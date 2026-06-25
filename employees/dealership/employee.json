@@ -1,0 +1,12 @@
+{
+  "name": "Client Update Employee",
+  "industry": "Auto Dealerships",
+  "version": "1.0",
+  "description": "Drafts dealership client updates.",
+  "requiresApproval": true,
+  "tools": [
+    "ghl",
+    "openai",
+    "sqlite"
+  ]
+}

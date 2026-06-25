@@ -1,0 +1,12 @@
+{
+  "name": "Client Update Employee",
+  "industry": "Manufacturing",
+  "version": "1.0",
+  "description": "Drafts manufacturing client updates.",
+  "requiresApproval": true,
+  "tools": [
+    "ghl",
+    "openai",
+    "sqlite"
+  ]
+}

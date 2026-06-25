@@ -1,0 +1,12 @@
+{
+  "name": "Client Update Employee",
+  "industry": "Real Estate",
+  "version": "1.0",
+  "description": "Drafts real estate client updates.",
+  "requiresApproval": true,
+  "tools": [
+    "ghl",
+    "openai",
+    "sqlite"
+  ]
+}

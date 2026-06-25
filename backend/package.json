@@ -1,0 +1,20 @@
+{
+  "name": "vibetech-core-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VIBETech Core backend (production SaaS foundation).",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon --watch server.js --exec node server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
