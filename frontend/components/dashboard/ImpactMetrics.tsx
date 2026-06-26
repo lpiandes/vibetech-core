@@ -1,9 +1,15 @@
+import SectionHeader from "@/components/design-system/SectionHeader";
 import MetricCard from "@/components/design-system/MetricCard";
 
 export default function ImpactMetrics() {
   return (
     <section>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <SectionHeader
+        title="At a glance"
+        subtitle="Impact and governance status."
+      />
+
+      <div className="mt-5 grid gap-3 opacity-90 sm:grid-cols-2">
         <MetricCard
           label="Hours Saved"
           value="42.6"

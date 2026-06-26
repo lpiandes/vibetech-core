@@ -6,7 +6,7 @@ export default function EmployeeReasoningCard({
   return (
     <section className="rounded-3xl border border-border bg-background p-6 shadow-sm">
       <div className="text-sm font-semibold text-foreground">
-        Employee Recommendation
+        Employee Thinking
       </div>
 
       <div className="mt-4 rounded-2xl bg-muted/30 px-5 py-4">

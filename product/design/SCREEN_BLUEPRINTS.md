@@ -60,7 +60,7 @@ Major sections:
 1. Review Header (title + context)
 2. Case Summary (client/matter/priority/status/assigned employee/created time)
 3. Attorney Note (exact note text)
-4. Employee Recommendation (concise professional reasoning, business-focused)
+4. Employee Thinking (concise professional reasoning, business-focused)
 5. Draft Preview (document-like viewer)
 6. Feedback (visual-only placeholder)
 7. Approval Status + Actions

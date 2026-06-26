@@ -5,8 +5,8 @@ export default function QueueHeader() {
     <div className="mb-8">
       <PageTitle
         eyebrow="Work Queue"
-        title="My Digital Employee needs my review."
-        description="Review completed work coming from your Digital Workforce. Approve when appropriate, and move forward confidently."
+        title="Why is this waiting for me?"
+        description="These items are holding steady until you review them and guide the next move."
       />
     </div>
   );

@@ -46,32 +46,52 @@ export default function QueueItem({ item }: { item: QueueItemModel }) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="truncate text-xl font-semibold tracking-tight text-foreground">
-            {item.clientName}
+            {item.title}
           </div>
           <div className="mt-1 text-sm text-muted-foreground">
-            {item.matterType}
+            {item.clientName}
           </div>
 
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4 flex items-start gap-3">
             <Avatar name={item.employee} size={32} />
             <div className="min-w-0">
-              <div className="text-xs text-muted-foreground">
-                Assigned Digital Employee
+              <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                Prepared by
               </div>
-              <div className="truncate text-sm font-medium text-foreground">
+              <div className="mt-1 truncate text-sm font-medium text-foreground">
                 {item.employee}
               </div>
             </div>
           </div>
 
+          <div className="mt-4">
+            <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              Employee explanation
+            </div>
+            <p className="mt-2 text-sm leading-6 text-foreground">
+              {`${item.employee} prepared this ${item.matterType} for your review.`}
+            </p>
+          </div>
+
+          <div className="mt-3">
+            <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              Employee recommendation
+            </div>
+            <p className="mt-2 text-sm leading-6 text-foreground">
+              Review the terms and guide the next step with confidence.
+            </p>
+          </div>
+
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <PriorityBadge priority={item.priority} />
             <StatusBadge status={item.status} />
-            <div className="text-xs text-muted-foreground">Created: {relative}</div>
+            <div className="text-xs text-muted-foreground">
+              Received {relative}
+            </div>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center">
+        <div className="flex shrink-0 items-end">
           <PrimaryButton
             type="button"
             className="h-10 rounded-2xl px-5"
