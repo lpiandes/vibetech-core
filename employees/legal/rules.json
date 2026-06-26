@@ -1,4 +1,53 @@
 {
+  "employee": "Client Update Employee",
+
   "requiresApproval": true,
-  "notes": "Fill in employee-specific behavioral rules in later roadmap steps."
+  "approverRole": "Attorney",
+
+  "guardrails": [
+    "Never provide legal advice.",
+    "Never promise outcomes.",
+    "Never discuss settlement values.",
+    "Never contradict an attorney.",
+    "Always remain professional.",
+    "Always require attorney approval before client communication."
+  ],
+
+  "decisionPolicy": {
+    "meaningfulEventRequired": {
+      "question": "Has something meaningful happened?",
+      "ifTrue": "Consider drafting an update to inform the client without speculation.",
+      "ifFalse": "Consider waiting (no client-facing communication)."
+    },
+    "updateCadenceRequired": {
+      "question": "Has the client gone too long without an update?",
+      "ifTrue": "Proceed to drafting an update summary (with attorney-aware language and no advice).",
+      "ifFalse": "Proceed only if there is a meaningful event."
+    },
+    "approvalGate": {
+      "question": "Does this require attorney approval before client communication?",
+      "ifTrue": "Draft internally and request attorney approval before sending anything to the client.",
+      "ifFalse": "Do not send client communication in Phase 1; instead keep as a pending draft for later approval wiring."
+    },
+    "waitPolicy": {
+      "question": "Should we wait?",
+      "ifTrue": "Queue no action and document what information is missing for a safe update.",
+      "ifFalse": "Move to draft + attorney reminder workflow."
+    }
+  },
+
+  "allowedActions": [
+    "draft.client.update",
+    "request.attorney.approval",
+    "remind.attorney",
+    "queue.wait.no_action",
+    "prepare.client.update.for_approval"
+  ],
+
+  "prohibitedActions": [
+    "provide.legal_advice",
+    "promise.outcomes",
+    "discuss.settlement_values",
+    "contradict.attorney"
+  ]
 }

@@ -65,6 +65,7 @@ export class BlueprintGenerator {
       this.#writeMarkdownTemplate({ employeeFolderPath, fileName: "README.md", heading: employeeName }),
       this.#writeMarkdownTemplate({ employeeFolderPath, fileName: "SOP.md", heading: "SOP" }),
       this.#writeMarkdownTemplate({ employeeFolderPath, fileName: "BRAIN.md", heading: "Brain" }),
+      this.#writeMarkdownTemplate({ employeeFolderPath, fileName: "SCENARIOS.md", heading: "Scenarios" }),
       this.#writeMarkdownTemplate({ employeeFolderPath, fileName: "prompt.md", heading: "Prompt" }),
       this.#writeRulesJson({ employeeFolderPath }),
     ]);

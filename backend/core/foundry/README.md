@@ -36,6 +36,7 @@ It creates:
 
 - `employee.json` (contract skeleton metadata only)
 - `PROFILE.md`, `README.md`, `SOP.md`, `BRAIN.md` (heading-only templates)
+- `SCENARIOS.md` (heading-only scenarios framework template)
 - `prompt.md` (heading-only template)
 - `rules.json` (rules skeleton with no executable business logic)
 - `examples/`, `tests/`, `assets/` folders (empty structure)
@@ -67,6 +68,19 @@ Later steps will extend the Foundry by adding capabilities such as:
 - optional generation helpers for event/capability scaffolding
 
 Phase 2 Step 2.1.1 stops after the blueprint framework foundation.
+
+---
+
+## Scenario Framework (Standard Employee Artifact)
+
+`SCENARIOS.md` is a standardized business document that describes realistic decision situations an employee must handle.
+
+It exists to improve product quality without adding runtime logic:
+
+- helps define decision intent in business language
+- improves testability with scenario-based regression sets
+- enables better demos by showing deterministic “what would happen” coverage
+- provides a stable contract for future implementation (SDK/AI/providers can map scenarios to execution later)
 
 ---
 

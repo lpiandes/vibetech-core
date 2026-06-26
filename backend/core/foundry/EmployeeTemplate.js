@@ -25,6 +25,7 @@ export class EmployeeTemplate {
     "README.md",
     "SOP.md",
     "BRAIN.md",
+    "SCENARIOS.md",
     "prompt.md",
     "rules.json",
   ];
