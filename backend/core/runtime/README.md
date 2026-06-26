@@ -185,4 +185,84 @@ Future roadmap layers can consume the pipeline response by reading:
 
 At a later stage, execution components can translate `action/nextStep` into side effects (provider/integration work), while keeping governance (`requiresApproval`) consistent.
 
+---
+
+## Runtime MVP (Sprint 6) — Prompt Loader
+
+### Purpose of `PromptLoader`
+
+`PromptLoader` loads a Digital Employee’s prompt and supporting artifacts from that employee’s folder.
+
+It is infrastructure-only:
+- it reads files from the filesystem
+- it does not interpret or modify prompts
+- it does not implement AI
+- it does not call providers
+- it does not generate drafts or execution outputs
+
+### Why prompts belong to employees (not runtime)
+
+The Architecture Bible defines that industry knowledge and employee-specific business intent live inside employees.
+
+By loading:
+- `prompt.md`
+- `TRAINING.md`
+- `rules.json`
+- `employee.json`
+
+from the employee artifact directory, runtime stays generic and reusable across all employees and operating systems.
+
+Runtime components should only orchestrate and execute contracts, not own employee content.
+
+### How future DraftGenerator components will consume PromptLoader output
+
+Later roadmap steps will:
+
+1. Call `PromptLoader.load({ employeeFolderPath })`
+2. Receive `{ prompt, training, rules, employee }`
+3. Use those artifacts as inputs to future draft/execution components (implemented in later sprints)
+
+This keeps content loading stable and testable, while generation strategies can evolve independently.
+
+---
+
+## Runtime MVP (Sprint 7A) — Prompt Builder
+
+### Purpose of `PromptBuilder`
+
+`PromptBuilder` assembles a complete prompt string for a Digital Employee by combining:
+
+- Employee Operating Manual content (`prompt.md`)
+- Training content (`TRAINING.md`)
+- Rules content (`rules.json`)
+- RuntimePipeline output (situation/decision/action/nextStep/governance metadata)
+- `attorneyNote`
+- `clientName`
+
+It does **not** call any LLM/provider.
+It does **not** generate drafts.
+It does **not** execute actions.
+It performs deterministic prompt assembly only.
+
+### Why prompt assembly is separated from provider execution
+
+Prompt assembly is a deterministic infrastructure step.
+Provider execution (LLM calls, message transport, etc.) is a separate concern.
+
+Separating them:
+
+- keeps prompts reproducible and testable
+- allows multiple LLM providers to consume the same PromptBuilder output
+- preserves the Architecture Bible boundary: employees contain content and constraints; runtime orchestrates and prepares contracts
+
+### How future LLM providers consume PromptBuilder output
+
+Later roadmap components (provider adapters) will call:
+
+1. `PromptBuilder.build(...)` to get `{ prompt }`
+2. send that prompt to an LLM provider
+3. apply any governance checks and execution workflows (in later sprints)
+
+This sprint intentionally stops before any provider interaction.
+
 

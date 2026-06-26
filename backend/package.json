@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "nodemon --watch server.js --exec node server.js",
     "start": "node server.js",
-    "foundry": "node core/foundry/foundry.js"
+    "foundry": "node core/foundry/foundry.js",
+    "demo": "node core/demo/DemoRunner.js"
   },
   "dependencies": {
     "cors": "^2.8.6",
