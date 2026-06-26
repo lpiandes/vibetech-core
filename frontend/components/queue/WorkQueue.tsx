@@ -92,14 +92,12 @@ const mockItems: QueueItemModel[] = [
 
 export default function WorkQueue() {
   return (
-    <div>
+    <div className="space-y-8">
       <QueueHeader />
 
-      <div className="mb-6">
-        <QueueFilters />
-      </div>
+      <QueueFilters />
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         {mockItems.length === 0 ? (
           <EmptyState />
         ) : (

@@ -38,14 +38,14 @@ export default function QueueItem({ item }: { item: QueueItemModel }) {
 
   return (
     <div
-      className="group cursor-pointer rounded-3xl border border-border bg-background px-5 py-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="group cursor-pointer rounded-3xl border border-border bg-background px-5 py-4 shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
       role="button"
       tabIndex={0}
       aria-label={`${item.title} for ${item.clientName}`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-lg font-semibold tracking-tight text-foreground">
+          <div className="truncate text-xl font-semibold tracking-tight text-foreground">
             {item.clientName}
           </div>
           <div className="mt-1 text-sm text-muted-foreground">
@@ -64,17 +64,18 @@ export default function QueueItem({ item }: { item: QueueItemModel }) {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <PriorityBadge priority={item.priority} />
             <StatusBadge status={item.status} />
-            <div className="text-xs text-muted-foreground">
-              Created: {relative}
-            </div>
+            <div className="text-xs text-muted-foreground">Created: {relative}</div>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-end">
-          <PrimaryButton type="button" className="h-10 rounded-2xl px-4">
+        <div className="flex shrink-0 items-center">
+          <PrimaryButton
+            type="button"
+            className="h-10 rounded-2xl px-5"
+          >
             <span className="inline-flex items-center gap-2">
               Review Work <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </span>
