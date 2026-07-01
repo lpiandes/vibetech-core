@@ -28,20 +28,6 @@ export default function ActionBar({
           type="button"
           className="h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Edit
-        </button>
-
-        <button
-          type="button"
-          className="h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          Regenerate
-        </button>
-
-        <button
-          type="button"
-          className="h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
           Reject
         </button>
       </div>

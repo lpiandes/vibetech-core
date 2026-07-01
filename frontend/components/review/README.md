@@ -9,7 +9,7 @@ Review Work is where business users validate and govern what their Digital Emplo
 This screen is designed to:
 - feel premium and focused
 - communicate context top-to-bottom
-- present the attorney note, employee thinking, and draft content clearly
+- present property highlights, buyer considerations, employee thinking, and draft content clearly
 - keep actions visible and governance-oriented
 
 ## How future runtime + generation will populate this page
@@ -17,8 +17,8 @@ This screen is designed to:
 This sprint uses mock data only.
 
 In later steps, the runtime/generation layer will populate:
-- Case Summary (client/matter/priority/status/assigned employee/timestamps)
-- Attorney Note (exact text as authored or provided)
+- Buyer Summary (buyer/property/priority/status/assigned employee/timestamps)
+- Property Highlights & Buyer Considerations (exact text as authored or provided)
 - Employee Thinking (business reasoning, concise and professional)
 - Draft Preview (a generated draft document)
 - Approval Status (pending/approved/completed)
@@ -31,7 +31,7 @@ The component structure in this folder already matches those sections, so future
 - `ReviewWorkspace.tsx`: page-level composition in the required vertical order
 - `ReviewHeader.tsx`: title + quick context header
 - `CaseSummaryCard.tsx`: shows case metadata
-- `AttorneyNoteCard.tsx`: shows attorney note exactly as written
+- `AttorneyNoteCard.tsx`: shows property highlights and buyer considerations
 - `EmployeeReasoningCard.tsx`: shows employee thinking (business reasoning, not chain-of-thought)
 - `DraftPreviewCard.tsx`: document-style preview (readable typography)
 - `FeedbackCard.tsx`: placeholder-only feedback textarea

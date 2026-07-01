@@ -21,7 +21,7 @@ It is designed to communicate immediately:
 
 ## Mock dataset
 
-`WorkQueue.tsx` includes a mock dataset of exactly **8** legal queue items for initial design validation.
+`WorkQueue.tsx` includes a mock dataset of queue items for initial design validation.
 These items are shown in the UI only; no backend calls are made.
 
 ## How future Review pages will open

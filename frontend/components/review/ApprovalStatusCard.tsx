@@ -15,7 +15,7 @@ export default function ApprovalStatusCard({
       <div className="mt-4 space-y-3">
         <div className="flex items-start justify-between gap-4">
           <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Requires Attorney Approval
+            Requires Review Approval
           </div>
           <div className="text-sm font-semibold text-foreground">
             {approval.requiresAttorneyApproval ? "Yes" : "No"}

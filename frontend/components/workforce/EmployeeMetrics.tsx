@@ -18,7 +18,7 @@ export default function EmployeeMetrics({
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Today completed
+            Today's accomplishments
           </div>
           <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
             {todayCompleted}

@@ -23,27 +23,27 @@ export default function CaseSummaryCard({ case: cs }: { case: CaseSummary }) {
   return (
     <section className="rounded-3xl border border-border bg-background p-6 shadow-sm">
       <div className="text-sm font-semibold text-foreground">
-        Case Summary
+        Buyer Summary
       </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <div className="space-y-1">
           <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Client
+            Buyer
           </div>
           <div className="text-sm font-semibold text-foreground">{cs.clientName}</div>
         </div>
 
         <div className="space-y-1">
           <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Matter Type
+            Property Summary
           </div>
           <div className="text-sm font-semibold text-foreground">{cs.matterType}</div>
         </div>
 
         <div className="space-y-1">
           <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Priority
+            Response Priority
           </div>
           <div className="text-sm font-semibold text-foreground">{cs.priority}</div>
         </div>
@@ -57,7 +57,7 @@ export default function CaseSummaryCard({ case: cs }: { case: CaseSummary }) {
 
         <div className="space-y-1">
           <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Assigned Employee
+            Assigned Digital Employee
           </div>
           <div className="text-sm font-semibold text-foreground">{cs.assignedEmployee}</div>
         </div>

@@ -1,9 +1,9 @@
  "use client";
 
 import { ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 import Avatar from "@/components/design-system/Avatar";
-import PrimaryButton from "@/components/design-system/PrimaryButton";
 import PriorityBadge from "@/components/design-system/PriorityBadge";
 import StatusBadge from "@/components/design-system/StatusBadge";
 
@@ -37,20 +37,24 @@ export default function QueueItem({ item }: { item: QueueItemModel }) {
   const relative = formatRelativeTime(item.createdTimeISO);
 
   return (
-    <div
+    <Link
+      href={`/work-queue/${item.id}`}
       className="group cursor-pointer rounded-3xl border border-border bg-background px-5 py-4 shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-      role="button"
-      tabIndex={0}
-      aria-label={`${item.title} for ${item.clientName}`}
+      aria-label={`Draft response for ${item.clientName}`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xl font-semibold tracking-tight text-foreground">
-            {item.title}
+          <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            Buyer
           </div>
-          <div className="mt-1 text-sm text-muted-foreground">
+          <div className="mt-1 truncate text-xl font-semibold tracking-tight text-foreground">
             {item.clientName}
           </div>
+
+          <div className="mt-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            Properties
+          </div>
+          <div className="mt-1 text-sm text-muted-foreground">{item.matterType}</div>
 
           <div className="mt-4 flex items-start gap-3">
             <Avatar name={item.employee} size={32} />
@@ -92,17 +96,18 @@ export default function QueueItem({ item }: { item: QueueItemModel }) {
         </div>
 
         <div className="flex shrink-0 items-end">
-          <PrimaryButton
-            type="button"
-            className="h-10 rounded-2xl px-5"
+          <Link
+            href={`/work-queue/${item.id}`}
+            className="inline-flex h-10 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <span className="inline-flex items-center gap-2">
-              Review Work <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              Review buyer response
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </span>
-          </PrimaryButton>
+          </Link>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 

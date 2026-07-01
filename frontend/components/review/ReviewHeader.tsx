@@ -8,7 +8,7 @@ export default function ReviewHeader() {
         Can I confidently approve this?
       </h1>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-        Review the case context, attorney note, and the employee’s thinking.
+        Review the buyer context, property highlights/considerations, and the employee’s thinking.
         Approve when everything is aligned.
       </p>
     </div>

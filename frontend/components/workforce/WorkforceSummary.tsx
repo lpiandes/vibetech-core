@@ -2,23 +2,33 @@ import InfoCard from "@/components/design-system/InfoCard";
 import MetricCard from "@/components/design-system/MetricCard";
 import SectionHeader from "@/components/design-system/SectionHeader";
 import StatusBadge from "@/components/design-system/StatusBadge";
+import { demoCompany } from "@/lib/company/demoCompany";
 
 export default function WorkforceSummary() {
-  // Mock data (documentation + v1 visual-only implementation).
-  const mock = {
-    employees: 4,
-    working: 2,
-    needsReview: 1,
-    offline: 1,
-    tasksCompleted: 23,
-    hoursSaved: 18.4,
-  };
+  const employeesWorkingCount = demoCompany.employees.filter(
+    (e) => e.status === "Working",
+  ).length;
+  const employeesNeedingReviewCount = demoCompany.employees.filter(
+    (e) => e.status === "Needs Review",
+  ).length;
+  const employeesOfflineCount = demoCompany.employees.filter(
+    (e) => e.status === "Offline",
+  ).length;
+
+  const tasksCompleted = demoCompany.employees.reduce(
+    (sum, e) => sum + e.todayCompletedCount,
+    0,
+  );
+
+  const hoursSaved = demoCompany.companyData.hoursSavedToday;
 
   return (
     <section>
       <SectionHeader
         title="Workforce Summary"
-        subtitle="Employees, review demand, and today’s outcomes."
+        subtitle={
+          "Buyer-ready work and governance demand."
+        }
       />
 
       <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -29,28 +39,28 @@ export default function WorkforceSummary() {
                 Employees
               </div>
               <div className="text-sm font-semibold text-foreground">
-                {mock.employees}
+                {demoCompany.employees.length}
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status="Working" />
               <div className="text-sm text-muted-foreground">
-                {mock.working}
+                {employeesWorkingCount}
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status="Needs Review" />
               <div className="text-sm text-muted-foreground">
-                {mock.needsReview}
+                {employeesNeedingReviewCount}
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status="Offline" />
               <div className="text-sm text-muted-foreground">
-                {mock.offline}
+                {employeesOfflineCount}
               </div>
             </div>
           </div>
@@ -58,13 +68,15 @@ export default function WorkforceSummary() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <MetricCard
-            label="Today’s Tasks Completed"
-            value={mock.tasksCompleted}
-            footnote="Work finished by your Digital Employees and ready for governance."
+            label="Buyer-ready work completed"
+            value={tasksCompleted}
+            footnote={
+              "Work prepared and ready for review."
+            }
           />
           <MetricCard
             label="Hours Saved Today"
-            value={mock.hoursSaved}
+            value={hoursSaved}
             suffix="hrs"
             footnote="Estimated time saved from employee-ready work."
           />

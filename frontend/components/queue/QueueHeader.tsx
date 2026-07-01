@@ -4,9 +4,9 @@ export default function QueueHeader() {
   return (
     <div className="mb-8">
       <PageTitle
-        eyebrow="Work Queue"
-        title="Why is this waiting for me?"
-        description="These items are holding steady until you review them and guide the next move."
+        eyebrow="Buyer inquiries"
+        title="Why is this waiting for your review?"
+        description="Draft responses are held here until you confirm what the buyer should see next."
       />
     </div>
   );

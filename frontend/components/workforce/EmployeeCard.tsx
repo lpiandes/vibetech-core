@@ -9,6 +9,7 @@ export type EmployeeCardModel = {
   id: string;
   name: string;
   role: string;
+  mission?: string;
   status: "Working" | "Needs Review" | "Approved" | "Completed" | "Offline";
   statusQualifier: string;
   todayCompleted: number;
@@ -41,13 +42,29 @@ export default function EmployeeCard({
               {employee.role}
             </div>
 
+            {employee.mission ? (
+              <div className="mt-4 rounded-2xl border border-border bg-muted/10 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                  Mission
+                </div>
+                <div className="mt-2 text-sm leading-6 text-foreground">
+                  {employee.mission}
+                </div>
+              </div>
+            ) : null}
+
             <div className="mt-4">
-              <EmployeeStatus
-                status={employee.status}
-                qualifier={employee.statusQualifier}
-                waitingOnYou={employee.waitingOnYou}
-                needsReview={needsReview}
-              />
+              <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                Current Work
+              </div>
+              <div className="mt-2">
+                <EmployeeStatus
+                  status={employee.status}
+                  qualifier={employee.statusQualifier}
+                  waitingOnYou={employee.waitingOnYou}
+                  needsReview={needsReview}
+                />
+              </div>
             </div>
 
             <div className="mt-4">
