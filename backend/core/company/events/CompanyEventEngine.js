@@ -313,6 +313,32 @@ export class CompanyEventEngine {
         break;
       }
 
+      case COMPANY_EVENT_TYPES.KNOWLEDGE_SOURCE_RECEIVED:
+      case COMPANY_EVENT_TYPES.KNOWLEDGE_INGESTION_STARTED:
+      case COMPANY_EVENT_TYPES.KNOWLEDGE_INGESTION_COMPLETED:
+      case COMPANY_EVENT_TYPES.KNOWLEDGE_INGESTION_FAILED: {
+        const { sourceId, sourceType, status, errorMessage } = event.payload ?? {};
+        requireString(sourceId, "payload.sourceId");
+        requireString(sourceType ?? event.type, "payload.sourceType");
+
+        const activity = {
+          timestampISO: event.timestamp,
+          employee: "Knowledge Ingestion Engine",
+          action: event.type,
+          object: String(sourceId),
+          status:
+            event.type === COMPANY_EVENT_TYPES.KNOWLEDGE_INGESTION_FAILED
+              ? `FAILED${errorMessage ? `:${String(errorMessage).slice(0, 80)}` : ""}`
+              : String(status ?? "RECORDED"),
+        };
+
+        nextCustomActivities = [
+          ...nextCustomActivities,
+          deepFreeze(activity),
+        ];
+        break;
+      }
+
       case COMPANY_EVENT_TYPES.ACTIVITY_CREATED: {
         const { activity } = event.payload;
         if (!isPlainObject(activity)) {
