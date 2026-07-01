@@ -11,6 +11,8 @@
  * - No provider/runtime pipeline changes
  */
 
+import { CompanyEventEngine } from "./events/CompanyEventEngine.js";
+
 function deepFreeze(value) {
   if (!value || typeof value !== "object") return value;
   if (Object.isFrozen(value)) return value;
@@ -387,6 +389,7 @@ function createABCPropertyGroupSeed() {
     knowledge,
     integrations,
     approvalRules,
+    customActivities: [],
   });
 }
 
@@ -485,6 +488,11 @@ export class CompanyWorkspaceRuntime {
 
     /** @type {Array<{timestampISO:string, employee:string, action:string, object:string, status:string}>} */
     const activities = [];
+
+    const customActivities = Array.isArray(this._state.customActivities)
+      ? this._state.customActivities
+      : [];
+    activities.push(...customActivities);
 
     for (const inquiry of inquiries) {
       const buyer = buyerById.get(inquiry.buyerId);
@@ -604,6 +612,12 @@ export class CompanyWorkspaceRuntime {
       hoursSavedToday,
       activeEmployees,
     };
+  }
+
+  applyEvent(event) {
+    // Delegation is the only permitted runtime mutation path.
+    const engine = new CompanyEventEngine({ runtime: this });
+    engine.apply(event);
   }
 }
 
