@@ -25,16 +25,44 @@ function formatCompactPreview(body: string, maxChars = 420) {
   return `${text.slice(0, maxChars).trimEnd()}…`;
 }
 
+function formatStatus(status: string) {
+  switch (status) {
+    case "DRAFT":
+      return "Draft Created";
+    case "PENDING_APPROVAL":
+      return "Awaiting Review";
+    case "APPROVED":
+      return "Approved";
+    case "SENDING":
+      return "Sending";
+    case "SENT":
+      return "Sent";
+    case "DELIVERED":
+      return "Delivered";
+    case "OPENED":
+      return "Opened";
+    case "REPLIED":
+      return "Replied";
+    case "FAILED":
+      return "Failed";
+    default:
+      return status;
+  }
+}
+
 export default function CommunicationCard({
   communication,
 }: {
   communication: CommunicationModel;
 }) {
   const preview = formatCompactPreview(communication.body);
+  const statusLabel = formatStatus(communication.status);
 
   return (
     <section className="rounded-3xl border border-border bg-background p-6 shadow-sm">
-      <div className="text-sm font-semibold text-foreground">Communication</div>
+      <div className="text-sm font-semibold text-foreground">
+        Prepared Communication
+      </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <div className="space-y-1">
@@ -48,19 +76,19 @@ export default function CommunicationCard({
 
         <div className="space-y-1">
           <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Status
+            Recipient
           </div>
           <div className="text-sm font-semibold text-foreground">
-            {communication.status}
+            {communication.recipient}
           </div>
         </div>
 
         <div className="space-y-1">
           <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Recipient
+            Status
           </div>
           <div className="text-sm font-semibold text-foreground">
-            {communication.recipient}
+            {statusLabel}
           </div>
         </div>
 

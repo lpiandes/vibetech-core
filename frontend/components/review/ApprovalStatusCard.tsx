@@ -6,16 +6,22 @@ export default function ApprovalStatusCard({
     statusLabel: string;
   };
 }) {
+  const decision = approval.requiresAttorneyApproval
+    ? "Awaiting your approval"
+    : approval.statusLabel?.toLowerCase().includes("rejected")
+      ? "Rejected"
+      : "Approved";
+
   return (
     <section className="rounded-3xl border border-border bg-background p-6 shadow-sm">
       <div className="text-sm font-semibold text-foreground">
-        Approval Status
+        Decision
       </div>
 
       <div className="mt-4 space-y-3">
         <div className="flex items-start justify-between gap-4">
           <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Requires Review Approval
+            Review Required
           </div>
           <div className="text-sm font-semibold text-foreground">
             {approval.requiresAttorneyApproval ? "Yes" : "No"}
@@ -24,10 +30,10 @@ export default function ApprovalStatusCard({
 
         <div className="flex items-start justify-between gap-4">
           <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Status
+            Decision
           </div>
           <div className="text-sm font-semibold text-foreground">
-            {approval.statusLabel}
+            {decision}
           </div>
         </div>
       </div>

@@ -322,6 +322,105 @@ export class CommunicationEngine {
     return updated;
   }
 
+  markFailed({ communicationId, failedAtISO, reason } = {}) {
+    requireString(communicationId, "communicationId");
+    const comm = this.getCommunicationOrThrow(communicationId);
+
+    const t = nowISO(failedAtISO);
+    const status = COMMUNICATION_STATUSES.FAILED;
+    const timeline = [
+      ...comm.timeline,
+      {
+        timestampISO: t,
+        status,
+        action: actionLabelForStatus(status),
+        object: reason ? String(reason) : comm.recipient,
+      },
+    ];
+
+    const updated = createCommunication({
+      ...comm,
+      status,
+      timeline,
+    });
+    this._upsertCommunication(updated);
+    this._logActivity({
+      communicationId,
+      status,
+      action: actionLabelForStatus(status),
+      timestampISO: t,
+      object: updated.recipient,
+    });
+    return updated;
+  }
+
+  /**
+   * Executes outbound delivery through a provider.
+   * CommunicationEngine remains the owner of business state.
+   *
+   * @param {object} params
+   * @param {string} params.communicationId
+   * @param {EmailProvider} params.provider
+   * @returns {Promise<{success:boolean, providerMessageId?:string, providerStatus?:string, communication:any, error?:any}>}
+   */
+  async sendCommunication({ communicationId, provider } = {}) {
+    requireString(communicationId, "communicationId");
+    if (!provider || typeof provider !== "object") {
+      throw new Error("CommunicationEngine.sendCommunication requires a provider.");
+    }
+
+    const comm = this.getCommunicationOrThrow(communicationId);
+    if (!comm) throw new Error(`CommunicationEngine: communication missing: ${communicationId}`);
+
+    let providerMessageId;
+    let providerStatus;
+    let sentTimestampISO;
+
+    try {
+      if (typeof provider.connect === "function") {
+        await provider.connect();
+      }
+
+      const result = await provider.send({
+        communication: comm,
+      });
+
+      providerMessageId = result?.providerMessageId;
+      providerStatus = result?.providerStatus;
+      sentTimestampISO =
+        result?.sentTimestampISO ?? result?.sentTimestamp;
+
+      const updated = this.markSent({
+        communicationId,
+        sentAtISO: sentTimestampISO ?? new Date().toISOString(),
+      });
+
+      return {
+        success: true,
+        providerMessageId,
+        providerStatus,
+        communication: updated,
+      };
+    } catch (error) {
+      const failedAtISO = new Date().toISOString();
+      this.markFailed({
+        communicationId,
+        failedAtISO,
+        reason: error?.message ?? error,
+      });
+
+      return {
+        success: false,
+        error,
+        communication: this.getCommunicationOrThrow(communicationId),
+      };
+    } finally {
+      if (typeof provider.disconnect === "function") {
+        await provider.disconnect();
+      }
+    }
+  }
+
   markDelivered({ communicationId, timestampISO } = {}) {
     requireString(communicationId, "communicationId");
     const comm = this.getCommunicationOrThrow(communicationId);

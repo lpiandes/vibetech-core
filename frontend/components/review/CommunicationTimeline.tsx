@@ -7,52 +7,56 @@ export type CommunicationTimelineEntry = {
   object?: string;
 };
 
-function formatTime(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export default function CommunicationTimeline({
   timeline,
 }: {
   timeline: CommunicationTimelineEntry[];
 }) {
-  const ordered = [...timeline].sort(
-    (a, b) => new Date(a.timestampISO).getTime() - new Date(b.timestampISO).getTime(),
-  );
+  const reached = new Set((timeline ?? []).map((t) => t.status));
+
+  const steps: Array<{ status: string; label: string }> = [
+    { status: "DRAFT", label: "Draft Created" },
+    { status: "PENDING_APPROVAL", label: "Awaiting Review" },
+    { status: "APPROVED", label: "Approved" },
+    { status: "SENT", label: "Sent" },
+    { status: "DELIVERED", label: "Delivered" },
+    { status: "OPENED", label: "Opened" },
+    { status: "REPLIED", label: "Replied" },
+  ];
 
   return (
     <section>
-      <InfoCard title="Timeline">
-        {ordered.length === 0 ? (
-          <div className="text-sm text-muted-foreground">
-            No communication timeline yet.
+      <InfoCard title="Communication Progress">
+        <div className="relative pl-6">
+          <div className="absolute left-0 top-2 bottom-2 w-px bg-border" />
+
+          <div className="space-y-6">
+            {steps.map((s) => {
+              const done = reached.has(s.status);
+              return (
+                <div key={s.status} className="flex items-start gap-4">
+                  <div
+                    className={[
+                      "mt-0.5 h-3 w-3 rounded-full",
+                      done ? "bg-primary" : "bg-border",
+                    ].join(" ")}
+                  />
+
+                  <div className="min-w-0">
+                    <div
+                      className={[
+                        "text-sm font-semibold",
+                        done ? "text-foreground" : "text-muted-foreground",
+                      ].join(" ")}
+                    >
+                      {s.label}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ) : (
-          <div className="space-y-3">
-            {ordered.map((t, idx) => (
-              <div
-                key={`${t.timestampISO}-${idx}`}
-                className="grid grid-cols-4 items-start gap-x-6 gap-y-1"
-              >
-                <div className="w-16 shrink-0 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                  {formatTime(t.timestampISO)}
-                </div>
-                <div className="col-span-1 text-sm font-semibold text-foreground">
-                  {t.status}
-                </div>
-                <div className="col-span-2 text-sm leading-6 text-muted-foreground">
-                  {t.action}
-                  {t.object ? ` · ${t.object}` : ""}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        </div>
       </InfoCard>
     </section>
   );
