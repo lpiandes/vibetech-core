@@ -19,5 +19,17 @@ export class WorkspaceService {
   loadWorkQueue() {
     return this.api.loadWorkQueue();
   }
+
+  loadReviewWork(workItemId: string) {
+    return this.api.loadReviewWork(workItemId);
+  }
+
+  applyReviewDecision(workItemId: string, decision: "APPROVE" | "REJECT") {
+    return this.api.applyReviewDecision(workItemId, decision);
+  }
+
+  sendReviewCommunication(workItemId: string) {
+    return this.api.sendReviewCommunication(workItemId);
+  }
 }
 

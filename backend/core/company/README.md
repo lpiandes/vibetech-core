@@ -57,3 +57,7 @@ If CRM syncing is added later:
 - the mapping writes into CompanyData inside this runtime
 - UI continues to read from the runtime SSOT, not from CRM-native schemas
 
+## Knowledge OS (Sprint 1)
+The runtime now owns a first-class `knowledgeRepository` and exposes the legacy `getKnowledge()` compact shape as a derived compatibility layer.
+`CompanyBrain` continues working exactly as before by consuming `runtime.getKnowledge()`, while the repository becomes the canonical source for future employee context.
+

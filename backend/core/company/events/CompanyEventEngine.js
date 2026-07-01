@@ -1,4 +1,15 @@
 import { COMPANY_EVENT_TYPES, SUPPORTED_COMPANY_EVENT_TYPES } from "./CompanyEventTypes.js";
+import {
+  applyKnowledgeArchived,
+  applyKnowledgeCreated,
+  applyKnowledgeRevisionCreated,
+} from "../../knowledge/KnowledgeRepository.js";
+import {
+  applyCategoryArchived,
+  applyCategoryCreated,
+  applyCategoryReordered,
+  applyCategoryUpdated,
+} from "../../knowledge/categories/CategoryRepository.js";
 
 function deepFreeze(value) {
   if (!value || typeof value !== "object") return value;
@@ -56,10 +67,19 @@ export class CompanyEventEngine {
 
     const prevState = this.runtime._state;
     const prevCompanyData = prevState.companyData;
+    const prevKnowledgeRepository = prevState.knowledgeRepository;
+    const prevKnowledgeCategories = prevState.knowledgeCategories;
+
+    const isValidCategory = (categoryId) => {
+      if (!Array.isArray(prevKnowledgeCategories?.items)) return false;
+      return prevKnowledgeCategories.items.some((c) => c.id === categoryId && c.status !== "ARCHIVED");
+    };
 
     let nextCompanyData = prevCompanyData;
     let nextCustomActivities =
       Array.isArray(prevState.customActivities) ? prevState.customActivities : [];
+    let nextKnowledgeRepository = prevKnowledgeRepository;
+    let nextKnowledgeCategories = prevKnowledgeCategories;
 
     switch (event.type) {
       case COMPANY_EVENT_TYPES.WEBSITE_INQUIRY_RECEIVED: {
@@ -252,6 +272,47 @@ export class CompanyEventEngine {
         break;
       }
 
+      case COMPANY_EVENT_TYPES.KNOWLEDGE_CREATED: {
+        nextKnowledgeRepository = applyKnowledgeCreated(prevKnowledgeRepository, event.payload, {
+          isValidCategory,
+        });
+        break;
+      }
+
+      case COMPANY_EVENT_TYPES.KNOWLEDGE_REVISION_CREATED: {
+        nextKnowledgeRepository = applyKnowledgeRevisionCreated(
+          prevKnowledgeRepository,
+          event.payload,
+          { isValidCategory },
+        );
+        break;
+      }
+
+      case COMPANY_EVENT_TYPES.KNOWLEDGE_ARCHIVED: {
+        nextKnowledgeRepository = applyKnowledgeArchived(prevKnowledgeRepository, event.payload);
+        break;
+      }
+
+      case COMPANY_EVENT_TYPES.CATEGORY_CREATED: {
+        nextKnowledgeCategories = applyCategoryCreated(prevKnowledgeCategories, event.payload);
+        break;
+      }
+
+      case COMPANY_EVENT_TYPES.CATEGORY_UPDATED: {
+        nextKnowledgeCategories = applyCategoryUpdated(prevKnowledgeCategories, event.payload);
+        break;
+      }
+
+      case COMPANY_EVENT_TYPES.CATEGORY_ARCHIVED: {
+        nextKnowledgeCategories = applyCategoryArchived(prevKnowledgeCategories, event.payload);
+        break;
+      }
+
+      case COMPANY_EVENT_TYPES.CATEGORY_REORDERED: {
+        nextKnowledgeCategories = applyCategoryReordered(prevKnowledgeCategories, event.payload);
+        break;
+      }
+
       case COMPANY_EVENT_TYPES.ACTIVITY_CREATED: {
         const { activity } = event.payload;
         if (!isPlainObject(activity)) {
@@ -280,6 +341,8 @@ export class CompanyEventEngine {
       ...prevState,
       companyData: nextCompanyData,
       customActivities: nextCustomActivities,
+      knowledgeRepository: nextKnowledgeRepository,
+      knowledgeCategories: nextKnowledgeCategories,
     });
 
     this.runtime._state = nextState;

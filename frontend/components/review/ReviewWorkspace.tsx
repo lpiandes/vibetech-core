@@ -9,7 +9,9 @@ import EmployeeReasoningCard from "./EmployeeReasoningCard";
 import FeedbackCard from "./FeedbackCard";
 import ReviewHeader from "./ReviewHeader";
 
-export default function ReviewWorkspace({
+export { default } from "./ReviewWorkspaceRuntime";
+
+export function ReviewWorkspaceLegacy({
   workItemId,
 }: {
   workItemId?: string;
@@ -24,7 +26,7 @@ export default function ReviewWorkspace({
     considerations: string[];
     employeeThinking: string;
     draftEmail: string;
-    approval: { requiresAttorneyApproval: boolean; statusLabel: string };
+    approval: { requiresApproval: boolean; statusLabel: string };
   };
 
   const propertyWorksById: Record<string, WorkMock> = {
@@ -48,7 +50,7 @@ export default function ReviewWorkspace({
         "This buyer submitted an inquiry for 68 Mystic Meadow Lane. Based on the buyer’s message and the property details, I recommend responding today while interest is high—while clearly confirming the most important next steps and any timing questions the buyer raised.",
       draftEmail:
         "Subject: Next steps for 68 Mystic Meadow Lane\n\nHello John,\n\nThanks for your interest in 68 Mystic Meadow Lane in Hartford. Here’s what we have so far, and the best next steps to keep things moving:\n\nProperty highlights\n- Updated kitchen and open-plan living\n- Bright, natural light throughout\n- Walkable to local amenities\n\nBuyer considerations\n- We’ll confirm your timeline for closing and key milestones\n- We’ll review any HOA items that may affect next steps\n- We’ll check zoning constraints for any planned renovations\n\nIf you’d like, reply with your preferred timing for a walkthrough and whether there are any specific items you want to prioritize.\n\nWarm regards,\nProperty Interest Coordinator\n",
-      approval: { requiresAttorneyApproval: true, statusLabel: "Pending Review" },
+      approval: { requiresApproval: true, statusLabel: "Pending Review" },
     },
     pm2: {
       buyerName: "Sarah Johnson",
@@ -69,7 +71,7 @@ export default function ReviewWorkspace({
         "This buyer is asking for a clear plan after reviewing 15 Oak Street. I recommend a professional response today that confirms key details, addresses timeline questions, and invites the buyer’s preferred next step—so governance stays aligned and communication stays calm.",
       draftEmail:
         "Subject: Your next steps for 15 Oak Street\n\nHello Sarah,\n\nThanks for reaching out about 15 Oak Street in Hartford. To keep everything moving smoothly, here are the property highlights and the items we should confirm next:\n\nProperty highlights\n- Quiet street setting\n- Flexible layout for changing needs\n- Strong potential for value-focused updates\n\nBuyer considerations\n- We’ll confirm your ideal move-in timeframe\n- We’ll clarify any questions you have about planned updates\n\nReply when you’re ready with your preferred timing for a walkthrough, and we’ll coordinate the next steps.\n\nSincerely,\nProperty Interest Coordinator\n",
-      approval: { requiresAttorneyApproval: true, statusLabel: "Pending Review" },
+      approval: { requiresApproval: true, statusLabel: "Pending Review" },
     },
     pm3: {
       buyerName: "Michael Davis",
@@ -89,7 +91,7 @@ export default function ReviewWorkspace({
         "The buyer is interested in 22 Harbor View and is expecting a timely response. I recommend responding today with a structured email that confirms key property details, summarizes what we need to align next steps, and keeps communication governance-ready.",
       draftEmail:
         "Subject: Guidance for 22 Harbor View\n\nHello Michael,\n\nThank you for your inquiry about 22 Harbor View in Hartford. Below is a structured overview and the most helpful next steps so we can align quickly:\n\nProperty highlights\n- Scenic views from key rooms\n- Comfortable living space with room to expand\n\nBuyer considerations\n- Confirm your renovation goals and any timing constraints\n- Check whether external updates could affect next steps\n\nIf you’d like, share your preferred timing for a walkthrough and any priorities you want us to address first.\n\nBest regards,\nProperty Interest Coordinator\n",
-      approval: { requiresAttorneyApproval: true, statusLabel: "Pending Review" },
+      approval: { requiresApproval: true, statusLabel: "Pending Review" },
     },
   };
 
@@ -106,7 +108,7 @@ export default function ReviewWorkspace({
         "An inquiry has been received. I recommend drafting a response today while interest is high, keeping the next step clear and aligned with governance requirements.",
       draftEmail:
         "Subject: Buyer response draft\n\nHello,\n\nThanks for the update. Here are the next steps we can align on today.\n\nProperty highlights\n- Inquiry received\n- Clear next steps drafted\n\nBuyer considerations\n- Confirm timing for review\n- Align response to latest guidance\n\nSincerely,\nUpdate Coordinator\n",
-      approval: { requiresAttorneyApproval: true, statusLabel: "Pending Review" },
+      approval: { requiresApproval: true, statusLabel: "Pending Review" },
     },
     q2: {
       buyerName: "Harborstone Office",
@@ -120,7 +122,7 @@ export default function ReviewWorkspace({
         "The buyer requested an update. I recommend responding with a professional summary and next-step guidance to keep governance aligned and communication calm.",
       draftEmail:
         "Subject: Update requested\n\nHello,\n\nThanks for your request. Here’s a clear plan for next steps.\n\nProperty highlights\n- Update requested\n- Draft response prepared\n\nBuyer considerations\n- Confirm preferred timing\n- Ensure governance alignment\n\nWarm regards,\nUpdate Coordinator\n",
-      approval: { requiresAttorneyApproval: true, statusLabel: "Pending Review" },
+      approval: { requiresApproval: true, statusLabel: "Pending Review" },
     },
   };
 
@@ -176,7 +178,7 @@ export default function ReviewWorkspace({
           return d.toISOString();
         };
 
-        const reviewRequired = Boolean(workItem.approval?.requiresAttorneyApproval);
+        const reviewRequired = Boolean(workItem.approval?.requiresApproval);
         const communicationStatus = reviewRequired ? "PENDING_APPROVAL" : "APPROVED";
 
         const communication: CommunicationModel = {
@@ -221,7 +223,13 @@ export default function ReviewWorkspace({
         );
       })()}
       <FeedbackCard />
-      <ActionBar approval={workItem.approval} />
+      <ActionBar
+        workItemId={String(workItemId ?? defaultId)}
+        approval={workItem.approval}
+        communicationStatus={
+          workItem.approval.requiresApproval ? "PENDING_APPROVAL" : "APPROVED"
+        }
+      />
     </div>
   );
 }

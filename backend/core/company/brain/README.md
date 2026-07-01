@@ -5,9 +5,9 @@
 
 It is not just document search, and not just RAG. In v1 it combines:
 - Structured Company Data (from `CompanyData`)
-- Company Knowledge (from `CompanyKnowledge`)
+- Company Knowledge (from `CompanyWorkspaceRuntime.getKnowledge()` — derived compatibility from Knowledge Repository + Categories)
 - Company Policies (from approval rules + knowledge policies)
-- Brand Voice (from `CompanyKnowledge.brandVoice`)
+- Brand Voice (from `CompanyWorkspaceRuntime.getKnowledge().brandVoice`)
 - Operational Rules (derived stable guidance for employees)
 - Historical Memory (placeholder for future memory/trace retrieval)
 

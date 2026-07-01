@@ -12,6 +12,14 @@
  */
 
 import { CompanyEventEngine } from "./events/CompanyEventEngine.js";
+import { COMPANY_EVENT_TYPES } from "./events/CompanyEventTypes.js";
+import { createCompanyEvent } from "./events/CompanyEvent.js";
+import {
+  createKnowledgeRepository,
+} from "../knowledge/KnowledgeRepository.js";
+import { deriveCompactKnowledgeFromRepository } from "../knowledge/deriveCompactKnowledgeFromRepository.js";
+import { createBuiltInKnowledgeCategories } from "../knowledge/categories/builtInCategories.js";
+import { createCategoryRepository } from "../knowledge/categories/CategoryRepository.js";
 
 function deepFreeze(value) {
   if (!value || typeof value !== "object") return value;
@@ -337,33 +345,226 @@ function createABCPropertyGroupSeed() {
     ],
   };
 
-  /** @type {CompanyKnowledge} */
-  const knowledge = {
-    faqs: [
+  const allEmployeeIds = employees.map((e) => e.employeeId);
+
+  function normalizeKeywords(text) {
+    return String(text ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 12);
+  }
+
+  const baseCreatedAtISO = "2026-06-20T00:00:00.000Z";
+  const baseUpdatedAtISO = "2026-06-20T00:00:00.000Z";
+
+  // Seed knowledge repository from the legacy compact knowledge values
+  // so CompanyBrain and BrainSearch remain compatible.
+  const knowledgeCategories = createCategoryRepository({
+    items: createBuiltInKnowledgeCategories(),
+  });
+
+  const knowledgeRepository = createKnowledgeRepository({
+    items: [
       {
-        question: "How quickly do you respond to inquiries?",
-        answer: "Draft responses are typically prepared within the same day window.",
+        id: "kn_faq_respond_speed",
+        title: "How quickly do you respond to inquiries?",
+        description: "Draft responses are typically prepared within the same day window.",
+        category: "FAQ",
+        tags: ["faq"],
+        relationships: [],
+        createdAt: baseCreatedAtISO,
+        updatedAt: baseUpdatedAtISO,
+        createdBy: "seed",
+        updatedBy: "seed",
+        visibility: "INTERNAL",
+        status: "ACTIVE",
+        source: "industry_template:property-management",
+        confidence: 0.85,
+        priority: "Medium",
+        industry: identity.industry,
+        applicableEmployees: allEmployeeIds,
+        searchKeywords: normalizeKeywords("respond speed inquiries draft responses"),
+        metadata: { legacyKey: "faqs[0]" },
       },
       {
-        question: "What do you confirm before scheduling a walkthrough?",
-        answer:
+        id: "kn_faq_walkthrough_confirmation",
+        title: "What do you confirm before scheduling a walkthrough?",
+        description:
           "We confirm key property details and the buyer’s preferred timing for next steps.",
+        category: "FAQ",
+        tags: ["faq"],
+        relationships: [],
+        createdAt: baseCreatedAtISO,
+        updatedAt: baseUpdatedAtISO,
+        createdBy: "seed",
+        updatedBy: "seed",
+        visibility: "INTERNAL",
+        status: "ACTIVE",
+        source: "industry_template:property-management",
+        confidence: 0.85,
+        priority: "Medium",
+        industry: identity.industry,
+        applicableEmployees: allEmployeeIds,
+        searchKeywords: normalizeKeywords("walkthrough confirmation confirm key property details timing next steps"),
+        metadata: { legacyKey: "faqs[1]" },
+      },
+
+      {
+        id: "kn_listing_policy_professional_structured",
+        title: "Listing policy: professional and structured",
+        description: "Keep responses professional and structured.",
+        category: "POLICIES",
+        tags: ["policy", "listing"],
+        relationships: [],
+        createdAt: baseCreatedAtISO,
+        updatedAt: baseUpdatedAtISO,
+        createdBy: "seed",
+        updatedBy: "seed",
+        visibility: "INTERNAL",
+        status: "ACTIVE",
+        source: "industry_template:property-management",
+        confidence: 0.8,
+        priority: "Medium",
+        industry: identity.industry,
+        applicableEmployees: allEmployeeIds,
+        searchKeywords: normalizeKeywords("listing policy professional structured"),
+        metadata: { legacyKey: "listingPolicies[0]" },
+      },
+      {
+        id: "kn_listing_policy_confirm_key_details",
+        title: "Listing policy: confirm key property details",
+        description: "Confirm key property details before moving into scheduling.",
+        category: "POLICIES",
+        tags: ["policy", "listing"],
+        relationships: [],
+        createdAt: baseCreatedAtISO,
+        updatedAt: baseUpdatedAtISO,
+        createdBy: "seed",
+        updatedBy: "seed",
+        visibility: "INTERNAL",
+        status: "ACTIVE",
+        source: "industry_template:property-management",
+        confidence: 0.8,
+        priority: "Medium",
+        industry: identity.industry,
+        applicableEmployees: allEmployeeIds,
+        searchKeywords: normalizeKeywords("listing policy confirm key property details scheduling"),
+        metadata: { legacyKey: "listingPolicies[1]" },
+      },
+
+      {
+        id: "kn_response_pref_calm_confident",
+        title: "Response preference: calm and confident",
+        description: "Use calm, confident language.",
+        category: "POLICIES",
+        tags: ["preference", "tone"],
+        relationships: [],
+        createdAt: baseCreatedAtISO,
+        updatedAt: baseUpdatedAtISO,
+        createdBy: "seed",
+        updatedBy: "seed",
+        visibility: "INTERNAL",
+        status: "ACTIVE",
+        source: "industry_template:property-management",
+        confidence: 0.8,
+        priority: "Medium",
+        industry: identity.industry,
+        applicableEmployees: allEmployeeIds,
+        searchKeywords: normalizeKeywords("response preference calm confident language"),
+        metadata: { legacyKey: "responsePreferences[0]" },
+      },
+      {
+        id: "kn_response_pref_next_step_choice",
+        title: "Response preference: include next step the buyer can choose",
+        description: "Always include the next step the buyer can choose.",
+        category: "POLICIES",
+        tags: ["preference", "next-step"],
+        relationships: [],
+        createdAt: baseCreatedAtISO,
+        updatedAt: baseUpdatedAtISO,
+        createdBy: "seed",
+        updatedBy: "seed",
+        visibility: "INTERNAL",
+        status: "ACTIVE",
+        source: "industry_template:property-management",
+        confidence: 0.8,
+        priority: "Medium",
+        industry: identity.industry,
+        applicableEmployees: allEmployeeIds,
+        searchKeywords: normalizeKeywords("response preference next step buyer choose"),
+        metadata: { legacyKey: "responsePreferences[1]" },
+      },
+
+      {
+        id: "kn_brand_voice_premium_calm_confident",
+        title: "Brand voice: premium, calm, and confident",
+        description: "Premium, calm, and confident guidance.",
+        category: "BRAND_VOICE",
+        tags: ["brand-voice"],
+        relationships: [],
+        createdAt: baseCreatedAtISO,
+        updatedAt: baseUpdatedAtISO,
+        createdBy: "seed",
+        updatedBy: "seed",
+        visibility: "INTERNAL",
+        status: "ACTIVE",
+        source: "industry_template:property-management",
+        confidence: 0.9,
+        priority: "High",
+        industry: identity.industry,
+        applicableEmployees: allEmployeeIds,
+        searchKeywords: normalizeKeywords("brand voice premium calm confident guidance"),
+        metadata: { legacyKey: "brandVoice" },
+      },
+
+      {
+        id: "kn_property_showing_confirm_windows",
+        title: "Property showing rule: confirm preferred walkthrough windows",
+        description: "Confirm preferred walkthrough windows before proposing times.",
+        category: "PROPERTY_INFORMATION",
+        tags: ["property", "showing"],
+        relationships: [],
+        createdAt: baseCreatedAtISO,
+        updatedAt: baseUpdatedAtISO,
+        createdBy: "seed",
+        updatedBy: "seed",
+        visibility: "INTERNAL",
+        status: "ACTIVE",
+        source: "industry_template:property-management",
+        confidence: 0.82,
+        priority: "High",
+        industry: identity.industry,
+        applicableEmployees: allEmployeeIds,
+        searchKeywords: normalizeKeywords("property showing rule confirm walkthrough windows proposing times"),
+        metadata: { legacyKey: "propertyShowingRules[0]" },
+      },
+
+      {
+        id: "kn_property_showing_brief_checklist",
+        title: "Property showing rule: include a brief buyer checklist",
+        description: "Include a brief checklist of what the buyer should prepare.",
+        category: "PROPERTY_INFORMATION",
+        tags: ["property", "showing", "checklist"],
+        relationships: [],
+        createdAt: baseCreatedAtISO,
+        updatedAt: baseUpdatedAtISO,
+        createdBy: "seed",
+        updatedBy: "seed",
+        visibility: "INTERNAL",
+        status: "ACTIVE",
+        source: "industry_template:property-management",
+        confidence: 0.82,
+        priority: "Medium",
+        industry: identity.industry,
+        applicableEmployees: allEmployeeIds,
+        searchKeywords: normalizeKeywords("property showing checklist buyer prepare"),
+        metadata: { legacyKey: "propertyShowingRules[1]" },
       },
     ],
-    listingPolicies: [
-      "Keep responses professional and structured.",
-      "Confirm key property details before moving into scheduling.",
-    ],
-    responsePreferences: [
-      "Use calm, confident language.",
-      "Always include the next step the buyer can choose.",
-    ],
-    brandVoice: "Premium, calm, and confident guidance.",
-    propertyShowingRules: [
-      "Confirm preferred walkthrough windows before proposing times.",
-      "Include a brief checklist of what the buyer should prepare.",
-    ],
-  };
+  });
 
   /** @type {CompanyIntegration[]} */
   const integrations = [
@@ -386,7 +587,8 @@ function createABCPropertyGroupSeed() {
     identity,
     employees,
     companyData,
-    knowledge,
+    knowledgeRepository,
+    knowledgeCategories,
     integrations,
     approvalRules,
     communications: [],
@@ -416,13 +618,64 @@ export class CompanyWorkspaceRuntime {
   }
 
   getKnowledge() {
-    return {
-      faqs: this._state.knowledge.faqs,
-      listingPolicies: this._state.knowledge.listingPolicies,
-      responsePreferences: this._state.knowledge.responsePreferences,
-      brandVoice: this._state.knowledge.brandVoice,
-      propertyShowingRules: this._state.knowledge.propertyShowingRules,
+    return deriveCompactKnowledgeFromRepository(this._state.knowledgeRepository);
+  }
+
+  getKnowledgeRepository() {
+    return this._state.knowledgeRepository;
+  }
+
+  getKnowledgeCategories() {
+    return this._state.knowledgeCategories;
+  }
+
+  createKnowledgeItem(knowledgeInput) {
+    const event = createCompanyEvent({
+      id: knowledgeInput?.id ? `kn_evt_${knowledgeInput.id}` : undefined,
+      timestampISO: new Date().toISOString(),
+      type: COMPANY_EVENT_TYPES.KNOWLEDGE_CREATED,
+      source: "runtime:createKnowledgeItem",
+      payload: knowledgeInput,
+    });
+    this.applyEvent(event);
+    return this.getKnowledgeRepository();
+  }
+
+  reviseKnowledgeItem(knowledgeId, revisionPatch) {
+    const payload = {
+      id: knowledgeId,
+      ...revisionPatch,
+      updatedAt: revisionPatch?.updatedAt ?? new Date().toISOString(),
+      updatedBy: revisionPatch?.updatedBy ?? "runtime:reviseKnowledgeItem",
     };
+
+    const event = createCompanyEvent({
+      id: `kn_evt_rev_${knowledgeId}_${Date.now()}`,
+      timestampISO: new Date().toISOString(),
+      type: COMPANY_EVENT_TYPES.KNOWLEDGE_REVISION_CREATED,
+      source: "runtime:reviseKnowledgeItem",
+      payload,
+    });
+
+    this.applyEvent(event);
+    return this.getKnowledgeRepository();
+  }
+
+  archiveKnowledgeItem(knowledgeId, opts = {}) {
+    const event = createCompanyEvent({
+      id: `kn_evt_arch_${knowledgeId}_${Date.now()}`,
+      timestampISO: new Date().toISOString(),
+      type: COMPANY_EVENT_TYPES.KNOWLEDGE_ARCHIVED,
+      source: "runtime:archiveKnowledgeItem",
+      payload: {
+        id: knowledgeId,
+        updatedAt: opts.updatedAt ?? new Date().toISOString(),
+        updatedBy: opts.updatedBy ?? "runtime:archiveKnowledgeItem",
+      },
+    });
+
+    this.applyEvent(event);
+    return this.getKnowledgeRepository();
   }
 
   getIntegrations() {

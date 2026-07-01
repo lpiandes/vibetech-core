@@ -18,6 +18,7 @@ export default function CommunicationTimeline({
     { status: "DRAFT", label: "Draft Created" },
     { status: "PENDING_APPROVAL", label: "Awaiting Review" },
     { status: "APPROVED", label: "Approved" },
+    { status: "FAILED", label: "Failed" },
     { status: "SENT", label: "Sent" },
     { status: "DELIVERED", label: "Delivered" },
     { status: "OPENED", label: "Opened" },
