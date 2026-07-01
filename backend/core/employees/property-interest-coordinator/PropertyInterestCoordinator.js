@@ -30,6 +30,8 @@ import { ReviewWorkViewAdapter } from "../../views/ReviewWorkViewAdapter.js";
 
 import { PropertyResearchCapability } from "../../capabilities/property/PropertyResearchCapability.js";
 
+import { CompanyBrain } from "../../company/brain/CompanyBrain.js";
+
 function repoRootFromThisFile() {
   // This file lives at:
   // backend/core/employees/property-interest-coordinator/PropertyInterestCoordinator.js
@@ -109,7 +111,7 @@ export class PropertyInterestCoordinator {
    * @param {object} input.companyContext
    * @returns {Promise<{ reviewWork: any, employeeSummary: any }>}
    */
-  async run({ inquiry, property, companyContext }) {
+  async run({ inquiry, property, companyContext, runtime }) {
     const buyerName = formatBuyerName(inquiry);
     const responsePolicy = safeString(companyContext?.responsePolicy);
 
@@ -118,11 +120,25 @@ export class PropertyInterestCoordinator {
     const urgentFromMessage = /urgent|asap|today|immediately/i.test(safeString(inquiry?.message));
     const isUrgent = urgentFromMessage || daysSince <= 1;
 
-    // Capability requires companyKnowledge; we derive a minimal deterministic knowledge object
-    // from the available companyContext (responsePolicy) to satisfy the contract.
+    // Request business context from CompanyBrain (v1) instead of hand-assembling.
+    const companyBrain = runtime ? new CompanyBrain({ runtime }) : null;
+    const businessContext = companyBrain
+      ? companyBrain.buildBusinessContext({
+          employeeId: "emp_prop_interest",
+          task: "PROPERTY_RESEARCH",
+          companyId: safeString(companyContext?.companyName),
+          relatedEntities: {
+            property,
+            buyerInquiry: inquiry,
+          },
+        })
+      : null;
+
     const companyKnowledge = {
-      responsePreferences: [responsePolicy].filter(Boolean),
-      propertyShowingRules: ["Confirm preferred walkthrough windows before proposing times."],
+      responsePreferences: businessContext?.operationalRules?.responsePreferences ?? [responsePolicy].filter(Boolean),
+      propertyShowingRules:
+        businessContext?.operationalRules?.propertyShowingRules ??
+        ["Confirm preferred walkthrough windows before proposing times."],
     };
 
     const capability = new PropertyResearchCapability();

@@ -66,9 +66,11 @@ export class EmployeeDispatcher {
           },
         };
 
-        const { reviewWork, employeeSummary } = await this.propertyInterestCoordinator.run(
-          employeeInput,
-        );
+        const { reviewWork, employeeSummary } =
+          await this.propertyInterestCoordinator.run({
+            ...employeeInput,
+            runtime: this.runtime,
+          });
 
         return {
           success: true,
