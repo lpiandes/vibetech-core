@@ -4,56 +4,71 @@ import { demoCompany } from "@/lib/company/demoCompany";
 
 export default function DashboardHeader() {
   const inquiries = demoCompany.companyData.inquiries;
-
-  const inquiriesCount = inquiries.length;
-  const draftsReadyForReview = inquiries.filter(
+  const needsYourAttentionCount = inquiries.filter(
     (i) => i.status === "Needs Review" && i.draftResponseReady,
-  );
+  ).length;
 
-  const avgResponseTimeMinutes = (() => {
-    const times = draftsReadyForReview
-      .map((i) => i.responseTimeMinutes)
-      .filter((t): t is number => typeof t === "number");
-    if (!times.length) return 0;
-    return Math.round(times.reduce((a, b) => a + b, 0) / times.length);
-  })();
+  const employeeStats = demoCompany.employees.map((e) => {
+    const employeeInquiries = inquiries.filter(
+      (i) => i.employeeName === e.employeeName,
+    );
+
+    const reviewedCount = employeeInquiries.length || e.todayCompletedCount;
+    const preparedDraftCount = employeeInquiries.filter(
+      (i) => i.draftResponseReady,
+    ).length;
+    const highIntentCount = employeeInquiries.filter(
+      (i) => i.priority === "High",
+    ).length;
+
+    return {
+      employee: e,
+      reviewedCount,
+      preparedDraftCount,
+      highIntentCount,
+    };
+  });
 
   return (
     <section>
-      <InfoCard title="Good morning, Leo.">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-              Buyer inquiries
-            </div>
-
-            <p className="mt-3 text-sm leading-6 text-foreground">
-              Your Digital Workforce received {inquiriesCount} new buyer
-              inquiries while you were away.
-            </p>
-
-            <div className="mt-2 text-sm leading-6 text-foreground">
-              <span className="font-medium">
-                {draftsReadyForReview.length} Draft responses
-              </span>{" "}
-              are ready for your review.
-            </div>
-
-            <div className="mt-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-              Estimated response time
-            </div>
-            <div className="mt-2 text-sm leading-6 text-foreground">
-              <span className="font-semibold">
-                {avgResponseTimeMinutes} minutes
-              </span>
-            </div>
+      <InfoCard title="Good morning Mike.">
+        <div className="min-w-0">
+          <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            While you were away...
           </div>
 
-          <div className="shrink-0 pt-1">
-            <PrimaryButton
-              type="button"
-              className="h-11 rounded-2xl px-6"
-            >
+          <div className="mt-4 space-y-5">
+            {employeeStats.map((s) => (
+              <div key={s.employee.employeeId} className="space-y-2">
+                <div className="text-sm font-semibold text-foreground">
+                  {s.employee.employeeName}
+                </div>
+
+                <div className="text-sm leading-6 text-foreground">
+                  <span className="block">
+                    • Reviewed {s.reviewedCount} buyer inquiries
+                  </span>
+                  <span className="block">
+                    • Prepared {s.preparedDraftCount} draft responses
+                  </span>
+                  <span className="block">
+                    • Flagged {s.highIntentCount} high-intent buyers
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 text-sm leading-6 text-foreground">
+            Needs your attention on{" "}
+            <span className="font-semibold">
+              {needsYourAttentionCount} responses
+            </span>
+            .
+          </div>
+
+          <div className="mt-6 flex items-center justify-start">
+            <PrimaryButton type="button" className="h-11 rounded-2xl px-6">
               Review buyer response
             </PrimaryButton>
           </div>

@@ -22,7 +22,7 @@ export const demoCompany: Company = {
       approvalRateFootnote: "Based on recent approval outcomes.",
       workload: {
         inProgressCount: 2,
-        waitingOnYouCount: 1,
+        waitingOnYouCount: 3,
       },
       capabilities: [
         "Property Summary",
@@ -178,7 +178,7 @@ export const demoCompany: Company = {
           "Thanks! I’d like to understand next steps and when we can schedule a walkthrough.",
         submittedAtISO: "2026-06-25T13:45:00.000Z",
         status: "Needs Review",
-        priority: "Medium",
+        priority: "High",
         employeeName: "Property Interest Coordinator",
         createdTimeISO: "2026-06-25T14:05:00.000Z",
         queueVisible: true,
@@ -197,7 +197,7 @@ export const demoCompany: Company = {
         employeeName: "Property Interest Coordinator",
         createdTimeISO: "2026-06-25T11:50:00.000Z",
         queueVisible: true,
-        draftResponseReady: false,
+        draftResponseReady: true,
         responseTimeMinutes: 51,
       },
       {

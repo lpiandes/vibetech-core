@@ -9,7 +9,7 @@ export default function QuickActions() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
           <div>
             <PrimaryButton type="button" className="h-11 rounded-2xl px-6">
-              Review Work
+              Review buyer response
             </PrimaryButton>
           </div>
 
