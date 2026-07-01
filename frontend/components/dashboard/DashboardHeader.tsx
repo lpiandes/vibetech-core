@@ -1,31 +1,29 @@
 import InfoCard from "@/components/design-system/InfoCard";
 import PrimaryButton from "@/components/design-system/PrimaryButton";
-import { demoCompany } from "@/lib/company/demoCompany";
+type EmployeeStat = {
+  employeeId: string;
+  name: string;
+  todayCompletedCount: number;
+  currentWorkload?: { waitingOnYouCount?: number };
+};
 
-export default function DashboardHeader() {
-  const inquiries = demoCompany.companyData.inquiries;
-  const needsYourAttentionCount = inquiries.filter(
-    (i) => i.status === "Needs Review" && i.draftResponseReady,
-  ).length;
+export default function DashboardHeader({
+  dashboardView,
+  digitalWorkforceView,
+}: {
+  dashboardView: any;
+  digitalWorkforceView: { employees: EmployeeStat[] };
+}) {
+  const needsYourAttentionCount =
+    dashboardView?.itemsRequiringReview ?? 0;
 
-  const employeeStats = demoCompany.employees.map((e) => {
-    const employeeInquiries = inquiries.filter(
-      (i) => i.employeeName === e.employeeName,
-    );
-
-    const reviewedCount = employeeInquiries.length || e.todayCompletedCount;
-    const preparedDraftCount = employeeInquiries.filter(
-      (i) => i.draftResponseReady,
-    ).length;
-    const highIntentCount = employeeInquiries.filter(
-      (i) => i.priority === "High",
-    ).length;
-
+  const employeeStats = (digitalWorkforceView?.employees ?? []).map((e) => {
+    const waitingOnYouCount = e.currentWorkload?.waitingOnYouCount ?? 0;
     return {
       employee: e,
-      reviewedCount,
-      preparedDraftCount,
-      highIntentCount,
+      reviewedCount: e.todayCompletedCount ?? 0,
+      preparedDraftCount: e.todayCompletedCount ?? 0,
+      highIntentCount: waitingOnYouCount,
     };
   });
 
@@ -41,7 +39,7 @@ export default function DashboardHeader() {
             {employeeStats.map((s) => (
               <div key={s.employee.employeeId} className="space-y-2">
                 <div className="text-sm font-semibold text-foreground">
-                  {s.employee.employeeName}
+                  {s.employee.name}
                 </div>
 
                 <div className="text-sm leading-6 text-foreground">

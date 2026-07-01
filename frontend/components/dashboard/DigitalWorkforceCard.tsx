@@ -1,44 +1,55 @@
 import Avatar from "@/components/design-system/Avatar";
 import InfoCard from "@/components/design-system/InfoCard";
 import StatusBadge from "@/components/design-system/StatusBadge";
-import { demoCompany } from "@/lib/company/demoCompany";
 
-export default function DigitalWorkforceCard() {
-  const totalCompleted = demoCompany.employees.reduce(
-    (sum, e) => sum + e.todayCompletedCount,
+export default function DigitalWorkforceCard({
+  employees,
+  activityFeed,
+  hoursSavedToday,
+}: {
+  employees: Array<{
+    employeeId: string;
+    name: string;
+    role: string;
+    status: "Working" | "Offline" | "Needs Review" | "Approved" | "Completed";
+    statusQualifier: string;
+    todayCompletedCount: number;
+    todayAccomplishmentLine: string;
+    approvalRatePercent: number;
+    approvalRateFootnote: string;
+    currentWorkload?: { inProgressCount: number; waitingOnYouCount: number };
+    capabilities?: string[];
+    primaryActionLabel?: string;
+  }>;
+  activityFeed: Array<{
+    time: string;
+    employee: string;
+    activity: string;
+    object: string;
+  }>;
+  hoursSavedToday: number;
+}) {
+  const totalCompleted = employees.reduce(
+    (sum, e) => sum + (e.todayCompletedCount ?? 0),
     0,
   );
   const totalCompletedSafe = totalCompleted || 1;
-  const hoursSavedToday = demoCompany.companyData.hoursSavedToday;
-
-  const formatTime = (iso: string) => new Date(iso).toISOString().slice(11, 16);
-
-  const employees = demoCompany.employees;
-  const inquiries = demoCompany.companyData.inquiries;
 
   return (
     <section>
       <div className="space-y-5">
         {employees.map((e) => {
-          const employeeInquiries = inquiries.filter(
-            (i) => i.employeeName === e.employeeName,
-          );
-          const startedAt =
-            employeeInquiries
-              .map((i) => i.submittedAtISO)
-              .sort()
-              .at(0) ?? employeeInquiries[0]?.createdTimeISO;
-
-          const startedValue = startedAt ? formatTime(startedAt) : "Today";
+          const employeeFeed = activityFeed.filter((a) => a.employee === e.name);
+          const startedValue = employeeFeed.length ? employeeFeed[0]?.time : "Today";
 
           const hoursReturned =
-            (hoursSavedToday * e.todayCompletedCount) / totalCompletedSafe;
+            (hoursSavedToday * (e.todayCompletedCount ?? 0)) / totalCompletedSafe;
 
           return (
-            <InfoCard key={e.employeeId} title={e.employeeName}>
+            <InfoCard key={e.employeeId} title={e.name}>
               <div className="flex items-start justify-between gap-6">
                 <div className="flex items-start gap-4">
-                  <Avatar name={e.employeeName} size={44} />
+                  <Avatar name={e.name} size={44} />
 
                   <div className="min-w-0">
                     <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
@@ -66,7 +77,7 @@ export default function DigitalWorkforceCard() {
                       Waiting For You
                     </div>
                     <div className="mt-2 text-sm leading-6 text-foreground">
-                      {e.workload.waitingOnYouCount} responses
+                      {e.currentWorkload?.waitingOnYouCount ?? 0} responses
                     </div>
                   </div>
                 </div>

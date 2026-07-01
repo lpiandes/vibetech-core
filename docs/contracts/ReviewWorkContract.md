@@ -30,6 +30,7 @@ Backend Runtime “Review Work view” adapter for a specific Work item.
 - `employeeThinking` (string)
 - `draft` (Draft; see `RuntimeModels.md`)
 - `approval` (ApprovalRequest; see `RuntimeModels.md`)
+- `communication` (CommunicationView; see `CommunicationTypes.md` in `backend/core/communication/` for first-class outbound communication)
 - `activities` (Activity[]; optional; for future “audit-style” display)
 
 ### ApprovalRequest (portion of `ReviewWorkResponse`)

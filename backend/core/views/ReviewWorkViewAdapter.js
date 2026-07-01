@@ -30,6 +30,7 @@ export class ReviewWorkViewAdapter {
     employeeFolderPath,
     attorneyNote,
     clientName,
+    workItemId,
   }) {
     const result = await this.DraftGenerator.generate({
       runtimeInput,
@@ -41,8 +42,8 @@ export class ReviewWorkViewAdapter {
     const runtime = result?.runtime ?? {};
 
     const createdTimeISO = "2026-06-25T14:30:00.000Z";
-    const placeholderMatterType = "Settlement Negotiation";
-    const assignedEmployeeName = "Client Update Employee";
+    const placeholderMatterType = "Property Inquiry";
+    const assignedEmployeeName = "Property Interest Coordinator";
 
     const isUrgent = Boolean(runtimeInput?.isUrgent);
     const priority = isUrgent ? "High" : "Medium";
@@ -91,7 +92,7 @@ export class ReviewWorkViewAdapter {
 
     const approval = {
       approvalRequestId: "approval_1",
-      workItemId: "workItem_demo",
+      workItemId: String(workItemId ?? "workItem_demo"),
       requiresApproval,
       approvalType: "Attorney Approval",
       statusLabel: requiresApproval ? "Pending Review" : "Completed",

@@ -9,10 +9,6 @@
  */
 
 export class ReviewWorkflow {
-  /**
-   * @param {object} params
-   * @param {ReviewWorkViewAdapter} params.ReviewWorkViewAdapter
-   */
   constructor({ ReviewWorkViewAdapter } = {}) {
     if (!ReviewWorkViewAdapter) {
       throw new Error("ReviewWorkflow requires ReviewWorkViewAdapter.");
@@ -32,16 +28,60 @@ export class ReviewWorkflow {
    * @param {string} input.clientName
    * @returns {Promise<object>} ReviewWorkResponse business contract
    */
-  async createReviewTask({ runtimeInput, employeeFolderPath, attorneyNote, clientName }) {
+  async createReviewTask({
+    runtimeInput,
+    employeeFolderPath,
+    attorneyNote,
+    clientName,
+    workItemId,
+    companyRuntime,
+    communicationChannel = "email",
+  }) {
     const response = await this.ReviewWorkViewAdapter.toReviewWorkResponse({
       runtimeInput,
       employeeFolderPath,
       attorneyNote,
       clientName,
+      workItemId,
     });
 
-    const key = String(response?.approval?.workItemId ?? "workItem_demo");
+    const key = String(response?.approval?.workItemId ?? workItemId ?? "workItem_demo");
     this.sessions.set(key, { response });
+
+    // Create DRAFT communication as a first-class business object.
+    if (companyRuntime) {
+      const { CommunicationEngine } = await import("../communication/CommunicationEngine.js");
+
+      const communicationEngine = new CommunicationEngine({ runtime: companyRuntime });
+      const communicationId = `comm_${key}`;
+
+      const draftContent = String(response?.draft?.content ?? "");
+      const { subject, body } = (() => {
+        const lines = draftContent.split(/\r?\n/);
+        const idx = lines.findIndex((l) => /^Subject:/i.test(l));
+        if (idx >= 0) {
+          const subject = lines[idx].replace(/^Subject:/i, "").trim() || "Buyer response";
+          const bodyLines = lines.slice(idx + 1);
+          while (bodyLines.length && bodyLines[0].trim().length === 0) bodyLines.shift();
+          return { subject, body: bodyLines.join("\n") };
+        }
+        return { subject: "Buyer response", body: draftContent };
+      })();
+
+      const reviewRequired = Boolean(response?.approval?.requiresApproval);
+
+      const comm = communicationEngine.createDraft({
+        communicationId,
+        channel: communicationChannel,
+        recipient: String(clientName ?? response?.caseSummary?.clientName ?? "Recipient"),
+        subject,
+        body,
+        reviewRequired,
+        createdAtISO: runtimeInput?.nowISO,
+      });
+
+      response.communication = comm;
+    }
 
     return response;
   }
@@ -54,7 +94,12 @@ export class ReviewWorkflow {
    * @param {"APPROVE"|"REJECT"} input.decision
    * @returns {object} Updated ReviewWorkResponse business contract
    */
-  applyApprovalDecision({ workItemId, decision }) {
+  async applyApprovalDecision({
+    workItemId,
+    decision,
+    companyRuntime,
+    approvedBy,
+  }) {
     const key = String(workItemId);
     const session = this.sessions.get(key);
     if (!session?.response) {
@@ -76,12 +121,38 @@ export class ReviewWorkflow {
       response.approval.statusLabel = "Completed";
       response.approval.governanceNote =
         "Governance decision recorded. The draft is approved within governance boundaries.";
+
+      // When ReviewWorkflow approves, create an APPROVED Communication.
+      if (companyRuntime) {
+        const { CommunicationEngine } = await import("../communication/CommunicationEngine.js");
+        const communicationEngine = new CommunicationEngine({ runtime: companyRuntime });
+        const communicationId = `comm_${key}`;
+
+        const comm = communicationEngine.approveCommunication({
+          communicationId,
+          approvedBy: String(approvedBy ?? "Review Workflow"),
+          approvedAtISO: completionTimeISO,
+        });
+        response.communication = comm;
+      }
     } else {
       response.approval.requiresApproval = requiresApproval;
       response.approval.primaryAction = "Reject";
       response.approval.statusLabel = "Rejected";
       response.approval.governanceNote =
         "Governance decision recorded. The draft is rejected and will require revised next steps.";
+
+      if (companyRuntime) {
+        const { CommunicationEngine } = await import("../communication/CommunicationEngine.js");
+        const communicationEngine = new CommunicationEngine({ runtime: companyRuntime });
+        const communicationId = `comm_${key}`;
+        const comm = communicationEngine.rejectCommunication({
+          communicationId,
+          rejectedAtISO: completionTimeISO,
+          rejectedBy: String(approvedBy ?? "Review Workflow"),
+        });
+        response.communication = comm;
+      }
     }
 
     response.caseSummary.status = "Completed";

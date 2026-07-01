@@ -14,8 +14,12 @@ import { WebsiteInquiryAdapter } from "./WebsiteInquiryAdapter.js";
 
 async function main() {
   const adapter = new WebsiteInquiryAdapter();
+  // Runtime is required so the adapter can publish events.
+  const { CompanyWorkspaceRuntime } = await import("../company/CompanyWorkspaceRuntime.js");
+  const runtime = new CompanyWorkspaceRuntime();
 
   const payload = {
+    runtime,
     inquiry: {
       name: "Emily Carter",
       email: "emily.carter@example.com",
@@ -23,6 +27,7 @@ async function main() {
       message:
         "Hi! I’m interested in this property and would like to discuss next steps today. Is there anything urgent I should know about?",
       submittedAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
+      priority: "High",
     },
     property: {
       propertyId: "prop_68_mystic",
@@ -60,6 +65,9 @@ async function main() {
 
   console.log("\nReview Work Response");
   console.log(JSON.stringify(result.reviewWork, null, 2));
+
+  console.log("\nUpdated Metrics");
+  console.log(JSON.stringify(runtime.getMetrics(), null, 2));
 }
 
 main().catch((err) => {

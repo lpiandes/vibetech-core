@@ -389,6 +389,7 @@ function createABCPropertyGroupSeed() {
     knowledge,
     integrations,
     approvalRules,
+    communications: [],
     customActivities: [],
   });
 }
@@ -442,6 +443,14 @@ export class CompanyWorkspaceRuntime {
 
   getMetrics() {
     return this._metrics;
+  }
+
+  /**
+   * First-class outbound communications created via CommunicationEngine.
+   * @returns {Array<any>}
+   */
+  getCommunications() {
+    return this._state.communications;
   }
 
   _deriveWorkQueue() {

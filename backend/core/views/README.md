@@ -37,3 +37,17 @@ Future adapters (Dashboard, Work Queue, Digital Workforce) should follow the sam
 4. Populate deterministic placeholders for any fields that runtime does not yet produce
 5. Avoid leaking prompts, runtime internals, and provider/pipeline details
 
+## WorkspaceViewAdapter (Dashboard, Digital Workforce, Work Queue)
+
+`WorkspaceViewAdapter` is the first adapter that exposes a single backend entry point for the Workspace UI.
+
+Why this matters:
+- Every frontend screen should consume view adapter outputs (not runtime internals).
+- The runtime remains implementation-focused (company state + derived business models).
+- View adapters become the stable contract between backend business models and frontend page contracts.
+
+As future APIs are added, they can simply expose:
+- `runtime -> WorkspaceViewAdapter.getDashboardView()`
+- `runtime -> WorkspaceViewAdapter.getDigitalWorkforceView()`
+- `runtime -> WorkspaceViewAdapter.getWorkQueueView()`
+

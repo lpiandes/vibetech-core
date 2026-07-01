@@ -90,7 +90,7 @@ async function runScenario({ decision }) {
   console.log(JSON.stringify(reviewResponse, null, 2));
 
   // 2) Apply approval decision (in-memory only) and mark completion
-  const updated = workflow.applyApprovalDecision({
+  const updated = await workflow.applyApprovalDecision({
     workItemId: reviewResponse?.approval?.workItemId,
     decision,
   });

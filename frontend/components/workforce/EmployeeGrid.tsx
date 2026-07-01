@@ -1,31 +1,26 @@
 import EmployeeCard from "./EmployeeCard";
 import type { EmployeeCardModel } from "./EmployeeCard";
-import { demoCompany } from "@/lib/company/demoCompany";
+import { WorkspaceService } from "@/lib/workspace/WorkspaceService";
 
 export default function EmployeeGrid() {
-  const propertyEmployee = demoCompany.employees.find(
-    (e) => e.employeeName === "Property Interest Coordinator",
-  );
+  const service = new WorkspaceService();
+  const view = service.loadDigitalWorkforce();
 
-  const employees: EmployeeCardModel[] = propertyEmployee
-    ? [
-        {
-          id: propertyEmployee.employeeId,
-          name: propertyEmployee.employeeName,
-          role: propertyEmployee.role,
-          mission: propertyEmployee.mission,
-          status: propertyEmployee.status,
-          statusQualifier: propertyEmployee.statusQualifier,
-          todayCompleted: propertyEmployee.todayCompletedCount,
-          todayCompletedLine: propertyEmployee.todayAccomplishmentLine,
-          approvalRatePercent: propertyEmployee.approvalRatePercent,
-          approvalRateFootnote: propertyEmployee.approvalRateFootnote,
-          inProgress: propertyEmployee.workload.inProgressCount,
-          waitingOnYou: propertyEmployee.workload.waitingOnYouCount,
-          capabilities: propertyEmployee.capabilities,
-        },
-      ]
-    : [];
+  const employees: EmployeeCardModel[] = (view.employees ?? []).map((e: any) => ({
+    id: e.employeeId,
+    name: e.name,
+    role: e.role,
+    mission: undefined,
+    status: e.status,
+    statusQualifier: e.statusQualifier,
+    todayCompleted: e.todayCompletedCount,
+    todayCompletedLine: e.todayAccomplishmentLine,
+    approvalRatePercent: e.approvalRatePercent,
+    approvalRateFootnote: e.approvalRateFootnote,
+    inProgress: e.currentWorkload?.inProgressCount ?? 0,
+    waitingOnYou: e.currentWorkload?.waitingOnYouCount ?? 0,
+    capabilities: e.capabilities,
+  }));
 
   return (
     <section>

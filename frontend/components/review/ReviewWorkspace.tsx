@@ -1,7 +1,10 @@
 import ActionBar from "./ActionBar";
 import AttorneyNoteCard from "./AttorneyNoteCard";
 import CaseSummaryCard from "./CaseSummaryCard";
-import DraftPreviewCard from "./DraftPreviewCard";
+import CommunicationCard, {
+  type CommunicationModel,
+} from "./CommunicationCard";
+import CommunicationTimeline from "./CommunicationTimeline";
 import EmployeeReasoningCard from "./EmployeeReasoningCard";
 import FeedbackCard from "./FeedbackCard";
 import ReviewHeader from "./ReviewHeader";
@@ -153,8 +156,70 @@ export default function ReviewWorkspace({
       />
 
       <EmployeeReasoningCard recommendation={workItem.employeeThinking} />
+      {(() => {
+        const draft = String(workItem.draftEmail ?? "");
+        const lines = draft.split(/\r?\n/);
+        const subjectLineIdx = lines.findIndex((l) => /^Subject:/i.test(l));
+        const subject =
+          subjectLineIdx >= 0
+            ? lines[subjectLineIdx].replace(/^Subject:/i, "").trim() || "Buyer response"
+            : "Buyer response";
 
-      <DraftPreviewCard draft={workItem.draftEmail} />
+        const bodyLines =
+          subjectLineIdx >= 0 ? lines.slice(subjectLineIdx + 1) : lines;
+        while (bodyLines.length && bodyLines[0].trim().length === 0) bodyLines.shift();
+
+        const created = workItem.createdTimeISO;
+        const addMinutes = (iso: string, minutes: number) => {
+          const d = new Date(iso);
+          d.setUTCMinutes(d.getUTCMinutes() + minutes);
+          return d.toISOString();
+        };
+
+        const reviewRequired = Boolean(workItem.approval?.requiresAttorneyApproval);
+        const communicationStatus = reviewRequired ? "PENDING_APPROVAL" : "APPROVED";
+
+        const communication: CommunicationModel = {
+          communicationId: `comm_${workItemId ?? defaultId}`,
+          channel: "email",
+          status: communicationStatus,
+          recipient: workItem.buyerName,
+          subject,
+          body: bodyLines.join("\n"),
+          createdAt: created,
+          reviewRequired,
+          timeline: reviewRequired
+            ? [
+                {
+                  timestampISO: created,
+                  status: "DRAFT",
+                  action: "Draft Created",
+                  object: workItem.buyerName,
+                },
+                {
+                  timestampISO: addMinutes(created, 1),
+                  status: "PENDING_APPROVAL",
+                  action: "Review Required",
+                  object: workItem.buyerName,
+                },
+              ]
+            : [
+                {
+                  timestampISO: created,
+                  status: "APPROVED",
+                  action: "Approved",
+                  object: workItem.buyerName,
+                },
+              ],
+        };
+
+        return (
+          <>
+            <CommunicationCard communication={communication} />
+            <CommunicationTimeline timeline={communication.timeline} />
+          </>
+        );
+      })()}
       <FeedbackCard />
       <ActionBar approval={workItem.approval} />
     </div>

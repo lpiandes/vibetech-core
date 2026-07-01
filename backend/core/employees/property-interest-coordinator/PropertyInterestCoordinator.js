@@ -28,6 +28,8 @@ import { DraftGenerator } from "../../generation/DraftGenerator.js";
 
 import { ReviewWorkViewAdapter } from "../../views/ReviewWorkViewAdapter.js";
 
+import { PropertyResearchCapability } from "../../capabilities/property/PropertyResearchCapability.js";
+
 function repoRootFromThisFile() {
   // This file lives at:
   // backend/core/employees/property-interest-coordinator/PropertyInterestCoordinator.js
@@ -53,39 +55,40 @@ function computeDaysSince(submittedAtISO) {
   return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 }
 
-function buildEmployeeThinking({
+function buildEmployeeThinkingFromCapability({
   buyerName,
-  property,
-  inquiry,
+  capabilityOutput,
   responsePolicy,
 }) {
-  const address = safeString(property?.address).trim();
-  const city = safeString(property?.city).trim();
-  const state = safeString(property?.state).trim();
-  const fullAddress = [address, city, state].filter(Boolean).join(", ");
+  const propertySummary = capabilityOutput?.propertySummary ?? "";
+  const buyerFit = capabilityOutput?.buyerFit ?? "";
+  const sellingPoints = Array.isArray(capabilityOutput?.sellingPoints)
+    ? capabilityOutput.sellingPoints
+    : [];
+  const buyerConsiderations = Array.isArray(capabilityOutput?.buyerConsiderations)
+    ? capabilityOutput.buyerConsiderations
+    : [];
+  const reasoning = capabilityOutput?.reasoning ?? "";
 
-  const price = property?.price !== undefined && property?.price !== null ? safeString(property.price) : "";
-  const highl = Array.isArray(property?.highlights) ? property.highlights : [];
-  const cons = Array.isArray(property?.considerations) ? property.considerations : [];
+  const sellingPointsLine = sellingPoints.length
+    ? `Key strengths: ${sellingPoints.slice(0, 3).join("; ")}.`
+    : "";
+  const buyerConsiderationsLine = buyerConsiderations.length
+    ? `Items to confirm next: ${buyerConsiderations.slice(0, 2).join("; ")}.`
+    : "";
 
-  const highlightsText = highl.length ? highl.join("; ") : "Key strengths are present, but details will be confirmed in the next step.";
-  const considerationsText = cons.length ? cons.join("; ") : "There are a few points to clarify with the buyer and coordinate internally.";
-
-  const urgencyCue = /urgent|asap|today|immediately/i.test(safeString(inquiry?.message));
   const responseCue = responsePolicy
-    ? `The company response policy requires prompt, professional guidance.`
-    : `The response should be prompt, professional, and governance-aware.`;
+    ? `Response policy: ${responsePolicy}`
+    : "Response policy: prompt, professional, governance-aware guidance.";
 
   return [
-    `${buyerName} submitted a property inquiry for ${fullAddress || "a specified address"}.`,
-    price ? `The listed price is ${price}.` : "",
-    `Based on the inquiry and property details, I recommend responding today while interest is high.`,
-    `Property highlights: ${highlightsText}`,
-    `Buyer considerations: ${considerationsText}`,
+    `${buyerName} submitted a property inquiry.`,
+    propertySummary ? `Property summary: ${propertySummary}` : "",
+    buyerFit ? `Buyer fit: ${buyerFit}.` : "",
+    sellingPointsLine,
+    buyerConsiderationsLine,
+    reasoning,
     responseCue,
-    urgencyCue
-      ? `The buyer’s message suggests urgency; prioritize a clear, next-step response.`
-      : `Provide a structured reply that sets expectations and invites the buyer’s preferences.`,
   ]
     .filter(Boolean)
     .join(" ");
@@ -110,16 +113,28 @@ export class PropertyInterestCoordinator {
     const buyerName = formatBuyerName(inquiry);
     const responsePolicy = safeString(companyContext?.responsePolicy);
 
-    // 1) Recognize a new inquiry (local deterministic decision point).
+    // 1) Research the property + buyer intent via a reusable capability.
     const daysSince = computeDaysSince(safeString(inquiry?.submittedAt));
     const urgentFromMessage = /urgent|asap|today|immediately/i.test(safeString(inquiry?.message));
     const isUrgent = urgentFromMessage || daysSince <= 1;
 
-    // 2) Summarize property (highlights + considerations) into business language.
-    const employeeThinking = buildEmployeeThinking({
-      buyerName,
+    // Capability requires companyKnowledge; we derive a minimal deterministic knowledge object
+    // from the available companyContext (responsePolicy) to satisfy the contract.
+    const companyKnowledge = {
+      responsePreferences: [responsePolicy].filter(Boolean),
+      propertyShowingRules: ["Confirm preferred walkthrough windows before proposing times."],
+    };
+
+    const capability = new PropertyResearchCapability();
+    const capabilityOutput = capability.run({
       property,
-      inquiry,
+      buyerInquiry: inquiry,
+      companyKnowledge,
+    });
+
+    const employeeThinking = buildEmployeeThinkingFromCapability({
+      buyerName,
+      capabilityOutput,
       responsePolicy,
     });
 
@@ -143,16 +158,22 @@ export class PropertyInterestCoordinator {
 
     const attorneyNote = [
       `Property Highlights:`,
-      Array.isArray(property?.highlights) && property.highlights.length
-        ? property.highlights.map((h) => `- ${safeString(h)}`).join("\n")
+      Array.isArray(capabilityOutput?.sellingPoints) && capabilityOutput.sellingPoints.length
+        ? capabilityOutput.sellingPoints.map((p) => `- ${safeString(p)}`).join("\n")
         : "- Not specified yet.",
       ``,
       `Buyer Considerations:`,
-      Array.isArray(property?.considerations) && property.considerations.length
-        ? property.considerations.map((c) => `- ${safeString(c)}`).join("\n")
+      Array.isArray(capabilityOutput?.buyerConsiderations) && capabilityOutput.buyerConsiderations.length
+        ? capabilityOutput.buyerConsiderations.map((c) => `- ${safeString(c)}`).join("\n")
         : "- Not specified yet.",
       ``,
       `Response Policy: ${responsePolicy || "Prompt, professional, governance-aware."}`,
+      ``,
+      `Recommended Talking Points:`,
+      Array.isArray(capabilityOutput?.recommendedTalkingPoints) &&
+      capabilityOutput.recommendedTalkingPoints.length
+        ? capabilityOutput.recommendedTalkingPoints.map((t) => `- ${safeString(t)}`).join("\n")
+        : "- Not specified yet.",
       ``,
       `Recommendation: ${employeeThinking}`,
     ].join("\n");
@@ -193,8 +214,12 @@ export class PropertyInterestCoordinator {
       : "Respond promptly with a professional reply, confirming key property details and inviting buyer preferences.";
 
     const confidence = Array.isArray(property?.highlights) && property.highlights.length
-      ? 0.86
-      : 0.72;
+      ? capabilityOutput?.confidence === "High"
+        ? 0.92
+        : capabilityOutput?.confidence === "Medium"
+          ? 0.78
+          : 0.68
+      : 0.68;
 
     return {
       reviewWork,
@@ -202,7 +227,7 @@ export class PropertyInterestCoordinator {
         employeeName: "Property Interest Coordinator",
         mission:
           "Recognize property inquiries, understand the property, prepare a recommendation, draft a response, and create a governance review task.",
-        recommendedAction,
+        recommendedAction: recommendedAction,
         confidence,
       },
     };

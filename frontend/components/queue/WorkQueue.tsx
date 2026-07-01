@@ -6,36 +6,13 @@ import QueueHeader from "./QueueHeader";
 import QueueFilters from "./QueueFilters";
 import QueueItem, { type QueueItemModel } from "./QueueItem";
 import EmptyState from "./EmptyState";
-import { demoCompany } from "@/lib/company/demoCompany";
 
-export default function WorkQueue() {
-  const buyerById = new Map(
-    demoCompany.companyData.buyers.map((b) => [b.buyerId, b.name]),
-  );
-  const propertyById = new Map(
-    demoCompany.companyData.properties.map((p) => [p.propertyId, p]),
-  );
-
-  const queueItems: QueueItemModel[] = demoCompany.companyData.inquiries
-    .filter((i) => i.queueVisible)
-    .map((i) => {
-      const buyerName = buyerById.get(i.buyerId) ?? "Buyer";
-      const p = propertyById.get(i.propertyId);
-      const propertySummary = p
-        ? `${p.address} (${p.city}, ${p.state})`
-        : "Property";
-
-      return {
-        id: i.inquiryId,
-        title: "Draft response",
-        clientName: buyerName,
-        matterType: propertySummary,
-        priority: i.priority,
-        status: i.status,
-        employee: i.employeeName,
-        createdTimeISO: i.createdTimeISO,
-      };
-    });
+export default function WorkQueue({
+  items,
+}: {
+  items: QueueItemModel[];
+}) {
+  const queueItems = items;
 
   return (
     <div className="space-y-8">
