@@ -33,9 +33,9 @@ test("Requirement evaluation: initial onboarding yields NOT_STARTED and seeded r
   const result = engine.evaluate({ companyRuntime, onboardingRuntime, nowISO: NOW0 });
 
   const identity = result.capabilities.find((c) => c.id === "company_identity");
-  assert.equal(identity.status, "NOT_STARTED");
-  assert.equal(identity.health, "DEGRADED");
-  assert.ok(identity.recommendations.includes("Complete Company Profile."));
+  assert.equal(identity.status, "READY");
+  assert.equal(identity.health, "HEALTHY");
+  assert.equal(identity.recommendations.length, 0);
   assert.ok(Object.isFrozen(identity));
   assert.ok(Object.isFrozen(result));
 });

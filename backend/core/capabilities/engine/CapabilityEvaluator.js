@@ -1,9 +1,14 @@
 import { createBusinessCapability } from "./BusinessCapability.js";
 import { deepFreeze } from "./_utils/deepFreeze.js";
 
-function normalizeStatusFromProgress({ unmetRequirements, completionPercent, dependencyBlocked } = {}) {
+function normalizeStatusFromProgress({
+  unmetRequirements,
+  completionPercent,
+  dependencyBlocked,
+  requirementsLength,
+} = {}) {
   if (dependencyBlocked) return "BLOCKED";
-  if (unmetRequirements.length === 0 && completionPercent >= 100) return "READY";
+  if (requirementsLength > 0 && unmetRequirements.length === 0) return "READY";
   if (completionPercent > 0) return "IN_PROGRESS";
   return "NOT_STARTED";
 }
@@ -49,6 +54,18 @@ function evaluateRequirement({ requirement, runtimeContext } = {}) {
           : false;
       case "company_metrics_available":
         return Boolean(companyRuntime?.getMetrics?.());
+      case "company_profile_validation_passed": {
+        const profile = companyRuntime?.getCompanyProfile?.();
+        return Boolean(profile?.metadata?.validation?.ok);
+      }
+      case "company_profile_completion_percent_threshold": {
+        const threshold = typeof requirement?.threshold === "number" ? requirement.threshold : 80;
+        const profile = companyRuntime?.getCompanyProfile?.();
+        const completion = typeof profile?.metadata?.completionPercent === "number"
+          ? profile.metadata.completionPercent
+          : 0;
+        return completion >= threshold;
+      }
       default:
         return false;
     }
@@ -101,7 +118,18 @@ export class CapabilityEvaluator {
     );
     const unmetRequirements = evaluatedRequirements.filter((x) => !x.met);
     const metCount = requirements.length - unmetRequirements.length;
-    const completionPercent = requirements.length ? (metCount / requirements.length) * 100 : 0;
+    let completionPercent = requirements.length ? (metCount / requirements.length) * 100 : 0;
+
+    // Company Identity completion should reflect the actual profile completion percentage.
+    if (capabilityId === "company_identity") {
+      const profile = companyRuntime?.getCompanyProfile?.();
+      const profileCompletion = typeof profile?.metadata?.completionPercent === "number"
+        ? profile.metadata.completionPercent
+        : null;
+      if (profileCompletion !== null) {
+        completionPercent = Math.max(0, Math.min(100, profileCompletion));
+      }
+    }
 
     // dependency blockers (derived)
     const depsBlockedObj = (evaluatedDependencies?.blockedBy ?? {})[capDef.id];
@@ -112,6 +140,7 @@ export class CapabilityEvaluator {
       unmetRequirements,
       completionPercent,
       dependencyBlocked,
+      requirementsLength: requirements.length,
     });
 
     const health = determineHealth({ status, unmetRequirements });

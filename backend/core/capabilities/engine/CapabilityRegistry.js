@@ -31,7 +31,10 @@ const BUILT_IN_CAPABILITIES = [
     id: "company_identity",
     name: "Company Identity",
     description: "Company identity and baseline configuration is defined.",
-    requirements: [{ type: "onboarding_step_completed", stepId: "company_profile" }],
+    requirements: [
+      { type: "company_profile_validation_passed" },
+      { type: "company_profile_completion_percent_threshold", threshold: 40 },
+    ],
     providedFeatures: ["company-profile-loaded"],
     industrySupport: ["any"],
     recommendationSeeds: ["Complete Company Profile."],
