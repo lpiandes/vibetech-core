@@ -24,6 +24,22 @@ This sprint builds:
 - `MissionControlLayout`
   - owns only layout decisions (single/compact), driven by view model fields
 
+## Mission Control Experience (UX Principles)
+This is an executive command center. The experience should feel calm, confident, and premium.
+
+### Loading philosophy
+- Loading should never block the layout; we show a consistent skeleton while the route is rendering.
+- Use `app/mission-control/loading.tsx` for route-level loading UX.
+
+### Empty state philosophy
+- Empty sections should communicate confidence, not absence.
+- Never show generic “No Data”. Prefer section-specific executive reassurance.
+- Empty sections start collapsed to prevent the page from dominating with empty content.
+
+### Error philosophy
+- If Mission Control cannot render, degrade gracefully to a friendly executive fallback.
+- Use Next’s `app/mission-control/error.tsx` plus the local `MissionControlErrorBoundary` for presentation-safe error handling.
+
 ## Relationship to the backend
 - The backend produces `MissionControlViewModel` via `MissionControlViewAdapter`
 - React renders only the view model fields

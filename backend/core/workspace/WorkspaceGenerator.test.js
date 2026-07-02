@@ -50,6 +50,8 @@ test("Workspace generation: includes expected modules and produces immutable con
   const moduleIds = config.modules.map((m) => m.id);
   // Base modules
   assert.ok(moduleIds.includes("dashboard"));
+  assert.ok(moduleIds.includes("mission_control"));
+  assert.ok(moduleIds.includes("settings"));
   assert.ok(moduleIds.includes("company_health"));
   assert.ok(moduleIds.includes("recommendations"));
 

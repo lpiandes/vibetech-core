@@ -2,13 +2,13 @@ import { deepFreeze } from "./_utils/deepFreeze.js";
 
 function sectionOrder(section) {
   const map = {
-    Workspace: 1,
-    Knowledge: 2,
-    Workforce: 3,
-    Operations: 4,
-    Communications: 5,
-    Integrations: 6,
-    Analytics: 7,
+    "Mission Control": 1,
+    Team: 2,
+    Work: 3,
+    Knowledge: 4,
+    Company: 5,
+    Analytics: 6,
+    Settings: 7,
   };
   return map[section] ?? 99;
 }

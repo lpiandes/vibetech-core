@@ -2,6 +2,10 @@ import { deepFreeze } from "../_utils/deepFreeze.js";
 
 function iconForModuleId(moduleId) {
   switch (moduleId) {
+    case "mission_control":
+      return "sparkles";
+    case "settings":
+      return "sun";
     case "dashboard":
       return "dashboard";
     case "knowledge":

@@ -43,3 +43,7 @@ Mission Control is the composer; it never computes intelligence belonging to oth
 
 Future Mission Control view adapters and renderers can translate this canonical model into UI.
 
+## Mission Control Freeze (Permanent)
+Mission Control is now feature-frozen for this architecture foundation sprint.
+Future platform capabilities must improve Mission Control through composition (additional canonical objects feeding the generator/view), not by redesigning sections/cards/UX logic.
+

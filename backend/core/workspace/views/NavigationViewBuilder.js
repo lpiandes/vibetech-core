@@ -3,20 +3,20 @@ import { deepFreeze } from "../_utils/deepFreeze.js";
 function sectionTitle(sectionId) {
   // Presentation titles for the navigation UI.
   switch (sectionId) {
-    case "Workspace":
-      return "Workspace";
     case "Knowledge":
       return "Knowledge";
-    case "Workforce":
-      return "Workforce";
-    case "Operations":
-      return "Operations";
-    case "Communications":
-      return "Communications";
-    case "Integrations":
-      return "Integrations";
+    case "Team":
+      return "Team";
+    case "Work":
+      return "Work";
+    case "Company":
+      return "Company";
     case "Analytics":
       return "Analytics";
+    case "Settings":
+      return "Settings";
+    case "Mission Control":
+      return "Mission Control";
     default:
       return String(sectionId);
   }

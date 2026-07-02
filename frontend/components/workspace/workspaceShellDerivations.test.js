@@ -19,33 +19,42 @@ function makeWorkspaceViewModel() {
     navigation: {
       sections: [
         {
+          id: "nav_section_Mission_Control",
+          title: "Mission Control",
+          items: [{ moduleId: "mission_control", title: "Mission Control", visibility: "VISIBLE", status: "READY" }],
+        },
+        {
+          id: "nav_section_Team",
+          title: "Team",
+          items: [{ moduleId: "digital_workforce", title: "Team", visibility: "VISIBLE", status: "READY" }],
+        },
+        {
           id: "nav_section_Workspace",
-          title: "Workspace",
+          title: "Company",
           items: [
-            { moduleId: "dashboard", title: "Dashboard", visibility: "VISIBLE", status: "READY" },
-            { moduleId: "digital_workforce", title: "Digital Workforce", visibility: "VISIBLE", status: "READY" },
+            { moduleId: "dashboard", title: "Company", visibility: "VISIBLE", status: "READY" },
           ],
         },
         {
           id: "nav_section_Operations",
-          title: "Operations",
-          items: [{ moduleId: "work_queue", title: "Work Queue", visibility: "VISIBLE", status: "READY" }],
+          title: "Work",
+          items: [{ moduleId: "work_queue", title: "Work", visibility: "VISIBLE", status: "READY" }],
         },
-        // No existing routes yet; should be filtered from derived sidebar.
-        {
-          id: "nav_section_Knowledge",
-          title: "Knowledge",
-          items: [{ moduleId: "knowledge", title: "Knowledge", visibility: "VISIBLE", status: "READY" }],
-        },
+        { id: "nav_section_Knowledge", title: "Knowledge", items: [{ moduleId: "knowledge", title: "Knowledge", visibility: "VISIBLE", status: "READY" }] },
+        { id: "nav_section_Analytics", title: "Analytics", items: [{ moduleId: "analytics", title: "Analytics", visibility: "VISIBLE", status: "READY" }] },
+        { id: "nav_section_Settings", title: "Settings", items: [{ moduleId: "settings", title: "Settings", visibility: "VISIBLE", status: "READY" }] },
       ],
     },
     modules: {
       id: "modules_view",
       modules: [
+        { moduleId: "mission_control", icon: "sparkles", title: "Mission Control", badges: [] },
         { moduleId: "dashboard", icon: "dashboard", title: "Dashboard", badges: [] },
         { moduleId: "digital_workforce", icon: "users", title: "Digital Workforce", badges: [] },
         { moduleId: "work_queue", icon: "inbox", title: "Work Queue", badges: [] },
         { moduleId: "knowledge", icon: "book", title: "Knowledge", badges: [] },
+        { moduleId: "analytics", icon: "chart", title: "Analytics", badges: [] },
+        { moduleId: "settings", icon: "sun", title: "Settings", badges: [] },
       ],
     },
   };
@@ -55,16 +64,17 @@ test("Navigation rendering: derived sidebar uses view-model ordering", () => {
   const vm = makeWorkspaceViewModel();
   const items = deriveSidebarNavItems(vm);
 
-  assert.equal(items.length, 3); // knowledge filtered (no route mapping)
+  assert.equal(items.length, 7);
   assert.deepEqual(
     items.map((x) => x.moduleId),
-    ["dashboard", "digital_workforce", "work_queue"],
+    ["mission_control", "digital_workforce", "dashboard", "work_queue", "knowledge", "analytics", "settings"],
   );
   assert.ok(items.every((x) => Object.isFrozen(x)));
   assert.ok(Object.isFrozen(items));
 });
 
 test("Module rendering: active module mapping by pathname", () => {
+  assert.equal(getActiveModuleIdFromPathname("/mission-control"), "mission_control");
   assert.equal(getActiveModuleIdFromPathname("/dashboard"), "dashboard");
   assert.equal(getActiveModuleIdFromPathname("/digital-workforce"), "digital_workforce");
   assert.equal(getActiveModuleIdFromPathname("/work-queue"), "work_queue");
@@ -102,7 +112,7 @@ test("Validation: duplicate navigation ids throw", () => {
 test("Immutability assumptions: helpers do not mutate frozen view models", () => {
   const vm = deepFreeze(makeWorkspaceViewModel());
   const items = deriveSidebarNavItems(vm);
-  assert.ok(items.length === 3);
-  assert.deepEqual(items.map((x) => x.moduleId), ["dashboard", "digital_workforce", "work_queue"]);
+  assert.ok(items.length === 7);
+  assert.deepEqual(items.map((x) => x.moduleId), ["mission_control", "digital_workforce", "dashboard", "work_queue", "knowledge", "analytics", "settings"]);
 });
 

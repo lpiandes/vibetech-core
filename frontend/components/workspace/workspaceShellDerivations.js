@@ -1,8 +1,11 @@
 const ROUTES_BY_MODULE_ID = {
-  dashboard: "/dashboard",
+  mission_control: "/mission-control",
   digital_workforce: "/digital-workforce",
   work_queue: "/work-queue",
-  // Future routing generated later in Sprint 4.
+  knowledge: "/dashboard",
+  dashboard: "/dashboard",
+  analytics: "/dashboard",
+  settings: "/dashboard",
 };
 
 function getRouteForModuleId(moduleId) {
@@ -52,6 +55,8 @@ export function deriveSidebarNavItems(workspaceViewModel) {
     });
   }
 
+  for (let i = 0; i < navItems.length; i += 1) navItems[i].displayOrder = i;
+
   return Object.freeze(navItems.map((x) => Object.freeze(x)));
 }
 
@@ -91,6 +96,7 @@ export function validateWorkspaceShellViewModel(workspaceViewModel) {
 
 export function getActiveModuleIdFromPathname(pathname) {
   const path = String(pathname ?? "");
+  if (path === "/mission-control") return "mission_control";
   if (path === "/dashboard") return "dashboard";
   if (path === "/digital-workforce") return "digital_workforce";
   if (path.startsWith("/work-queue")) return "work_queue";
