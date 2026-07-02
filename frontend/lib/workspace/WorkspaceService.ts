@@ -23,6 +23,10 @@ import { REQUEST_EVENT_TYPES } from "../../../backend/core/request/RequestEventT
 import { WorkRuntime } from "../../../backend/core/work/WorkRuntime.js";
 import { WorkViewAdapter } from "../../../backend/core/work/views/WorkViewAdapter.js";
 
+import { CapabilityRuntime } from "../../../backend/core/capabilities/runtime/CapabilityRuntime.js";
+import { CapabilityIntelligenceEngine } from "../../../backend/core/capabilities/intelligence/CapabilityIntelligenceEngine.js";
+import { CapabilityViewAdapter } from "../../../backend/core/capabilities/views/CapabilityViewAdapter.js";
+
 const NOW_ISO = "2026-07-01T00:00:00.000Z";
 
 function makeCapabilitiesReady(overrides: Record<string, any> = {}) {
@@ -261,6 +265,25 @@ export class WorkspaceService {
       companyRuntime: this.runtime,
       teamRuntime: this.teamRuntime,
       workRuntime: this.workRuntime,
+    });
+  }
+
+  loadCapabilityViewModel() {
+    const capabilityRuntime = new CapabilityRuntime({ seed: null });
+
+    const report = new CapabilityIntelligenceEngine({ nowISO: NOW_ISO }).generate({
+      capabilityRuntime,
+      teamRuntime: this.teamRuntime,
+      workRuntime: this.workRuntime,
+      companyWorkspaceRuntime: this.runtime,
+      companyId: String(this.runtime.getCompany?.()?.companyName ?? "company"),
+      nowISO: NOW_ISO,
+    } as any);
+
+    const adapter = new CapabilityViewAdapter({ nowISO: NOW_ISO });
+    return adapter.translate({
+      capabilityRuntime,
+      capabilityIntelligenceReport: report,
     });
   }
 
