@@ -16,6 +16,10 @@ import { MissionControlViewAdapter } from "../../../backend/core/mission-control
 import { TeamRuntime } from "../../../backend/core/team/TeamRuntime.js";
 import { TeamViewAdapter } from "../../../backend/core/team/views/TeamViewAdapter.js";
 
+import { RequestRuntime } from "../../../backend/core/request/RequestRuntime.js";
+import { RequestViewAdapter } from "../../../backend/core/request/views/RequestViewAdapter.js";
+import { REQUEST_EVENT_TYPES } from "../../../backend/core/request/RequestEventTypes.js";
+
 import { WorkRuntime } from "../../../backend/core/work/WorkRuntime.js";
 import { WorkViewAdapter } from "../../../backend/core/work/views/WorkViewAdapter.js";
 
@@ -53,11 +57,13 @@ export class WorkspaceService {
   private businessCapabilities = makeCapabilitiesReady();
   private generator = new WorkspaceGenerator({ nowISO: NOW_ISO });
   private teamRuntime: TeamRuntime;
+  private requestRuntime: RequestRuntime;
   private workRuntime: WorkRuntime;
 
   constructor() {
     this.runtime = new CompanyWorkspaceRuntime();
     this.teamRuntime = new TeamRuntime();
+    this.requestRuntime = new RequestRuntime({ nowISO: NOW_ISO });
     this.workRuntime = new WorkRuntime({ nowISO: NOW_ISO });
 
     // Seed a stable “after demo intake” inquiry event so the queue/dashboard
@@ -88,6 +94,71 @@ export class WorkspaceService {
       },
     });
     this.runtime.applyEvent(demoEvent);
+
+    // Seed deterministic RequestRuntime entries so the first UI experience has content.
+    // This sprint remains rendering-only (no qualification, conversion, or work creation).
+    this.requestRuntime.applyEvent({
+      id: "evt_req_seed_incoming_1",
+      timestampISO: NOW_ISO,
+      type: REQUEST_EVENT_TYPES.REQUEST_RECEIVED,
+      source: "frontend-mock-workspace-seed",
+      payload: {
+        request: {
+          id: "req_seed_1",
+          title: "Website inquiry",
+          description: "Incoming request from website intake.",
+          requestType: "inquiry",
+          status: "received",
+          priority: "high",
+          channel: "website",
+          source: "demo-seed",
+          requester: "prospective-client",
+          dueAt: "2026-06-20T00:00:00.000Z",
+          assignedWorkId: null,
+          assignedTeamMemberId: null,
+          qualificationStatus: null,
+          attachments: [],
+          metadata: {},
+        },
+      },
+    });
+
+    this.requestRuntime.applyEvent({
+      id: "evt_req_seed_incoming_2",
+      timestampISO: NOW_ISO,
+      type: REQUEST_EVENT_TYPES.REQUEST_RECEIVED,
+      source: "frontend-mock-workspace-seed",
+      payload: {
+        request: {
+          id: "req_seed_2",
+          title: "Phone inquiry",
+          description: "Incoming request from phone intake.",
+          requestType: "inquiry",
+          status: "received",
+          priority: "medium",
+          channel: "phone",
+          source: "demo-seed",
+          requester: "prospective-client",
+          dueAt: null,
+          assignedWorkId: null,
+          assignedTeamMemberId: null,
+          qualificationStatus: null,
+          attachments: [],
+          metadata: {},
+        },
+      },
+    });
+
+    this.requestRuntime.applyEvent({
+      id: "evt_req_seed_incoming_2_qualified",
+      timestampISO: NOW_ISO,
+      type: REQUEST_EVENT_TYPES.REQUEST_QUALIFIED,
+      source: "frontend-mock-workspace-seed",
+      payload: {
+        requestId: "req_seed_2",
+        qualificationStatus: "triaged",
+      },
+    });
 
     this.adapter = new WorkspaceViewAdapter({ runtime: this.runtime });
     // Review-work actions still live in the mock API (communication engine + coordinator).
@@ -181,6 +252,16 @@ export class WorkspaceService {
   loadKnowledgeViewModel() {
     const workspaceConfig = this.getWorkspaceConfig();
     return this.adapter.getKnowledgeView(workspaceConfig);
+  }
+
+  loadRequestViewModel() {
+    const adapter = new RequestViewAdapter({ nowISO: NOW_ISO });
+    return adapter.translate({
+      requestRuntime: this.requestRuntime,
+      companyRuntime: this.runtime,
+      teamRuntime: this.teamRuntime,
+      workRuntime: this.workRuntime,
+    });
   }
 
   loadReviewWork(workItemId: string) {
