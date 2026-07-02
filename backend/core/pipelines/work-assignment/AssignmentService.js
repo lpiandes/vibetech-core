@@ -19,6 +19,8 @@ import {
 
 import { validateAssignmentCandidate, validateAssignmentResultShape, validateRuntimes, validateWorkCreatedEvent, validateWorkItemExists } from "./AssignmentValidator.js";
 
+import { CapabilityMatchingEngine } from "../../capabilities/matching/CapabilityMatchingEngine.js";
+
 function fail(message) {
   throw new Error(`AssignmentService: ${message}`);
 }
@@ -42,7 +44,7 @@ export class AssignmentService {
     this.workAssignmentEventSource = workAssignmentEventSource ?? "work_assignment_pipeline";
   }
 
-  assignOwnership({ workRuntime, teamRuntime, workCreatedEvent } = {}) {
+  assignOwnership({ workRuntime, teamRuntime, capabilityRuntime, workCreatedEvent, nowISO } = {}) {
     try {
       validateWorkCreatedEvent(workCreatedEvent);
       validateRuntimes({ workRuntime, teamRuntime });
@@ -65,6 +67,13 @@ export class AssignmentService {
           errors: [],
           metadata: {
             derivedFrom: { workCreatedEventId: String(workCreatedEvent?.eventId ?? "") },
+            usedCapabilityMatching: false,
+            matchResultId: null,
+            bestMatchProviderId: null,
+            bestMatchScore: null,
+            unmatchedRequirements: [],
+            fallbackUsed: false,
+            fallbackReason: "",
           },
         });
         validateAssignmentResultShape(res);
@@ -86,9 +95,54 @@ export class AssignmentService {
           assignmentReason: ASSIGNMENT_STATUS_REASON.EXPLICIT_ASSIGNED_TO,
           workType,
           createdAtISO,
+          capabilityAssignment: {
+            usedCapabilityMatching: false,
+            matchResultId: null,
+            bestMatchProviderId: null,
+            bestMatchScore: null,
+            unmatchedRequirements: [],
+            fallbackUsed: true,
+            fallbackReason: ASSIGNMENT_STATUS_REASON.EXPLICIT_ASSIGNED_TO,
+          },
         });
       }
 
+      // Capability-aware preferred path (deterministic evaluation only).
+      if (capabilityRuntime) {
+        const engine = new CapabilityMatchingEngine({ nowISO: String(nowISO ?? createdAtISO ?? workRuntime.nowISO ?? "2026-07-01T00:00:00.000Z") });
+        const matchResult = engine.match({
+          workItem,
+          capabilityRuntime,
+          teamRuntime,
+        });
+
+        if (matchResult?.bestMatch?.providerId) {
+          const pickedMember = members.find((m) => String(m.id) === String(matchResult.bestMatch.providerId));
+          if (pickedMember) {
+            return this._applyAssignment({
+              workRuntime,
+              teamRuntime,
+              workCreatedEvent,
+              workItemId,
+              candidate: pickedMember,
+              assignmentReason: ASSIGNMENT_STATUS_REASON.CAPABILITY_BEST_MATCH,
+              workType,
+              createdAtISO,
+              capabilityAssignment: {
+                usedCapabilityMatching: true,
+                matchResultId: String(matchResult.matchResultId),
+                bestMatchProviderId: String(matchResult.bestMatch.providerId),
+                bestMatchScore: Number(matchResult.bestMatch.score),
+                unmatchedRequirements: Array.isArray(matchResult.unmatchedRequirements) ? matchResult.unmatchedRequirements.map(String) : [],
+                fallbackUsed: false,
+                fallbackReason: "",
+              },
+            });
+          }
+        }
+      }
+
+      // Fallback to existing deterministic order.
       // 2) Matching digital employee.
       const digitalMatches = members.filter((m) => String(m.memberType) === "digital_employee" && doesMemberMatchWorkType(m, workType));
       const pickedDigital = pickDeterministic(digitalMatches);
@@ -102,6 +156,15 @@ export class AssignmentService {
           assignmentReason: ASSIGNMENT_STATUS_REASON.MATCHING_DIGITAL_EMPLOYEE,
           workType,
           createdAtISO,
+          capabilityAssignment: {
+            usedCapabilityMatching: false,
+            matchResultId: null,
+            bestMatchProviderId: null,
+            bestMatchScore: null,
+            unmatchedRequirements: [],
+            fallbackUsed: true,
+            fallbackReason: ASSIGNMENT_STATUS_REASON.MATCHING_DIGITAL_EMPLOYEE,
+          },
         });
       }
 
@@ -118,6 +181,15 @@ export class AssignmentService {
           assignmentReason: ASSIGNMENT_STATUS_REASON.MATCHING_HUMAN_EMPLOYEE,
           workType,
           createdAtISO,
+          capabilityAssignment: {
+            usedCapabilityMatching: false,
+            matchResultId: null,
+            bestMatchProviderId: null,
+            bestMatchScore: null,
+            unmatchedRequirements: [],
+            fallbackUsed: true,
+            fallbackReason: ASSIGNMENT_STATUS_REASON.MATCHING_HUMAN_EMPLOYEE,
+          },
         });
       }
 
@@ -134,6 +206,15 @@ export class AssignmentService {
           assignmentReason: ASSIGNMENT_STATUS_REASON.DEFAULT_DEPARTMENT_OWNER,
           workType,
           createdAtISO,
+          capabilityAssignment: {
+            usedCapabilityMatching: false,
+            matchResultId: null,
+            bestMatchProviderId: null,
+            bestMatchScore: null,
+            unmatchedRequirements: [],
+            fallbackUsed: true,
+            fallbackReason: ASSIGNMENT_STATUS_REASON.DEFAULT_DEPARTMENT_OWNER,
+          },
         });
       }
 
@@ -149,6 +230,15 @@ export class AssignmentService {
           assignmentReason: ASSIGNMENT_STATUS_REASON.DEFAULT_DEPARTMENT_OWNER,
           workType,
           createdAtISO,
+          capabilityAssignment: {
+            usedCapabilityMatching: false,
+            matchResultId: null,
+            bestMatchProviderId: null,
+            bestMatchScore: null,
+            unmatchedRequirements: [],
+            fallbackUsed: true,
+            fallbackReason: ASSIGNMENT_STATUS_REASON.DEFAULT_DEPARTMENT_OWNER,
+          },
         });
       }
 
@@ -159,6 +249,15 @@ export class AssignmentService {
         workItemId,
         assignmentReason: ASSIGNMENT_STATUS_REASON.UNASSIGNED,
         createdAtISO,
+        capabilityAssignment: {
+          usedCapabilityMatching: false,
+          matchResultId: null,
+          bestMatchProviderId: null,
+          bestMatchScore: null,
+          unmatchedRequirements: [],
+          fallbackUsed: true,
+          fallbackReason: ASSIGNMENT_STATUS_REASON.UNASSIGNED,
+        },
       });
     } catch (err) {
       const message = String(err?.message ?? err);
@@ -173,12 +272,26 @@ export class AssignmentService {
         errors: [message],
         metadata: {
           derivedFrom: { workCreatedEventId: String(workCreatedEvent?.eventId ?? "") },
+          usedCapabilityMatching: false,
+          matchResultId: null,
+          bestMatchProviderId: null,
+          bestMatchScore: null,
+          unmatchedRequirements: [],
+          fallbackUsed: false,
+          fallbackReason: "",
         },
       });
     }
   }
 
-  _applyUnassigned({ workRuntime, workCreatedEvent, workItemId, assignmentReason, createdAtISO } = {}) {
+  _applyUnassigned({
+    workRuntime,
+    workCreatedEvent,
+    workItemId,
+    assignmentReason,
+    createdAtISO,
+    capabilityAssignment,
+  } = {}) {
     const nowISO = String(createdAtISO ?? workCreatedEvent?.occurredAt ?? workRuntime.nowISO ?? "2026-07-01T00:00:00.000Z");
     const assigneeId = UNASSIGNED_ASSIGNEE.id;
     const assigneeType = UNASSIGNED_ASSIGNEE.type;
@@ -216,13 +329,31 @@ export class AssignmentService {
       errors: [],
       metadata: {
         derivedFrom: { workCreatedEventId: String(workCreatedEvent?.eventId ?? "") },
+        usedCapabilityMatching: Boolean(capabilityAssignment?.usedCapabilityMatching),
+        matchResultId: capabilityAssignment?.matchResultId ?? null,
+        bestMatchProviderId: capabilityAssignment?.bestMatchProviderId ?? null,
+        bestMatchScore: capabilityAssignment?.bestMatchScore ?? null,
+        unmatchedRequirements: Array.isArray(capabilityAssignment?.unmatchedRequirements)
+          ? capabilityAssignment.unmatchedRequirements.map(String)
+          : [],
+        fallbackUsed: Boolean(capabilityAssignment?.fallbackUsed),
+        fallbackReason: capabilityAssignment?.fallbackReason ?? "",
       },
     });
     validateAssignmentResultShape(res);
     return res;
   }
 
-  _applyAssignment({ workRuntime, teamRuntime, workCreatedEvent, workItemId, candidate, assignmentReason, createdAtISO } = {}) {
+  _applyAssignment({
+    workRuntime,
+    teamRuntime,
+    workCreatedEvent,
+    workItemId,
+    candidate,
+    assignmentReason,
+    createdAtISO,
+    capabilityAssignment,
+  } = {}) {
     const nowISO = String(createdAtISO ?? workCreatedEvent?.occurredAt ?? workRuntime.nowISO ?? "2026-07-01T00:00:00.000Z");
     const { assigneeId, assigneeType } = mapMemberToAssignee(candidate);
 
@@ -262,6 +393,15 @@ export class AssignmentService {
       errors: [],
       metadata: {
         derivedFrom: { workCreatedEventId: String(workCreatedEvent?.eventId ?? "") },
+        usedCapabilityMatching: Boolean(capabilityAssignment?.usedCapabilityMatching),
+        matchResultId: capabilityAssignment?.matchResultId ?? null,
+        bestMatchProviderId: capabilityAssignment?.bestMatchProviderId ?? null,
+        bestMatchScore: capabilityAssignment?.bestMatchScore ?? null,
+        unmatchedRequirements: Array.isArray(capabilityAssignment?.unmatchedRequirements)
+          ? capabilityAssignment.unmatchedRequirements.map(String)
+          : [],
+        fallbackUsed: Boolean(capabilityAssignment?.fallbackUsed),
+        fallbackReason: capabilityAssignment?.fallbackReason ?? "",
       },
     });
 

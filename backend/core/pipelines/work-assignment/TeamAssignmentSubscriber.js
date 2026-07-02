@@ -21,13 +21,13 @@ export function teamAssignmentHandle(event, context = {}) {
 
   try {
     validateWorkCreatedEvent(event);
-    const { workRuntime, teamRuntime } = context;
+    const { workRuntime, teamRuntime, capabilityRuntime } = context;
 
     if (!workRuntime) return { status: "FAILED", message: "Missing workRuntime.", actions: [], errors: ["workRuntime required"], metadata: {} };
     if (!teamRuntime) return { status: "FAILED", message: "Missing teamRuntime.", actions: [], errors: ["teamRuntime required"], metadata: {} };
 
     const service = new AssignmentService();
-    const assignmentResult = service.assignOwnership({ workRuntime, teamRuntime, workCreatedEvent: event });
+    const assignmentResult = service.assignOwnership({ workRuntime, teamRuntime, capabilityRuntime, workCreatedEvent: event });
 
     // Map assignment status -> bus status.
     const busStatus = String(assignmentResult?.status) === "FAILED" ? "FAILED" : "SUCCESS";
@@ -54,6 +54,7 @@ export function teamAssignmentHandle(event, context = {}) {
 export function createTeamAssignmentSubscriber({
   workRuntime,
   teamRuntime,
+  capabilityRuntime,
   id = DEFAULT_SUBSCRIBER_ID,
   name = DEFAULT_SUBSCRIBER_NAME,
   priority = 0,
@@ -62,7 +63,7 @@ export function createTeamAssignmentSubscriber({
   if (!workRuntime) fail("createTeamAssignmentSubscriber requires workRuntime.");
   if (!teamRuntime) fail("createTeamAssignmentSubscriber requires teamRuntime.");
 
-  const boundHandler = (event) => teamAssignmentHandle(event, { workRuntime, teamRuntime });
+  const boundHandler = (event) => teamAssignmentHandle(event, { workRuntime, teamRuntime, capabilityRuntime });
 
   return createPlatformEventSubscriberFromHandler({
     id,

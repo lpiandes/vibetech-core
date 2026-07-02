@@ -9,6 +9,7 @@ export const ASSIGNMENT_STATUSES = {
 export const ASSIGNMENT_STATUS_REASON = {
   ALREADY_ASSIGNED: "already_assigned",
   EXPLICIT_ASSIGNED_TO: "explicit_assigned_to",
+  CAPABILITY_BEST_MATCH: "capability_best_match",
   MATCHING_DIGITAL_EMPLOYEE: "matching_digital_employee",
   MATCHING_HUMAN_EMPLOYEE: "matching_human_employee",
   DEFAULT_DEPARTMENT_OWNER: "default_department_owner",

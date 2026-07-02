@@ -18,10 +18,19 @@ import { createTeamAssignmentSubscriber, teamAssignmentHandle } from "./TeamAssi
 import { AssignmentService } from "./AssignmentService.js";
 import { ASSIGNMENT_STATUSES } from "./AssignmentDefaults.js";
 
+import { CapabilityRuntime } from "../../capabilities/runtime/CapabilityRuntime.js";
+import { CAPABILITY_EVENT_TYPES } from "../../capabilities/runtime/CapabilityEventTypes.js";
+import { createCapability } from "../../capabilities/runtime/Capability.js";
+
 const NOW_ISO = "2026-07-01T00:00:00.000Z";
 const WORK_CREATED_AT = "2026-07-02T00:00:00.000Z";
 
-function makeWorkRuntime({ workItemId = "work_1", workType = "intake", assignedTo = "unassigned" } = {}) {
+function makeWorkRuntime({
+  workItemId = "work_1",
+  workType = "intake",
+  assignedTo = "unassigned",
+  requiredCapabilities = [],
+} = {}) {
   const workRuntime = new WorkRuntime({ nowISO: NOW_ISO });
   const workItem = buildWorkItemForSeed({
     nowISO: NOW_ISO,
@@ -51,6 +60,20 @@ function makeWorkRuntime({ workItemId = "work_1", workType = "intake", assignedT
     source: "test",
     payload: { workItem },
   });
+
+  if (Array.isArray(requiredCapabilities) && requiredCapabilities.length > 0) {
+    const current = workRuntime.getWorkItem(workItemId);
+    workRuntime.applyEvent({
+      id: `evt_work_item_patch_required_caps_${workItemId}`,
+      timestampISO: WORK_CREATED_AT,
+      type: WORK_EVENT_TYPES.WORK_ITEM_UPDATED,
+      source: "test",
+      payload: {
+        workItemId,
+        patch: { metadata: { ...current.metadata, requiredCapabilities } },
+      },
+    });
+  }
 
   return workRuntime;
 }
@@ -189,6 +212,63 @@ test("successful assignment integration: bus dispatch updates WorkRuntime", () =
   const updatedItem = workRuntime.getWorkItem(workItemId);
   assert.equal(updatedItem.assignedTo, "tm_d1");
   assert.equal(workRuntime.getAssignments().length, 1);
+});
+
+test("subscriber integration with capabilityRuntime context: uses capability bestMatch", () => {
+  const workItemId = "work_cap_sub_1";
+  const workRuntime = makeWorkRuntime({
+    workItemId,
+    workType: "intake",
+    assignedTo: "unassigned",
+    requiredCapabilities: ["cap_digital_needed"],
+  });
+  const teamRuntime = makeTeamRuntime({
+    members: [
+      // Digital does NOT match fallback via workType, but DOES match capability requirement.
+      { id: "tm_d1", memberType: "digital_employee", roleId: "role_digital_other", skills: [], permissions: [] },
+      // Human matches fallback via workType.
+      { id: "tm_h1", memberType: "human", roleId: "role_human_intake", skills: ["intake"], permissions: [] },
+    ],
+  });
+
+  const capabilityRuntime = new CapabilityRuntime({ seed: null });
+  capabilityRuntime.applyEvent({
+    id: "evt_cap_reg_sub_1",
+    timestampISO: WORK_CREATED_AT,
+    type: CAPABILITY_EVENT_TYPES.CAPABILITY_REGISTERED,
+    source: "test",
+    payload: {
+      capability: createCapability({
+        id: "cap_digital_needed",
+        name: "Digital capability",
+        description: "desc",
+        category: "operations",
+        level: 3,
+        status: "active",
+        requirements: [],
+        providedBy: ["digital_employee"],
+        requiredKnowledge: [],
+        requiredConnectedSystems: [],
+        metadata: {},
+      }),
+    },
+  });
+
+  const subscriber = createTeamAssignmentSubscriber({ workRuntime, teamRuntime, capabilityRuntime });
+  const bus = new PlatformEventBus({ nowISO: NOW_ISO });
+  bus.subscribe({ eventType: "WORK_CREATED", subscriber });
+
+  const event = makeWorkCreatedPlatformEvent({ workItemId, workType: "intake", assignedTo: "unassigned" });
+  const report = bus.dispatch(event, { dispatchedAtISO: NOW_ISO });
+
+  assert.equal(report.successCount, 1);
+  assert.equal(workRuntime.getWorkItem(workItemId).assignedTo, "tm_d1");
+
+  const assignmentResult = report.results[0].metadata.assignmentResult;
+  assert.equal(assignmentResult.metadata.usedCapabilityMatching, true);
+  assert.equal(assignmentResult.metadata.fallbackUsed, false);
+  assert.equal(assignmentResult.metadata.bestMatchProviderId, "tm_d1");
+  assert.deepEqual(assignmentResult.metadata.unmatchedRequirements, []);
 });
 
 test("runtime updated + unassigned when no candidates: assignments still created", () => {

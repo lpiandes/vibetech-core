@@ -12,6 +12,10 @@ import { createTeamRole } from "../../team/TeamRole.js";
 import { createTeamMetrics } from "../../team/TeamMetrics.js";
 import { TeamRuntime } from "../../team/TeamRuntime.js";
 
+import { CapabilityRuntime } from "../../capabilities/runtime/CapabilityRuntime.js";
+import { CAPABILITY_EVENT_TYPES } from "../../capabilities/runtime/CapabilityEventTypes.js";
+import { createCapability } from "../../capabilities/runtime/Capability.js";
+
 import { AssignmentService } from "./AssignmentService.js";
 import { ASSIGNMENT_STATUSES } from "./AssignmentDefaults.js";
 
@@ -140,6 +144,20 @@ function makeWorkCreatedPlatformEvent({ workItemId, workType, assignedTo, occurr
   });
 }
 
+function makeCapabilityRuntimeWithCapabilities({ capabilities } = {}) {
+  const runtime = new CapabilityRuntime({ seed: null });
+  for (const cap of capabilities ?? []) {
+    runtime.applyEvent({
+      id: `evt_cap_reg_${cap.id}`,
+      timestampISO: WORK_CREATED_AT,
+      type: CAPABILITY_EVENT_TYPES.CAPABILITY_REGISTERED,
+      source: "test",
+      payload: { capability: cap },
+    });
+  }
+  return runtime;
+}
+
 test("Successful assignment: matching digital employee wins deterministically", () => {
   const teamRuntime = makeTeamRuntime({
     members: [
@@ -176,6 +194,173 @@ test("Successful assignment: matching digital employee wins deterministically", 
   const assignments = workRuntime.getAssignments();
   assert.equal(assignments.length, 1);
   assert.equal(assignments[0].assigneeId, "tm_digital_1");
+});
+
+test("Capability-aware assignment: uses CapabilityMatchingEngine bestMatch when available", () => {
+  const capabilityRuntime = makeCapabilityRuntimeWithCapabilities({
+    capabilities: [
+      createCapability({
+        id: "cap_digital_needed",
+        name: "Digital capability",
+        description: "desc",
+        category: "operations",
+        level: 3,
+        status: "active",
+        requirements: [],
+        providedBy: ["digital_employee"],
+        requiredKnowledge: [],
+        requiredConnectedSystems: [],
+        metadata: {},
+      }),
+    ],
+  });
+
+  const teamRuntime = makeTeamRuntime({
+    members: [
+      // Digital does NOT match workType "intake" for fallback, but does provide the required capability.
+      { id: "tm_d1", name: "Digital Other", memberType: "digital_employee", roleId: "role_digital_other", skills: [], permissions: [] },
+      // Human matches fallback.
+      { id: "tm_h1", name: "Human Intake", memberType: "human", roleId: "role_human_intake", skills: ["intake"], permissions: [] },
+    ],
+  });
+
+  const workRuntime = makeWorkRuntimeWithWorkItem({
+    workItemId: "work_cap_1",
+    workType: "intake",
+    assignedTo: "unassigned",
+  });
+
+  // Inject capability requirements into the WorkItem metadata (used by CapabilityMatchingEngine).
+  const workItem = workRuntime.getWorkItem("work_cap_1");
+  workRuntime.applyEvent({
+    id: "evt_work_item_updated_for_required_capabilities",
+    timestampISO: WORK_CREATED_AT,
+    type: WORK_EVENT_TYPES.WORK_ITEM_UPDATED,
+    source: "test",
+    payload: {
+      workItemId: "work_cap_1",
+      patch: { metadata: { ...workItem.metadata, requiredCapabilities: ["cap_digital_needed", "cap_missing"] } },
+    },
+  });
+
+  const workCreatedEvent = makeWorkCreatedPlatformEvent({ workItemId: "work_cap_1", workType: "intake", assignedTo: "unassigned" });
+
+  const service = new AssignmentService();
+  const teamBefore = JSON.stringify(teamRuntime._state);
+  const capBefore = JSON.stringify(capabilityRuntime._state);
+
+  let applyCalls = 0;
+  const originalApply = workRuntime.applyEvent.bind(workRuntime);
+  workRuntime.applyEvent = (event) => {
+    applyCalls += 1;
+    return originalApply(event);
+  };
+
+  const result = service.assignOwnership({ workRuntime, teamRuntime, capabilityRuntime, workCreatedEvent });
+
+  assert.equal(result.status, "ASSIGNED");
+  assert.equal(result.assigneeId, "tm_d1");
+  assert.equal(result.metadata.usedCapabilityMatching, true);
+  assert.equal(result.metadata.fallbackUsed, false);
+  assert.equal(result.metadata.bestMatchProviderId, "tm_d1");
+  assert.deepEqual(result.metadata.unmatchedRequirements, ["cap_missing"]);
+  assert.equal(typeof result.metadata.bestMatchScore, "number");
+  assert.ok(result.metadata.matchResultId);
+  assert.ok(result.runtimeUpdated);
+  assert.equal(applyCalls, 1);
+
+  assert.equal(JSON.stringify(teamRuntime._state), teamBefore);
+  assert.equal(JSON.stringify(capabilityRuntime._state), capBefore);
+});
+
+test("Capability-aware assignment: falls back when capabilityRuntime provided but no bestMatch exists", () => {
+  const capabilityRuntime = makeCapabilityRuntimeWithCapabilities({
+    capabilities: [],
+  });
+
+  const teamRuntime = makeTeamRuntime({
+    members: [
+      { id: "tm_d1", name: "Digital Intake", memberType: "digital_employee", roleId: "role_digital_intake", skills: ["intake"], permissions: [] },
+      { id: "tm_h1", name: "Human Intake", memberType: "human", roleId: "role_human_intake", skills: ["intake"], permissions: [] },
+    ],
+  });
+
+  const workRuntime = makeWorkRuntimeWithWorkItem({ workItemId: "work_cap_fb_1", workType: "intake", assignedTo: "unassigned" });
+
+  // requiredCapabilities includes unknown capability ids -> no providers can match -> bestMatch null.
+  const workItem = workRuntime.getWorkItem("work_cap_fb_1");
+  workRuntime.applyEvent({
+    id: "evt_work_item_updated_for_required_capabilities_fb",
+    timestampISO: WORK_CREATED_AT,
+    type: WORK_EVENT_TYPES.WORK_ITEM_UPDATED,
+    source: "test",
+    payload: {
+      workItemId: "work_cap_fb_1",
+      patch: { metadata: { ...workItem.metadata, requiredCapabilities: ["cap_missing_1"] } },
+    },
+  });
+
+  const workCreatedEvent = makeWorkCreatedPlatformEvent({ workItemId: "work_cap_fb_1", workType: "intake", assignedTo: "unassigned" });
+  const service = new AssignmentService();
+
+  const result = service.assignOwnership({ workRuntime, teamRuntime, capabilityRuntime, workCreatedEvent });
+
+  assert.equal(result.status, ASSIGNMENT_STATUSES.ASSIGNED);
+  // Fallback should preserve deterministic order (digital match wins for workType "intake").
+  assert.equal(result.assignmentReason, "matching_digital_employee");
+  assert.equal(result.metadata.usedCapabilityMatching, false);
+  assert.equal(result.metadata.fallbackUsed, true);
+});
+
+test("Capability-aware assignment: preserves explicit assignedTo when capabilityRuntime is provided", () => {
+  const capabilityRuntime = makeCapabilityRuntimeWithCapabilities({
+    capabilities: [
+      createCapability({
+        id: "cap_digital_needed",
+        name: "Digital capability",
+        description: "desc",
+        category: "operations",
+        level: 3,
+        status: "active",
+        requirements: [],
+        providedBy: ["digital_employee"],
+        requiredKnowledge: [],
+        requiredConnectedSystems: [],
+        metadata: {},
+      }),
+    ],
+  });
+
+  const teamRuntime = makeTeamRuntime({
+    members: [
+      { id: "tm_d1", name: "Digital Intake", memberType: "digital_employee", roleId: "role_digital_other", skills: [], permissions: [] },
+      { id: "tm_h1", name: "Human Intake", memberType: "human", roleId: "role_human_intake", skills: ["intake"], permissions: [] },
+    ],
+  });
+
+  const workRuntime = makeWorkRuntimeWithWorkItem({ workItemId: "work_cap_explicit_1", workType: "intake", assignedTo: "unassigned" });
+  const workItem = workRuntime.getWorkItem("work_cap_explicit_1");
+  workRuntime.applyEvent({
+    id: "evt_work_item_updated_for_required_capabilities_explicit",
+    timestampISO: WORK_CREATED_AT,
+    type: WORK_EVENT_TYPES.WORK_ITEM_UPDATED,
+    source: "test",
+    payload: {
+      workItemId: "work_cap_explicit_1",
+      patch: { metadata: { ...workItem.metadata, requiredCapabilities: ["cap_digital_needed"] } },
+    },
+  });
+
+  const workCreatedEvent = makeWorkCreatedPlatformEvent({ workItemId: "work_cap_explicit_1", workType: "intake", assignedTo: "tm_h1" });
+
+  const result = new AssignmentService().assignOwnership({ workRuntime, teamRuntime, capabilityRuntime, workCreatedEvent });
+
+  assert.equal(result.status, ASSIGNMENT_STATUSES.ASSIGNED);
+  assert.equal(result.assigneeId, "tm_h1");
+  assert.equal(result.assignmentReason, "explicit_assigned_to");
+  assert.equal(result.metadata.usedCapabilityMatching, false);
+  assert.equal(result.metadata.fallbackUsed, true);
+  assert.equal(result.metadata.fallbackReason, "explicit_assigned_to");
 });
 
 test("Already assigned: service returns already_assigned and runtimeUpdated=false", () => {
