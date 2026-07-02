@@ -55,6 +55,27 @@ function evaluateRequirement({ requirement, runtimeContext } = {}) {
       case "company_metrics_available":
         return Boolean(companyRuntime?.getMetrics?.());
 
+      case "company_communication_setup_email_ready": {
+        const setup = companyRuntime?.getCommunicationSetup?.();
+        return Boolean(setup?.readiness?.emailReady);
+      }
+      case "company_communication_setup_sms_ready": {
+        const setup = companyRuntime?.getCommunicationSetup?.();
+        return Boolean(setup?.readiness?.smsReady);
+      }
+      case "company_communication_setup_brand_ready": {
+        const setup = companyRuntime?.getCommunicationSetup?.();
+        return Boolean(setup?.readiness?.brandReady);
+      }
+      case "company_communication_setup_quiet_hours_ready": {
+        const setup = companyRuntime?.getCommunicationSetup?.();
+        return Boolean(setup?.readiness?.quietHoursReady);
+      }
+      case "company_communication_setup_approval_policy_ready": {
+        const setup = companyRuntime?.getCommunicationSetup?.();
+        return Boolean(setup?.readiness?.approvalPolicyReady);
+      }
+
       case "company_business_profile_validation_passed": {
         const profile = companyRuntime?.getBusinessProfile?.();
         return Boolean(profile?.metadata?.validation?.ok);

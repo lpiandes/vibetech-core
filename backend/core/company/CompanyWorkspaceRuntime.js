@@ -23,6 +23,7 @@ import { createCategoryRepository } from "../knowledge/categories/CategoryReposi
 import { CompanyProfileBuilder } from "./profile/CompanyProfileBuilder.js";
 import { createCompanyProfile } from "./profile/CompanyProfile.js";
 import { BusinessProfileBuilder } from "./business-profile/BusinessProfileBuilder.js";
+import { CommunicationSetupBuilder } from "./communication-setup/CommunicationSetupBuilder.js";
 
 function deepFreeze(value) {
   if (!value || typeof value !== "object") return value;
@@ -605,12 +606,20 @@ function createABCPropertyGroupSeed() {
     },
   ];
 
+  const communicationSetup = CommunicationSetupBuilder.build({
+    companyProfile,
+    businessProfile,
+    approvalRules,
+    nowISO: baseUpdatedAtISO,
+  });
+
   return deepFreeze({
     identity,
     employees,
     companyData,
     companyProfile,
     businessProfile,
+    communicationSetup,
     knowledgeRepository,
     knowledgeCategories,
     integrations,
@@ -647,6 +656,10 @@ export class CompanyWorkspaceRuntime {
 
   getBusinessProfile() {
     return this._state.businessProfile;
+  }
+
+  getCommunicationSetup() {
+    return this._state.communicationSetup;
   }
 
   getKnowledge() {

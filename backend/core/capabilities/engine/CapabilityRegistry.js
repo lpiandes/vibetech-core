@@ -95,9 +95,11 @@ const BUILT_IN_CAPABILITIES = [
     description: "Digital communications can be produced deterministically.",
     dependencies: ["brand", "integrations"],
     requirements: [
-      // Communications require integrations + brand operational readiness.
-      { type: "onboarding_step_completed", stepId: "integrations" },
-      { type: "company_communication_engine_ready" },
+      { type: "company_communication_setup_email_ready" },
+      { type: "company_communication_setup_sms_ready" },
+      { type: "company_communication_setup_brand_ready" },
+      { type: "company_communication_setup_quiet_hours_ready" },
+      { type: "company_communication_setup_approval_policy_ready" },
     ],
     providedFeatures: ["communications-ready"],
     industrySupport: ["any"],
