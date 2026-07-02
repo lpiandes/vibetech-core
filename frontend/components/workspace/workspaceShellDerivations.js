@@ -1,11 +1,11 @@
 const ROUTES_BY_MODULE_ID = {
   mission_control: "/mission-control",
-  digital_workforce: "/digital-workforce",
-  work_queue: "/work-queue",
-  knowledge: "/dashboard",
-  dashboard: "/dashboard",
-  analytics: "/dashboard",
-  settings: "/dashboard",
+  digital_workforce: "/team",
+  work_queue: "/work",
+  knowledge: "/knowledge",
+  dashboard: "/company",
+  analytics: "/analytics",
+  settings: "/settings",
 };
 
 function getRouteForModuleId(moduleId) {
@@ -97,6 +97,16 @@ export function validateWorkspaceShellViewModel(workspaceViewModel) {
 export function getActiveModuleIdFromPathname(pathname) {
   const path = String(pathname ?? "");
   if (path === "/mission-control") return "mission_control";
+  // Primary routes
+  if (path === "/team") return "digital_workforce";
+  if (path === "/work") return "work_queue";
+  if (path.startsWith("/work/")) return "work_queue";
+  if (path === "/knowledge") return "knowledge";
+  if (path === "/company") return "dashboard";
+  if (path === "/analytics") return "analytics";
+  if (path === "/settings") return "settings";
+
+  // Legacy compatibility routes
   if (path === "/dashboard") return "dashboard";
   if (path === "/digital-workforce") return "digital_workforce";
   if (path.startsWith("/work-queue")) return "work_queue";

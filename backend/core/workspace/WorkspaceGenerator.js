@@ -1,5 +1,4 @@
 import { createDefaultWorkspaceModules } from "./WorkspaceModuleRegistry.js";
-import { buildWorkspaceNavigation } from "./WorkspaceNavigation.js";
 import { buildWorkspaceDashboard } from "./WorkspaceDashboard.js";
 import { createWorkspaceWidget } from "./WorkspaceWidget.js";
 import { buildWorkspaceQueue } from "./WorkspaceQueue.js";
@@ -7,6 +6,8 @@ import { buildWorkspaceRecommendations } from "./WorkspaceRecommendation.js";
 import { validateWorkspaceConfiguration } from "./WorkspaceValidation.js";
 import { createWorkspaceConfiguration } from "./WorkspaceConfiguration.js";
 import { WORKSPACE_DEFAULT_VERSION, MODULE_REGISTRY } from "./WorkspaceDefaults.js";
+
+import { NavigationService } from "./navigation/NavigationService.js";
 
 function statusByCapabilityId(businessCapabilities) {
   const caps = Array.isArray(businessCapabilities)
@@ -97,7 +98,9 @@ export class WorkspaceGenerator {
       return (a.navigation?.item ?? a.title).localeCompare(b.navigation?.item ?? b.title);
     });
 
-    const navigation = buildWorkspaceNavigation({ modules: enabledModules });
+    const navigation = new NavigationService({ nowISO: nowISO ?? this.nowISO }).generate({
+      modules: enabledModules,
+    });
 
     const widgetIds = [];
     for (const m of enabledModules) {

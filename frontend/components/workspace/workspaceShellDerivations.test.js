@@ -29,18 +29,16 @@ function makeWorkspaceViewModel() {
           items: [{ moduleId: "digital_workforce", title: "Team", visibility: "VISIBLE", status: "READY" }],
         },
         {
-          id: "nav_section_Workspace",
-          title: "Company",
-          items: [
-            { moduleId: "dashboard", title: "Company", visibility: "VISIBLE", status: "READY" },
-          ],
-        },
-        {
           id: "nav_section_Operations",
           title: "Work",
           items: [{ moduleId: "work_queue", title: "Work", visibility: "VISIBLE", status: "READY" }],
         },
         { id: "nav_section_Knowledge", title: "Knowledge", items: [{ moduleId: "knowledge", title: "Knowledge", visibility: "VISIBLE", status: "READY" }] },
+        {
+          id: "nav_section_Workspace",
+          title: "Company",
+          items: [{ moduleId: "dashboard", title: "Company", visibility: "VISIBLE", status: "READY" }],
+        },
         { id: "nav_section_Analytics", title: "Analytics", items: [{ moduleId: "analytics", title: "Analytics", visibility: "VISIBLE", status: "READY" }] },
         { id: "nav_section_Settings", title: "Settings", items: [{ moduleId: "settings", title: "Settings", visibility: "VISIBLE", status: "READY" }] },
       ],
@@ -67,7 +65,7 @@ test("Navigation rendering: derived sidebar uses view-model ordering", () => {
   assert.equal(items.length, 7);
   assert.deepEqual(
     items.map((x) => x.moduleId),
-    ["mission_control", "digital_workforce", "dashboard", "work_queue", "knowledge", "analytics", "settings"],
+    ["mission_control", "digital_workforce", "work_queue", "knowledge", "dashboard", "analytics", "settings"],
   );
   assert.ok(items.every((x) => Object.isFrozen(x)));
   assert.ok(Object.isFrozen(items));
@@ -75,6 +73,13 @@ test("Navigation rendering: derived sidebar uses view-model ordering", () => {
 
 test("Module rendering: active module mapping by pathname", () => {
   assert.equal(getActiveModuleIdFromPathname("/mission-control"), "mission_control");
+  assert.equal(getActiveModuleIdFromPathname("/team"), "digital_workforce");
+  assert.equal(getActiveModuleIdFromPathname("/work"), "work_queue");
+  assert.equal(getActiveModuleIdFromPathname("/work/pm1"), "work_queue");
+  assert.equal(getActiveModuleIdFromPathname("/knowledge"), "knowledge");
+  assert.equal(getActiveModuleIdFromPathname("/company"), "dashboard");
+  assert.equal(getActiveModuleIdFromPathname("/analytics"), "analytics");
+  assert.equal(getActiveModuleIdFromPathname("/settings"), "settings");
   assert.equal(getActiveModuleIdFromPathname("/dashboard"), "dashboard");
   assert.equal(getActiveModuleIdFromPathname("/digital-workforce"), "digital_workforce");
   assert.equal(getActiveModuleIdFromPathname("/work-queue"), "work_queue");
@@ -113,6 +118,6 @@ test("Immutability assumptions: helpers do not mutate frozen view models", () =>
   const vm = deepFreeze(makeWorkspaceViewModel());
   const items = deriveSidebarNavItems(vm);
   assert.ok(items.length === 7);
-  assert.deepEqual(items.map((x) => x.moduleId), ["mission_control", "digital_workforce", "dashboard", "work_queue", "knowledge", "analytics", "settings"]);
+  assert.deepEqual(items.map((x) => x.moduleId), ["mission_control", "digital_workforce", "work_queue", "knowledge", "dashboard", "analytics", "settings"]);
 });
 
