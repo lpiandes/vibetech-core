@@ -24,7 +24,7 @@ Why it exists:
 
 ### `AppShell.tsx`
 Purpose: composes the three shell regions:
-- `Sidebar`
+- `WorkspaceRenderer`
 - `Topbar`
 - `PageContainer`
 
@@ -35,20 +35,8 @@ Why it exists:
 ---
 
 ### `Sidebar.tsx`
-Purpose: fixed-width left navigation.
-
-Includes:
-- `Logo`
-- Navigation items:
-  - Dashboard (active)
-  - My Team
-  - Work Queue
-  - Performance
-  - Settings button at the bottom
-
-Design intent:
-- premium whitespace, subtle borders, soft shadows
-- desktop-first (sidebar hidden on smaller screens)
+Legacy component. Sprint 3 shell navigation is generated from the backend Workspace View Model via `frontend/components/workspace/NavigationRenderer`.
+This file now returns `null` to avoid hardcoded navigation.
 
 ---
 

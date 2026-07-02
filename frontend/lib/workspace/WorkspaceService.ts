@@ -101,6 +101,12 @@ export class WorkspaceService {
     return this.adapter.getWorkQueueView(workspaceConfig);
   }
 
+  loadWorkspaceViewModel() {
+    const workspaceConfig = this.getWorkspaceConfig();
+    // Full workspace shell snapshot for application-level rendering.
+    return this.adapter.translate(workspaceConfig);
+  }
+
   loadReviewWork(workItemId: string) {
     return this.api.loadReviewWork(workItemId);
   }

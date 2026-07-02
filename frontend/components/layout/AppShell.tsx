@@ -1,28 +1,17 @@
 import type { ReactNode } from "react";
 
-import Sidebar from "./Sidebar";
-import Topbar from "./Topbar";
-import PageContainer from "./PageContainer";
+import { WorkspaceService } from "@/lib/workspace/WorkspaceService";
+
+import WorkspaceRenderer from "@/components/workspace/WorkspaceRenderer";
 
 export default function AppShell({ children }: { children: ReactNode }) {
+  const service = new WorkspaceService();
+  const workspaceViewModel = service.loadWorkspaceViewModel();
+
   return (
-    <div className="min-h-screen w-full bg-background text-foreground">
-      <div className="flex min-h-screen">
-        <aside className="hidden md:flex md:w-72 md:shrink-0 md:flex-col">
-          <Sidebar />
-        </aside>
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="shrink-0">
-            <Topbar />
-          </header>
-
-          <main className="flex-1">
-            <PageContainer>{children}</PageContainer>
-          </main>
-        </div>
-      </div>
-    </div>
+    <WorkspaceRenderer workspaceViewModel={workspaceViewModel}>
+      {children}
+    </WorkspaceRenderer>
   );
 }
 
