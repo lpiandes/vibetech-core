@@ -339,6 +339,35 @@ export class CompanyEventEngine {
         break;
       }
 
+      case COMPANY_EVENT_TYPES.KNOWLEDGE_PUBLISH_STARTED:
+      case COMPANY_EVENT_TYPES.KNOWLEDGE_PUBLISHED:
+      case COMPANY_EVENT_TYPES.KNOWLEDGE_PUBLISH_FAILED: {
+        const { draftId, knowledgeId, errorMessage } = event.payload ?? {};
+        requireString(draftId, "payload.draftId");
+        requireString(knowledgeId, "payload.knowledgeId");
+
+        const status =
+          event.type === COMPANY_EVENT_TYPES.KNOWLEDGE_PUBLISH_FAILED
+            ? `FAILED${errorMessage ? `:${String(errorMessage).slice(0, 80)}` : ""}`
+            : event.type === COMPANY_EVENT_TYPES.KNOWLEDGE_PUBLISH_STARTED
+              ? "STARTED"
+              : "PUBLISHED";
+
+        const activity = {
+          timestampISO: event.timestamp,
+          employee: "Knowledge Publishing Engine",
+          action: event.type,
+          object: String(knowledgeId),
+          status,
+        };
+
+        nextCustomActivities = [
+          ...nextCustomActivities,
+          deepFreeze(activity),
+        ];
+        break;
+      }
+
       case COMPANY_EVENT_TYPES.ACTIVITY_CREATED: {
         const { activity } = event.payload;
         if (!isPlainObject(activity)) {
