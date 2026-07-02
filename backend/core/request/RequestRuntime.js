@@ -1,6 +1,8 @@
-import { RequestEventEngine } from "./RequestEventEngine.js";
 import { buildDefaultRequestSeed } from "./RequestBuilder.js";
+import { RequestEventEngine } from "./RequestEventEngine.js";
+
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
+
 import { validateRequestRuntime } from "./RequestRuntimeValidator.js";
 
 export class RequestRuntime {
@@ -27,7 +29,7 @@ export class RequestRuntime {
   applyEvent(event) {
     const engine = new RequestEventEngine({ runtime: this });
     engine.apply(event);
-    // engine deep-freezes next state; keep deterministic invariants.
+    // Engine deep-freezes next state; keep deterministic invariants + validate.
     this._state = deepFreeze(this._state);
     validateRequestRuntime(this);
     return this._state;

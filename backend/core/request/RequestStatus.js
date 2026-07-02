@@ -1,15 +1,6 @@
-export const REQUEST_STATUSES = [
-  "support",
-  "received",
-  "reviewing",
-  "qualified",
-  "rejected",
-  "converted",
-  "cancelled",
-  "closed",
-];
+export const REQUEST_STATUSES = ["received", "reviewing", "qualified", "rejected", "converted", "cancelled", "closed"];
 
-export function isValidRequestStatus(value) {
-  return REQUEST_STATUSES.includes(String(value));
+export function isValidRequestStatus(status) {
+  return REQUEST_STATUSES.includes(String(status ?? ""));
 }
 

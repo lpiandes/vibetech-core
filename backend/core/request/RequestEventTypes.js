@@ -1,3 +1,6 @@
+import { REQUEST_CHANNEL_TYPES } from "./RequestChannel.js";
+import { REQUEST_STATUSES } from "./RequestStatus.js";
+
 export const REQUEST_EVENT_TYPES = {
   REQUEST_RECEIVED: "REQUEST_RECEIVED",
   REQUEST_UPDATED: "REQUEST_UPDATED",
@@ -9,3 +12,6 @@ export const REQUEST_EVENT_TYPES = {
 
 export const SUPPORTED_REQUEST_EVENT_TYPES = Object.values(REQUEST_EVENT_TYPES);
 
+// Kept here for convenience + consistency with other runtimes.
+export { REQUEST_STATUSES };
+export { REQUEST_CHANNEL_TYPES };
