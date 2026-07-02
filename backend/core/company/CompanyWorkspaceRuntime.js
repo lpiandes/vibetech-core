@@ -24,6 +24,7 @@ import { CompanyProfileBuilder } from "./profile/CompanyProfileBuilder.js";
 import { createCompanyProfile } from "./profile/CompanyProfile.js";
 import { BusinessProfileBuilder } from "./business-profile/BusinessProfileBuilder.js";
 import { CommunicationSetupBuilder } from "./communication-setup/CommunicationSetupBuilder.js";
+import { ConnectedSystemBuilder } from "./connected-systems/ConnectedSystemBuilder.js";
 
 function deepFreeze(value) {
   if (!value || typeof value !== "object") return value;
@@ -613,6 +614,12 @@ function createABCPropertyGroupSeed() {
     nowISO: baseUpdatedAtISO,
   });
 
+  const connectedSystems = ConnectedSystemBuilder.buildSnapshot({
+    integrations,
+    knowledgeRepository,
+    knowledgeCategories,
+  });
+
   return deepFreeze({
     identity,
     employees,
@@ -620,6 +627,7 @@ function createABCPropertyGroupSeed() {
     companyProfile,
     businessProfile,
     communicationSetup,
+    connectedSystems,
     knowledgeRepository,
     knowledgeCategories,
     integrations,
@@ -660,6 +668,10 @@ export class CompanyWorkspaceRuntime {
 
   getCommunicationSetup() {
     return this._state.communicationSetup;
+  }
+
+  getConnectedSystems() {
+    return this._state.connectedSystems;
   }
 
   getKnowledge() {

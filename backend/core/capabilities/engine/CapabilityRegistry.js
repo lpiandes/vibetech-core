@@ -64,16 +64,16 @@ const BUILT_IN_CAPABILITIES = [
   }),
   makeBaseCapability({
     id: "integrations",
-    name: "Integrations",
-    description: "External integrations are connected or ready for onboarding.",
+    name: "Connections",
+    description: "External systems are connected and ready for operations.",
     dependencies: ["business_profile"],
     requirements: [
       { type: "onboarding_step_completed", stepId: "integrations" },
-      { type: "company_integration_connected_any" },
+      { type: "company_connected_systems_feature_available", feature: "Intake" },
     ],
-    providedFeatures: ["integrations-connected"],
+    providedFeatures: ["connections-ready"],
     industrySupport: ["any"],
-    recommendationSeeds: ["Connect at least one integration."],
+    recommendationSeeds: ["Connect at least one system."],
   }),
   makeBaseCapability({
     id: "knowledge",

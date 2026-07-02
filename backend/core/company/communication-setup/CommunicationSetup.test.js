@@ -133,6 +133,13 @@ test("Capability evaluation: Communications capability becomes READY when Commun
     getBusinessProfile: () => ({
       metadata: { validation: { ok: true }, completionPercent: 100 },
     }),
+    getConnectedSystems: () => [
+      {
+        id: "cs_website_intake",
+        status: "READY",
+        features: ["Intake"],
+      },
+    ],
     getIntegrations: () => [{ connected: true }],
     getCommunicationSetup: () => setup,
     getMetrics: () => ({ pendingReviews: 0 }),

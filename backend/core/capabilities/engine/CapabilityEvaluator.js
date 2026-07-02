@@ -54,6 +54,20 @@ function evaluateRequirement({ requirement, runtimeContext } = {}) {
         return Array.isArray(companyRuntime?.getIntegrations?.())
           ? companyRuntime.getIntegrations().some((i) => i && i.connected === true)
           : false;
+
+      case "company_connected_systems_any_ready": {
+        const systems = companyRuntime?.getConnectedSystems?.();
+        const list = Array.isArray(systems) ? systems : [];
+        return list.some((s) => s && s.status === "READY");
+      }
+
+      case "company_connected_systems_feature_available": {
+        const feature = String(requirement?.feature ?? "");
+        if (!feature) return false;
+        const systems = companyRuntime?.getConnectedSystems?.();
+        const list = Array.isArray(systems) ? systems : [];
+        return list.some((s) => s && s.status === "READY" && Array.isArray(s.features) && s.features.includes(feature));
+      }
       case "company_metrics_available":
         return Boolean(companyRuntime?.getMetrics?.());
 
