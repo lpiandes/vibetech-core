@@ -16,6 +16,9 @@ import { MissionControlViewAdapter } from "../../../backend/core/mission-control
 import { TeamRuntime } from "../../../backend/core/team/TeamRuntime.js";
 import { TeamViewAdapter } from "../../../backend/core/team/views/TeamViewAdapter.js";
 
+import { WorkRuntime } from "../../../backend/core/work/WorkRuntime.js";
+import { WorkViewAdapter } from "../../../backend/core/work/views/WorkViewAdapter.js";
+
 const NOW_ISO = "2026-07-01T00:00:00.000Z";
 
 function makeCapabilitiesReady(overrides: Record<string, any> = {}) {
@@ -50,10 +53,12 @@ export class WorkspaceService {
   private businessCapabilities = makeCapabilitiesReady();
   private generator = new WorkspaceGenerator({ nowISO: NOW_ISO });
   private teamRuntime: TeamRuntime;
+  private workRuntime: WorkRuntime;
 
   constructor() {
     this.runtime = new CompanyWorkspaceRuntime();
     this.teamRuntime = new TeamRuntime();
+    this.workRuntime = new WorkRuntime({ nowISO: NOW_ISO });
 
     // Seed a stable “after demo intake” inquiry event so the queue/dashboard
     // have deterministic runtime-derived content.
@@ -160,6 +165,16 @@ export class WorkspaceService {
       teamRuntime: this.teamRuntime,
       companyRuntime: this.runtime,
       companyBrief: brief,
+    });
+  }
+
+  loadWorkViewModel() {
+    const adapter = new WorkViewAdapter({ nowISO: NOW_ISO });
+    // Read-only translation: do not mutate runtimes.
+    return adapter.translate({
+      workRuntime: this.workRuntime,
+      teamRuntime: this.teamRuntime,
+      companyRuntime: this.runtime,
     });
   }
 
