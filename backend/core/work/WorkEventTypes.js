@@ -1,0 +1,35 @@
+export const WORK_EVENT_TYPES = {
+  WORK_ITEM_CREATED: "WORK_ITEM_CREATED",
+  WORK_ITEM_UPDATED: "WORK_ITEM_UPDATED",
+  WORK_ITEM_STAGE_CHANGED: "WORK_ITEM_STAGE_CHANGED",
+  WORK_ITEM_STATUS_CHANGED: "WORK_ITEM_STATUS_CHANGED",
+  WORK_ITEM_ASSIGNED: "WORK_ITEM_ASSIGNED",
+  WORK_ITEM_BLOCKED: "WORK_ITEM_BLOCKED",
+  WORK_ITEM_UNBLOCKED: "WORK_ITEM_UNBLOCKED",
+  WORK_ITEM_COMPLETED: "WORK_ITEM_COMPLETED",
+  WORK_QUEUE_CREATED: "WORK_QUEUE_CREATED",
+  WORK_STAGE_CREATED: "WORK_STAGE_CREATED",
+};
+
+export const SUPPORTED_WORK_EVENT_TYPES = Object.values(WORK_EVENT_TYPES);
+
+export const WORK_ASSIGNMENT_STATUSES = {
+  ACTIVE: "active",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+};
+
+export const WORK_STATUSES = [
+  "new",
+  "ready",
+  "in_progress",
+  "waiting",
+  "blocked",
+  "review_required",
+  "approved",
+  "rejected",
+  "completed",
+  "cancelled",
+  "failed",
+];
+
