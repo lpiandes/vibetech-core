@@ -22,6 +22,7 @@ import { createBuiltInKnowledgeCategories } from "../knowledge/categories/builtI
 import { createCategoryRepository } from "../knowledge/categories/CategoryRepository.js";
 import { CompanyProfileBuilder } from "./profile/CompanyProfileBuilder.js";
 import { createCompanyProfile } from "./profile/CompanyProfile.js";
+import { BusinessProfileBuilder } from "./business-profile/BusinessProfileBuilder.js";
 
 function deepFreeze(value) {
   if (!value || typeof value !== "object") return value;
@@ -375,6 +376,12 @@ function createABCPropertyGroupSeed() {
     }),
   );
 
+  const businessProfile = BusinessProfileBuilder.build({
+    companyProfile,
+    overrides: { metadata: { createdAtISO: baseCreatedAtISO, updatedAtISO: baseUpdatedAtISO, version: 1 } },
+    nowISO: baseUpdatedAtISO,
+  });
+
   // Seed knowledge repository from the legacy compact knowledge values
   // so CompanyBrain and BrainSearch remain compatible.
   const knowledgeCategories = createCategoryRepository({
@@ -603,6 +610,7 @@ function createABCPropertyGroupSeed() {
     employees,
     companyData,
     companyProfile,
+    businessProfile,
     knowledgeRepository,
     knowledgeCategories,
     integrations,
@@ -635,6 +643,10 @@ export class CompanyWorkspaceRuntime {
 
   getCompanyProfile() {
     return this._state.companyProfile;
+  }
+
+  getBusinessProfile() {
+    return this._state.businessProfile;
   }
 
   getKnowledge() {

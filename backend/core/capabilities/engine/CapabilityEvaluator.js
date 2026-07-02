@@ -54,6 +54,19 @@ function evaluateRequirement({ requirement, runtimeContext } = {}) {
           : false;
       case "company_metrics_available":
         return Boolean(companyRuntime?.getMetrics?.());
+
+      case "company_business_profile_validation_passed": {
+        const profile = companyRuntime?.getBusinessProfile?.();
+        return Boolean(profile?.metadata?.validation?.ok);
+      }
+      case "company_business_profile_completion_percent_threshold": {
+        const threshold = typeof requirement?.threshold === "number" ? requirement.threshold : 80;
+        const profile = companyRuntime?.getBusinessProfile?.();
+        const completion = typeof profile?.metadata?.completionPercent === "number"
+          ? profile.metadata.completionPercent
+          : 0;
+        return completion >= threshold;
+      }
       case "company_profile_validation_passed": {
         const profile = companyRuntime?.getCompanyProfile?.();
         return Boolean(profile?.metadata?.validation?.ok);
@@ -123,6 +136,16 @@ export class CapabilityEvaluator {
     // Company Identity completion should reflect the actual profile completion percentage.
     if (capabilityId === "company_identity") {
       const profile = companyRuntime?.getCompanyProfile?.();
+      const profileCompletion = typeof profile?.metadata?.completionPercent === "number"
+        ? profile.metadata.completionPercent
+        : null;
+      if (profileCompletion !== null) {
+        completionPercent = Math.max(0, Math.min(100, profileCompletion));
+      }
+    }
+
+    if (capabilityId === "business_profile") {
+      const profile = companyRuntime?.getBusinessProfile?.();
       const profileCompletion = typeof profile?.metadata?.completionPercent === "number"
         ? profile.metadata.completionPercent
         : null;

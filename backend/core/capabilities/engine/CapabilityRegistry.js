@@ -44,7 +44,10 @@ const BUILT_IN_CAPABILITIES = [
     name: "Business Profile",
     description: "Business setup is configured for operations.",
     dependencies: ["company_identity"],
-    requirements: [{ type: "onboarding_step_completed", stepId: "business_setup" }],
+    requirements: [
+      { type: "company_business_profile_validation_passed" },
+      { type: "company_business_profile_completion_percent_threshold", threshold: 80 },
+    ],
     providedFeatures: ["business-profile-configured"],
     industrySupport: ["any"],
     recommendationSeeds: ["Complete Business Setup."],

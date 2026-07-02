@@ -40,11 +40,11 @@ test("Requirement evaluation: initial onboarding yields NOT_STARTED and seeded r
   assert.ok(Object.isFrozen(result));
 });
 
-test("Dependency resolution: completing brand setup but missing business setup makes brand BLOCKED", () => {
+test("Dependency resolution: brand setup makes brand READY (BusinessProfile drives dependency)", () => {
   const companyRuntime = new CompanyWorkspaceRuntime();
   const onboardingRuntime = new OnboardingRuntime({ companyId: "co_1", nowISO: NOW0 });
 
-  // Complete identity + brand setup, but leave business_setup incomplete.
+  // Complete identity + brand setup, but do not complete business_setup onboarding step.
   completeStep({ onboardingRuntime, stepId: "company_profile", nowISO: NOW1 });
   completeStep({ onboardingRuntime, stepId: "brand_setup", nowISO: NOW2 });
 
@@ -52,15 +52,10 @@ test("Dependency resolution: completing brand setup but missing business setup m
   const result = engine.evaluate({ companyRuntime, onboardingRuntime, nowISO: NOW2 });
 
   const brand = result.capabilities.find((c) => c.id === "brand");
-  assert.equal(brand.status, "BLOCKED");
-  assert.equal(brand.health, "DEGRADED");
-  assert.ok(Array.isArray(brand.blockedBy));
-  assert.ok(brand.blockedBy.includes("business_profile"));
-
-  // Recommendation should include deterministic dependency guidance.
-  assert.ok(
-    brand.recommendations.some((r) => String(r).startsWith("Resolve dependencies first:")),
-  );
+  // Brand depends on the BusinessProfile capability (not the onboarding business_setup step).
+  assert.notEqual(brand.status, "BLOCKED");
+  assert.equal(brand.status, "READY");
+  assert.equal(brand.health, "HEALTHY");
 });
 
 test("Metrics: once one capability is READY and others are not, overall readiness becomes IN_PROGRESS", () => {
