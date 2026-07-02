@@ -5,6 +5,14 @@ import { COMPANY_EVENT_TYPES } from "../../../backend/core/company/events/Compan
 import { createCompanyEvent } from "../../../backend/core/company/events/CompanyEvent.js";
 import { MockWorkspaceApi } from "./MockWorkspaceApi";
 
+import { CompanyBriefEngine } from "../../../backend/core/business-intelligence/company-brief/CompanyBriefEngine.js";
+import { CompanyHealthEngine } from "../../../backend/core/business-intelligence/company-health/CompanyHealthEngine.js";
+import { CompanyInsightEngine } from "../../../backend/core/business-intelligence/insights/CompanyInsightEngine.js";
+import { CompanyOpportunityEngine } from "../../../backend/core/business-intelligence/opportunities/CompanyOpportunityEngine.js";
+import { CompanyRecommendationEngine } from "../../../backend/core/business-intelligence/recommendations/CompanyRecommendationEngine.js";
+import { MissionControlGenerator } from "../../../backend/core/mission-control/MissionControlGenerator.js";
+import { MissionControlViewAdapter } from "../../../backend/core/mission-control/views/MissionControlViewAdapter.js";
+
 const NOW_ISO = "2026-07-01T00:00:00.000Z";
 
 function makeCapabilitiesReady(overrides: Record<string, any> = {}) {
@@ -105,6 +113,38 @@ export class WorkspaceService {
     const workspaceConfig = this.getWorkspaceConfig();
     // Full workspace shell snapshot for application-level rendering.
     return this.adapter.translate(workspaceConfig);
+  }
+
+  loadMissionControlViewModel() {
+    // Mission Control is derived from canonical intelligence objects (deterministic).
+    const brief = new CompanyBriefEngine({ nowISO: NOW_ISO }).generate({ companyRuntime: this.runtime });
+    const health = new CompanyHealthEngine({ nowISO: NOW_ISO }).generate({ companyRuntime: this.runtime, companyBrief: brief });
+    const insights = new CompanyInsightEngine({ nowISO: NOW_ISO }).generate({
+      previousCompanyHealth: health,
+      currentCompanyHealth: health,
+    });
+    const opportunities = new CompanyOpportunityEngine({ nowISO: NOW_ISO }).generate({
+      companyRuntime: this.runtime,
+      companyBrief: brief,
+      companyHealth: health,
+      companyInsights: insights,
+    });
+    const recommendations = new CompanyRecommendationEngine({ nowISO: NOW_ISO }).generate({
+      companyBrief: brief,
+      companyHealth: health,
+      companyInsights: insights,
+      companyOpportunities: opportunities,
+    });
+
+    const missionControl = new MissionControlGenerator({ nowISO: NOW_ISO }).generate({
+      companyBrief: brief,
+      companyHealth: health,
+      companyInsights: insights,
+      companyOpportunities: opportunities,
+      companyRecommendations: recommendations,
+    });
+
+    return new MissionControlViewAdapter().translate(missionControl);
   }
 
   loadReviewWork(workItemId: string) {
