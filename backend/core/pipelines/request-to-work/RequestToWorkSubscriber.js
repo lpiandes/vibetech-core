@@ -1,8 +1,7 @@
-import { WORK_EVENT_TYPES } from "../../work/WorkEventTypes.js";
-
 import { REQUEST_TO_WORK_ACTION_TYPES, DEFAULT_WORK_QUEUE_ID } from "./RequestToWorkDefaults.js";
 import { mapRequestConvertedToWorkItemInput } from "./RequestToWorkMapper.js";
 import { validateRequestConvertedEvent } from "./RequestToWorkValidator.js";
+import { WorkCreationService } from "./WorkCreationService.js";
 
 function fail(message) {
   throw new Error(`RequestToWorkSubscriber: ${message}`);
@@ -10,10 +9,6 @@ function fail(message) {
 
 function safeArray(v) {
   return Array.isArray(v) ? v : [];
-}
-
-function makeDeterministicId(...parts) {
-  return parts.map((p) => String(p)).join("_");
 }
 
 /**
@@ -51,14 +46,23 @@ export function requestToWorkHandle(event, context = {}) {
   // If WorkRuntime exists in context, apply WORK_ITEM_CREATED.
   const workRuntime = context.workRuntime;
   if (workRuntime && typeof workRuntime.applyEvent === "function") {
-    const workEvent = {
-      id: makeDeterministicId("evt_work_item_created", event.eventId, workItemInput.id),
-      timestampISO: String(payload.convertedAt),
-      type: WORK_EVENT_TYPES.WORK_ITEM_CREATED,
-      source: "request-to-work:subscriber",
-      payload: { workItem: workItemInput },
-    };
-    workRuntime.applyEvent(workEvent);
+    const service = new WorkCreationService();
+    const created = service.createWorkItem({
+      workRuntime,
+      workItemInput,
+      requestConvertedEventId: String(event?.eventId ?? "req_conv"),
+      convertedAtISO: String(payload.convertedAt),
+    });
+
+    if (created.status !== "SUCCESS") {
+      return {
+        status: "FAILED",
+        message: "Failed to create work item in WorkRuntime.",
+        actions: [action],
+        errors: Array.isArray(created.errors) && created.errors.length ? created.errors : ["Work creation failed."],
+        metadata: { derivedFrom: { requestId, workItemId: String(workItemInput.id) } },
+      };
+    }
   } else if (workRuntime !== undefined) {
     // Context provided but invalid; treat as failed (deterministic).
     return {

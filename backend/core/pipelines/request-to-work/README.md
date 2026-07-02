@@ -11,13 +11,16 @@ This sprint does **not** implement qualification, conversion workflow orchestrat
   - validates event payload
   - deterministically maps request payload → canonical `workItemInput`
   - returns a deterministic action: `create_work_item`
-  - optionally applies `WORK_ITEM_CREATED` **only** if `context.workRuntime` is explicitly provided
+  - optionally creates work **only** if `context.workRuntime` is explicitly provided
+    - work creation is delegated to `WorkCreationService` (which calls `workRuntime.applyEvent()`)
 - `RequestToWorkMapper`
   - converts the `REQUEST_CONVERTED` payload fields into the canonical `WorkItemInput` shape
 - `RequestToWorkValidator`
   - validates compatibility for `REQUEST_CONVERTED` events and the payload contract
 - `RequestToWorkDefaults`
   - provides deterministic defaults (stageId/queueId/status) for newly created work
+- `WorkCreationService`
+  - owns Work event mapping/validation and deterministic application via `workRuntime.applyEvent()`
 
 ## Relationship to `PlatformEventBus`
 `RequestToWorkSubscriber` is designed to be registered as a bus-compatible subscriber via the Platform Event Subscriber Framework.
