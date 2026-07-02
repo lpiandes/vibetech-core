@@ -77,7 +77,6 @@ test("Error boundary shows fallback when child throws", () => {
 
   const html = renderToStaticMarkup(
     <MissionControlErrorBoundary>
-      {/* @ts-expect-error testing boundary */}
       <Thrower />
     </MissionControlErrorBoundary>,
   );

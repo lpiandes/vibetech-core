@@ -13,6 +13,9 @@ import { CompanyRecommendationEngine } from "../../../backend/core/business-inte
 import { MissionControlGenerator } from "../../../backend/core/mission-control/MissionControlGenerator.js";
 import { MissionControlViewAdapter } from "../../../backend/core/mission-control/views/MissionControlViewAdapter.js";
 
+import { TeamRuntime } from "../../../backend/core/team/TeamRuntime.js";
+import { TeamViewAdapter } from "../../../backend/core/team/views/TeamViewAdapter.js";
+
 const NOW_ISO = "2026-07-01T00:00:00.000Z";
 
 function makeCapabilitiesReady(overrides: Record<string, any> = {}) {
@@ -46,9 +49,11 @@ export class WorkspaceService {
   private api: MockWorkspaceApi;
   private businessCapabilities = makeCapabilitiesReady();
   private generator = new WorkspaceGenerator({ nowISO: NOW_ISO });
+  private teamRuntime: TeamRuntime;
 
   constructor() {
     this.runtime = new CompanyWorkspaceRuntime();
+    this.teamRuntime = new TeamRuntime();
 
     // Seed a stable “after demo intake” inquiry event so the queue/dashboard
     // have deterministic runtime-derived content.
@@ -145,6 +150,17 @@ export class WorkspaceService {
     });
 
     return new MissionControlViewAdapter().translate(missionControl);
+  }
+
+  loadTeamViewModel() {
+    const brief = new CompanyBriefEngine({ nowISO: NOW_ISO }).generate({ companyRuntime: this.runtime });
+    const adapter = new TeamViewAdapter({ nowISO: NOW_ISO });
+    // Read-only translation: do not mutate runtime.
+    return adapter.translate({
+      teamRuntime: this.teamRuntime,
+      companyRuntime: this.runtime,
+      companyBrief: brief,
+    });
   }
 
   loadReviewWork(workItemId: string) {
