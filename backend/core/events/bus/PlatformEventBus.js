@@ -157,7 +157,8 @@ export class PlatformEventBus {
         results.push(res);
         if (status === DISPATCH_RESULT_STATUSES.SUCCESS) successCount += 1;
         if (status === DISPATCH_RESULT_STATUSES.FAILED) failureCount += 1;
-        if (status === DISPATCH_RESULT_STATUSES.SKIPPED) skippedCount += 1;
+        // Treat DISABLED as a non-executed/ignored outcome for counts.
+        if (status === DISPATCH_RESULT_STATUSES.SKIPPED || status === DISPATCH_RESULT_STATUSES.DISABLED) skippedCount += 1;
       } catch (err) {
         const res = createPlatformEventDispatchResult({
           subscriberId,
