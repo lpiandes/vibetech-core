@@ -1,5 +1,6 @@
 import { createBusinessCapability } from "./BusinessCapability.js";
 import { deepFreeze } from "./_utils/deepFreeze.js";
+import { CompanyBrain } from "../../company/brain/CompanyBrain.js";
 
 function normalizeStatusFromProgress({
   unmetRequirements,
@@ -15,10 +16,11 @@ function normalizeStatusFromProgress({
 
 function determineHealth({ status, unmetRequirements } = {}) {
   if (status === "READY") return "HEALTHY";
-  if (status === "BLOCKED") return unmetRequirements.length ? "DEGRADED" : "DEGRADED";
+  if (status === "BLOCKED") return "DEGRADED";
   if (status === "IN_PROGRESS") return "DEGRADED";
   if (status === "NOT_STARTED") return "DEGRADED";
   if (status === "DISABLED") return "UNAVAILABLE";
+  if (status === "DEGRADED") return "DEGRADED";
   return "DEGRADED";
 }
 
@@ -88,6 +90,82 @@ function evaluateRequirement({ requirement, runtimeContext } = {}) {
           : 0;
         return completion >= threshold;
       }
+      case "company_knowledge_repository_initialized":
+        return Boolean(companyRuntime?.getKnowledgeRepository?.());
+
+      case "company_knowledge_categories_available": {
+        const categories = companyRuntime?.getKnowledgeCategories?.();
+        const items = Array.isArray(categories?.items) ? categories.items : [];
+        return items.length > 0;
+      }
+
+      case "company_knowledge_items_published": {
+        const repo = companyRuntime?.getKnowledgeRepository?.();
+        const items = Array.isArray(repo?.items) ? repo.items : [];
+        const published = items.filter((i) => i && i.status !== "ARCHIVED");
+        return published.length > 0;
+      }
+
+      case "company_knowledge_minimum_published_count": {
+        const minCount = typeof requirement?.minCount === "number" ? requirement.minCount : 1;
+        const repo = companyRuntime?.getKnowledgeRepository?.();
+        const items = Array.isArray(repo?.items) ? repo.items : [];
+        const published = items.filter((i) => i && i.status !== "ARCHIVED");
+        return published.length >= minCount;
+      }
+
+      case "company_knowledge_publishing_activity_exists": {
+        const activities = companyRuntime?.getActivities?.() ?? [];
+        return activities.some(
+          (a) =>
+            a?.action === "KNOWLEDGE_PUBLISH_STARTED" ||
+            a?.action === "KNOWLEDGE_PUBLISH_FAILED" ||
+            a?.action === "KNOWLEDGE_PUBLISHED" ||
+            a?.action === "KNOWLEDGE_INGESTION_COMPLETED",
+        );
+      }
+
+      case "company_knowledge_brain_context_available": {
+        try {
+          const brain = new CompanyBrain({ runtime: companyRuntime });
+          const employees = Array.isArray(companyRuntime?.getEmployees?.())
+            ? companyRuntime.getEmployees()
+            : [];
+          const employeeId = employees[0]?.employeeId ?? "";
+
+          const ctx = brain.buildBusinessContext({
+            employeeId,
+            task: "knowledge_readiness_check",
+            relatedEntities: {
+              buyerInquiry: { message: "General inquiry" },
+            },
+          });
+
+          const usable =
+            ctx &&
+            typeof ctx.summary === "string" &&
+            ctx.summary.trim().length > 0 &&
+            ((Array.isArray(ctx.relevantDocuments) && ctx.relevantDocuments.length > 0) ||
+              (Array.isArray(ctx.relevantPolicies) && ctx.relevantPolicies.length > 0) ||
+              (typeof ctx.brandVoice === "string" && ctx.brandVoice.trim().length > 0));
+
+          return Boolean(usable);
+        } catch {
+          return false;
+        }
+      }
+
+      case "company_knowledge_no_blocking_errors": {
+        const activities = companyRuntime?.getActivities?.() ?? [];
+        const hasFailure = activities.some(
+          (a) =>
+            a?.action === "KNOWLEDGE_INGESTION_FAILED" ||
+            a?.action === "KNOWLEDGE_PUBLISH_FAILED" ||
+            String(a?.status ?? "").startsWith("FAILED"),
+        );
+        return !hasFailure;
+      }
+
       case "company_profile_validation_passed": {
         const profile = companyRuntime?.getCompanyProfile?.();
         return Boolean(profile?.metadata?.validation?.ok);
@@ -154,6 +232,46 @@ export class CapabilityEvaluator {
     const metCount = requirements.length - unmetRequirements.length;
     let completionPercent = requirements.length ? (metCount / requirements.length) * 100 : 0;
 
+    // Knowledge capability has explicit readiness states (NOT_STARTED/IN_PROGRESS/READY/BLOCKED/DEGRADED)
+    // based on deterministic published count + brain/context + error activities.
+    if (capabilityId === "knowledge") {
+      const repo = companyRuntime?.getKnowledgeRepository?.();
+      const repoItems = Array.isArray(repo?.items) ? repo.items : [];
+      const publishedCount = repoItems.filter((i) => i && i.status !== "ARCHIVED").length;
+
+      const categories = companyRuntime?.getKnowledgeCategories?.();
+      const categoryItems = Array.isArray(categories?.items) ? categories.items : [];
+      const categoriesCount = categoryItems.length;
+
+      const evaluatedByType = {};
+      for (let i = 0; i < requirements.length; i += 1) {
+        const t = requirements[i]?.type;
+        evaluatedByType[String(t)] = evaluatedRequirements[i]?.met ?? false;
+      }
+
+      const noBlockingErrorsMet = Boolean(evaluatedByType.company_knowledge_no_blocking_errors);
+      const categoriesAvailableMet = Boolean(evaluatedByType.company_knowledge_categories_available);
+      const brainContextAvailableMet = Boolean(
+        evaluatedByType.company_knowledge_brain_context_available,
+      );
+      const minPublishedMet = Boolean(evaluatedByType.company_knowledge_minimum_published_count);
+
+      // If core systems are missing, block.
+      if (publishedCount === 0) {
+        // Repository exists but no usable published knowledge.
+        completionPercent = 0;
+      } else if (!categoriesAvailableMet || categoriesCount === 0 || !brainContextAvailableMet) {
+        // Missing knowledge system or brain context failure.
+        completionPercent = completionPercent; // keep computed
+      } else if (!minPublishedMet) {
+        // Some knowledge exists but not enough for full readiness.
+        completionPercent = Math.max(5, completionPercent);
+      } else if (!noBlockingErrorsMet) {
+        // Knowledge exists but has ingestion/publish failures; treat as DEGRADED.
+        completionPercent = Math.max(50, completionPercent);
+      }
+    }
+
     // Company Identity completion should reflect the actual profile completion percentage.
     if (capabilityId === "company_identity") {
       const profile = companyRuntime?.getCompanyProfile?.();
@@ -187,18 +305,77 @@ export class CapabilityEvaluator {
       requirementsLength: requirements.length,
     });
 
-    const health = determineHealth({ status, unmetRequirements });
+    let finalStatus = status;
+    if (capabilityId === "knowledge") {
+      // Explicit override for knowledge.
+      if (!dependencyBlocked) {
+        const repo = companyRuntime?.getKnowledgeRepository?.();
+        const repoItems = Array.isArray(repo?.items) ? repo.items : [];
+        const publishedCount = repoItems.filter((i) => i && i.status !== "ARCHIVED").length;
+
+        const minCountReq = requirements.find(
+          (r) => r.type === "company_knowledge_minimum_published_count",
+        );
+        const minCount =
+          minCountReq && typeof minCountReq.minCount === "number" ? minCountReq.minCount : 1;
+
+        const evaluatedByType = {};
+        for (let i = 0; i < requirements.length; i += 1) {
+          const t = requirements[i]?.type;
+          evaluatedByType[String(t)] = evaluatedRequirements[i]?.met ?? false;
+        }
+        const noBlockingErrorsMet = Boolean(evaluatedByType.company_knowledge_no_blocking_errors);
+        const categoriesAvailableMet = Boolean(evaluatedByType.company_knowledge_categories_available);
+        const brainContextAvailableMet = Boolean(evaluatedByType.company_knowledge_brain_context_available);
+
+        const missingCore = !categoriesAvailableMet || !brainContextAvailableMet;
+
+        if (missingCore) finalStatus = "BLOCKED";
+        else if (publishedCount === 0) finalStatus = "NOT_STARTED";
+        else if (publishedCount < minCount) finalStatus = "IN_PROGRESS";
+        else if (!noBlockingErrorsMet) finalStatus = "DEGRADED";
+        else if (unmetRequirements.length === 0) finalStatus = "READY";
+        else finalStatus = "IN_PROGRESS";
+      }
+    }
+
+    const health = determineHealth({ status: finalStatus, unmetRequirements });
 
     const recommendations = [];
-    if (status === "NOT_STARTED") {
+    if (finalStatus === "NOT_STARTED") {
       recommendations.push(...(capDef.recommendationSeeds ?? []));
-    } else if (status === "IN_PROGRESS") {
+    } else if (finalStatus === "IN_PROGRESS") {
       recommendations.push(...(capDef.recommendationSeeds ?? []));
-    } else if (status === "BLOCKED") {
+    } else if (finalStatus === "BLOCKED") {
       recommendations.push(...(capDef.recommendationSeeds ?? []));
       if (dependencyBlocked) {
         const deps = capDef.dependencies ?? [];
         recommendations.push(`Resolve dependencies first: ${deps.join(", ")}.`);
+      }
+    } else if (finalStatus === "DEGRADED") {
+      recommendations.push(...(capDef.recommendationSeeds ?? []));
+    }
+
+    if (capabilityId === "knowledge" && finalStatus !== "READY") {
+      const unmetTypes = evaluatedRequirements
+        .map((r, i) => (!r.met ? requirements[i]?.type : null))
+        .filter(Boolean);
+
+      const add = (s) => recommendations.push(s);
+      const has = (t) => unmetTypes.includes(t);
+
+      if (has("company_knowledge_repository_initialized")) add("Upload company knowledge.");
+      if (has("company_knowledge_categories_available")) add("Add knowledge categories.");
+      if (has("company_knowledge_items_published") || has("company_knowledge_minimum_published_count"))
+        add("Publish at least one knowledge item.");
+      if (has("company_knowledge_brain_context_available")) add("Review imported knowledge drafts.");
+      if (has("company_knowledge_no_blocking_errors")) add("Resolve knowledge errors.");
+      if (has("company_knowledge_publishing_activity_exists")) add("Publish imported knowledge.");
+
+      // Extra deterministic suggestions (safe general recommendations).
+      if (has("company_knowledge_items_published") || has("company_knowledge_minimum_published_count")) {
+        add("Add FAQs or SOPs.");
+        add("Add company policies.");
       }
     }
 
@@ -207,7 +384,7 @@ export class CapabilityEvaluator {
       name: capDef.name,
       description: capDef.description,
       category: capDef.category,
-      status,
+      status: finalStatus,
       health,
       requirements: evaluatedRequirements.map((r, idx) => ({
         requirement: requirements[idx],

@@ -18,3 +18,14 @@ The **Business Capability Engine** deterministically evaluates platform capabili
 - Reads from `CompanyWorkspaceRuntime` and `OnboardingRuntime` (optional).
 - Does not introduce a new source of truth.
 
+## Knowledge capability integration (Sprint 6)
+The **Knowledge** capability is evaluated from the live Knowledge OS state owned by `CompanyWorkspaceRuntime`:
+- `runtime.getKnowledgeRepository()`
+- `runtime.getKnowledgeCategories()`
+- `runtime.getKnowledge()`
+- `runtime.getActivities()` (to detect publish/ingestion failures)
+
+It includes a safe deterministic `CompanyBrain.buildBusinessContext()` check to confirm that Digital Employees can rely on usable business context derived from current knowledge.
+
+The Capability Engine remains read-only; it performs evaluation only and never writes to the repository.
+
