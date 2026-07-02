@@ -27,6 +27,14 @@ import { CapabilityRuntime } from "../../../backend/core/capabilities/runtime/Ca
 import { CapabilityIntelligenceEngine } from "../../../backend/core/capabilities/intelligence/CapabilityIntelligenceEngine.js";
 import { CapabilityViewAdapter } from "../../../backend/core/capabilities/views/CapabilityViewAdapter.js";
 
+import { CommunicationRuntime } from "../../../backend/core/communications/CommunicationRuntime.js";
+import { COMMUNICATION_EVENT_TYPES } from "../../../backend/core/communications/CommunicationEventTypes.js";
+import {
+  buildCommunicationThreadForSeed,
+  buildCommunicationMessageForSeed,
+} from "../../../backend/core/communications/CommunicationBuilder.js";
+import { CommunicationViewAdapter } from "../../../backend/core/communications/views/CommunicationViewAdapter.js";
+
 const NOW_ISO = "2026-07-01T00:00:00.000Z";
 
 function makeCapabilitiesReady(overrides: Record<string, any> = {}) {
@@ -284,6 +292,154 @@ export class WorkspaceService {
     return adapter.translate({
       capabilityRuntime,
       capabilityIntelligenceReport: report,
+    });
+  }
+
+  loadCommunicationViewModel() {
+    const communicationRuntime = new CommunicationRuntime({ nowISO: NOW_ISO });
+
+    // Deterministic demo communications so the executive dashboard has stable content.
+    const thread = buildCommunicationThreadForSeed({
+      nowISO: NOW_ISO,
+      overrides: {
+        id: "ct_seed_1",
+        subject: "Executive communications follow-up",
+        channel: "internal",
+        status: "draft",
+        participants: [
+          { id: "tm_ceo", type: "human" },
+          { id: "p_external_1", type: "external_system" },
+        ],
+        messageIds: [],
+        relatedObjects: [{ workItemId: "wi_seed_communication_1" }],
+        createdAt: NOW_ISO,
+        updatedAt: NOW_ISO,
+        metadata: {},
+      },
+    });
+
+    communicationRuntime.applyEvent({
+      id: "evt_ct_seed_1_created",
+      timestampISO: NOW_ISO,
+      type: COMMUNICATION_EVENT_TYPES.COMMUNICATION_THREAD_CREATED,
+      source: "frontend-mock-workspace-seed",
+      payload: { thread },
+    });
+
+    // Drafted queued message older than threshold -> queued attention.
+    const draftedQueued = buildCommunicationMessageForSeed({
+      nowISO: "2026-06-20T00:00:00.000Z",
+      threadId: "ct_seed_1",
+      overrides: {
+        id: "cm_seed_queued_1",
+        direction: "outbound",
+        channel: "email",
+        status: "draft",
+        subject: "Queued exec update",
+        body: "Draft body for queued exec update.",
+        sender: { id: "tm_ceo", type: "human" },
+        recipients: [{ id: "p_external_1", type: "external_system" }],
+        relatedObjects: [{ workItemId: "wi_seed_communication_1" }],
+        sentAt: null,
+        deliveredAt: null,
+        failedAt: null,
+      },
+    });
+
+    communicationRuntime.applyEvent({
+      id: "evt_cm_seed_queued_1_drafted",
+      timestampISO: NOW_ISO,
+      type: COMMUNICATION_EVENT_TYPES.COMMUNICATION_MESSAGE_DRAFTED,
+      source: "frontend-mock-workspace-seed",
+      payload: { message: draftedQueued },
+    });
+
+    communicationRuntime.applyEvent({
+      id: "evt_cm_seed_queued_1_queued",
+      timestampISO: NOW_ISO,
+      type: COMMUNICATION_EVENT_TYPES.COMMUNICATION_MESSAGE_QUEUED,
+      source: "frontend-mock-workspace-seed",
+      payload: { messageId: "cm_seed_queued_1" },
+    });
+
+    // Failed message -> immediate attention.
+    const draftedFailed = buildCommunicationMessageForSeed({
+      nowISO: "2026-06-25T00:00:00.000Z",
+      threadId: "ct_seed_1",
+      overrides: {
+        id: "cm_seed_failed_1",
+        direction: "outbound",
+        channel: "internal",
+        status: "draft",
+        subject: "Failed exec follow-up",
+        body: "Body for a message that will fail.",
+        sender: { id: "tm_ceo", type: "human" },
+        recipients: [{ id: "p_external_1", type: "external_system" }],
+        relatedObjects: [{ workItemId: "wi_seed_communication_1" }],
+        sentAt: null,
+        deliveredAt: null,
+        failedAt: null,
+      },
+    });
+
+    communicationRuntime.applyEvent({
+      id: "evt_cm_seed_failed_1_drafted",
+      timestampISO: NOW_ISO,
+      type: COMMUNICATION_EVENT_TYPES.COMMUNICATION_MESSAGE_DRAFTED,
+      source: "frontend-mock-workspace-seed",
+      payload: { message: draftedFailed },
+    });
+
+    communicationRuntime.applyEvent({
+      id: "evt_cm_seed_failed_1_failed",
+      timestampISO: NOW_ISO,
+      type: COMMUNICATION_EVENT_TYPES.COMMUNICATION_MESSAGE_FAILED,
+      source: "frontend-mock-workspace-seed",
+      payload: { messageId: "cm_seed_failed_1" },
+    });
+
+    // Received inbound with missing sender/recipients.
+    const draftedReceived = buildCommunicationMessageForSeed({
+      nowISO: NOW_ISO,
+      threadId: "ct_seed_1",
+      overrides: {
+        id: "cm_seed_received_1",
+        direction: "inbound",
+        channel: "chat",
+        status: "draft",
+        subject: "Inbound request requiring response",
+        body: "Inbound body that needs response.",
+        sender: null,
+        recipients: [],
+        relatedObjects: [{ workItemId: "wi_seed_communication_1" }],
+        sentAt: null,
+        deliveredAt: null,
+        failedAt: null,
+      },
+    });
+
+    communicationRuntime.applyEvent({
+      id: "evt_cm_seed_received_1_drafted",
+      timestampISO: NOW_ISO,
+      type: COMMUNICATION_EVENT_TYPES.COMMUNICATION_MESSAGE_DRAFTED,
+      source: "frontend-mock-workspace-seed",
+      payload: { message: draftedReceived },
+    });
+
+    communicationRuntime.applyEvent({
+      id: "evt_cm_seed_received_1_received",
+      timestampISO: NOW_ISO,
+      type: COMMUNICATION_EVENT_TYPES.COMMUNICATION_MESSAGE_RECEIVED,
+      source: "frontend-mock-workspace-seed",
+      payload: { messageId: "cm_seed_received_1" },
+    });
+
+    const adapter = new CommunicationViewAdapter({ nowISO: NOW_ISO });
+    return adapter.translate({
+      communicationRuntime,
+      workRuntime: this.workRuntime,
+      teamRuntime: this.teamRuntime,
+      companyWorkspaceRuntime: this.runtime,
     });
   }
 
