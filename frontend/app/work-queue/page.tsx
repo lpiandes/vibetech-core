@@ -4,17 +4,7 @@ import { WorkspaceService } from "@/lib/workspace/WorkspaceService";
 export default function WorkQueuePage() {
   const service = new WorkspaceService();
   const view = service.loadWorkQueue();
-  const items = (view.items ?? []).map((i: any) => ({
-    id: i.id,
-    title: i.title,
-    clientName: i.clientName,
-    matterType: i.matterType,
-    priority: i.priority,
-    status: i.status,
-    employee: i.assignedEmployeeName,
-    createdTimeISO: i.createdTimeISO,
-  }));
-
-  return <WorkQueue items={items} />;
+  // `WorkspaceViewAdapter` returns WorkQueue view items already in the UI card contract shape.
+  return <WorkQueue items={(view.items ?? []) as any[]} />;
 }
 

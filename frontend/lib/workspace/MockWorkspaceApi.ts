@@ -1,10 +1,38 @@
 import { CompanyWorkspaceRuntime } from "../../../backend/core/company/CompanyWorkspaceRuntime.js";
-import { WorkspaceViewAdapter } from "../../../backend/core/views/WorkspaceViewAdapter.js";
+import { WorkspaceGenerator } from "../../../backend/core/workspace/WorkspaceGenerator.js";
+import { WorkspaceViewAdapter } from "../../../backend/core/workspace/views/WorkspaceViewAdapter.js";
 import { COMPANY_EVENT_TYPES } from "../../../backend/core/company/events/CompanyEventTypes.js";
 import { createCompanyEvent } from "../../../backend/core/company/events/CompanyEvent.js";
 import { PropertyInterestCoordinator } from "../../../backend/core/employees/property-interest-coordinator/PropertyInterestCoordinator.js";
 import { CommunicationEngine } from "../../../backend/core/communication/CommunicationEngine.js";
 import { GmailProvider } from "../../../backend/providers/email/GmailProvider.js";
+
+const NOW_ISO = "2026-07-01T00:00:00.000Z";
+
+function makeCapabilitiesReady(overrides: Record<string, any> = {}) {
+  const base = [
+    { id: "company_identity", status: "READY" },
+    { id: "business_profile", status: "READY" },
+    { id: "brand", status: "READY" },
+    { id: "integrations", status: "READY" },
+    { id: "knowledge", status: "READY" },
+    { id: "communications", status: "READY" },
+    { id: "digital_workforce", status: "READY" },
+    { id: "workspace", status: "READY" },
+    { id: "analytics", status: "READY" },
+  ];
+
+  const map = new Map(base.map((c) => [c.id, { ...c }]));
+  for (const [k, v] of Object.entries(overrides)) {
+    if (!map.has(k)) map.set(k, { id: k, status: v });
+    else (map.get(k) as any).status = v;
+  }
+
+  return {
+    overallReadiness: "READY",
+    capabilities: [...map.values()],
+  };
+}
 
 function parseSubjectAndBody(draftContent: string) {
   const lines = String(draftContent ?? "").split(/\r?\n/);
@@ -36,76 +64,79 @@ function hasGmailConfig() {
 }
 
 export class MockWorkspaceApi {
-  private static runtime: CompanyWorkspaceRuntime | null = null;
-  private static adapter: WorkspaceViewAdapter | null = null;
-  private static hasAppliedDemoInquiryEvent = false;
+  private runtime: CompanyWorkspaceRuntime;
+  private adapter: WorkspaceViewAdapter;
+  private generator: WorkspaceGenerator;
+  private businessCapabilities = makeCapabilitiesReady();
 
-  private getAdapter() {
-    if (!MockWorkspaceApi.runtime || !MockWorkspaceApi.adapter) {
-      MockWorkspaceApi.runtime = new CompanyWorkspaceRuntime();
-      MockWorkspaceApi.adapter = new WorkspaceViewAdapter({
-        runtime: MockWorkspaceApi.runtime,
-      });
+  constructor({
+    runtime,
+    seedDemoInquiryEvent = true,
+  }: {
+    runtime?: CompanyWorkspaceRuntime;
+    seedDemoInquiryEvent?: boolean;
+  } = {}) {
+    this.runtime = runtime ?? new CompanyWorkspaceRuntime();
+    this.generator = new WorkspaceGenerator({ nowISO: NOW_ISO });
+    this.adapter = new WorkspaceViewAdapter({ runtime: this.runtime });
 
-      // Seed the in-memory runtime with one website inquiry event so that
-      // Dashboard / Activity timeline / Work Queue reflect "after demo intake".
-      //
-      // This uses the existing event model + engine (no duplicated state derivation).
-      if (!MockWorkspaceApi.hasAppliedDemoInquiryEvent) {
-        const event = createCompanyEvent({
-          id: "evt_demo_website_inquiry_received_1",
-          timestampISO: "2026-07-01T19:19:55.460Z",
-          type: COMPANY_EVENT_TYPES.WEBSITE_INQUIRY_RECEIVED,
-          source: "frontend-mock-workspace-seed",
-          payload: {
-            buyer: {
-              buyerId: "buyer_web_rachael_nguyen",
-              name: "Rachael Nguyen",
-              email: "rachael.nguyen@example.com",
-              phone: "(555) 019-2219",
-            },
-            propertyId: "prop_68_mystic",
-            message:
-              "Hi! I'm interested in the property and would like to discuss next steps today. Can you share a good walkthrough window?",
-            submittedAtISO: "2026-07-01T19:19:55.460Z",
-            priority: "High",
-            employeeName: "Property Interest Coordinator",
-            queueVisible: true,
-            draftResponseReady: true,
-            responseTimeMinutes: 32,
-            inquiryId: "inq_demo_rachael_nguyen",
-            status: "Needs Review",
+    if (seedDemoInquiryEvent) {
+      const demoEvent = createCompanyEvent({
+        id: "evt_demo_website_inquiry_received_1",
+        timestampISO: "2026-07-01T19:19:55.460Z",
+        type: COMPANY_EVENT_TYPES.WEBSITE_INQUIRY_RECEIVED,
+        source: "frontend-mock-workspace-seed",
+        payload: {
+          buyer: {
+            buyerId: "buyer_web_rachael_nguyen",
+            name: "Rachael Nguyen",
+            email: "rachael.nguyen@example.com",
+            phone: "(555) 019-2219",
           },
-        });
-
-        MockWorkspaceApi.runtime.applyEvent(event);
-        MockWorkspaceApi.hasAppliedDemoInquiryEvent = true;
-      }
+          propertyId: "prop_68_mystic",
+          message:
+            "Hi! I'm interested in the property and would like to discuss next steps today. Can you share a good walkthrough window?",
+          submittedAtISO: "2026-07-01T19:19:55.460Z",
+          priority: "High",
+          employeeName: "Property Interest Coordinator",
+          queueVisible: true,
+          draftResponseReady: true,
+          responseTimeMinutes: 32,
+          inquiryId: "inq_demo_rachael_nguyen",
+          status: "Needs Review",
+        },
+      });
+      this.runtime.applyEvent(demoEvent);
     }
-    return MockWorkspaceApi.adapter;
   }
 
-  private getRuntime() {
-    this.getAdapter();
-    if (!MockWorkspaceApi.runtime) {
-      throw new Error("MockWorkspaceApi: runtime not initialized.");
-    }
-    return MockWorkspaceApi.runtime;
+  private getWorkspaceConfig() {
+    return this.generator.generate({
+      runtime: this.runtime,
+      businessProfile: this.runtime.getBusinessProfile(),
+      companyProfile: this.runtime.getCompanyProfile(),
+      businessCapabilities: this.businessCapabilities,
+      nowISO: NOW_ISO,
+    });
   }
 
   loadDashboard() {
-    const adapter = this.getAdapter();
-    return adapter.getDashboardView();
+    const workspaceConfig = this.getWorkspaceConfig();
+    return this.adapter.getDashboardView(workspaceConfig);
   }
 
   loadDigitalWorkforce() {
-    const adapter = this.getAdapter();
-    return adapter.getDigitalWorkforceView();
+    const workspaceConfig = this.getWorkspaceConfig();
+    return this.adapter.getDigitalWorkforceView(workspaceConfig);
   }
 
   loadWorkQueue() {
-    const adapter = this.getAdapter();
-    return adapter.getWorkQueueView();
+    const workspaceConfig = this.getWorkspaceConfig();
+    return this.adapter.getWorkQueueView(workspaceConfig);
+  }
+
+  private getRuntime() {
+    return this.runtime;
   }
 
   async loadReviewWork(workItemId: string) {
