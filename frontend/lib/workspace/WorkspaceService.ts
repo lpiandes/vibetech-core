@@ -178,6 +178,11 @@ export class WorkspaceService {
     });
   }
 
+  loadKnowledgeViewModel() {
+    const workspaceConfig = this.getWorkspaceConfig();
+    return this.adapter.getKnowledgeView(workspaceConfig);
+  }
+
   loadReviewWork(workItemId: string) {
     return this.api.loadReviewWork(workItemId);
   }

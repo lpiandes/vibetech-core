@@ -10,7 +10,6 @@ const nextConfig: NextConfig = {
     // Primary routes must work even though legacy pages still exist.
     // This keeps navigation primary destinations clean while preserving compatibility.
     return [
-      { source: "/knowledge", destination: "/dashboard" },
       { source: "/company", destination: "/dashboard" },
       { source: "/analytics", destination: "/dashboard" },
       { source: "/settings", destination: "/dashboard" },
