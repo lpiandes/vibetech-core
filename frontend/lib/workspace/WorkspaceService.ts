@@ -35,6 +35,12 @@ import {
 } from "../../../backend/core/communications/CommunicationBuilder.js";
 import { CommunicationViewAdapter } from "../../../backend/core/communications/views/CommunicationViewAdapter.js";
 
+import { AnalyticsRuntime } from "../../../backend/core/analytics/AnalyticsRuntime.js";
+import { buildAnalyticsDataPointForSeed, buildAnalyticsMetricForSeed } from "../../../backend/core/analytics/AnalyticsBuilder.js";
+import { computeAnalyticsDerivedMetrics } from "../../../backend/core/analytics/AnalyticsMetrics.js";
+import { AnalyticsIntelligenceEngine } from "../../../backend/core/analytics/intelligence/AnalyticsIntelligenceEngine.js";
+import { AnalyticsViewAdapter } from "../../../backend/core/analytics/views/AnalyticsViewAdapter.js";
+
 const NOW_ISO = "2026-07-01T00:00:00.000Z";
 
 function makeCapabilitiesReady(overrides: Record<string, any> = {}) {
@@ -440,6 +446,216 @@ export class WorkspaceService {
       workRuntime: this.workRuntime,
       teamRuntime: this.teamRuntime,
       companyWorkspaceRuntime: this.runtime,
+    });
+  }
+
+  loadAnalyticsViewModel() {
+    const companyId = String(this.runtime.getCompany?.()?.companyName ?? "company");
+
+    const metrics = [
+      buildAnalyticsMetricForSeed({ id: "request_received_count", category: "requests" }),
+      buildAnalyticsMetricForSeed({ id: "request_qualified_count", category: "requests" }),
+      buildAnalyticsMetricForSeed({ id: "request_converted_count", category: "requests" }),
+      buildAnalyticsMetricForSeed({ id: "request_rejected_count", category: "requests" }),
+
+      buildAnalyticsMetricForSeed({ id: "work_created_count", category: "work" }),
+      buildAnalyticsMetricForSeed({ id: "work_assigned_count", category: "work" }),
+      buildAnalyticsMetricForSeed({ id: "work_completed_count", category: "work" }),
+
+      buildAnalyticsMetricForSeed({ id: "communication_sent_count", category: "communications" }),
+      buildAnalyticsMetricForSeed({ id: "communication_failed_count", category: "communications" }),
+      buildAnalyticsMetricForSeed({ id: "communication_received_count", category: "communications" }),
+
+      buildAnalyticsMetricForSeed({ id: "team_member_created_count", category: "team" }),
+      buildAnalyticsMetricForSeed({ id: "team_member_archived_count", category: "team" }),
+
+      buildAnalyticsMetricForSeed({ id: "capability_registered_count", category: "capabilities" }),
+      buildAnalyticsMetricForSeed({ id: "capability_archived_count", category: "capabilities" }),
+    ];
+
+    const dataPoints = [
+      // Requests
+      buildAnalyticsDataPointForSeed({
+        id: "dp_req_received_1",
+        metricId: "request_received_count",
+        timestamp: NOW_ISO,
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_req_received_1",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+      buildAnalyticsDataPointForSeed({
+        id: "dp_req_received_2",
+        metricId: "request_received_count",
+        timestamp: "2026-06-30T00:00:00.000Z",
+        value: 2,
+        dimensions: [],
+        sourceEventId: "evt_seed_req_received_2",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+      buildAnalyticsDataPointForSeed({
+        id: "dp_req_converted_1",
+        metricId: "request_converted_count",
+        timestamp: "2026-06-20T00:00:00.000Z",
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_req_converted_1",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+
+      // Work
+      buildAnalyticsDataPointForSeed({
+        id: "dp_work_created_1",
+        metricId: "work_created_count",
+        timestamp: "2026-06-20T00:00:00.000Z",
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_work_created_1",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+      buildAnalyticsDataPointForSeed({
+        id: "dp_work_created_2",
+        metricId: "work_created_count",
+        timestamp: NOW_ISO,
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_work_created_2",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+      buildAnalyticsDataPointForSeed({
+        id: "dp_work_completed_1",
+        metricId: "work_completed_count",
+        timestamp: NOW_ISO,
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_work_completed_1",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+
+      // Communications
+      buildAnalyticsDataPointForSeed({
+        id: "dp_comm_sent_1",
+        metricId: "communication_sent_count",
+        timestamp: "2026-06-05T00:00:00.000Z",
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_comm_sent_1",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+      buildAnalyticsDataPointForSeed({
+        id: "dp_comm_sent_2",
+        metricId: "communication_sent_count",
+        timestamp: "2026-06-25T00:00:00.000Z",
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_comm_sent_2",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+      buildAnalyticsDataPointForSeed({
+        id: "dp_comm_failed_1",
+        metricId: "communication_failed_count",
+        timestamp: "2026-06-15T00:00:00.000Z",
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_comm_failed_1",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+
+      // Team
+      buildAnalyticsDataPointForSeed({
+        id: "dp_team_created_1",
+        metricId: "team_member_created_count",
+        timestamp: "2026-06-01T00:00:00.000Z",
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_team_created_1",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+      buildAnalyticsDataPointForSeed({
+        id: "dp_team_created_2",
+        metricId: "team_member_created_count",
+        timestamp: "2026-06-20T00:00:00.000Z",
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_team_created_2",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+      buildAnalyticsDataPointForSeed({
+        id: "dp_team_archived_1",
+        metricId: "team_member_archived_count",
+        timestamp: "2026-06-15T00:00:00.000Z",
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_team_archived_1",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+
+      // Capabilities
+      buildAnalyticsDataPointForSeed({
+        id: "dp_cap_registered_1",
+        metricId: "capability_registered_count",
+        timestamp: "2026-06-10T00:00:00.000Z",
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_cap_registered_1",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+      buildAnalyticsDataPointForSeed({
+        id: "dp_cap_archived_1",
+        metricId: "capability_archived_count",
+        timestamp: "2026-06-25T00:00:00.000Z",
+        value: 1,
+        dimensions: [],
+        sourceEventId: "evt_seed_cap_archived_1",
+        sourceObject: {},
+        metadata: {},
+        metricDimensionsForValidation: [],
+      }),
+    ];
+
+    const seed = () => {
+      const derivedMetrics = computeAnalyticsDerivedMetrics({ metrics, dataPoints });
+      return { metrics, dataPoints, derivedMetrics };
+    };
+
+    const analyticsRuntime = new AnalyticsRuntime({ seed, nowISO: NOW_ISO });
+
+    const analyticsIntelligenceReport = new AnalyticsIntelligenceEngine({ nowISO: NOW_ISO }).generate({
+      analyticsRuntime,
+      companyId: companyId as any,
+      nowISO: NOW_ISO,
+    } as any);
+
+    const adapter = new AnalyticsViewAdapter({ nowISO: NOW_ISO });
+    return adapter.translate({
+      analyticsRuntime,
+      analyticsIntelligenceReport,
     });
   }
 
