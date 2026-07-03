@@ -59,15 +59,14 @@ const makeVm = () =>
 test("Empty state copy renders for empty Recommendations section", () => {
   const vm = makeVm();
   const html = renderToStaticMarkup(<MissionControlRenderer viewModel={vm} />);
-  assert.ok(html.includes("Everything looks good. No immediate action is required."));
-  assert.ok(html.includes("Show"));
+  assert.ok(html.includes("No priorities require attention today."));
 });
 
 test("Loading placeholders render deterministically", () => {
   const htmlA = renderToStaticMarkup(<MissionControlLoading />);
   const htmlB = renderToStaticMarkup(<MissionControlLoading />);
   assert.deepEqual(htmlA, htmlB);
-  assert.ok(htmlA.includes("animate-pulse"));
+  assert.ok(htmlA.includes("Preparing Mission Control cockpit"));
 });
 
 test("Error boundary shows fallback when child throws", () => {

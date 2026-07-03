@@ -11,18 +11,12 @@ This sprint builds:
 ## Responsibilities
 - `MissionControlRenderer`
   - top-level orchestration for rendering a `MissionControlViewModel`
-- `MissionControlHero`
-  - renders the hero header (headline/subtitle/status/primary/secondary actions)
-- `MissionControlSectionRenderer`
-  - renders each section dynamically from `viewModel.sections`
-- `MissionControlCardRenderer`
-  - renders each card dynamically from section `cards`
-- `MissionControlActionRenderer`
-  - renders each business action deterministically from `MissionControlActionView`
-- `MissionControlAlertRenderer`
-  - renders each alert from `viewModel.alerts`
-- `MissionControlLayout`
-  - owns only layout decisions (single/compact), driven by view model fields
+- `MissionControlExecutiveLayout`
+  - executive-only layout mapping `MissionControlViewModel` into the “cockpit” experience using `frontend/components/executive/*` primitives and design tokens
+- `MissionControlLoading`
+  - route-level loading UX using executive loading primitives
+- `MissionControlErrorBoundary`
+  - presentation-safe error handling for rendering failures
 
 ## Mission Control Experience (UX Principles)
 This is an executive command center. The experience should feel calm, confident, and premium.

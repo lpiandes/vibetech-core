@@ -6,8 +6,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import TeamRenderer from "./TeamRenderer";
 import TeamLoading from "./TeamLoading";
 import TeamErrorBoundary from "./TeamErrorBoundary";
-import TeamSummary from "./TeamSummary";
-import TeamContextProvider from "./TeamContext";
 
 const makeVm = () =>
   ({
@@ -120,78 +118,56 @@ const makeVm = () =>
     metadata: { layout: "single" },
   }) as any;
 
-test("Renderer: renders summary, departments, members, attention, and recommendations", () => {
+test("Renderer: renders workforce cockpit sections", () => {
   const vm = makeVm();
   const html = renderToStaticMarkup(<TeamRenderer viewModel={vm} />);
   assert.ok(html.includes(vm.summary));
+  assert.ok(html.includes("Team OS"));
+  assert.ok(html.includes("Workforce Pulse"));
   assert.ok(html.includes("Departments"));
-  assert.ok(html.includes("Executive"));
-  assert.ok(html.includes("Support"));
-  assert.ok(html.includes("Members"));
+  assert.ok(html.includes("People"));
   assert.ok(html.includes("CEO"));
   assert.ok(html.includes("Support Lead"));
   assert.ok(html.includes("Attention"));
   assert.ok(html.includes(vm.attention.items[0].summary));
   assert.ok(html.includes("Recommendations"));
   assert.ok(html.includes(vm.recommendations[0].label));
+  assert.ok(html.includes("Next:"));
 });
 
-test("Summary: renders recommendation count and workload metrics", () => {
-  const vm = makeVm();
-  const html = renderToStaticMarkup(
-    <TeamContextProvider viewModel={vm}>
-      <TeamSummary />
-    </TeamContextProvider>,
-  );
-  assert.ok(html.includes("1 recommendation(s) queued."));
-  assert.ok(html.includes("Utilization"));
-  assert.ok(html.includes("42%"));
-  assert.ok(html.includes("Availability"));
-});
-
-test("Department rendering: iterates viewModel.departments dynamically", () => {
+test("Departments empty state uses executive language", () => {
   const vm = makeVm();
   vm.departments = [];
   const html = renderToStaticMarkup(<TeamRenderer viewModel={vm} />);
-  assert.ok(html.includes("No departments have been configured yet."));
+  assert.ok(html.includes("Your department coverage will appear as roles are configured."));
 });
 
-test("Member rendering: iterates viewModel.members dynamically", () => {
+test("People empty state uses executive language", () => {
   const vm = makeVm();
   vm.members = [];
   const html = renderToStaticMarkup(<TeamRenderer viewModel={vm} />);
-  assert.ok(html.includes("No team members have been added yet."));
+  assert.ok(html.includes("People cards will appear as capacity is measured."));
 });
 
-test("Attention empty state: copy renders when attention.items is empty", () => {
+test("Attention empty state uses executive language", () => {
   const vm = makeVm();
   vm.attention.items = [];
   const html = renderToStaticMarkup(<TeamRenderer viewModel={vm} />);
-  assert.ok(html.includes("Your team doesn't require immediate attention."));
+  assert.ok(html.includes("Your workforce is operating smoothly."));
 });
 
-test("Recommendations empty state: copy renders when recommendations is empty", () => {
+test("Recommendations empty state uses executive language", () => {
   const vm = makeVm();
   vm.recommendations = [];
   const html = renderToStaticMarkup(<TeamRenderer viewModel={vm} />);
-  assert.ok(html.includes("Everything is running smoothly."));
+  assert.ok(html.includes("No recommendations are currently pending."));
 });
 
-test("Loading placeholders: deterministic animate-pulse output", () => {
+test("Loading placeholders: deterministic executive labels", () => {
   const htmlA = renderToStaticMarkup(<TeamLoading />);
   const htmlB = renderToStaticMarkup(<TeamLoading />);
   assert.deepEqual(htmlA, htmlB);
-  assert.ok(htmlA.includes("animate-pulse"));
-});
-
-test("Context: TeamSummary reads from TeamContext", () => {
-  const vm = makeVm();
-  const html = renderToStaticMarkup(
-    <TeamContextProvider viewModel={vm}>
-      <TeamSummary />
-    </TeamContextProvider>,
-  );
-  assert.ok(html.includes(vm.summary));
+  assert.ok(htmlA.includes("Preparing workforce cockpit"));
 });
 
 test("Error boundary: fallback renders when child throws", () => {
