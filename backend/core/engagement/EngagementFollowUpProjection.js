@@ -15,14 +15,23 @@ function workLinkedToInteraction(workItems, interactionId) {
   });
 }
 
+function validDateString(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (!text || text === "null" || text === "undefined") return null;
+  const time = new Date(text).getTime();
+  return Number.isFinite(time) ? text : null;
+}
+
 export function buildEngagementFollowUps({ interactions, workItems, automationRuns, approvals, partyId, nowISO } = {}) {
   const nowMs = new Date(String(nowISO ?? "2026-07-01T00:00:00.000Z")).getTime();
   const followUps = [];
 
   for (const interaction of safeArray(interactions)) {
-    if (!interaction.followUpAt) continue;
+    const followUpAt = validDateString(interaction.followUpAt);
+    if (!followUpAt) continue;
 
-    const dueMs = new Date(String(interaction.followUpAt)).getTime();
+    const dueMs = new Date(followUpAt).getTime();
     const status =
       Number.isFinite(dueMs) && dueMs < nowMs ? FOLLOW_UP_STATUSES.OVERDUE : FOLLOW_UP_STATUSES.UPCOMING;
 
@@ -35,7 +44,7 @@ export function buildEngagementFollowUps({ interactions, workItems, automationRu
         id: `follow_up_${interaction.id}`,
         interactionId: String(interaction.id),
         partyId: String(partyId),
-        dueAt: String(interaction.followUpAt),
+        dueAt: followUpAt,
         status,
         ownerId: interaction.ownerId ?? null,
         outcome: interaction.outcome ?? null,

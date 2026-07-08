@@ -1,7 +1,8 @@
 "use client";
 
-import { useContext, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 
 import type { WorkViewModel } from "./WorkContext";
@@ -18,6 +19,7 @@ import {
   filterWorkItems,
   priorityLabel,
   priorityTone,
+  resolveTargetWorkItem,
   resolveWorkRowHref,
   sortWorkQueueItems,
   statusTone,
@@ -86,11 +88,13 @@ function WorkQueueRow({
   businessId,
   onResolveFollowUp,
   onDraftFollowUp,
+  highlighted = false,
 }: {
   item: WorkQueueItem;
   businessId: string;
   onResolveFollowUp: (item: WorkQueueItem) => void;
   onDraftFollowUp: (item: WorkQueueItem) => void;
+  highlighted?: boolean;
 }) {
   const display = item.metadata?.display ?? {};
   const href = resolveWorkRowHref(display, businessId);
@@ -198,6 +202,7 @@ function WorkQueueRow({
     color: "inherit" as const,
     cursor: href ? "pointer" : "default",
     transition: "background-color 120ms ease",
+    backgroundColor: highlighted ? cockpitColors.panelElevated : "transparent",
   };
 
   if (href) {
@@ -209,7 +214,7 @@ function WorkQueueRow({
           event.currentTarget.style.backgroundColor = cockpitColors.panelElevated;
         }}
         onMouseLeave={(event) => {
-          event.currentTarget.style.backgroundColor = "transparent";
+          event.currentTarget.style.backgroundColor = highlighted ? cockpitColors.panelElevated : "transparent";
         }}
       >
         {rowBody}
@@ -273,12 +278,24 @@ function FilterChips({
 export default function WorkExecutiveLayout() {
   const viewModel = useContext<WorkViewModel | null>(WorkViewModelContext);
   const { businessId } = useBusinessScope();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
   const [filter, setFilter] = useState<WorkQueueFilter>("all");
   const [resolutionTarget, setResolutionTarget] = useState<WorkQueueItem | null>(null);
   const [draftTarget, setDraftTarget] = useState<WorkQueueItem | null>(null);
+  const requestedWorkId = searchParams.get("workId");
 
   const metrics = viewModel?.metrics ?? {};
   const counts = useMemo(() => deriveWorkQueueCounts(viewModel?.items, metrics), [viewModel?.items, metrics]);
+  const targetWork = useMemo(
+    () => resolveTargetWorkItem(viewModel?.items, requestedWorkId),
+    [viewModel?.items, requestedWorkId],
+  );
+
+  useEffect(() => {
+    if (targetWork) setFilter("all");
+  }, [targetWork?.id]);
 
   const metricStrip = useMemo(
     () => [
@@ -296,6 +313,13 @@ export default function WorkExecutiveLayout() {
   }, [viewModel?.items, filter]);
 
   if (!viewModel) return null;
+
+  const clearRequestedWork = () => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("workId");
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  };
 
   const relationshipFollowUpOutcomes = (viewModel?.productContext?.installationResult?.relationshipFollowUpOutcomes ?? []) as RelationshipFollowUpOutcome[];
 
@@ -316,6 +340,39 @@ export default function WorkExecutiveLayout() {
       />
 
       <ShellMetricStrip metrics={metricStrip} />
+
+      {targetWork ? (
+        <ShellPanel
+          title="Selected work"
+          subtitle="Opened from the contact record."
+          action={
+            <button
+              type="button"
+              onClick={clearRequestedWork}
+              style={{
+                borderRadius: radius.medium,
+                border: `1px solid ${cockpitColors.panelBorder}`,
+                backgroundColor: cockpitColors.panel,
+                color: cockpitColors.textSecondary,
+                padding: "7px 10px",
+                fontSize: typography.caption.fontSize,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Close
+            </button>
+          }
+        >
+          <WorkQueueRow
+            item={targetWork}
+            businessId={businessId}
+            onResolveFollowUp={setResolutionTarget}
+            onDraftFollowUp={setDraftTarget}
+            highlighted
+          />
+        </ShellPanel>
+      ) : null}
 
       <ShellPanel
         title="Active work queue"

@@ -5,8 +5,10 @@ import {
   derivePeopleCounts,
   filterPeople,
   relationshipText,
+  resolvePeopleDetailNextActionHref,
   resolvePeopleFilters,
   searchPeople,
+  workQueueHrefForPeopleDetail,
 } from "./peopleSemantics.ts";
 import { MCBRIDE_PEOPLE_FILTERS } from "../../../industries/property-management/config/mcbrideRelationshipRegistry.js";
 
@@ -97,4 +99,17 @@ test("relationship labels are human-readable and enums stay hidden", () => {
 test("search matches contact and property context", () => {
   assert.equal(searchPeople(parties, "harbor").length, 1);
   assert.equal(searchPeople(parties, "owner@example.com").length, 1);
+});
+
+test("people detail work next action resolves to current business Work route with exact work id", () => {
+  assert.equal(
+    resolvePeopleDetailNextActionHref("biz_1", {
+      sourceType: "work",
+      sourceId: "work_relationship_followup_123",
+    }),
+    "/b/biz_1/work?workId=work_relationship_followup_123",
+  );
+  assert.equal(workQueueHrefForPeopleDetail("biz_1", "work with spaces"), "/b/biz_1/work?workId=work%20with%20spaces");
+  assert.equal(resolvePeopleDetailNextActionHref("biz_1", { sourceType: "interaction", sourceId: "int_1" }), null);
+  assert.equal(resolvePeopleDetailNextActionHref("biz_1", { sourceType: "work", sourceId: "" }), null);
 });

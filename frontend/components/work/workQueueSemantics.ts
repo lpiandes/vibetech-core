@@ -75,6 +75,12 @@ export function getActiveWorkItems(items: unknown) {
   return (Array.isArray(items) ? items : []).filter(isActiveWorkItem) as WorkQueueItem[];
 }
 
+export function resolveTargetWorkItem(items: unknown, workId: unknown) {
+  const id = String(workId ?? "").trim();
+  if (!id) return null;
+  return getActiveWorkItems(items).find((item) => String(item?.id ?? "") === id) ?? null;
+}
+
 export function countWaitingWork(items: unknown) {
   return getActiveWorkItems(items).filter(isWaitingWorkItem).length;
 }

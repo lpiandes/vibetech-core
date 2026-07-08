@@ -92,6 +92,9 @@ export const getAuthorizedWorkspace = cache(async (businessId: string, requiredP
     runtimeSnapshots,
   });
   timer.mark("WORKSPACE_SERVICE");
+  await timer.time("SUBJECT_INTEREST_RECONCILIATION", () =>
+    service.reconcileHistoricalSubjectInterestsIfNeeded(),
+  );
 
   timer.finish("TOTAL");
 

@@ -103,7 +103,7 @@ const makeDetail = (): EngagementViewModel =>
         metadata: {},
       },
     ],
-    openWork: [{ id: "wi_1", title: "Prospect follow-up", workTypeLabel: "Prospect follow-up", subjectName: "12 Harbor View" }],
+    openWork: [{ id: "wi_1", title: "Prospect follow-up", workTypeLabel: "Prospect follow-up", subjectName: "12 Harbor View", assignedTo: "unassigned" }],
     openRequests: [{ id: "req_1", title: "Inquiry", requestTypeLabel: "Inquiry" }],
     communications: [],
     interactions: [],
@@ -111,7 +111,7 @@ const makeDetail = (): EngagementViewModel =>
     pendingApprovals: [],
     automationActivity: [],
     attention: { summary: "1 item needs attention.", items: [{ id: "att_1" }] },
-    nextActions: [{ id: "na_1", title: "Follow up", description: "Confirm next step with prospect." }],
+    nextActions: [{ id: "na_1", title: "Review work: Prospect follow-up", description: "Confirm next step with prospect.", sourceType: "work", sourceId: "wi_1" }],
     subjects: [{ id: "sub_1", displayName: "12 Harbor View" }],
     communicationPreferences: { items: [], contactable: { email: true, sms: true } },
     segmentMemberships: [],
@@ -152,4 +152,25 @@ test("PeopleDetailLayout renders contact, property interest, and open work", () 
   assert.ok(html.includes("12 Harbor View"));
   assert.ok(html.includes("Open requests and work"));
   assert.ok(html.includes("Prospect follow-up"));
+  assert.ok(html.includes("Not assigned"));
+  assert.ok(html.includes("/b/biz_1/work?workId=wi_1"));
+  assert.ok(html.includes("Open Work"));
+});
+
+test("PeopleDetailLayout makes the visible Review work action navigational", () => {
+  const html = renderToStaticMarkup(<PeopleDetailLayout businessId="biz_1" viewModel={makeDetail()} />);
+  const label = "Review work: Prospect follow-up";
+  const labelIndex = html.indexOf(label);
+  const anchorStart = html.lastIndexOf("<a ", labelIndex);
+  const previousAnchorEnd = html.lastIndexOf("</a>", labelIndex);
+  const anchorEnd = html.indexOf("</a>", labelIndex);
+
+  assert.notEqual(labelIndex, -1);
+  assert.ok(anchorStart !== -1 && anchorStart > previousAnchorEnd);
+  assert.notEqual(anchorEnd, -1);
+
+  const anchor = html.slice(anchorStart, anchorEnd + 4);
+  assert.ok(anchor.includes('href="/b/biz_1/work?workId=wi_1"'));
+  assert.ok(anchor.includes(label));
+  assert.ok(!anchor.startsWith("<button"));
 });

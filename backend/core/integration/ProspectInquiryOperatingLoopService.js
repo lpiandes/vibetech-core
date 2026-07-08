@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 import { InboundAcknowledgmentService } from "../integrations/inbound/InboundAcknowledgmentService.js";
 import { RecordInteractionService } from "../interactions/RecordInteractionService.js";
+import { resolveExactSubjectInterestFromText } from "../business-subject/SubjectInterestTextResolver.js";
 import { createEntityRef, ENTITY_TYPES } from "../references/EntityRef.js";
 import {
   ensureProspectRelationship,
@@ -55,7 +56,14 @@ export async function runProspectInquiryOperatingLoop({
 
   const submissionId = String(inquiry?.submissionId ?? crypto.randomUUID());
   const externalEventId = submissionId;
-  const subjectId = String(inquiry?.subjectId ?? "").trim();
+  const submittedSubjectId = String(inquiry?.subjectId ?? "").trim();
+  const inferredSubject = submittedSubjectId
+    ? null
+    : resolveExactSubjectInterestFromText({
+        text: message,
+        businessSubjectRuntime: stack.businessSubjectRuntime,
+      });
+  const subjectId = submittedSubjectId || (inferredSubject?.matched ? inferredSubject.subjectId : "");
 
   let subjectType = "listing";
   let subjectDisplayName = null;
@@ -170,6 +178,12 @@ export async function runProspectInquiryOperatingLoop({
     partyId,
     requestId,
     interactionId,
+    inferredSubjectInterest: inferredSubject?.matched
+      ? {
+          subjectId: inferredSubject.subjectId,
+          reason: inferredSubject.reason,
+        }
+      : null,
     emailResult,
     prospectFollowUpWork,
   };

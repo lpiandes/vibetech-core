@@ -24,6 +24,8 @@ import {
 } from "../automations/install/WorkspaceAutomationInstaller.js";
 import { ApprovalRuntime } from "../approvals/ApprovalRuntime.js";
 import { APPROVAL_INTERNAL_EVENT_TYPES } from "../approvals/ApprovalEventTypes.js";
+import { BusinessSubjectRuntime } from "../business-subject/BusinessSubjectRuntime.js";
+import { BUSINESS_SUBJECT_EVENT_TYPES } from "../business-subject/BusinessSubjectEventTypes.js";
 import { EngagementViewAdapter } from "./EngagementViewAdapter.js";
 import { TIMELINE_ITEM_TYPES } from "./EngagementDefaults.js";
 
@@ -148,6 +150,28 @@ function recordInteraction({
     followUpAt,
     nowISO,
     metadata: {},
+  });
+}
+
+function seedSubject(businessSubjectRuntime, { subjectId = "subj_main", displayName = "123 Main St" } = {}) {
+  businessSubjectRuntime.applyEvent({
+    id: `evt_subject_${subjectId}`,
+    timestampISO: NOW0,
+    type: BUSINESS_SUBJECT_EVENT_TYPES.SUBJECT_CREATED,
+    source: "engagement_test",
+    payload: {
+      subject: {
+        id: subjectId,
+        workspaceId: "ws_engagement_test",
+        subjectType: "listing",
+        displayName,
+        status: "active",
+        keyAttributes: { address: displayName },
+        externalReferences: [],
+        createdAt: NOW0,
+        updatedAt: NOW0,
+      },
+    },
   });
 }
 
@@ -395,4 +419,92 @@ test("Engagement approval proof: pending approval visible, grant creates work on
 
   assert.ok(vm.timeline.some((t) => t.type === TIMELINE_ITEM_TYPES.APPROVAL_GRANTED));
   assert.ok(vm.openWork.some((w) => String(w.id) === gatedWorkId));
+});
+
+test("EngagementViewAdapter hides invalid follow-up timestamps and humanizes implementation values", () => {
+  const partyId = "party_followup_null";
+  const requestId = "req_followup_null";
+  const workId = "work_followup_null";
+  const interactionId = "int_followup_null";
+
+  const businessGraphRuntime = new BusinessGraphRuntime();
+  const requestRuntime = new RequestRuntime({ nowISO: NOW0 });
+  const workRuntime = new WorkRuntime({ nowISO: NOW0 });
+  const communicationRuntime = new CommunicationRuntime({ nowISO: NOW0 });
+  const interactionRuntime = new InteractionRuntime();
+  const automationRuntime = new AutomationRuntime({ nowISO: NOW0 });
+
+  seedPartyGraph({ businessGraphRuntime, requestRuntime, partyId, requestId, nowISO: NOW0 });
+  recordInteraction({
+    interactionRuntime,
+    interactionId,
+    partyId,
+    requestId,
+    workId,
+    outcome: "follow_up_required",
+    followUpAt: null,
+    nowISO: NOW0,
+  });
+
+  const vm = new EngagementViewAdapter({ nowISO: NOW0 }).translate({
+    partyId,
+    businessGraphRuntime,
+    requestRuntime,
+    workRuntime,
+    communicationRuntime,
+    interactionRuntime,
+    automationRuntime,
+  });
+
+  assert.equal(vm.followUps.length, 0);
+  assert.equal(vm.timeline.some((item) => item.type === TIMELINE_ITEM_TYPES.FOLLOW_UP_SCHEDULED), false);
+  const outcome = vm.timeline.find((item) => item.type === TIMELINE_ITEM_TYPES.INTERACTION_OUTCOME_RECORDED);
+  assert.ok(outcome);
+  assert.equal(outcome.description, "Outcome: Follow Up Required · Next: Next Step Value");
+  const relationship = vm.timeline.find((item) => item.type === TIMELINE_ITEM_TYPES.RELATIONSHIP_CREATED);
+  assert.ok(relationship);
+  assert.equal(relationship.description, "Request linked to this contact.");
+  const visibleTimelineText = vm.timeline.map((item) => `${item.title} ${item.description}`).join(" ");
+  assert.doesNotMatch(visibleTimelineText, new RegExp("Party/|Organization/|follow_up_required|Follow-up at null"));
+});
+
+test("EngagementViewAdapter shows property interest from request and interaction subject refs", () => {
+  const partyId = "party_subject_refs";
+  const requestId = "req_subject_refs";
+  const subjectId = "subj_subject_refs";
+
+  const businessGraphRuntime = new BusinessGraphRuntime();
+  const requestRuntime = new RequestRuntime({ nowISO: NOW0 });
+  const workRuntime = new WorkRuntime({ nowISO: NOW0 });
+  const communicationRuntime = new CommunicationRuntime({ nowISO: NOW0 });
+  const interactionRuntime = new InteractionRuntime();
+  const automationRuntime = new AutomationRuntime({ nowISO: NOW0 });
+  const businessSubjectRuntime = new BusinessSubjectRuntime();
+
+  seedSubject(businessSubjectRuntime, { subjectId, displayName: "123 Main St" });
+  seedPartyGraph({ businessGraphRuntime, requestRuntime, partyId, requestId, nowISO: NOW0 });
+  requestRuntime.applyEvent({
+    id: "evt_req_subject_ref_patch",
+    timestampISO: NOW0,
+    type: REQUEST_EVENT_TYPES.REQUEST_UPDATED,
+    source: "engagement_test",
+    payload: {
+      requestId,
+      patch: { subjectRefs: [{ entityType: "Subject", entityId: subjectId }] },
+    },
+  });
+
+  const vm = new EngagementViewAdapter({ nowISO: NOW0 }).translate({
+    partyId,
+    businessGraphRuntime,
+    businessSubjectRuntime,
+    requestRuntime,
+    workRuntime,
+    communicationRuntime,
+    interactionRuntime,
+    automationRuntime,
+  });
+
+  assert.equal(vm.subjects.length, 1);
+  assert.equal(vm.subjects[0].displayName, "123 Main St");
 });

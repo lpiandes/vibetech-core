@@ -36,6 +36,11 @@ export type PeopleIndexItem = {
 
 export type PeopleFilter = string;
 
+export type PeopleNextAction = {
+  sourceType?: string | null;
+  sourceId?: string | null;
+};
+
 const LEGACY_FILTER_OPTIONS: PeopleFilterDefinition[] = [
   { id: "all", label: "All", predicate: { type: "all" } },
   { id: "prospects", label: "Prospects", predicate: { type: "hasActiveRelationship", types: ["PROSPECT"] } },
@@ -133,6 +138,16 @@ export function searchPeople(parties: unknown, query: string) {
 
     return haystack.includes(q);
   });
+}
+
+export function workQueueHrefForPeopleDetail(businessId: string, workId?: unknown) {
+  const id = String(workId ?? "").trim();
+  return `/b/${businessId}/work${id ? `?workId=${encodeURIComponent(id)}` : ""}`;
+}
+
+export function resolvePeopleDetailNextActionHref(businessId: string, action?: PeopleNextAction | null) {
+  if (String(action?.sourceType ?? "") !== "work" || !action?.sourceId) return null;
+  return workQueueHrefForPeopleDetail(businessId, action.sourceId);
 }
 
 export function derivePeopleCounts(parties: unknown, peopleFilters: unknown) {

@@ -8,6 +8,7 @@ import EntityAvatar from "@/components/shell/EntityAvatar";
 import ShellPanel from "@/components/shell/ShellPanel";
 import type { EngagementViewModel } from "@/lib/workspace/EngagementTypes";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
+import { resolvePeopleDetailNextActionHref, workQueueHrefForPeopleDetail } from "./peopleSemantics";
 
 function PanelEmpty({ description }: { description: string }) {
   return (
@@ -35,6 +36,14 @@ function ContextField({ label, value }: { label: string; value: string }) {
       </div>
     </div>
   );
+}
+
+function workQueueHref(businessId: string, workId?: unknown) {
+  return workQueueHrefForPeopleDetail(businessId, workId);
+}
+
+function nextActionHref(businessId: string, action?: { sourceType?: string; sourceId?: string } | null) {
+  return resolvePeopleDetailNextActionHref(businessId, action);
 }
 
 export default function PeopleDetailLayout({
@@ -93,6 +102,8 @@ export default function PeopleDetailLayout({
   const email = contactMethods.find((method) => method.includes("@")) ?? null;
   const phone = contactMethods.find((method) => !method.includes("@") && /\d/.test(method)) ?? null;
   const needsAttention = viewModel.attention.items.length > 0;
+  const primaryNextAction = viewModel.nextActions[0] ?? null;
+  const primaryNextActionHref = nextActionHref(businessId, primaryNextAction);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>
@@ -131,7 +142,19 @@ export default function PeopleDetailLayout({
             }}
           >
             {needsAttention ? <StatusBadge label="Needs attention" tone="warning" /> : null}
-            {viewModel.nextActions[0] ? <StatusBadge label={viewModel.nextActions[0].title} tone="info" /> : null}
+            {primaryNextAction ? (
+              primaryNextActionHref ? (
+                <Link
+                  href={primaryNextActionHref}
+                  aria-label={`${primaryNextAction.title} in Work`}
+                  style={{ display: "inline-flex", textDecoration: "none" }}
+                >
+                  <StatusBadge label={primaryNextAction.title} tone="info" />
+                </Link>
+              ) : (
+                <StatusBadge label={primaryNextAction.title} tone="info" />
+              )
+            ) : null}
           </div>
           <div style={{ marginTop: spacing.xs, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>
             {viewModel.attention.summary}
@@ -283,11 +306,19 @@ export default function PeopleDetailLayout({
                     <ul style={{ margin: `${spacing.xs} 0 0`, paddingLeft: spacing.lg, color: cockpitColors.textSecondary }}>
                       {viewModel.openWork.map((work) => (
                         <li key={String(work.id)} style={{ marginBottom: spacing.xs }}>
-                          {String((work as { title?: string }).title ?? "Work item")}
+                          <Link
+                            href={workQueueHref(businessId, work.id)}
+                            style={{ color: cockpitColors.accent, fontWeight: 650, textDecoration: "none" }}
+                          >
+                            {String((work as { title?: string }).title ?? "Work item")}
+                          </Link>
                           {(work as { subjectName?: string }).subjectName ? ` · ${(work as { subjectName?: string }).subjectName}` : ""}
                           {(work as { workTypeLabel?: string }).workTypeLabel
                             ? ` · ${(work as { workTypeLabel?: string }).workTypeLabel}`
                             : ""}
+                          {(work as { assigneeName?: string }).assigneeName
+                            ? ` · Assigned to ${(work as { assigneeName?: string }).assigneeName}`
+                            : " · Not assigned"}
                         </li>
                       ))}
                     </ul>
@@ -306,6 +337,21 @@ export default function PeopleDetailLayout({
                     <div style={{ marginTop: spacing.xs, color: cockpitColors.textSecondary, fontSize: typography.caption.fontSize, lineHeight: 1.5 }}>
                       {action.description}
                     </div>
+                    {String((action as { sourceType?: string }).sourceType ?? "") === "work" ? (
+                      <Link
+                        href={workQueueHref(businessId, (action as { sourceId?: string }).sourceId)}
+                        style={{
+                          display: "inline-flex",
+                          marginTop: spacing.sm,
+                          color: cockpitColors.accent,
+                          fontSize: typography.caption.fontSize,
+                          fontWeight: 700,
+                          textDecoration: "none",
+                        }}
+                      >
+                        Open Work
+                      </Link>
+                    ) : null}
                   </div>
                 ))}
               </div>

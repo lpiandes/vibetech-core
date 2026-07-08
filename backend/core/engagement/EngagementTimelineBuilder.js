@@ -20,6 +20,37 @@ function compareTimelineItems(a, b) {
   return String(a.id).localeCompare(String(b.id));
 }
 
+function validDateString(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (!text || text === "null" || text === "undefined") return null;
+  const time = new Date(text).getTime();
+  return Number.isFinite(time) ? text : null;
+}
+
+function humanizeToken(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return text
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function relationshipDescription({ relationship, partyId, businessSubjectRuntime } = {}) {
+  const type = String(relationship?.relationshipType ?? "");
+  const from = relationship?.fromEntity ?? {};
+  const to = relationship?.toEntity ?? {};
+  const other = String(from.entityId) === String(partyId) ? to : from;
+  if (type === "INTERESTED_IN" && String(other.entityType) === "Subject") {
+    const subject = businessSubjectRuntime?.getSubject?.(String(other.entityId));
+    return `Property interest linked${subject?.displayName ? `: ${subject.displayName}` : ""}.`;
+  }
+  if (type === "REQUESTED_BY") return "Request linked to this contact.";
+  if (String(other.entityType) === "Organization") return `${humanizeToken(type)} classification added.`;
+  return `${humanizeToken(type)} relationship added.`;
+}
+
 function partyLinkedRequestIds({ businessGraphRuntime, partyId } = {}) {
   const pid = String(partyId);
   const ids = new Set();
@@ -52,6 +83,7 @@ function collectPartyContext({
   interactionRuntime,
   automationRuntime,
   approvalRuntime,
+  businessSubjectRuntime,
 } = {}) {
   const pid = String(partyId);
   const linkedRequestIds = partyLinkedRequestIds({ businessGraphRuntime, partyId: pid });
@@ -111,6 +143,7 @@ function collectPartyContext({
     messages,
     automationRuns,
     approvals,
+    businessSubjectRuntime,
   };
 }
 
@@ -262,7 +295,11 @@ function buildRuntimeTimelineItems(ctx, party, workRuntime, requestRuntime) {
         category: TIMELINE_CATEGORIES.RELATIONSHIP,
         occurredAt: rel.createdAt,
         title: "Relationship created",
-        description: `${rel.relationshipType}: ${rel.fromEntity.entityType}/${rel.fromEntity.entityId} → ${rel.toEntity.entityType}/${rel.toEntity.entityId}`,
+        description: relationshipDescription({
+          relationship: rel,
+          partyId: pid,
+          businessSubjectRuntime: ctx.businessSubjectRuntime,
+        }),
         status: rel.status,
         actor: null,
         relatedObjects: [{ partyId: pid }, { relationshipId: rel.id }],
@@ -403,7 +440,7 @@ function buildRuntimeTimelineItems(ctx, party, workRuntime, requestRuntime) {
           id: `tl_comm_drafted_${msg.id}`,
           type: TIMELINE_ITEM_TYPES.COMMUNICATION_MESSAGE_DRAFTED,
           title: "Communication drafted",
-          description: String(msg.subject ?? msg.body ?? msg.id).slice(0, 120),
+          description: `Draft: ${String(msg.subject ?? msg.body ?? msg.id).slice(0, 120)}`,
         }),
       );
 
@@ -415,7 +452,7 @@ function buildRuntimeTimelineItems(ctx, party, workRuntime, requestRuntime) {
             type: TIMELINE_ITEM_TYPES.COMMUNICATION_MESSAGE_QUEUED,
             occurredAt: msg.queuedAt ?? msg.updatedAt ?? msg.createdAt,
             title: "Communication queued",
-            description: String(msg.subject ?? msg.id),
+            description: `Queued, not sent: ${String(msg.subject ?? msg.id)}`,
           }),
         );
       }
@@ -451,7 +488,7 @@ function buildRuntimeTimelineItems(ctx, party, workRuntime, requestRuntime) {
             type: TIMELINE_ITEM_TYPES.COMMUNICATION_MESSAGE_SENT,
             occurredAt: msg.sentAt ?? msg.updatedAt ?? msg.createdAt,
             title: "Communication sent",
-            description: String(msg.subject ?? msg.id),
+            description: `Sent: ${String(msg.subject ?? msg.id)}`,
           }),
         );
       }
@@ -494,6 +531,11 @@ function buildRuntimeTimelineItems(ctx, party, workRuntime, requestRuntime) {
     }
 
     if (interaction.outcome) {
+      const outcomeLabel = humanizeToken(interaction.outcome);
+      const nextStepLabel =
+        interaction.nextStep && String(interaction.nextStep) !== String(interaction.outcome)
+          ? humanizeToken(interaction.nextStep)
+          : "";
       items.push(
         createEngagementTimelineItem({
           id: `tl_interaction_outcome_${interaction.id}`,
@@ -501,7 +543,7 @@ function buildRuntimeTimelineItems(ctx, party, workRuntime, requestRuntime) {
           category: TIMELINE_CATEGORIES.INTERACTION,
           occurredAt: interaction.updatedAt ?? interaction.occurredAt,
           title: "Outcome recorded",
-          description: `Outcome: ${interaction.outcome}${interaction.nextStep ? ` · Next: ${interaction.nextStep}` : ""}`,
+          description: `Outcome: ${outcomeLabel}${nextStepLabel ? ` · Next: ${nextStepLabel}` : ""}`,
           status: interaction.outcome,
           actor: interaction.ownerId,
           relatedObjects: [{ interactionId: interaction.id }, { partyId: pid }],
@@ -510,15 +552,16 @@ function buildRuntimeTimelineItems(ctx, party, workRuntime, requestRuntime) {
       );
     }
 
-    if (interaction.followUpAt) {
+    const followUpAt = validDateString(interaction.followUpAt);
+    if (followUpAt) {
       items.push(
         createEngagementTimelineItem({
           id: `tl_follow_up_scheduled_${interaction.id}`,
           type: TIMELINE_ITEM_TYPES.FOLLOW_UP_SCHEDULED,
           category: TIMELINE_CATEGORIES.INTERACTION,
-          occurredAt: interaction.followUpAt,
+          occurredAt: followUpAt,
           title: "Follow-up scheduled",
-          description: `Follow-up at ${interaction.followUpAt}`,
+          description: `Follow-up at ${followUpAt}`,
           status: "scheduled",
           actor: interaction.ownerId,
           relatedObjects: [{ interactionId: interaction.id }, { partyId: pid }],
@@ -722,6 +765,7 @@ export function buildEngagementTimeline({
   automationRuntime,
   approvalRuntime,
   platformEventStore,
+  businessSubjectRuntime,
 } = {}) {
   const party = businessGraphRuntime?.getParty?.(partyId) ?? null;
   const ctx = collectPartyContext({
@@ -733,6 +777,7 @@ export function buildEngagementTimeline({
     interactionRuntime,
     automationRuntime,
     approvalRuntime,
+    businessSubjectRuntime,
   });
   ctx.businessGraphRuntime = businessGraphRuntime;
 

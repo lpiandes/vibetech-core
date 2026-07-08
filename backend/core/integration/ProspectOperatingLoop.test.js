@@ -13,6 +13,7 @@ import { buildConnectedSystemsSnapshot } from "../industries/connections/buildCo
 import { buildPmProspectCoordinatorPlatformCoverage } from "../platform/knowledge/PlatformKnowledgeReadinessBridge.js";
 import { DIGITAL_EMPLOYEE_STATUSES } from "../industries/employees/DigitalEmployeeReadinessEngine.js";
 import { CONNECTION_STATUSES } from "../integrations/connections/ConnectionStatus.js";
+import { BUSINESS_SUBJECT_EVENT_TYPES } from "../business-subject/BusinessSubjectEventTypes.js";
 
 const NOW = "2026-07-01T00:00:00.000Z";
 
@@ -43,6 +44,28 @@ function buildNormalBusinessStack(workspaceId) {
     platformEventStore: stack.store,
   });
   return { stack, integrationPlatform };
+}
+
+function seedSubject(stack, { subjectId = "subj_main", displayName = "123 Main St", address = "123 main st" } = {}) {
+  stack.businessSubjectRuntime.applyEvent({
+    id: `evt_subject_${subjectId}`,
+    timestampISO: NOW,
+    type: BUSINESS_SUBJECT_EVENT_TYPES.SUBJECT_CREATED,
+    source: "prospect_flow_test",
+    payload: {
+      subject: {
+        id: subjectId,
+        workspaceId: stack.workspaceId,
+        subjectType: "listing",
+        displayName,
+        status: "active",
+        keyAttributes: { address },
+        externalReferences: [],
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    },
+  });
 }
 
 function residentCoordinatorReadiness({ stack, integrationPlatform, platformDocumentCount }) {
@@ -130,6 +153,58 @@ test("prospect acknowledgment subject uses configured company name", async () =>
   assert.equal(result.ok, true);
   const thread = stack.communicationRuntime.getThread(`ct_ack_${result.requestId}`);
   assert.match(String(thread?.subject), /Re: Your inquiry to Normal PM Co/);
+});
+
+test("prospect inquiry exact property text links existing subject without creating subjects from vague text", async () => {
+  const workspaceId = "ws_pm_prospect_property_text";
+  const { stack, integrationPlatform } = buildNormalBusinessStack(workspaceId);
+  await connectBusinessEmailDev({ integrationPlatform, workspaceId, nowISO: NOW });
+  seedSubject(stack, { subjectId: "subj_123_main", displayName: "123 main st", address: "123 main st" });
+
+  const result = await runProspectInquiryOperatingLoop({
+    stack,
+    integrationPlatform,
+    workspaceId,
+    nowISO: NOW,
+    inquiry: {
+      name: "Alex Morgan",
+      email: "alex@morhan.com",
+      message: "i want 123 main st",
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.inferredSubjectInterest.subjectId, "subj_123_main");
+
+  const request = stack.requestRuntime.getRequest(result.requestId);
+  assert.equal(request.subjectRefs[0].entityId, "subj_123_main");
+  const interaction = stack.interactionRuntime.getInteraction(result.interactionId);
+  assert.ok(interaction.relatedObjects.some((ref) => ref.entityType === "Subject" && ref.entityId === "subj_123_main"));
+  assert.ok(
+    stack.businessGraphRuntime.getRelationships().some(
+      (rel) =>
+        rel.relationshipType === "INTERESTED_IN" &&
+        rel.fromEntity.entityId === result.partyId &&
+        rel.toEntity.entityId === "subj_123_main",
+    ),
+  );
+
+  const beforeSubjects = stack.businessSubjectRuntime.getSubjects().length;
+  const vague = await runProspectInquiryOperatingLoop({
+    stack,
+    integrationPlatform,
+    workspaceId,
+    nowISO: NOW,
+    inquiry: {
+      name: "Vague Prospect",
+      email: "vague@example.com",
+      message: "looking near downtown",
+    },
+  });
+  assert.equal(vague.ok, true);
+  assert.equal(vague.inferredSubjectInterest, null);
+  assert.equal(stack.requestRuntime.getRequest(vague.requestId).subjectRefs.length, 0);
+  assert.equal(stack.businessSubjectRuntime.getSubjects().length, beforeSubjects);
 });
 
 test("normal business starts with empty communication runtime", () => {

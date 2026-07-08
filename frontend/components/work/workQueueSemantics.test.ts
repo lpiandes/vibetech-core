@@ -5,6 +5,7 @@ import {
   deriveWorkQueueCounts,
   filterWorkItems,
   isOverdueWorkItem,
+  resolveTargetWorkItem,
   resolveWorkRowHref,
   sortWorkQueueItems,
 } from "./workQueueSemantics.ts";
@@ -116,4 +117,16 @@ test("resolveWorkRowHref never uses legacy engagement routes in business scope",
     ),
     null,
   );
+});
+
+test("resolveTargetWorkItem opens only active work present in the current business queue", () => {
+  const items = [
+    makeItem({ id: "work_current", status: "in_progress" }),
+    makeItem({ id: "work_done", status: "completed" }),
+  ];
+
+  assert.equal(resolveTargetWorkItem(items, "work_current")?.id, "work_current");
+  assert.equal(resolveTargetWorkItem(items, "work_missing"), null);
+  assert.equal(resolveTargetWorkItem(items, "work_done"), null);
+  assert.equal(resolveTargetWorkItem(items, ""), null);
 });

@@ -65,6 +65,7 @@ import {
 import { runShowingCoordinationOperatingLoop } from "../../../backend/core/integration/ShowingCoordinationOperatingLoopService.js";
 import { buildCommunicationThreadDetail } from "../../../backend/core/communications/views/buildCommunicationThreadDetail.js";
 import { RecordBusinessSubjectService } from "../../../backend/core/business-subject/RecordBusinessSubjectService.js";
+import { reconcileHistoricalSubjectInterests } from "../../../backend/core/business-subject/SubjectInterestReconciliationService.js";
 import { buildBusinessSubjectIndex } from "../../../backend/core/business-subject/views/buildBusinessSubjectIndex.js";
 import { buildSubjectAudiencePreview } from "../../../backend/core/segments/views/buildSubjectAudiencePreview.js";
 import { buildBusinessOperatingHomeView } from "../../../backend/core/command-center/buildBusinessOperatingHomeView.js";
@@ -279,6 +280,25 @@ export class WorkspaceService {
       connectionDependencyProjection: this.connected.connectionDependencyProjection,
       installationResult: this.connected.installationResult,
     };
+  }
+
+  async reconcileHistoricalSubjectInterestsIfNeeded() {
+    const connected = this.connected as ConnectedBusinessWorkspace & { subjectInterestReconciliationComplete?: boolean };
+    if (connected.subjectInterestReconciliationComplete) {
+      return { changed: false, reconciledCount: 0, skippedCount: 0, snapshotKinds: [] };
+    }
+    const stack = connected.operatingStack ?? connected.ctx;
+    const result = reconcileHistoricalSubjectInterests({ stack, nowISO: NOW_ISO });
+    if (result.changed) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    connected.subjectInterestReconciliationComplete = true;
+    return result;
   }
 
   private getWorkspaceConfig() {

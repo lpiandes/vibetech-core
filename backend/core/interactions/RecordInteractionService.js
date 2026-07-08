@@ -86,6 +86,7 @@ export class RecordInteractionService {
 
     // 3) Outcome recorded
     if (outcome !== undefined && outcome !== null) {
+      const normalizedFollowUpAt = followUpAt === undefined || followUpAt === null ? null : String(followUpAt);
       interactionRuntime.applyEvent({
         id: `evt_interaction_outcome_${interactionId}_${occurredAtISO}`,
         timestampISO: occurredAtISO,
@@ -95,7 +96,7 @@ export class RecordInteractionService {
           interactionId,
           outcome: String(outcome),
           nextStep: nextStep === undefined ? null : String(nextStep),
-          followUpAt: followUpAt === undefined ? null : String(followUpAt),
+          followUpAt: normalizedFollowUpAt,
         },
       });
 
@@ -103,7 +104,7 @@ export class RecordInteractionService {
         interactionId,
         outcome: String(outcome),
         nextStep: nextStep === undefined ? null : String(nextStep),
-        followUpAt: followUpAt === undefined ? null : String(followUpAt),
+        followUpAt: normalizedFollowUpAt,
         occurredAtISO: occurredAtISO,
         metadata,
       });

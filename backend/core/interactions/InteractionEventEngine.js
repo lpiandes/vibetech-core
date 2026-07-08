@@ -84,6 +84,23 @@ export class InteractionEventEngine {
         break;
       }
 
+      case INTERACTION_EVENT_TYPES.INTERACTION_RELATED_OBJECTS_UPDATED: {
+        const { interactionId, relatedObjects } = payload;
+        if (!interactionId) throw new Error("INTERACTION_RELATED_OBJECTS_UPDATED: interactionId required.");
+        if (!Array.isArray(relatedObjects)) {
+          throw new Error("INTERACTION_RELATED_OBJECTS_UPDATED: relatedObjects must be array.");
+        }
+        const idx = interactions.findIndex((i) => String(i.id) === String(interactionId));
+        if (idx === -1) throw new Error(`INTERACTION_RELATED_OBJECTS_UPDATED: interaction does not exist: ${String(interactionId)}`);
+        const prevInteraction = interactions[idx];
+        interactions[idx] = createInteraction({
+          ...prevInteraction,
+          relatedObjects,
+          updatedAt: event.timestampISO,
+        });
+        break;
+      }
+
       default:
         throw new Error(`InteractionEventEngine: unhandled event type: ${event.type}`);
     }

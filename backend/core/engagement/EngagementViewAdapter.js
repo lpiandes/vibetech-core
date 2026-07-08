@@ -28,7 +28,7 @@ function isOpenRequestStatus(status) {
   return !["closed", "cancelled", "rejected"].includes(String(status ?? ""));
 }
 
-function collectPartySubjects({ partyId, businessGraphRuntime, businessSubjectRuntime }) {
+function collectPartySubjects({ partyId, businessGraphRuntime, businessSubjectRuntime, requests, interactions }) {
   if (!businessSubjectRuntime) return [];
   const pid = String(partyId);
   const subjectIds = new Set();
@@ -40,6 +40,20 @@ function collectPartySubjects({ partyId, businessGraphRuntime, businessSubjectRu
     }
     if (String(to?.entityType) === ENTITY_TYPES.PARTY && String(to?.entityId) === pid && String(from?.entityType) === ENTITY_TYPES.SUBJECT) {
       subjectIds.add(String(from.entityId));
+    }
+  }
+  for (const request of safeArray(requests)) {
+    for (const ref of safeArray(request?.subjectRefs)) {
+      if (String(ref?.entityType) === ENTITY_TYPES.SUBJECT && ref?.entityId) {
+        subjectIds.add(String(ref.entityId));
+      }
+    }
+  }
+  for (const interaction of safeArray(interactions)) {
+    for (const ref of safeArray(interaction?.relatedObjects)) {
+      if (String(ref?.entityType) === ENTITY_TYPES.SUBJECT && ref?.entityId) {
+        subjectIds.add(String(ref.entityId));
+      }
     }
   }
   return [...subjectIds]
@@ -195,6 +209,7 @@ export class EngagementViewAdapter {
       automationRuntime,
       approvalRuntime,
       platformEventStore,
+      businessSubjectRuntime,
     });
 
     const followUps = buildEngagementFollowUps({
@@ -258,7 +273,13 @@ export class EngagementViewAdapter {
       }),
     );
 
-    const subjects = collectPartySubjects({ partyId, businessGraphRuntime, businessSubjectRuntime });
+    const subjects = collectPartySubjects({
+      partyId,
+      businessGraphRuntime,
+      businessSubjectRuntime,
+      requests: ctx.requests,
+      interactions: ctx.interactions,
+    });
     const communicationPreferences = buildCommunicationPreferenceSummary({
       partyId,
       preferenceRuntime: communicationPreferenceRuntime,
