@@ -25,6 +25,7 @@ import {
   type WorkQueueItem,
 } from "./workQueueSemantics";
 import RelationshipFollowUpResolutionDialog from "./RelationshipFollowUpResolutionDialog";
+import RelationshipFollowUpDraftDialog from "./RelationshipFollowUpDraftDialog";
 import {
   isResolvableRelationshipFollowUpWork,
   type RelationshipFollowUpOutcome,
@@ -84,10 +85,12 @@ function WorkQueueRow({
   item,
   businessId,
   onResolveFollowUp,
+  onDraftFollowUp,
 }: {
   item: WorkQueueItem;
   businessId: string;
   onResolveFollowUp: (item: WorkQueueItem) => void;
+  onDraftFollowUp: (item: WorkQueueItem) => void;
 }) {
   const display = item.metadata?.display ?? {};
   const href = resolveWorkRowHref(display, businessId);
@@ -133,6 +136,29 @@ function WorkQueueRow({
       <div style={{ display: "flex", alignItems: "center", gap: spacing.xs, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
         {priority ? <StatusBadge label={priority} tone={priorityTone(item.priority)} /> : null}
         <StatusBadge label={statusLabel} tone={statusTone(item)} />
+        {canResolveFollowUp ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onDraftFollowUp(item);
+            }}
+            style={{
+              borderRadius: radius.medium,
+              border: `1px solid ${cockpitColors.panelBorder}`,
+              backgroundColor: cockpitColors.panel,
+              color: cockpitColors.textPrimary,
+              padding: "7px 10px",
+              fontSize: typography.caption.fontSize,
+              fontWeight: 700,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Draft
+          </button>
+        ) : null}
         {canResolveFollowUp ? (
           <button
             type="button"
@@ -249,6 +275,7 @@ export default function WorkExecutiveLayout() {
   const { businessId } = useBusinessScope();
   const [filter, setFilter] = useState<WorkQueueFilter>("all");
   const [resolutionTarget, setResolutionTarget] = useState<WorkQueueItem | null>(null);
+  const [draftTarget, setDraftTarget] = useState<WorkQueueItem | null>(null);
 
   const metrics = viewModel?.metrics ?? {};
   const counts = useMemo(() => deriveWorkQueueCounts(viewModel?.items, metrics), [viewModel?.items, metrics]);
@@ -300,7 +327,13 @@ export default function WorkExecutiveLayout() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {visibleItems.map((item) => (
-              <WorkQueueRow key={String(item.id)} item={item} businessId={businessId} onResolveFollowUp={setResolutionTarget} />
+              <WorkQueueRow
+                key={String(item.id)}
+                item={item}
+                businessId={businessId}
+                onResolveFollowUp={setResolutionTarget}
+                onDraftFollowUp={setDraftTarget}
+              />
             ))}
           </div>
         )}
@@ -312,6 +345,13 @@ export default function WorkExecutiveLayout() {
           work={resolutionTarget}
           outcomes={relationshipFollowUpOutcomes}
           onClose={() => setResolutionTarget(null)}
+        />
+      ) : null}
+      {draftTarget ? (
+        <RelationshipFollowUpDraftDialog
+          businessId={businessId}
+          work={draftTarget}
+          onClose={() => setDraftTarget(null)}
         />
       ) : null}
     </div>

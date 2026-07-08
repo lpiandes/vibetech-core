@@ -80,6 +80,7 @@ export function validateIndustryPackage(pkg) {
   validateSectionArray(pkg.lifecycleTransitions, "lifecycleTransitions", { requiredKeys: ["from", "to"] });
   validateRelationshipFollowUpRules(pkg.relationshipFollowUpRules);
   validateRelationshipFollowUpOutcomes(pkg.relationshipFollowUpOutcomes);
+  validateSectionArray(pkg.relationshipFollowUpDraftAssistance, "relationshipFollowUpDraftAssistance", { requiredKeys: ["id", "relationshipTypes", "channel", "subjectTemplate", "bodyTemplate"] });
   validateSectionArray(pkg.importProfiles, "importProfiles", { requiredKeys: ["profileId", "sourceSystem"] });
 
   if (pkg.onboardingSchema !== undefined && !isPlainObject(pkg.onboardingSchema)) {

@@ -49,6 +49,7 @@ import { buildEngagementPartyIndex } from "../../../backend/core/engagement/Enga
 import { buildRelationshipFollowUpProjection } from "../../../backend/core/relationship-followup/RelationshipFollowUpProjection.js";
 import { RelationshipFollowUpWorkConversionService } from "../../../backend/core/relationship-followup/RelationshipFollowUpWorkConversionService.js";
 import { RelationshipFollowUpResolutionService } from "../../../backend/core/relationship-followup/RelationshipFollowUpResolutionService.js";
+import { RelationshipFollowUpDraftAssistanceService } from "../../../backend/core/work-assistance/RelationshipFollowUpDraftAssistanceService.js";
 import { buildDemoStorySteps } from "../../../backend/core/demo/buildDemoStorySteps.js";
 import { projectSegmentMembership } from "../../../backend/core/segments/SegmentProjectionEngine.js";
 import { checkCommunicationPermitted } from "../../../backend/core/communications/preferences/CommunicationPreferenceEnforcer.js";
@@ -762,6 +763,38 @@ export class WorkspaceService {
       nextFollowUpAt: input.nextFollowUpAt,
       qualificationUpdates: input.qualificationUpdates,
       actorId: input.actorId,
+      nowISO: nowISO ?? NOW_ISO,
+    });
+    if (result.ok && result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
+  }
+
+  async prepareRelationshipFollowUpDraft(
+    input: {
+      workId: string;
+      actorId?: string;
+      knowledgeDocuments?: Array<Record<string, unknown>>;
+    },
+    nowISO?: string,
+  ) {
+    const stack = this.connected.operatingStack;
+    if (!stack) {
+      throw new Error("Relationship follow-up draft assistance is not available for this workspace.");
+    }
+    const result = (new RelationshipFollowUpDraftAssistanceService() as any).execute({
+      stack,
+      installationResult: this.connected.installationResult,
+      businessId: this.workspaceId,
+      workId: input.workId,
+      actorId: input.actorId,
+      knowledgeDocuments: input.knowledgeDocuments ?? [],
       nowISO: nowISO ?? NOW_ISO,
     });
     if (result.ok && result.snapshotKinds?.length) {
