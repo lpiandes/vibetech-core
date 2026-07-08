@@ -50,6 +50,7 @@ import { buildRelationshipFollowUpProjection } from "../../../backend/core/relat
 import { RelationshipFollowUpWorkConversionService } from "../../../backend/core/relationship-followup/RelationshipFollowUpWorkConversionService.js";
 import { RelationshipFollowUpResolutionService } from "../../../backend/core/relationship-followup/RelationshipFollowUpResolutionService.js";
 import { RelationshipFollowUpDraftAssistanceService } from "../../../backend/core/work-assistance/RelationshipFollowUpDraftAssistanceService.js";
+import { buildRelationshipOperationsIntelligence } from "../../../backend/core/relationship-operations/RelationshipOperationsIntelligenceProjection.js";
 import { buildDemoStorySteps } from "../../../backend/core/demo/buildDemoStorySteps.js";
 import { projectSegmentMembership } from "../../../backend/core/segments/SegmentProjectionEngine.js";
 import { checkCommunicationPermitted } from "../../../backend/core/communications/preferences/CommunicationPreferenceEnforcer.js";
@@ -806,6 +807,24 @@ export class WorkspaceService {
       });
     }
     return result;
+  }
+
+  loadRelationshipOperationsIntelligence() {
+    const stack = this.connected.operatingStack ?? this.connected.ctx;
+    return attachProductContext(
+      (buildRelationshipOperationsIntelligence as any)({
+        businessId: this.workspaceId,
+        workRuntime: stack?.workRuntime ?? this.workRuntime,
+        interactionRuntime: stack?.interactionRuntime ?? this.connected.ctx.interactionRuntime,
+        businessGraphRuntime: stack?.businessGraphRuntime ?? this.connected.ctx.businessGraphRuntime,
+        businessSubjectRuntime: stack?.businessSubjectRuntime ?? this.connected.ctx.businessSubjectRuntime,
+        communicationRuntime: stack?.communicationRuntime ?? this.communicationRuntime,
+        teamRuntime: stack?.teamRuntime ?? this.teamRuntime,
+        relationshipTypes: this.connected.installationResult?.relationshipTypes ?? [],
+        nowISO: NOW_ISO,
+      }),
+      this.connected,
+    );
   }
 
   loadAudienceDashboard() {
