@@ -43,6 +43,21 @@ function validateRelationshipFollowUpRules(rules) {
   }
 }
 
+function validateRelationshipFollowUpOutcomes(outcomes) {
+  if (outcomes === undefined) return;
+  validateSectionArray(outcomes, "relationshipFollowUpOutcomes", {
+    requiredKeys: ["id", "displayName", "applicableRelationshipTypes", "activitySemantics"],
+  });
+  for (const outcome of outcomes) {
+    if (!Array.isArray(outcome.applicableRelationshipTypes) || outcome.applicableRelationshipTypes.length === 0) {
+      fail(`relationshipFollowUpOutcomes[${outcome.id}].applicableRelationshipTypes must be non-empty array.`);
+    }
+    if (!isPlainObject(outcome.activitySemantics)) {
+      fail(`relationshipFollowUpOutcomes[${outcome.id}].activitySemantics must be plain object.`);
+    }
+  }
+}
+
 export function validateIndustryPackage(pkg) {
   if (!pkg || typeof pkg !== "object") fail("package required.");
   if (!Object.isFrozen(pkg)) fail("package must be frozen.");
@@ -64,6 +79,7 @@ export function validateIndustryPackage(pkg) {
   validateSectionArray(pkg.relationshipTypes, "relationshipTypes", { requiredKeys: ["type", "label"] });
   validateSectionArray(pkg.lifecycleTransitions, "lifecycleTransitions", { requiredKeys: ["from", "to"] });
   validateRelationshipFollowUpRules(pkg.relationshipFollowUpRules);
+  validateRelationshipFollowUpOutcomes(pkg.relationshipFollowUpOutcomes);
   validateSectionArray(pkg.importProfiles, "importProfiles", { requiredKeys: ["profileId", "sourceSystem"] });
 
   if (pkg.onboardingSchema !== undefined && !isPlainObject(pkg.onboardingSchema)) {

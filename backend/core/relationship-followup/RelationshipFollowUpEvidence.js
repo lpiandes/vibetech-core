@@ -95,6 +95,28 @@ function interactionReferencesParty(interaction, partyId) {
   return safeArray(interaction?.participants).some((participant) => String(participant?.partyId) === pid);
 }
 
+function relationshipFollowUpInteractionMetadata(interaction) {
+  const metadata = interaction?.metadata;
+  return isPlainObject(metadata?.relationshipFollowUp) ? metadata.relationshipFollowUp : {};
+}
+
+function countsAsMeaningfulCustomerActivity(interaction) {
+  const meta = relationshipFollowUpInteractionMetadata(interaction);
+  if (meta?.activitySemantics?.meaningfulCustomerActivity === false) return false;
+  return true;
+}
+
+function matchingFollowUpCommitment(interaction, { candidateId, relationshipType, ruleId, nowISO }) {
+  if (!interaction?.followUpAt) return false;
+  const meta = relationshipFollowUpInteractionMetadata(interaction);
+  if (String(meta?.candidateId ?? "") !== String(candidateId)) return false;
+  if (String(meta?.relationshipType ?? "") !== String(relationshipType)) return false;
+  if (String(meta?.ruleId ?? "") !== String(ruleId)) return false;
+  const due = toTime(interaction.followUpAt);
+  const now = toTime(nowISO);
+  return Number.isFinite(due) && Number.isFinite(now) && due > now;
+}
+
 function messageReferencesParty(message, partyId) {
   const pid = String(partyId);
   if (String(message?.sender?.id) === pid) return true;
@@ -151,6 +173,7 @@ export function buildRelationshipFollowUpEvidence({
   party,
   relationship,
   rule,
+  nowISO,
 } = {}) {
   const partyId = String(party?.id ?? "");
   const relationshipType = String(relationship?.relationshipType ?? "");
@@ -164,8 +187,18 @@ export function buildRelationshipFollowUpEvidence({
   const interactions = safeArray(interactionRuntime?.getInteractions?.()).filter((interaction) =>
     interactionReferencesParty(interaction, partyId),
   );
-  const operationalInteractions = interactions.filter((interaction) => String(interaction.source ?? "") !== "crm_import");
+  const operationalInteractions = interactions.filter((interaction) =>
+    String(interaction.source ?? "") !== "crm_import" && countsAsMeaningfulCustomerActivity(interaction),
+  );
   const importedNoteInteractions = interactions.filter((interaction) => String(interaction.source ?? "") === "crm_import");
+  const futureFollowUpCommitments = interactions
+    .filter((interaction) => matchingFollowUpCommitment(interaction, {
+      candidateId,
+      relationshipType,
+      ruleId: rule?.id,
+      nowISO,
+    }))
+    .sort((a, b) => String(a.followUpAt).localeCompare(String(b.followUpAt)));
   const messages = safeArray(communicationRuntime?.getMessages?.()).filter((message) => messageReferencesParty(message, partyId));
 
   const targetWorkType = rule?.targetWork?.workType;
@@ -234,6 +267,13 @@ export function buildRelationshipFollowUpEvidence({
         ? { source: "subject_linkage", value: String(primarySubject.displayName ?? primarySubject.id), subjectId: String(primarySubject.id) }
         : null,
     latestMeaningfulActivityAt,
+    latestFutureFollowUpCommitment: futureFollowUpCommitments[0]
+      ? {
+          interactionId: String(futureFollowUpCommitments[0].id),
+          followUpAt: String(futureFollowUpCommitments[0].followUpAt),
+          outcome: futureFollowUpCommitments[0].outcome ?? null,
+        }
+      : null,
     importedNotes: importedNoteInteractions.map((interaction) => ({
       interactionId: String(interaction.id),
       noteCount: safeArray(interaction.notes).length,

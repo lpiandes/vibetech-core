@@ -48,6 +48,7 @@ import { EngagementViewAdapter } from "../../../backend/core/engagement/Engageme
 import { buildEngagementPartyIndex } from "../../../backend/core/engagement/EngagementPartyIndexBuilder.js";
 import { buildRelationshipFollowUpProjection } from "../../../backend/core/relationship-followup/RelationshipFollowUpProjection.js";
 import { RelationshipFollowUpWorkConversionService } from "../../../backend/core/relationship-followup/RelationshipFollowUpWorkConversionService.js";
+import { RelationshipFollowUpResolutionService } from "../../../backend/core/relationship-followup/RelationshipFollowUpResolutionService.js";
 import { buildDemoStorySteps } from "../../../backend/core/demo/buildDemoStorySteps.js";
 import { projectSegmentMembership } from "../../../backend/core/segments/SegmentProjectionEngine.js";
 import { checkCommunicationPermitted } from "../../../backend/core/communications/preferences/CommunicationPreferenceEnforcer.js";
@@ -724,6 +725,43 @@ export class WorkspaceService {
       stack,
       installationResult: this.connected.installationResult,
       candidateId,
+      nowISO: nowISO ?? NOW_ISO,
+    });
+    if (result.ok && result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
+  }
+
+  async resolveRelationshipFollowUpWork(
+    input: {
+      workId: string;
+      outcomeId: string;
+      note?: string;
+      nextFollowUpAt?: string;
+      qualificationUpdates?: Record<string, unknown>;
+      actorId?: string;
+    },
+    nowISO?: string,
+  ) {
+    const stack = this.connected.operatingStack;
+    if (!stack) {
+      throw new Error("Relationship follow-up work is not available for this workspace.");
+    }
+    const result = new RelationshipFollowUpResolutionService().execute({
+      stack,
+      installationResult: this.connected.installationResult,
+      workId: input.workId,
+      outcomeId: input.outcomeId,
+      note: input.note,
+      nextFollowUpAt: input.nextFollowUpAt,
+      qualificationUpdates: input.qualificationUpdates,
+      actorId: input.actorId,
       nowISO: nowISO ?? NOW_ISO,
     });
     if (result.ok && result.snapshotKinds?.length) {

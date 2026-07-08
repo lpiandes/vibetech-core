@@ -24,6 +24,11 @@ import {
   type WorkQueueFilter,
   type WorkQueueItem,
 } from "./workQueueSemantics";
+import RelationshipFollowUpResolutionDialog from "./RelationshipFollowUpResolutionDialog";
+import {
+  isResolvableRelationshipFollowUpWork,
+  type RelationshipFollowUpOutcome,
+} from "./relationshipFollowUpResolutionSemantics";
 
 const FILTERS: Array<{ id: WorkQueueFilter; label: string }> = [
   { id: "all", label: "All" },
@@ -75,9 +80,18 @@ function SubjectChip({ name, href }: { name: string; href: string | null }) {
   );
 }
 
-function WorkQueueRow({ item, businessId }: { item: WorkQueueItem; businessId: string }) {
+function WorkQueueRow({
+  item,
+  businessId,
+  onResolveFollowUp,
+}: {
+  item: WorkQueueItem;
+  businessId: string;
+  onResolveFollowUp: (item: WorkQueueItem) => void;
+}) {
   const display = item.metadata?.display ?? {};
   const href = resolveWorkRowHref(display, businessId);
+  const canResolveFollowUp = isResolvableRelationshipFollowUpWork(item);
   const title = String(item.title ?? "Work item");
   const avatarName = display.partyName ? String(display.partyName) : title;
   const subjectHref = display.subjectId ? `/b/${businessId}/properties/${display.subjectId}` : null;
@@ -119,6 +133,29 @@ function WorkQueueRow({ item, businessId }: { item: WorkQueueItem; businessId: s
       <div style={{ display: "flex", alignItems: "center", gap: spacing.xs, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
         {priority ? <StatusBadge label={priority} tone={priorityTone(item.priority)} /> : null}
         <StatusBadge label={statusLabel} tone={statusTone(item)} />
+        {canResolveFollowUp ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onResolveFollowUp(item);
+            }}
+            style={{
+              borderRadius: radius.medium,
+              border: `1px solid ${cockpitColors.accent}`,
+              backgroundColor: cockpitColors.accent,
+              color: "#fff",
+              padding: "7px 10px",
+              fontSize: typography.caption.fontSize,
+              fontWeight: 700,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Resolve
+          </button>
+        ) : null}
         {href ? <ChevronRight size={16} color={cockpitColors.textMuted} aria-hidden /> : null}
       </div>
     </>
@@ -211,6 +248,7 @@ export default function WorkExecutiveLayout() {
   const viewModel = useContext<WorkViewModel | null>(WorkViewModelContext);
   const { businessId } = useBusinessScope();
   const [filter, setFilter] = useState<WorkQueueFilter>("all");
+  const [resolutionTarget, setResolutionTarget] = useState<WorkQueueItem | null>(null);
 
   const metrics = viewModel?.metrics ?? {};
   const counts = useMemo(() => deriveWorkQueueCounts(viewModel?.items, metrics), [viewModel?.items, metrics]);
@@ -231,6 +269,8 @@ export default function WorkExecutiveLayout() {
   }, [viewModel?.items, filter]);
 
   if (!viewModel) return null;
+
+  const relationshipFollowUpOutcomes = (viewModel?.productContext?.installationResult?.relationshipFollowUpOutcomes ?? []) as RelationshipFollowUpOutcome[];
 
   const emptyCopy =
     filter === "blocked"
@@ -260,11 +300,20 @@ export default function WorkExecutiveLayout() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {visibleItems.map((item) => (
-              <WorkQueueRow key={String(item.id)} item={item} businessId={businessId} />
+              <WorkQueueRow key={String(item.id)} item={item} businessId={businessId} onResolveFollowUp={setResolutionTarget} />
             ))}
           </div>
         )}
       </ShellPanel>
+
+      {resolutionTarget ? (
+        <RelationshipFollowUpResolutionDialog
+          businessId={businessId}
+          work={resolutionTarget}
+          outcomes={relationshipFollowUpOutcomes}
+          onClose={() => setResolutionTarget(null)}
+        />
+      ) : null}
     </div>
   );
 }

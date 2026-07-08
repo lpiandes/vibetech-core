@@ -29,6 +29,11 @@ export function evaluateRelationshipFollowUpRule({ rule, evidence, nowISO } = {}
   }
 
   const recurrenceDays = Number(rule.recurrenceDays ?? 0);
+  const futureFollowUpAt = evidence.latestFutureFollowUpCommitment?.followUpAt ?? null;
+  if (futureFollowUpAt) {
+    return { matched: false, reason: "future_follow_up_scheduled", recurrenceBlockedUntil: futureFollowUpAt };
+  }
+
   const completedAt = evidence.latestCompletedMatchingWork?.completedAt ?? null;
   const recurrenceBlockedUntil = completedAt ? addDaysISO(completedAt, recurrenceDays) : null;
   const recurrenceAge = completedAt ? daysSince(completedAt, nowISO) : null;
@@ -62,6 +67,7 @@ export function evaluateRelationshipFollowUpRule({ rule, evidence, nowISO } = {}
       qualificationCompleteness: evidence.qualificationCompleteness,
       propertyInterest: evidence.propertyInterest,
       latestMeaningfulActivityAt: evidence.latestMeaningfulActivityAt,
+      latestFutureFollowUpCommitment: evidence.latestFutureFollowUpCommitment,
       importedNotes: safeArray(evidence.importedNotes),
     },
   };

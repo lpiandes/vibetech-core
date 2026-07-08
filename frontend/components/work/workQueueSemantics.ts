@@ -22,6 +22,12 @@ export type WorkQueueItem = {
       nextStep?: string;
       assigneeName?: string | null;
     };
+    relationshipFollowUp?: {
+      candidateId?: string;
+      relationshipType?: string;
+      ruleId?: string;
+      reasonCode?: string;
+    } | null;
   };
 };
 

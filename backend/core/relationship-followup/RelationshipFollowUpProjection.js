@@ -77,6 +77,7 @@ export function buildRelationshipFollowUpProjection({
           party,
           relationship,
           rule,
+          nowISO: generatedAt,
         });
         const evaluated = evaluateRelationshipFollowUpRule({ rule, evidence, nowISO: generatedAt });
         if (!evaluated.matched) continue;
@@ -97,6 +98,7 @@ export function buildRelationshipFollowUpProjection({
           reasonLabel: String(rule.reasonLabel),
           evidence: evaluated.evidence,
           latestMeaningfulActivityAt: evidence.latestMeaningfulActivityAt,
+          latestFutureFollowUpCommitment: evidence.latestFutureFollowUpCommitment,
           existingOpenWorkId,
           latestCompletedMatchingWorkId,
           recurrenceBlockedUntil: evaluated.recurrenceBlockedUntil ?? null,

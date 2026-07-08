@@ -648,6 +648,7 @@ export class WorkViewAdapter {
           derivedFrom: { workItemId: wid },
           version: WORK_VIEW_VERSION,
           display,
+          relationshipFollowUp: w.metadata?.relationshipFollowUp ?? null,
         }),
       });
     });
@@ -685,4 +686,3 @@ export class WorkViewAdapter {
     return vm;
   }
 }
-
