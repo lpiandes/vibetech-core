@@ -9,6 +9,8 @@ export function createImportProfile({
   statusMappings = {},
   consentMappings = {},
   qualificationFieldMap = {},
+  importKind = "contact",
+  defaultSubjectType = null,
 } = {}) {
   if (!profileId) throw new Error("ImportProfile: profileId required.");
   if (!sourceSystem) throw new Error("ImportProfile: sourceSystem required.");
@@ -22,6 +24,8 @@ export function createImportProfile({
     statusMappings: deepFreeze({ ...statusMappings }),
     consentMappings: deepFreeze({ ...consentMappings }),
     qualificationFieldMap: deepFreeze({ ...qualificationFieldMap }),
+    importKind: String(importKind ?? "contact"),
+    defaultSubjectType: defaultSubjectType ? String(defaultSubjectType) : null,
   });
 }
 
@@ -50,10 +54,32 @@ export function suggestColumnMapFromHeaders(headers = [], profile = null) {
   const base = profile?.columnMap ?? {};
   const suggestions = { ...base };
   const normalizedHeaders = headers.map((h) => String(h ?? "").trim());
+  const importKind = String(profile?.importKind ?? "contact");
 
   for (const header of normalizedHeaders) {
     const lower = header.toLowerCase();
     if (suggestions[header]) continue;
+    if (importKind === "subject") {
+      if (lower.includes("external") || lower.includes("property id") || lower.includes("listing id")) {
+        suggestions[header] = "externalSubjectId";
+      } else if (lower === "name" || lower.includes("property name") || lower.includes("listing name")) {
+        suggestions[header] = "displayName";
+      } else if (lower.includes("address")) suggestions[header] = "address";
+      else if (lower === "unit" || lower.includes("unit")) suggestions[header] = "unit";
+      else if (lower === "city") suggestions[header] = "city";
+      else if (lower === "state") suggestions[header] = "state";
+      else if (lower.includes("zip") || lower.includes("postal")) suggestions[header] = "postalCode";
+      else if (lower.includes("price") || lower.includes("rent")) suggestions[header] = "price";
+      else if (lower.includes("bed")) suggestions[header] = "bedrooms";
+      else if (lower.includes("bath")) suggestions[header] = "bathrooms";
+      else if (lower.includes("property type")) suggestions[header] = "propertyType";
+      else if (lower === "status" || lower.includes("listing status")) suggestions[header] = "status";
+      else if (lower.includes("url") || lower.includes("link")) suggestions[header] = "listingUrl";
+      else if (lower.includes("description")) suggestions[header] = "description";
+      else if (lower.includes("property of interest")) suggestions[header] = "propertyOfInterest";
+      continue;
+    }
+
     if (lower.includes("email")) suggestions[header] = "email";
     else if (lower.includes("phone") || lower.includes("mobile")) suggestions[header] = "phone";
     else if (lower === "first name" || lower === "firstname") suggestions[header] = "firstName";

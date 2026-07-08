@@ -261,10 +261,15 @@ export function buildRelationshipFollowUpEvidence({
       hasDecisionTimeline: Boolean(qualification.decisionTimeline),
       hasContactMethod: safeArray(party?.contactMethods).length > 0,
     },
-    propertyInterest: propertyInterest
-      ? { source: "qualification.propertyOfInterest", value: propertyInterest }
-      : primarySubject
-        ? { source: "subject_linkage", value: String(primarySubject.displayName ?? primarySubject.id), subjectId: String(primarySubject.id) }
+    propertyInterest: primarySubject
+      ? {
+          source: "subject_linkage",
+          value: String(primarySubject.displayName ?? primarySubject.id),
+          subjectId: String(primarySubject.id),
+          rawQualificationValue: propertyInterest ? String(propertyInterest) : null,
+        }
+      : propertyInterest
+        ? { source: "qualification.propertyOfInterest", value: propertyInterest }
         : null,
     latestMeaningfulActivityAt,
     latestFutureFollowUpCommitment: futureFollowUpCommitments[0]

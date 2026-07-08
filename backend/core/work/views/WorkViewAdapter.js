@@ -13,6 +13,7 @@ import { validateWorkViewModel } from "./WorkViewValidator.js";
 import { formatBusinessDateWithOverdue } from "../../presentation/formatBusinessDate.js";
 import {
   resolveBusinessWorkLinks,
+  resolvePrimarySubjectIdForParty,
   resolveWorkPartyId,
 } from "./resolveWorkRowLinks.js";
 
@@ -138,6 +139,9 @@ function resolveWorkDisplay({
         break;
       }
     }
+  }
+  if (!subjectId && partyId) {
+    subjectId = resolvePrimarySubjectIdForParty({ partyId, businessGraphRuntime, businessSubjectRuntime });
   }
   const partyName = partyId ? businessGraphRuntime?.getParty?.(String(partyId))?.displayName ?? null : null;
   const subjectName = subjectId ? businessSubjectRuntime?.getSubject?.(String(subjectId))?.displayName ?? null : null;

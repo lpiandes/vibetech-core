@@ -23,6 +23,7 @@ export class CanonicalStateReader {
 
     const relationships = this.stack?.businessGraphRuntime?.getRelationships?.() ?? [];
     const activeRelationshipTypesByPartyId = {};
+    const activeSubjectLinksByPartyId = {};
     for (const rel of relationships) {
       if (String(rel.status) !== "active") continue;
       const fromId = String(rel.fromEntity?.entityId ?? "");
@@ -32,7 +33,30 @@ export class CanonicalStateReader {
         if (!activeRelationshipTypesByPartyId[partyId]) activeRelationshipTypesByPartyId[partyId] = [];
         activeRelationshipTypesByPartyId[partyId].push(String(rel.relationshipType));
       }
+      if (
+        String(rel.fromEntity?.entityType) === "Party" &&
+        String(rel.toEntity?.entityType) === "Subject"
+      ) {
+        if (!activeSubjectLinksByPartyId[fromId]) activeSubjectLinksByPartyId[fromId] = [];
+        activeSubjectLinksByPartyId[fromId].push({
+          relationshipId: String(rel.id),
+          subjectId: toId,
+          relationshipType: String(rel.relationshipType),
+        });
+      }
     }
+
+    const subjects = (this.stack?.businessSubjectRuntime?.getSubjects?.() ?? []).map((subject) =>
+      deepFreeze({
+        id: String(subject.id),
+        workspaceId: String(subject.workspaceId),
+        subjectType: String(subject.subjectType),
+        displayName: String(subject.displayName ?? ""),
+        status: String(subject.status ?? ""),
+        keyAttributes: subject.keyAttributes && typeof subject.keyAttributes === "object" ? { ...subject.keyAttributes } : {},
+        externalReferences: [...(subject.externalReferences ?? [])].map(String),
+      }),
+    );
 
     const preferencesByPartyId = {};
     for (const party of parties) {
@@ -60,7 +84,9 @@ export class CanonicalStateReader {
 
     return deepFreeze({
       parties,
+      subjects,
       activeRelationshipTypesByPartyId: deepFreeze(activeRelationshipTypesByPartyId),
+      activeSubjectLinksByPartyId: deepFreeze(activeSubjectLinksByPartyId),
       preferencesByPartyId: deepFreeze(preferencesByPartyId),
       importProfileRequestsByPartyId: deepFreeze(importProfileRequestsByPartyId),
     });

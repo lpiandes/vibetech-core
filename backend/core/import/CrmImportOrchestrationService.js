@@ -11,6 +11,8 @@ import { CsvImportParser } from "./parsers/CsvImportParser.js";
 import { CanonicalStateReader } from "./CanonicalStateReader.js";
 import { CrmImportDryRunExecutor } from "./CrmImportDryRunExecutor.js";
 import { CrmImportCommitExecutor } from "./CrmImportCommitExecutor.js";
+import { SubjectImportDryRunExecutor } from "./subjects/SubjectImportDryRunExecutor.js";
+import { SubjectImportCommitExecutor } from "./subjects/SubjectImportCommitExecutor.js";
 import { createImportArtifactStore } from "./storage/ImportArtifactStore.js";
 import { importRunRepository } from "./persistence/ImportRunRepository.js";
 
@@ -21,12 +23,24 @@ export class CrmImportOrchestrationService {
     parser = new CsvImportParser(),
     dryRunExecutor = new CrmImportDryRunExecutor(),
     commitExecutor = new CrmImportCommitExecutor(),
+    subjectDryRunExecutor = new SubjectImportDryRunExecutor(),
+    subjectCommitExecutor = new SubjectImportCommitExecutor(),
   } = {}) {
     this.repository = repository;
     this.artifactStore = artifactStore;
     this.parser = parser;
     this.dryRunExecutor = dryRunExecutor;
     this.commitExecutor = commitExecutor;
+    this.subjectDryRunExecutor = subjectDryRunExecutor;
+    this.subjectCommitExecutor = subjectCommitExecutor;
+  }
+
+  dryRunExecutorFor(profile) {
+    return String(profile?.importKind ?? "contact") === "subject" ? this.subjectDryRunExecutor : this.dryRunExecutor;
+  }
+
+  commitExecutorFor(profile) {
+    return String(profile?.importKind ?? "contact") === "subject" ? this.subjectCommitExecutor : this.commitExecutor;
   }
 
   /**
@@ -160,7 +174,7 @@ export class CrmImportOrchestrationService {
     const reader = new CanonicalStateReader({ stack });
     const canonicalSnapshot = reader.readSnapshot();
 
-    const { dryRunResult, rowResults } = this.dryRunExecutor.execute({
+    const { dryRunResult, rowResults } = this.dryRunExecutorFor(profile).execute({
       parsedRows: rows,
       columnMap,
       profile,
@@ -208,7 +222,13 @@ export class CrmImportOrchestrationService {
       committedByUserId: userId ?? null,
     });
 
-    const result = await this.commitExecutor.execute({
+    const profile = resolveImportProfile({
+      installationResult,
+      sourceSystem: importRun.sourceSystem,
+      profileId: importRun.profileId,
+    });
+
+    const result = await this.commitExecutorFor(profile).execute({
       repository: this.repository,
       businessId,
       run: importRun,

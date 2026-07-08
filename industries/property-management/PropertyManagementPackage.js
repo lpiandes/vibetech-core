@@ -8,6 +8,7 @@ import {
 } from "./config/mcbrideRelationshipRegistry.js";
 import { MCBRIDE_QUALIFICATION_FIELD_SCHEMAS } from "./config/mcbrideQualificationSchema.js";
 import { MCBRIDE_IMPORT_PROFILES } from "./config/mcbrideImportProfiles.js";
+import { MCBRIDE_SUBJECT_IMPORT_PROFILES } from "./config/mcbrideSubjectImportProfiles.js";
 
 export const PM_AUTOMATION_CONFIGS = {
   prospectFollowUp: buildOutcomeAutomationConfiguration({
@@ -494,6 +495,6 @@ export const PROPERTY_MANAGEMENT_PACKAGE = createIndustryPackage({
       ],
     },
   ],
-  importProfiles: MCBRIDE_IMPORT_PROFILES,
+  importProfiles: [...MCBRIDE_IMPORT_PROFILES, ...MCBRIDE_SUBJECT_IMPORT_PROFILES],
   metadata: { vertical: "property_management", universalMechanism: true },
 });

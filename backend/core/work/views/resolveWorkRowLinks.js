@@ -56,3 +56,17 @@ export function resolveBusinessWorkLinks({
     engagementHref: null,
   };
 }
+
+export function resolvePrimarySubjectIdForParty({ partyId, businessGraphRuntime, businessSubjectRuntime } = {}) {
+  const pid = String(partyId ?? "");
+  if (!pid) return null;
+  for (const rel of safeArray(businessGraphRuntime?.getRelationships?.())) {
+    if (String(rel?.status) !== "active") continue;
+    if (String(rel?.relationshipType) !== "INTERESTED_IN") continue;
+    if (String(rel?.fromEntity?.entityType) !== "Party" || String(rel?.fromEntity?.entityId) !== pid) continue;
+    if (String(rel?.toEntity?.entityType) !== "Subject") continue;
+    const subjectId = String(rel.toEntity.entityId);
+    if (businessSubjectRuntime?.getSubject?.(subjectId)) return subjectId;
+  }
+  return null;
+}
