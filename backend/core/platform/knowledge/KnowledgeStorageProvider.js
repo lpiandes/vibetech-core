@@ -15,6 +15,7 @@
 /**
  * @typedef {object} KnowledgeStorageProvider
  * @property {(input: KnowledgeStoragePutInput) => Promise<void>} putObject
+ * @property {(ref: KnowledgeStorageObjectRef) => Promise<Buffer>} getObject
  * @property {(ref: KnowledgeStorageObjectRef) => Promise<void>} deleteObject
  * @property {(ref: KnowledgeStorageObjectRef) => Promise<boolean>} objectExists
  */

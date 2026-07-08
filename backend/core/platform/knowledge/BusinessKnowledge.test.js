@@ -113,6 +113,29 @@ test("authorized role can upload supported document", async () => {
   assert.equal(doc.status, "ready");
 });
 
+test("operational knowledge retrieval returns bounded ready document content without broadening public list shape", async () => {
+  const business = await createTestBusiness();
+  const owner = await createTestUser({ email: `ops-knowledge-${uid()}@test.vibetech.local`, name: "Ops Knowledge" });
+  await platformStore.createMembership({ userId: owner.id, businessId: business.id, role: "OWNER" });
+  const service = makeService();
+  await service.uploadDocument({
+    businessId: business.id,
+    userId: owner.id,
+    buffer: Buffer.from("Leasing guidance content that should influence an internal operational draft."),
+    filename: "leasing-guide.txt",
+    mimeType: "text/plain",
+  });
+
+  const publicDocs = await service.listDocuments(business.id);
+  assert.equal(publicDocs.length, 1);
+  assert.equal(Object.hasOwn(publicDocs[0], "contentText"), false);
+
+  const operationalDocs = await service.listOperationalDocuments(business.id);
+  assert.equal(operationalDocs.length, 1);
+  assert.equal(operationalDocs[0].businessId, business.id);
+  assert.match(operationalDocs[0].contentText, /Leasing guidance content/);
+});
+
 test("unsupported file type rejected", async () => {
   const validation = validateKnowledgeUpload({
     buffer: Buffer.from("MZ"),

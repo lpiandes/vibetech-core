@@ -113,8 +113,8 @@ function addSubjectLink(stack, partyId) {
   ensurePartySubjectRelationship({ stack, partyId, subjectId: "subj_s16_harbor", nowISO: OLD });
 }
 
-function addPreferences(stack, partyId) {
-  for (const [channel, status] of [["email", "opt_out"], ["sms", "suppressed"]]) {
+function addPreferences(stack, partyId, statuses = { email: "opt_out", sms: "suppressed" }) {
+  for (const [channel, status] of [["email", statuses.email], ["sms", statuses.sms]]) {
     stack.communicationPreferenceRuntime.applyEvent({
       id: `evt_pref_${channel}`,
       timestampISO: OLD,
@@ -122,7 +122,7 @@ function addPreferences(stack, partyId) {
       source: "test",
       payload: {
         preference: {
-          id: `pref_${partyId}_${channel}`,
+        id: `pref_${partyId}_${channel}_${status}`,
           partyId,
           workspaceId: "ws_s16",
           channel,
@@ -257,10 +257,64 @@ function buildReadyStack() {
   return { stack, partyId, work };
 }
 
+function buildReadyStackWithPreferenceStatuses(statuses) {
+  const stack = buildPropertyManagementWorkspaceStack({ nowISO: NOW, workspaceId: "ws_s16" });
+  const partyId = addBuyerCandidateState(stack, `party_s16_${String(statuses.email ?? "none")}_${String(statuses.sms ?? "none")}`);
+  addSubjectLink(stack, partyId);
+  if (statuses.email || statuses.sms) addPreferences(stack, partyId, statuses);
+  addMemory(stack, partyId);
+  addTeamMember(stack);
+  const work = createFollowUpWork(stack);
+  return { stack, partyId, work };
+}
+
 const knowledge = [
-  { id: "doc_ready", businessId: "ws_s16", title: "Leasing response guide", status: "ready", sourceType: "TXT", categoryIds: ["PM_LEASING"] },
-  { id: "doc_other_business", businessId: "ws_other", title: "Other business guide", status: "ready", sourceType: "TXT", categoryIds: ["PM_LEASING"] },
-  { id: "doc_unpublished", businessId: "ws_s16", title: "Draft guide", status: "draft", sourceType: "TXT", categoryIds: ["PM_LEASING"] },
+  {
+    id: "doc_ready",
+    businessId: "ws_s16",
+    title: "Leasing response guide",
+    originalFilename: "leasing-response-guide.txt",
+    status: "ready",
+    sourceType: "TXT",
+    contentText: "Leasing guidance: offer a private tour window and confirm desired move timing.",
+  },
+  {
+    id: "doc_other_business",
+    businessId: "ws_other",
+    title: "Other business guide",
+    originalFilename: "leasing-other.txt",
+    status: "ready",
+    sourceType: "TXT",
+    contentText: "Other business content must never leak.",
+  },
+  {
+    id: "doc_unpublished",
+    businessId: "ws_s16",
+    title: "Draft leasing guide",
+    originalFilename: "leasing-draft.txt",
+    status: "draft",
+    sourceType: "TXT",
+    contentText: "Draft-only content must not influence the message.",
+  },
+  {
+    id: "doc_deleted",
+    businessId: "ws_s16",
+    title: "Deleted leasing guide",
+    originalFilename: "leasing-deleted.txt",
+    status: "ready",
+    deletedAt: "2026-07-01T00:00:00.000Z",
+    sourceType: "TXT",
+    contentText: "Deleted content must not influence the message.",
+  },
+  {
+    id: "doc_nonmatching",
+    businessId: "ws_s16",
+    title: "Maintenance guide",
+    originalFilename: "maintenance-guide.txt",
+    status: "ready",
+    sourceType: "TXT",
+    contentText: "Maintenance guidance: dispatch a vendor.",
+  },
 ];
 
 test("RelationshipFollowUpDraftAssistanceService prepares one safe draft with canonical context and knowledge evidence", () => {
@@ -281,6 +335,11 @@ test("RelationshipFollowUpDraftAssistanceService prepares one safe draft with ca
   assert.equal(result.draft.channel, "internal");
   assert.match(result.draft.body, /Buyer One/);
   assert.match(result.draft.body, /742 Harbor Lane/);
+  assert.match(result.draft.body, /offer a private tour window/);
+  assert.doesNotMatch(result.draft.body, /Other business content/);
+  assert.doesNotMatch(result.draft.body, /Draft-only content/);
+  assert.doesNotMatch(result.draft.body, /Deleted content/);
+  assert.doesNotMatch(result.draft.body, /dispatch a vendor/);
   assert.equal(result.context.property.source, "subject_linkage");
   assert.equal(result.context.rawPropertyInterest, "beach place");
   assert.equal(result.context.latestMeaningfulActivityAt, null);
@@ -288,8 +347,55 @@ test("RelationshipFollowUpDraftAssistanceService prepares one safe draft with ca
   assert.equal(result.context.channelGuidance.email.permitted, false);
   assert.equal(result.context.channelGuidance.sms.permitted, false);
   assert.deepEqual(result.context.knowledgeSources.map((doc) => doc.id), ["doc_ready"]);
+  assert.equal(result.context.knowledgeSources[0].excerpt, "Leasing guidance: offer a private tour window and confirm desired move timing.");
+  assert.deepEqual(result.draft.metadata.workAssistanceDraft.knowledgeSources.map((doc) => doc.id), ["doc_ready"]);
+  assert.equal(result.draft.metadata.workAssistanceDraft.sendPermissionImplied, false);
   assert.equal(stack.workRuntime.getWorkItems().length, beforeWorkCount);
   assert.equal(stack.communicationRuntime.getMessages().length, 1);
+  assert.equal(stack.communicationRuntime.getMessages().filter((message) => String(message.status) !== "draft").length, 0);
+});
+
+test("RelationshipFollowUpDraftAssistanceService safely falls back when no eligible knowledge content exists", () => {
+  const { stack, work } = buildReadyStack();
+  const result = new RelationshipFollowUpDraftAssistanceService().execute({
+    stack,
+    installationResult: stack.installationResult,
+    businessId: "ws_s16",
+    workId: work.id,
+    actorId: "tm_followup",
+    knowledgeDocuments: [
+      { id: "doc_empty", businessId: "ws_s16", title: "Leasing empty", status: "ready", sourceType: "TXT", contentText: "" },
+      { id: "doc_wrong", businessId: "ws_s16", title: "Maintenance", status: "ready", sourceType: "TXT", contentText: "Maintenance only." },
+    ],
+    nowISO: NOW,
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.context.knowledgeSources, []);
+  assert.doesNotMatch(result.draft.body, /Current approved guidance notes/);
+});
+
+test("RelationshipFollowUpDraftAssistanceService reports preference blocking without implying send readiness", () => {
+  for (const statuses of [
+    { email: "opt_out", sms: "opt_out" },
+    { email: "suppressed", sms: "suppressed" },
+    { email: null, sms: null },
+  ]) {
+    const { stack, work } = buildReadyStackWithPreferenceStatuses(statuses);
+    const result = new RelationshipFollowUpDraftAssistanceService().execute({
+      stack,
+      installationResult: stack.installationResult,
+      businessId: "ws_s16",
+      workId: work.id,
+      actorId: "tm_followup",
+      knowledgeDocuments: knowledge,
+      nowISO: NOW,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.draft.metadata.workAssistanceDraft.sendPermissionImplied, false);
+    assert.equal(result.context.channelGuidance.email.permitted, statuses.email ? false : true);
+    assert.equal(result.context.channelGuidance.sms.permitted, statuses.sms ? false : true);
+  }
 });
 
 test("RelationshipFollowUpDraftAssistanceService rejects ineligible Work", () => {

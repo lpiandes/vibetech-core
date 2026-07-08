@@ -10,6 +10,29 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function normalizeText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function categoryTokens(categoryId) {
+  return String(categoryId ?? "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token && token !== "pm" && token.length > 2);
+}
+
+function inferredCategoryMatches(doc, allowedCategoryIds) {
+  const haystack = `${doc?.title ?? ""} ${doc?.originalFilename ?? ""} ${doc?.contentText ?? ""}`.toLowerCase();
+  return safeArray(allowedCategoryIds).some((categoryId) => categoryTokens(categoryId).some((token) => haystack.includes(token)));
+}
+
+function knowledgeExcerpt(doc, maxChars = 220) {
+  const text = normalizeText(doc?.contentText);
+  if (!text) return "";
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars).replace(/\s+\S*$/, "")}...`;
+}
+
 function relationshipFollowUpMetadata(work) {
   return isPlainObject(work?.metadata?.relationshipFollowUp) ? work.metadata.relationshipFollowUp : null;
 }
@@ -49,15 +72,19 @@ function safeKnowledgeDocuments({ documents = [], businessId, allowedCategoryIds
     .filter((doc) => !doc?.deletedAt)
     .filter((doc) => {
       const categories = safeArray(doc?.categoryIds).map(String);
-      if (!allowed.size || !categories.length) return true;
+      if (!allowed.size) return true;
+      if (!categories.length) return inferredCategoryMatches(doc, [...allowed]);
       return categories.some((id) => allowed.has(id));
     })
+    .filter((doc) => knowledgeExcerpt(doc))
     .map((doc) => ({
       id: String(doc.id),
       title: String(doc.title ?? doc.originalFilename ?? "Knowledge document"),
       sourceType: String(doc.sourceType ?? ""),
       categoryIds: safeArray(doc.categoryIds).map(String),
+      excerpt: knowledgeExcerpt(doc),
     }))
+    .sort((a, b) => String(a.title).localeCompare(String(b.title)) || String(a.id).localeCompare(String(b.id)))
     .slice(0, 3);
 }
 

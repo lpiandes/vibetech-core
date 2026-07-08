@@ -25,7 +25,13 @@ function qualificationLine(qualification) {
 
 function knowledgeLine(knowledge) {
   if (!safeArray(knowledge).length) return "";
-  return `I also checked current approved guidance: ${knowledge.map((doc) => doc.title).join(", ")}. `;
+  const guidance = knowledge
+    .map((doc) => String(doc.excerpt ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(" ");
+  if (!guidance) return "";
+  return `Current approved guidance notes: ${guidance} `;
 }
 
 function draftIdentity(workId) {

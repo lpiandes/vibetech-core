@@ -6,6 +6,8 @@ import { KNOWLEDGE_SOURCE_TYPES, toPublicKnowledgeDocument } from "./BusinessKno
 import { createKnowledgeStorageProvider } from "./createKnowledgeStorageProvider.js";
 
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
+const DEFAULT_OPERATIONAL_CONTENT_BYTES = 32 * 1024;
+const DEFAULT_OPERATIONAL_CONTENT_CHARS = 4000;
 
 const EXTENSION_SOURCE_TYPE = {
   ".pdf": KNOWLEDGE_SOURCE_TYPES.PDF,
@@ -87,6 +89,16 @@ function defaultTitle(titleOverride, fallbackTitle) {
   return custom || fallbackTitle;
 }
 
+function supportsOperationalText(sourceType) {
+  const type = String(sourceType ?? "").toUpperCase();
+  return type === KNOWLEDGE_SOURCE_TYPES.TXT || type === KNOWLEDGE_SOURCE_TYPES.MARKDOWN;
+}
+
+function boundedText(buffer, maxChars = DEFAULT_OPERATIONAL_CONTENT_CHARS) {
+  const text = Buffer.isBuffer(buffer) ? buffer.toString("utf8") : String(buffer ?? "");
+  return text.replace(/\s+/g, " ").trim().slice(0, Number(maxChars ?? DEFAULT_OPERATIONAL_CONTENT_CHARS));
+}
+
 export class BusinessKnowledgeService {
   constructor({ storage = createKnowledgeStorageProvider(), store = platformStore } = {}) {
     this.storage = storage;
@@ -96,6 +108,44 @@ export class BusinessKnowledgeService {
   async listDocuments(businessId) {
     const rows = await this.store.listKnowledgeDocumentsForBusiness(businessId);
     return rows.map((doc) => toPublicKnowledgeDocument(doc));
+  }
+
+  async listOperationalDocuments(
+    businessId,
+    {
+      maxBytes = DEFAULT_OPERATIONAL_CONTENT_BYTES,
+      maxContentChars = DEFAULT_OPERATIONAL_CONTENT_CHARS,
+      storage = this.storage,
+    } = {},
+  ) {
+    const rows = await this.store.listKnowledgeDocumentsForBusiness(businessId);
+    const documents = [];
+    for (const doc of rows) {
+      let contentText = "";
+      if (supportsOperationalText(doc.sourceType) && storage?.getObject) {
+        try {
+          const buffer = await storage.getObject({ businessId, storageKey: doc.storageKey });
+          const bounded = buffer.length > Number(maxBytes) ? buffer.subarray(0, Number(maxBytes)) : buffer;
+          contentText = boundedText(bounded, maxContentChars);
+        } catch {
+          contentText = "";
+        }
+      }
+      documents.push({
+        id: doc.id,
+        businessId: doc.businessId,
+        title: doc.title,
+        originalFilename: doc.originalFilename,
+        sourceType: doc.sourceType,
+        status: doc.status,
+        textExtractionStatus: doc.textExtractionStatus,
+        deletedAt: doc.deletedAt,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+        contentText,
+      });
+    }
+    return documents;
   }
 
   async getDocument(businessId, documentId) {

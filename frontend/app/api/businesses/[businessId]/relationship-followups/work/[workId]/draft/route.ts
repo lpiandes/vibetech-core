@@ -11,7 +11,7 @@ export async function POST(
   try {
     const { businessId, workId } = await params;
     const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_MANAGE);
-    const knowledgeDocuments = await businessKnowledgeService.listDocuments(businessId);
+    const knowledgeDocuments = await businessKnowledgeService.listOperationalDocuments(businessId);
     const result = await ctx.service.prepareRelationshipFollowUpDraft(
       {
         workId,

@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { cockpitColors, radius, spacing, typography } from "@/design/tokens";
 import type { WorkQueueItem } from "./workQueueSemantics";
+import { channelPermissionLabel } from "./relationshipFollowUpDraftSemantics";
 
 type DraftResult = {
   draft?: { subject?: string; body?: string; metadata?: Record<string, any> };
@@ -91,8 +92,8 @@ export default function RelationshipFollowUpDraftDialog({
               </div>
               <div style={{ display: "grid", gap: 6, color: cockpitColors.textSecondary, fontSize: typography.caption.fontSize }}>
                 <div>Recommended channel: {String(guidance?.recommendedChannel ?? "email")}</div>
-                <div>Email: {guidance?.email?.permitted ? "available" : `blocked (${guidance?.email?.reason ?? "not permitted"})`}</div>
-                <div>SMS: {guidance?.sms?.permitted ? "available" : `blocked (${guidance?.sms?.reason ?? "not permitted"})`}</div>
+                <div>Email: {channelPermissionLabel(guidance?.email)}</div>
+                <div>SMS: {channelPermissionLabel(guidance?.sms)}</div>
                 {property ? <div>Property context: {String(property.displayName ?? property.value ?? "Linked property")}</div> : null}
                 {knowledge.length ? <div>Knowledge: {knowledge.map((doc: any) => String(doc.title)).join(", ")}</div> : null}
               </div>

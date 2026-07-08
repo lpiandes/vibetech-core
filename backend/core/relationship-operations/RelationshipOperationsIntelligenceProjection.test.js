@@ -8,6 +8,10 @@ import { WORK_EVENT_TYPES } from "../work/WorkEventTypes.js";
 import { INTERACTION_EVENT_TYPES } from "../interactions/InteractionEventTypes.js";
 import { COMMUNICATION_EVENT_TYPES } from "../communications/CommunicationEventTypes.js";
 import { ensurePartySubjectRelationship } from "../business-graph/partySubjectRelationship.js";
+import { RUNTIME_SNAPSHOT_KINDS } from "../persistence/RuntimeSnapshotKinds.js";
+import { persistAffectedRuntimes } from "../persistence/PersistedMutationCoordinator.js";
+import { InMemoryWorkspacePersistence } from "../persistence/InMemoryWorkspacePersistence.js";
+import { loadRuntimeSnapshotsMap } from "../persistence/createWorkspacePersistence.js";
 import { createEntityRef, ENTITY_TYPES } from "../references/EntityRef.js";
 import { buildRelationshipOperationsIntelligence } from "./RelationshipOperationsIntelligenceProjection.js";
 
@@ -277,4 +281,81 @@ test("relationship operations intelligence ignores weak property strings and doe
     }),
     before,
   );
+});
+
+test("relationship operations intelligence excludes terminal work and inactive property interest", () => {
+  const stack = buildPropertyManagementWorkspaceStack({ workspaceId: BUSINESS_ID, nowISO: NOW });
+  addParty(stack, { partyId: "party_terminal", name: "Terminal Buyer" });
+  addSubject(stack, { subjectId: "subj_terminal", displayName: "Terminal House" });
+  const linked = ensurePartySubjectRelationship({ stack, partyId: "party_terminal", subjectId: "subj_terminal", nowISO: OLD });
+  stack.businessGraphRuntime.applyEvent({
+    id: "evt_end_terminal_interest",
+    timestampISO: NOW,
+    type: BUSINESS_GRAPH_EVENT_TYPES.RELATIONSHIP_ENDED,
+    source: "test",
+    payload: { relationshipId: linked.relationshipId },
+  });
+  addFollowUpWork(stack, { workId: "work_cancelled", partyId: "party_terminal", status: "cancelled" });
+  addFollowUpWork(stack, { workId: "work_failed", partyId: "party_terminal", status: "failed" });
+  addFollowUpWork(stack, { workId: "work_rejected", partyId: "party_terminal", status: "rejected" });
+
+  const view = project(stack);
+
+  assert.equal(view.metrics.find((m) => m.id === "open_follow_up_work").value, 0);
+  assert.equal(view.propertyDemand.length, 0);
+});
+
+test("relationship operations intelligence stays business scoped when projected from business-scoped runtimes", () => {
+  const stackA = buildPropertyManagementWorkspaceStack({ workspaceId: "ws_s17_a", nowISO: NOW });
+  const stackB = buildPropertyManagementWorkspaceStack({ workspaceId: "ws_s17_b", nowISO: NOW });
+  addParty(stackA, { partyId: "party_a", name: "Business A Buyer" });
+  addFollowUpWork(stackA, { workId: "work_a", partyId: "party_a" });
+
+  const viewB = buildRelationshipOperationsIntelligence({
+    businessId: "ws_s17_b",
+    workRuntime: stackB.workRuntime,
+    interactionRuntime: stackB.interactionRuntime,
+    businessGraphRuntime: stackB.businessGraphRuntime,
+    businessSubjectRuntime: stackB.businessSubjectRuntime,
+    communicationRuntime: stackB.communicationRuntime,
+    teamRuntime: stackB.teamRuntime,
+    relationshipTypes: stackB.installationResult.relationshipTypes,
+    nowISO: NOW,
+  });
+
+  assert.equal(viewB.metrics.find((m) => m.id === "open_follow_up_work").value, 0);
+  assert.equal(viewB.oldOpenWork.some((row) => row.workId === "work_a"), false);
+});
+
+test("relationship operations intelligence rederives after restart from canonical snapshots", async () => {
+  const stack = buildPropertyManagementWorkspaceStack({ workspaceId: BUSINESS_ID, nowISO: NOW });
+  addParty(stack, { partyId: "party_restart", name: "Restart Buyer" });
+  addSubject(stack, { subjectId: "subj_restart", displayName: "Restart House" });
+  ensurePartySubjectRelationship({ stack, partyId: "party_restart", subjectId: "subj_restart", nowISO: OLD });
+  addFollowUpWork(stack, { workId: "work_restart", partyId: "party_restart" });
+  addOutcome(stack, { interactionId: "int_restart", partyId: "party_restart", workId: "work_restart", outcomeId: "follow_up_later", followUpAt: "2026-07-15T00:00:00.000Z" });
+  addDraft(stack, { workId: "work_restart", partyId: "party_restart" });
+  const before = project(stack);
+
+  const persistence = new InMemoryWorkspacePersistence();
+  await persistAffectedRuntimes({
+    workspaceId: BUSINESS_ID,
+    stack,
+    integrationPlatform: null,
+    kinds: [
+      RUNTIME_SNAPSHOT_KINDS.BUSINESS_GRAPH,
+      RUNTIME_SNAPSHOT_KINDS.BUSINESS_SUBJECT,
+      RUNTIME_SNAPSHOT_KINDS.WORK,
+      RUNTIME_SNAPSHOT_KINDS.INTERACTION,
+      RUNTIME_SNAPSHOT_KINDS.COMMUNICATION,
+    ],
+    persistence,
+  });
+  const snapshots = await loadRuntimeSnapshotsMap(BUSINESS_ID, persistence);
+  const restarted = buildPropertyManagementWorkspaceStack({ workspaceId: BUSINESS_ID, nowISO: NOW, runtimeSnapshots: snapshots });
+  const after = project(restarted);
+
+  assert.deepEqual(after.metrics, before.metrics);
+  assert.deepEqual(after.propertyDemand, before.propertyDemand);
+  assert.deepEqual(after.futureFollowUps, before.futureFollowUps);
 });

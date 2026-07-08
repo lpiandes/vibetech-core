@@ -39,6 +39,11 @@ export class LocalFilesystemKnowledgeStorage {
     await fs.promises.writeFile(filePath, buffer);
   }
 
+  async getObject({ businessId, storageKey }) {
+    const filePath = objectPath(businessId, storageKey);
+    return fs.promises.readFile(filePath);
+  }
+
   async deleteObject({ businessId, storageKey }) {
     const filePath = objectPath(businessId, storageKey);
     try {
