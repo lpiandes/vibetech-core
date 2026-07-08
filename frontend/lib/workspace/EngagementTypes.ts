@@ -111,4 +111,28 @@ export type EngagementPartyIndexViewModel = {
   generatedAt: string;
   peopleFilters?: PeopleFilterDefinition[];
   parties: EngagementPartyIndexItem[];
+  relationshipFollowUps?: {
+    generatedAt: string;
+    candidates: {
+      candidateId: string;
+      partyId: string;
+      displayName: string;
+      relationshipType: string;
+      relationshipLabel: string;
+      ruleId: string;
+      priority: string;
+      reasonCode: string;
+      reasonLabel: string;
+      evidence?: Record<string, unknown>;
+      latestMeaningfulActivityAt: string | null;
+      existingOpenWorkId: string | null;
+      latestCompletedMatchingWorkId: string | null;
+      recurrenceBlockedUntil: string | null;
+      contactability?: {
+        email?: { permitted?: boolean; reason?: string | null };
+        sms?: { permitted?: boolean; reason?: string | null };
+      };
+      targetWork?: Record<string, unknown>;
+    }[];
+  };
 };

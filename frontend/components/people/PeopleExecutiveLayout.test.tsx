@@ -28,6 +28,29 @@ function renderPeople(index: EngagementPartyIndexViewModel) {
 
 const makeIndex = (): EngagementPartyIndexViewModel => ({
   generatedAt: "2026-07-01T00:00:00.000Z",
+  relationshipFollowUps: {
+    generatedAt: "2026-07-01T00:00:00.000Z",
+    candidates: [
+      {
+        candidateId: "relationship-followup:party_1:PROSPECT:prospect_incomplete_qualification",
+        partyId: "party_1",
+        displayName: "Alex Rivera",
+        relationshipType: "PROSPECT",
+        relationshipLabel: "Prospect",
+        ruleId: "prospect_incomplete_qualification",
+        priority: "medium",
+        reasonCode: "prospect_incomplete_qualification",
+        reasonLabel: "Prospect — qualification incomplete",
+        evidence: { qualification: { decisionTimeline: "unknown" }, importedNotes: [{ interactionId: "int_1" }] },
+        latestMeaningfulActivityAt: null,
+        existingOpenWorkId: null,
+        latestCompletedMatchingWorkId: null,
+        recurrenceBlockedUntil: null,
+        contactability: { email: { permitted: true }, sms: { permitted: false, reason: "communication_not_permitted:opt_out" } },
+        targetWork: { workType: "prospect_follow_up" },
+      },
+    ],
+  },
   parties: [
     {
       partyId: "party_1",
@@ -103,6 +126,10 @@ test("PeopleExecutiveLayout renders executive people surface", () => {
   assert.ok(html.includes("People"));
   assert.ok(html.includes("Contacts and relationships VIBETech is tracking for this business."));
   assert.ok(html.includes("People and relationships"));
+  assert.ok(html.includes("Relationship follow-ups"));
+  assert.ok(html.includes("Prospect — qualification incomplete"));
+  assert.ok(html.includes("Create follow-up work"));
+  assert.ok(html.includes("SMS Blocked"));
   assert.ok(html.includes("Alex Rivera"));
   assert.ok(html.includes("Prospect"));
   assert.ok(html.includes("12 Harbor View"));

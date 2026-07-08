@@ -46,6 +46,8 @@ import { AutomationCenterViewAdapter } from "../../../backend/core/workspace/vie
 import { workspaceCompositionRegistry } from "./WorkspaceCompositionRegistry.js";
 import { EngagementViewAdapter } from "../../../backend/core/engagement/EngagementViewAdapter.js";
 import { buildEngagementPartyIndex } from "../../../backend/core/engagement/EngagementPartyIndexBuilder.js";
+import { buildRelationshipFollowUpProjection } from "../../../backend/core/relationship-followup/RelationshipFollowUpProjection.js";
+import { RelationshipFollowUpWorkConversionService } from "../../../backend/core/relationship-followup/RelationshipFollowUpWorkConversionService.js";
 import { buildDemoStorySteps } from "../../../backend/core/demo/buildDemoStorySteps.js";
 import { projectSegmentMembership } from "../../../backend/core/segments/SegmentProjectionEngine.js";
 import { checkCommunicationPermitted } from "../../../backend/core/communications/preferences/CommunicationPreferenceEnforcer.js";
@@ -692,7 +694,47 @@ export class WorkspaceService {
       businessId: this.workspaceId,
       nowISO: NOW_ISO,
     });
-    return attachProductContext(index, this.connected);
+    const relationshipFollowUps = this.loadRelationshipFollowUps({ includeProductContext: false });
+    return attachProductContext({ ...index, relationshipFollowUps }, this.connected);
+  }
+
+  loadRelationshipFollowUps({ includeProductContext = true }: { includeProductContext?: boolean } = {}) {
+    const stack = this.connected.operatingStack ?? this.connected.ctx;
+    const projection = buildRelationshipFollowUpProjection({
+      businessGraphRuntime: stack?.businessGraphRuntime ?? this.connected.ctx.businessGraphRuntime,
+      requestRuntime: stack?.requestRuntime ?? this.requestRuntime,
+      workRuntime: stack?.workRuntime ?? this.workRuntime,
+      interactionRuntime: stack?.interactionRuntime ?? this.connected.ctx.interactionRuntime,
+      communicationRuntime: stack?.communicationRuntime ?? this.communicationRuntime,
+      businessSubjectRuntime: stack?.businessSubjectRuntime ?? this.connected.ctx.businessSubjectRuntime,
+      communicationPreferenceRuntime: stack?.communicationPreferenceRuntime ?? this.connected.ctx.communicationPreferenceRuntime,
+      relationshipFollowUpRules: this.connected.installationResult?.relationshipFollowUpRules ?? [],
+      relationshipTypes: this.connected.installationResult?.relationshipTypes ?? [],
+      nowISO: NOW_ISO,
+    } as Parameters<typeof buildRelationshipFollowUpProjection>[0]);
+    return includeProductContext ? attachProductContext(projection, this.connected) : projection;
+  }
+
+  async createRelationshipFollowUpWork(candidateId: string, nowISO?: string) {
+    const stack = this.connected.operatingStack;
+    if (!stack) {
+      throw new Error("Relationship follow-up work is not available for this workspace.");
+    }
+    const result = new RelationshipFollowUpWorkConversionService().execute({
+      stack,
+      installationResult: this.connected.installationResult,
+      candidateId,
+      nowISO: nowISO ?? NOW_ISO,
+    });
+    if (result.ok && result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
   }
 
   loadAudienceDashboard() {

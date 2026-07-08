@@ -9,6 +9,7 @@ import StatusBadge from "@/components/product/StatusBadge";
 import EntityAvatar from "@/components/shell/EntityAvatar";
 import ShellMetricStrip from "@/components/shell/ShellMetricStrip";
 import ShellPanel from "@/components/shell/ShellPanel";
+import RelationshipFollowUpQueue from "@/components/people/RelationshipFollowUpQueue";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { useWorkspaceNavigation } from "@/components/workspace/WorkspaceNavigationContext";
 import type { EngagementPartyIndexViewModel } from "@/lib/workspace/EngagementTypes";
@@ -245,6 +246,11 @@ export default function PeopleExecutiveLayout({ index }: { index: EngagementPart
       />
 
       <ShellMetricStrip metrics={metricStrip} />
+
+      <RelationshipFollowUpQueue
+        businessId={businessId}
+        candidates={index.relationshipFollowUps?.candidates ?? []}
+      />
 
       <div
         style={{

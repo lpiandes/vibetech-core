@@ -19,6 +19,30 @@ function validateSectionArray(arr, name, { requiredKeys } = {}) {
   }
 }
 
+function validateRelationshipFollowUpRules(rules) {
+  if (rules === undefined) return;
+  validateSectionArray(rules, "relationshipFollowUpRules", {
+    requiredKeys: ["id", "relationshipTypes", "priority", "reasonCode", "reasonLabel", "targetWork", "recurrenceDays"],
+  });
+  for (const rule of rules) {
+    if (!Array.isArray(rule.relationshipTypes) || rule.relationshipTypes.length === 0) {
+      fail(`relationshipFollowUpRules[${rule.id}].relationshipTypes must be non-empty array.`);
+    }
+    if (!isPlainObject(rule.targetWork)) {
+      fail(`relationshipFollowUpRules[${rule.id}].targetWork must be plain object.`);
+    }
+    if (!rule.targetWork.workType || typeof rule.targetWork.workType !== "string") {
+      fail(`relationshipFollowUpRules[${rule.id}].targetWork.workType required string.`);
+    }
+    if (!Number.isFinite(Number(rule.recurrenceDays))) {
+      fail(`relationshipFollowUpRules[${rule.id}].recurrenceDays required number.`);
+    }
+    if (rule.conditions !== undefined && !isPlainObject(rule.conditions)) {
+      fail(`relationshipFollowUpRules[${rule.id}].conditions must be plain object.`);
+    }
+  }
+}
+
 export function validateIndustryPackage(pkg) {
   if (!pkg || typeof pkg !== "object") fail("package required.");
   if (!Object.isFrozen(pkg)) fail("package must be frozen.");
@@ -39,6 +63,7 @@ export function validateIndustryPackage(pkg) {
   validateSectionArray(pkg.connectionGuidance, "connectionGuidance", { requiredKeys: ["id", "displayName", "requirementLevel"] });
   validateSectionArray(pkg.relationshipTypes, "relationshipTypes", { requiredKeys: ["type", "label"] });
   validateSectionArray(pkg.lifecycleTransitions, "lifecycleTransitions", { requiredKeys: ["from", "to"] });
+  validateRelationshipFollowUpRules(pkg.relationshipFollowUpRules);
   validateSectionArray(pkg.importProfiles, "importProfiles", { requiredKeys: ["profileId", "sourceSystem"] });
 
   if (pkg.onboardingSchema !== undefined && !isPlainObject(pkg.onboardingSchema)) {

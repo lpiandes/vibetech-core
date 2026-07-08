@@ -68,6 +68,85 @@ export const PM_AUTOMATION_CONFIGS = {
   }),
 };
 
+export const PM_RELATIONSHIP_FOLLOW_UP_RULES = [
+  {
+    id: "buyer_immediate_timeline_stale",
+    relationshipTypes: ["BUYER"],
+    priority: "high",
+    reasonCode: "buyer_immediate_timeline_stale",
+    reasonLabel: "Active Buyer — immediate timeline, no recent meaningful activity",
+    staleAfterDays: 7,
+    recurrenceDays: 7,
+    conditions: {
+      decisionTimeline: { equals: "immediate" },
+    },
+    targetWork: {
+      workType: "prospect_follow_up",
+      stageId: "stage_follow_up",
+      queueId: "queue_follow_up",
+      title: "Prospect follow-up",
+      description: "Review relationship context and complete follow-up.",
+    },
+  },
+  {
+    id: "seller_prospect_near_term_stale",
+    relationshipTypes: ["SELLER_PROSPECT"],
+    priority: "high",
+    reasonCode: "seller_prospect_near_term_stale",
+    reasonLabel: "Seller Prospect — near-term timeline, follow-up needed",
+    staleAfterDays: 14,
+    recurrenceDays: 14,
+    conditions: {
+      decisionTimeline: { oneOf: ["immediate", "0_3_months"] },
+    },
+    targetWork: {
+      workType: "prospect_follow_up",
+      stageId: "stage_follow_up",
+      queueId: "queue_follow_up",
+      title: "Prospect follow-up",
+      description: "Review seller prospect context and complete follow-up.",
+    },
+  },
+  {
+    id: "investor_property_interest_stale",
+    relationshipTypes: ["INVESTOR"],
+    priority: "medium",
+    reasonCode: "investor_property_interest_stale",
+    reasonLabel: "Investor — property interest recorded, no recent meaningful activity",
+    staleAfterDays: 21,
+    recurrenceDays: 21,
+    conditions: {
+      requiresPropertyInterest: true,
+    },
+    targetWork: {
+      workType: "prospect_follow_up",
+      stageId: "stage_follow_up",
+      queueId: "queue_follow_up",
+      title: "Prospect follow-up",
+      description: "Review investor property interest and complete follow-up.",
+    },
+  },
+  {
+    id: "prospect_incomplete_qualification",
+    relationshipTypes: ["PROSPECT"],
+    priority: "medium",
+    reasonCode: "prospect_incomplete_qualification",
+    reasonLabel: "Prospect — qualification incomplete",
+    staleAfterDays: 14,
+    recurrenceDays: 14,
+    conditions: {
+      requiresIncompleteQualification: true,
+    },
+    targetWork: {
+      workType: "prospect_follow_up",
+      stageId: "stage_follow_up",
+      queueId: "queue_follow_up",
+      title: "Prospect follow-up",
+      description: "Review prospect qualification gaps and complete follow-up.",
+    },
+  },
+];
+
 export const PROPERTY_MANAGEMENT_PACKAGE = createIndustryPackage({
   id: "pkg_property_management",
   name: "Property Management",
@@ -306,6 +385,7 @@ export const PROPERTY_MANAGEMENT_PACKAGE = createIndustryPackage({
   qualificationFieldSchemas: MCBRIDE_QUALIFICATION_FIELD_SCHEMAS,
   relationshipTypes: MCBRIDE_RELATIONSHIP_TYPES,
   lifecycleTransitions: MCBRIDE_LIFECYCLE_TRANSITIONS,
+  relationshipFollowUpRules: PM_RELATIONSHIP_FOLLOW_UP_RULES,
   inboundRouting: [
     { eventKind: "form_submission", requestType: "PROSPECT_INQUIRY", acknowledgmentIntentId: "initial_prospect_response" },
     { eventKind: "missed_call", requestType: "PROSPECT_INQUIRY", acknowledgmentIntentId: "initial_prospect_response" },
