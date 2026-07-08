@@ -1,0 +1,158 @@
+import { deepFreeze } from "../../../backend/core/workspace/_utils/deepFreeze.js";
+import { PROPERTY_MANAGEMENT_PACKAGE } from "../PropertyManagementPackage.js";
+
+const implementedCapabilityIds = [
+  "crm_import_dry_run",
+  "crm_import_commit",
+  "relationship_classification",
+  "property_listing_import",
+  "person_property_linkage",
+  "relationship_follow_up_queue",
+  "relationship_follow_up_work_assignment",
+  "relationship_follow_up_outcome_resolution",
+  "knowledge_guided_draft_assistance",
+  "relationship_operations_intelligence",
+];
+
+const setupRequirementIds = [
+  "crm_csv",
+  "property_listing_csv",
+  "approved_knowledge_docs",
+  "team_assignment_config",
+  "consent_review",
+  "users_and_permissions",
+  "manual_walkthrough",
+];
+
+const deferredCapabilityIds = [
+  "sms_sending",
+  "email_sending",
+  "newsletters",
+  "referral_campaigns",
+  "appfolio_api_sync",
+  "website_form_automation",
+  "missed_call_automation",
+  "provider_communication_execution",
+];
+
+export const PROPERTY_MANAGEMENT_PACKAGE_MANIFEST = deepFreeze({
+  id: "property_management_real_estate_template_manifest",
+  packageId: PROPERTY_MANAGEMENT_PACKAGE.id,
+  packageName: PROPERTY_MANAGEMENT_PACKAGE.displayName,
+  supportedBusinessTypes: ["property_management", "real_estate_brokerage", "real_estate_investment"],
+  canonicalModel: {
+    partyRuntime: "PartyRuntime",
+    subjectRuntime: "BusinessSubjectRuntime",
+    subjectTypes: ["listing", "property", "unit"],
+    partyToSubjectRelationshipType: "INTERESTED_IN",
+    subjectSourceOfTruth: "BusinessSubject",
+    relationshipSourceOfTruth: "BusinessGraph",
+  },
+  relationshipTypes: PROPERTY_MANAGEMENT_PACKAGE.relationshipTypes.map(({ type, label, category, lifecycleStage }) => ({
+    type,
+    label,
+    category,
+    lifecycleStage,
+  })),
+  lifecycleTransitions: PROPERTY_MANAGEMENT_PACKAGE.lifecycleTransitions.map((transition) => ({
+    from: transition.from,
+    to: transition.to,
+    label: transition.label,
+    requiresExplicitAction: transition.requiresExplicitAction === true,
+  })),
+  qualificationSchemas: PROPERTY_MANAGEMENT_PACKAGE.qualificationFieldSchemas.map((schema) => ({
+    requestType: schema.requestType,
+    fields: schema.fields.map((field) => ({
+      key: field.key,
+      valueType: field.valueType,
+      canonicalSource: field.canonicalSource ?? null,
+      segmentable: field.segmentable === true,
+    })),
+  })),
+  subjectTypes: PROPERTY_MANAGEMENT_PACKAGE.subjectTypes.map((subjectType) => ({
+    id: subjectType.id,
+    displayName: subjectType.displayName,
+    attributeKeys: Object.keys(subjectType.attributeSchema ?? {}),
+  })),
+  importProfiles: PROPERTY_MANAGEMENT_PACKAGE.importProfiles.map((profile) => ({
+    profileId: profile.profileId,
+    label: profile.label,
+    importKind: profile.importKind ?? "crm",
+    sourceSystem: profile.sourceSystem,
+    defaultSubjectType: profile.defaultSubjectType ?? null,
+  })),
+  propertyInterestReconciliation: {
+    qualificationFieldKey: "propertyOfInterest",
+    canonicalLinkage: "BusinessGraph.INTERESTED_IN",
+    trustedIdentityFields: ["externalSubjectId", "listingUrl", "address+unit+city+state+postalCode"],
+    weakOnlyValuesRemainUnresolved: true,
+    unmatchedValuesCreateSubjects: false,
+    requestSubjectRefsPatchedByDefault: false,
+  },
+  workTypes: PROPERTY_MANAGEMENT_PACKAGE.workTypes.map(({ id, displayName }) => ({ id, displayName })),
+  followUpRules: PROPERTY_MANAGEMENT_PACKAGE.relationshipFollowUpRules.map((rule) => ({
+    id: rule.id,
+    relationshipTypes: [...rule.relationshipTypes],
+    priority: rule.priority,
+    reasonCode: rule.reasonCode,
+    targetWorkType: rule.targetWork?.workType ?? null,
+  })),
+  outcomes: PROPERTY_MANAGEMENT_PACKAGE.relationshipFollowUpOutcomes.map((outcome) => ({
+    id: outcome.id,
+    displayName: outcome.displayName,
+    applicableRelationshipTypes: [...outcome.applicableRelationshipTypes],
+    candidateEffect: outcome.candidateEffect,
+  })),
+  draftAssistance: PROPERTY_MANAGEMENT_PACKAGE.relationshipFollowUpDraftAssistance.map((template) => ({
+    id: template.id,
+    relationshipTypes: [...template.relationshipTypes],
+    channel: template.channel,
+    knowledgeCategoryIds: [...template.knowledgeCategoryIds],
+  })),
+  knowledgeCategories: PROPERTY_MANAGEMENT_PACKAGE.knowledgeCategories.map(({ id, name, defaultTags }) => ({
+    id,
+    name,
+    defaultTags: [...(defaultTags ?? [])],
+  })),
+  intelligenceSections: [
+    { id: "follow_up_workload", source: "RelationshipOperationsIntelligenceProjection" },
+    { id: "outcome_distribution", source: "RelationshipOperationsIntelligenceProjection" },
+    { id: "property_demand", source: "RelationshipOperationsIntelligenceProjection" },
+    { id: "future_follow_up_commitments", source: "RelationshipOperationsIntelligenceProjection" },
+    { id: "draft_assistance_usage", source: "RelationshipOperationsIntelligenceProjection" },
+  ],
+  dashboardDefinitions: {
+    presentationSource: "PROPERTY_MANAGEMENT_DASHBOARD_PRESENTATION",
+    operatingHomeSource: "PROPERTY_MANAGEMENT_OPERATING_HOME_PRESENTATION",
+    portfolioSemantics: PROPERTY_MANAGEMENT_PACKAGE.executiveExperience.dashboardPresentation.portfolioSemantics,
+    pulseMetricIds: PROPERTY_MANAGEMENT_PACKAGE.executiveExperience.dashboardPresentation.pulseMetrics.map((metric) => metric.id),
+    peopleFilterIds: PROPERTY_MANAGEMENT_PACKAGE.executiveExperience.dashboardPresentation.peopleFilters.map((filter) => filter.id),
+  },
+  segments: PROPERTY_MANAGEMENT_PACKAGE.segmentTemplates.map(({ id, name, targetEntityType }) => ({
+    id,
+    name,
+    targetEntityType,
+  })),
+  consentAndChannelRequirements: [
+    { id: "consent_review", requirement: "Review imported opt-in, opt-out, and suppressed consent state before outreach." },
+    { id: "draft_only_email", requirement: "Email assistance prepares reviewable drafts only; it does not send." },
+    { id: "sms_deferred", requirement: "SMS workflows remain deferred until provider, consent, and approval controls are implemented." },
+  ],
+  capabilities: {
+    implemented: implementedCapabilityIds,
+    setupRequired: setupRequirementIds,
+    deferred: deferredCapabilityIds,
+  },
+  setupRequirements: setupRequirementIds.map((id) => ({ id })),
+  deferredCapabilities: deferredCapabilityIds.map((id) => ({ id, active: false })),
+  acceptanceChecklist: [
+    "Import CRM contacts through dry run and explicit commit.",
+    "Import property/listing CSV through dry run and explicit commit.",
+    "Confirm interested people appear on property records.",
+    "Confirm linked properties appear on People detail.",
+    "Create, assign, and complete relationship follow-up work.",
+    "Record follow-up outcome memory and observe recurrence-aware reevaluation.",
+    "Prepare a knowledge-guided follow-up draft without sending communication.",
+    "Review relationship operations intelligence for follow-up workload and property demand.",
+  ],
+});
