@@ -5,6 +5,9 @@ import { TeamRuntime } from "../TeamRuntime.js";
 import { TeamViewAdapter } from "./TeamViewAdapter.js";
 import { validateTeamViewModel } from "./TeamViewValidator.js";
 
+import { WorkRuntime } from "../../work/WorkRuntime.js";
+import { WORK_EVENT_TYPES } from "../../work/WorkEventTypes.js";
+
 import { CompanyWorkspaceRuntime } from "../../company/CompanyWorkspaceRuntime.js";
 import { CompanyBriefEngine } from "../../business-intelligence/company-brief/CompanyBriefEngine.js";
 
@@ -57,7 +60,37 @@ test("Workload view: totals include all members and aggregate work", () => {
 });
 
 test("Attention detection: work waiting too long creates an attention item", () => {
-  const { viewModel } = buildContext();
+  const { teamRuntime, companyRuntime, companyBrief } = buildContext();
+  const workRuntime = new WorkRuntime({ nowISO: NOW0 });
+  workRuntime.applyEvent({
+    id: "evt_work_stale_1",
+    timestampISO: NOW0,
+    source: "test",
+    type: WORK_EVENT_TYPES.WORK_ITEM_CREATED,
+    payload: {
+      workItem: {
+        id: "work_stale_1",
+        title: "Stale review",
+        description: "Work waiting for review",
+        workType: "prospect_follow_up",
+        status: "in_progress",
+        priority: "medium",
+        stageId: "stage_execution",
+        queueId: "queue_in_progress",
+        assignedTo: "unassigned",
+        requestedBy: "party_1",
+        source: "test",
+        createdAt: "2026-06-20T00:00:00.000Z",
+        updatedAt: "2026-06-20T00:00:00.000Z",
+        relatedObjects: [],
+        requirements: [],
+        metadata: {},
+      },
+    },
+  });
+
+  const viewAdapter = new TeamViewAdapter({ nowISO: NOW0 });
+  const viewModel = viewAdapter.translate({ teamRuntime, companyRuntime, companyBrief, workRuntime });
 
   const categories = viewModel.attention.items.map((i) => i.category);
   assert.ok(categories.includes("work_waiting_too_long"));

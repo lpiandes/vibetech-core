@@ -34,5 +34,9 @@ export class RequestRuntime {
     validateRequestRuntime(this);
     return this._state;
   }
+
+  exportState() {
+    return this._state;
+  }
 }
 

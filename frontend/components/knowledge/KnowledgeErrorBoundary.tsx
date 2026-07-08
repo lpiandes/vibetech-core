@@ -3,6 +3,9 @@
 import type { ReactNode } from "react";
 import { Component } from "react";
 
+import ExecutiveCard from "@/components/executive/ExecutiveCard";
+import { semanticColors, spacing, typography } from "@/design/tokens";
+
 export default class KnowledgeErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
   constructor(props: { children: ReactNode }) {
     super(props);
@@ -16,11 +19,19 @@ export default class KnowledgeErrorBoundary extends Component<{ children: ReactN
   render() {
     if (this.state.hasError) {
       return (
-        <div className="rounded-xl border border-border bg-card p-6">
-          <div className="text-sm font-semibold">Knowledge</div>
-          <div className="mt-2 text-sm text-muted-foreground">Something went wrong while rendering knowledge. Please refresh.</div>
-          {this.state.message ? <div className="mt-2 text-xs text-muted-foreground">{this.state.message}</div> : null}
-        </div>
+        <ExecutiveCard style={{ padding: spacing.lg }}>
+          <div style={{ color: semanticColors.textPrimary, fontSize: typography.cardTitle.fontSize, lineHeight: typography.cardTitle.lineHeight, fontWeight: typography.cardTitle.fontWeight }}>
+            Knowledge failed to render.
+          </div>
+          <div style={{ marginTop: spacing.sm, color: semanticColors.textSecondary, fontSize: typography.body.fontSize, lineHeight: typography.body.lineHeight, fontWeight: typography.body.fontWeight }}>
+            Something went wrong while rendering executive knowledge. Please refresh.
+          </div>
+          {this.state.message ? (
+            <div style={{ marginTop: spacing.xs, color: semanticColors.textMuted, fontSize: typography.caption.fontSize, lineHeight: typography.caption.lineHeight, fontWeight: typography.caption.fontWeight }}>
+              {this.state.message}
+            </div>
+          ) : null}
+        </ExecutiveCard>
       );
     }
 

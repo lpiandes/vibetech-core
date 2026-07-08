@@ -1,11 +1,20 @@
 const ROUTES_BY_MODULE_ID = {
-  mission_control: "/mission-control",
+  home: "/home",
+  command_center: "/mission-control",
+  attention: "/attention",
+  audiences: "/audiences",
   digital_workforce: "/team",
   work_queue: "/work",
   knowledge: "/knowledge",
   dashboard: "/company",
   analytics: "/analytics",
   settings: "/settings",
+  communications: "/communications",
+  connections: "/connections",
+  setup: "/setup",
+  automations: "/automations",
+  engagement: "/engagement",
+  request: "/request",
 };
 
 function getRouteForModuleId(moduleId) {
@@ -22,7 +31,19 @@ function flattenNavigationItems(navigation) {
   return out;
 }
 
+export function derivePackageNavItems(workspaceViewModel) {
+  const packageNavigation = workspaceViewModel?.packageNavigation;
+  const items = Array.isArray(packageNavigation?.items) ? packageNavigation.items : [];
+  if (items.length === 0) return deriveSidebarNavItems(workspaceViewModel);
+  return Object.freeze(items.map((x) => Object.freeze({ ...x })));
+}
+
 export function deriveSidebarNavItems(workspaceViewModel) {
+  const packageItems = workspaceViewModel?.packageNavigation?.items;
+  if (Array.isArray(packageItems) && packageItems.length > 0) {
+    return derivePackageNavItems(workspaceViewModel);
+  }
+
   const navigation = workspaceViewModel?.navigation;
   const modulesView = workspaceViewModel?.modules;
   const moduleList = Array.isArray(modulesView?.modules) ? modulesView.modules : [];
@@ -96,7 +117,30 @@ export function validateWorkspaceShellViewModel(workspaceViewModel) {
 
 export function getActiveModuleIdFromPathname(pathname) {
   const path = String(pathname ?? "");
-  if (path === "/mission-control") return "mission_control";
+  const businessMatch = path.match(/^\/b\/[^/]+\/([^/]+)/);
+  if (businessMatch) {
+    const segment = businessMatch[1];
+    if (segment === "home") return "home";
+    if (segment === "for-you") return "command_center";
+    if (segment === "work") return "work_queue";
+    if (segment === "people") return "engagement";
+    if (segment === "inbox") return "communications";
+    if (segment === "team") return "digital_workforce";
+    if (segment === "knowledge") return "knowledge";
+    if (segment === "performance") return "analytics";
+    if (segment === "integrations") return "connections";
+    if (segment === "settings") return "setup";
+  }
+
+  if (path === "/home") return "home";
+  if (path === "/mission-control") return "command_center";
+  if (path === "/audiences") return "audiences";
+  if (path === "/attention") return "attention";
+  if (path === "/communications") return "communications";
+  if (path === "/connections") return "connections";
+  if (path === "/setup") return "setup";
+  if (path === "/automations") return "automations";
+  if (path.startsWith("/engagement")) return "engagement";
   // Primary routes
   if (path === "/team") return "digital_workforce";
   if (path === "/work") return "work_queue";

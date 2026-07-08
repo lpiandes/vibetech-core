@@ -42,6 +42,8 @@ const REQUEST_UPDATED_PATCH_ALLOWED_KEYS = new Set([
   "qualificationStatus",
   "attachments",
   "metadata",
+  "inboundAttribution",
+  "subjectRefs",
 ]);
 
 export class RequestEventEngine {

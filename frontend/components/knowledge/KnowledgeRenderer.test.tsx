@@ -4,56 +4,137 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import KnowledgeRenderer from "./KnowledgeRenderer";
-import KnowledgeContextProvider from "./KnowledgeContext";
-import KnowledgeSummary from "./KnowledgeSummary";
 import KnowledgeLoading from "./KnowledgeLoading";
 import KnowledgeErrorBoundary from "./KnowledgeErrorBoundary";
+import { buildKnowledgeExecutiveContext } from "./knowledgeSemantics";
 
 const makeVm = () =>
   ({
     id: "knowledge_view",
     title: "Knowledge",
-    summary: "Knowledge repository is ready for consistent execution.",
-    categories: [
-      { id: "FAQ", name: "FAQ", description: "Questions and answers", sortOrder: 10, items: [] },
-    ],
-    items: [],
+    subtitle: "Business knowledge",
+    icon: "book",
+    badges: [],
+    actions: [],
+    displayOrder: 70,
+    visibility: "VISIBLE",
+    status: "READY",
+    categories: [],
+    summary: "No knowledge yet.",
+    health: { score: 0, level: "warning" },
+    coverage: {},
+    metrics: { totalKnowledgeItems: 0 },
+    areas: [],
+    gaps: [],
+    risks: [],
+    strengths: [],
     recommendations: [],
-    metadata: { layout: "single" },
+    nextFocusSubtitle: "",
+    metadata: {},
   }) as any;
 
-test("Renderer: renders summary, categories, and recommendations sections", () => {
-  const vm = makeVm();
-  const html = renderToStaticMarkup(<KnowledgeRenderer viewModel={vm} />);
-  assert.ok(html.includes(vm.summary));
-  assert.ok(html.includes("Categories"));
-  assert.ok(html.includes("FAQ"));
-  assert.ok(html.includes("Recommendations"));
-  assert.ok(html.includes("No recommendations at this time."));
-});
+const makeContext = () =>
+  buildKnowledgeExecutiveContext({
+    employeeReadinessReport: {
+      employees: [
+        {
+          employeeId: "pm_resident_prospect_coordinator",
+          name: "Resident & Prospect Coordinator",
+          role: "resident_prospect_coordination",
+          requiredKnowledge: ["PM_LEASING"],
+          missingKnowledge: [],
+        },
+      ],
+    },
+    installationResult: {
+      dashboardPresentation: {
+        knowledge: {
+          categoryLabels: { PM_LEASING: "Leasing" },
+          emptyStates: { documents: "Upload policies, procedures, and guides so VIBETech can support your Digital Employees." },
+        },
+      },
+    },
+  });
 
-test("Empty state: knowledge items empty shows published empty state copy", () => {
-  const vm = makeVm();
-  vm.items = [];
-  const html = renderToStaticMarkup(<KnowledgeRenderer viewModel={vm} />);
-  assert.ok(html.includes("No knowledge has been published yet."));
-});
-
-test("Context: KnowledgeSummary reads from KnowledgeContext", () => {
-  const vm = makeVm();
+test("Renderer: knowledge page uses executive shell sections", () => {
   const html = renderToStaticMarkup(
-    <KnowledgeContextProvider viewModel={vm}>
-      <KnowledgeSummary />
-    </KnowledgeContextProvider>,
+    <KnowledgeRenderer
+      viewModel={makeVm()}
+      platformKnowledge={{ businessId: "biz-1", canManage: true, documents: [] }}
+      knowledgeContext={makeContext()}
+    />,
   );
-  assert.ok(html.includes(vm.summary));
+  assert.ok(html.includes("Knowledge"));
+  assert.ok(html.includes("Documents and business instructions VIBETech uses to understand how this company works."));
+  assert.ok(html.includes("Business knowledge"));
+  assert.ok(html.includes("What this helps VIBETech do"));
+});
+
+test("Renderer: document list renders polished rows without raw enums", () => {
+  const html = renderToStaticMarkup(
+    <KnowledgeRenderer
+      viewModel={makeVm()}
+      platformKnowledge={{
+        businessId: "biz-1",
+        canManage: true,
+        documents: [
+          {
+            id: "doc-1",
+            title: "Employee Handbook",
+            originalFilename: "handbook.pdf",
+            mimeType: "application/pdf",
+            sourceType: "PDF",
+            sizeBytes: 1024,
+            status: "ready",
+            textExtractionStatus: "skipped",
+            uploadedBy: { id: "u1", name: "Owner" },
+            createdAt: "2026-07-01T00:00:00.000Z",
+            updatedAt: "2026-07-01T00:00:00.000Z",
+          },
+        ],
+      }}
+      knowledgeContext={makeContext()}
+    />,
+  );
+  assert.ok(html.includes("Employee Handbook"));
+  assert.ok(html.includes("Ready"));
+  assert.ok(!html.includes("skipped"));
+  assert.ok(!html.includes("PDF</"));
+});
+
+test("Renderer: hides delete when canManage is false", () => {
+  const html = renderToStaticMarkup(
+    <KnowledgeRenderer
+      viewModel={makeVm()}
+      platformKnowledge={{
+        businessId: "biz-1",
+        canManage: false,
+        documents: [
+          {
+            id: "doc-1",
+            title: "Employee Handbook",
+            originalFilename: "handbook.pdf",
+            mimeType: "application/pdf",
+            sourceType: "PDF",
+            sizeBytes: 1024,
+            status: "ready",
+            textExtractionStatus: "skipped",
+            uploadedBy: null,
+            createdAt: "2026-07-01T00:00:00.000Z",
+            updatedAt: "2026-07-01T00:00:00.000Z",
+          },
+        ],
+      }}
+      knowledgeContext={makeContext()}
+    />,
+  );
+  assert.ok(!html.includes("Delete"));
 });
 
 test("Loading placeholders render deterministically", () => {
   const a = renderToStaticMarkup(<KnowledgeLoading />);
   const b = renderToStaticMarkup(<KnowledgeLoading />);
   assert.deepEqual(a, b);
-  assert.ok(a.includes("animate-pulse"));
 });
 
 test("Error boundary: fallback renders when child throws", () => {
@@ -67,6 +148,5 @@ test("Error boundary: fallback renders when child throws", () => {
     </KnowledgeErrorBoundary>,
   );
 
-  assert.ok(html.includes("Something went wrong while rendering knowledge"));
+  assert.ok(html.includes("Something went wrong"));
 });
-

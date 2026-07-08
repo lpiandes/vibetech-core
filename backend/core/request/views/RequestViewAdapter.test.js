@@ -258,6 +258,60 @@ test("Attention detection: includes key deterministic categories", () => {
   }
 });
 
+test("RequestViewAdapter excludes crm_import_profile requests from user-facing metrics and queues", () => {
+  const requestRuntime = new RequestRuntime({ nowISO: NOW });
+  const companyRuntime = new CompanyWorkspaceRuntime();
+  const teamRuntime = new TeamRuntime();
+  const workRuntime = new WorkRuntime({ nowISO: NOW });
+
+  requestRuntime.applyEvent(
+    makeEvent({
+      id: "evt_operational_received",
+      timestampISO: NOW,
+      type: REQUEST_EVENT_TYPES.REQUEST_RECEIVED,
+      payload: { request: baseRequestPayload({ id: "req_operational", requestType: "PROSPECT_INQUIRY" }) },
+    }),
+  );
+  requestRuntime.applyEvent(
+    makeEvent({
+      id: "evt_import_profile_received",
+      timestampISO: NOW,
+      type: REQUEST_EVENT_TYPES.REQUEST_RECEIVED,
+      payload: {
+        request: baseRequestPayload({
+          id: "req_import_profile",
+          requestType: "crm_import_profile",
+          source: "crm_import",
+          metadata: { importOnly: true, qualification: { intent: "buy" } },
+        }),
+      },
+    }),
+  );
+  requestRuntime.applyEvent(
+    makeEvent({
+      id: "evt_import_profile_closed",
+      timestampISO: NOW,
+      type: REQUEST_EVENT_TYPES.REQUEST_CLOSED,
+      payload: { requestId: "req_import_profile" },
+    }),
+  );
+
+  assert.equal(requestRuntime.getMetrics().totalRequests, 2);
+  assert.equal(requestRuntime.getMetrics().closedRequests, 1);
+
+  const vm = new RequestViewAdapter({ nowISO: NOW }).translate({
+    requestRuntime,
+    companyRuntime,
+    teamRuntime,
+    workRuntime,
+  });
+
+  assert.equal(vm.metrics.totalRequests, 1);
+  assert.equal(vm.metrics.closedRequests, 0);
+  assert.deepEqual(vm.items.map((item) => item.id), ["req_operational"]);
+  assert.ok(vm.queues.every((queue) => !queue.items.includes("req_import_profile")));
+});
+
 test("Action generation + item nextAction: includes convert_to_work and view_related_work", () => {
   const { requestRuntime, companyRuntime, teamRuntime, workRuntime } = buildRuntimes();
   const vm = new RequestViewAdapter({ nowISO: NOW }).translate({ requestRuntime, companyRuntime, teamRuntime, workRuntime });
@@ -279,4 +333,3 @@ test("Action generation + item nextAction: includes convert_to_work and view_rel
   const overdue = vm.items.find((x) => x.id === "r_overdue");
   assert.equal(overdue.nextAction, ACTION_TYPES.follow_up);
 });
-

@@ -28,3 +28,22 @@ export const semanticColors = {
 
 export type SemanticColorKey = keyof typeof semanticColors;
 
+/** Operating cockpit — dense product surfaces (desktop demo) */
+export const cockpitColors = {
+  background: "#eef1f5",
+  panel: "#ffffff",
+  panelElevated: "#f8fafc",
+  panelBorder: "rgba(15, 23, 42, 0.08)",
+  sidebar: "#0f1419",
+  sidebarBorder: "rgba(255,255,255,0.06)",
+  sidebarText: "rgba(255,255,255,0.92)",
+  sidebarTextMuted: "rgba(255,255,255,0.5)",
+  sidebarActive: "rgba(255,255,255,0.08)",
+  textPrimary: "#0f172a",
+  textSecondary: "#475569",
+  textMuted: "#64748b",
+  accent: "#3b82f6",
+  accentMuted: "rgba(59, 130, 246, 0.12)",
+  warning: "#d97706",
+} as const;
+

@@ -2,10 +2,10 @@ import InfoCard from "@/components/design-system/InfoCard";
 import MetricCard from "@/components/design-system/MetricCard";
 import SectionHeader from "@/components/design-system/SectionHeader";
 import StatusBadge from "@/components/design-system/StatusBadge";
-import { WorkspaceService } from "@/lib/workspace/WorkspaceService";
+import { getWorkspaceService } from "@/lib/workspace/getWorkspaceService";
 
 export default function WorkforceSummary() {
-  const service = new WorkspaceService();
+  const service = getWorkspaceService();
   const view = service.loadDigitalWorkforce();
   const mock = view.workforceSummary;
 

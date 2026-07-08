@@ -4,30 +4,48 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import CommunicationRenderer from "./CommunicationRenderer";
-import CommunicationContextProvider from "./CommunicationContext";
-import CommunicationSummary from "./CommunicationSummary";
+import CommunicationThreadDetailLayout from "./CommunicationThreadDetailLayout";
 import CommunicationLoading from "./CommunicationLoading";
 import CommunicationErrorBoundary from "./CommunicationErrorBoundary";
+import { BusinessScopeProvider } from "@/lib/platform/BusinessScopeContext";
+import { WorkspaceNavigationProvider } from "@/components/workspace/WorkspaceNavigationContext";
+
+function renderInbox(vm: any) {
+  return renderToStaticMarkup(
+    <BusinessScopeProvider
+      value={{
+        businessId: "biz_1",
+        role: "owner",
+        permissions: [],
+        businessName: "Magna Mare",
+      }}
+    >
+      <WorkspaceNavigationProvider>
+        <CommunicationRenderer viewModel={vm} />
+      </WorkspaceNavigationProvider>
+    </BusinessScopeProvider>,
+  );
+}
 
 const makeVm = () =>
   ({
     viewId: "vm_communications",
     companyId: "company_1",
     generatedAt: "2026-07-01T00:00:00.000Z",
-    summary: "2 conversations require attention.",
+    summary: "1 thread requires attention.",
     threads: [
       {
         id: "ct_1",
-        subject: "Customer follow-up",
+        subject: "Re: Your inquiry to Magna Mare",
         channel: "email",
-        status: "failed",
-        participants: [],
-        messageCount: 2,
+        status: "open",
+        participants: [{ id: "party_1", type: "external_system", name: "Alex Rivera" }],
+        messageCount: 1,
         latestMessageAt: "2026-07-01T00:00:00.000Z",
         relatedObjects: [],
-        attentionRequired: true,
-        badges: ["Needs Attention"],
-        actions: [{ id: "a_1", label: "Archive Thread", type: "archive_thread", target: "ct_1", priority: "later", style: "neutral", disabled: false, metadata: {} }],
+        attentionRequired: false,
+        badges: [],
+        actions: [],
         metadata: {},
       },
     ],
@@ -37,136 +55,144 @@ const makeVm = () =>
         threadId: "ct_1",
         direction: "outbound",
         channel: "email",
-        status: "failed",
-        sender: { id: "tm_ceo", type: "human", name: "CEO", metadata: {} },
-        recipients: [{ id: "p_1", type: "external_system", name: "Client", metadata: {} }],
-        subject: "Failed follow-up",
-        bodyPreview: "Body preview",
+        status: "queued",
+        sender: { id: "tm_ceo", type: "human", name: "Coordinator" },
+        recipients: [{ id: "party_1", type: "external_system", name: "Alex Rivera" }],
+        subject: "Re: Your inquiry",
+        bodyPreview: "Thank you for contacting us about your inquiry.",
         createdAt: "2026-07-01T00:00:00.000Z",
         sentAt: null,
         deliveredAt: null,
-        failedAt: "2026-07-01T00:00:00.000Z",
+        failedAt: null,
         relatedObjects: [],
-        attentionRequired: true,
-        badges: ["Failed"],
-        actions: [{ id: "a_2", label: "Retry Message", type: "retry_message", target: "cm_1", priority: "immediate", style: "danger", disabled: false, metadata: {} }],
-        metadata: {},
-      },
-    ],
-    participants: [],
-    queues: [
-      {
-        id: "q_needs_attention",
-        name: "Needs Attention",
-        summary: "1 thread(s) awaiting attention",
-        type: "needs_attention",
-        priority: "immediate",
-        itemCount: 1,
-        items: ["ct_1"],
-        status: "open",
+        attentionRequired: false,
+        badges: ["Queued"],
         actions: [],
         metadata: {},
       },
     ],
-    attention: {
-      summary: "1 thread(s) require attention.",
-      items: [
-        {
-          id: "att_1",
-          category: "failed_messages",
-          priority: "immediate",
-          summary: "Message cm_1 failed.",
-          metadata: {},
-        },
-      ],
-      metadata: {},
-    },
-    recommendedActions: [
-      {
-        id: "act_retry_1",
-        label: "Retry Message",
-        type: "retry_message",
-        target: "cm_1",
-        priority: "immediate",
-        style: "danger",
-        disabled: false,
-        metadata: {},
-      },
-    ],
+    participants: [],
+    queues: [],
+    attention: { summary: "No attention.", items: [], metadata: {} },
+    recommendedActions: [],
     metrics: {
       totalThreads: 1,
       totalMessages: 1,
       draftMessages: 0,
-      queuedMessages: 0,
+      queuedMessages: 1,
       sentMessages: 0,
-      failedMessages: 1,
+      failedMessages: 0,
       deliveredMessages: 0,
       receivedMessages: 0,
-      attentionThreadCount: 1,
-      attentionMessageCount: 1,
+      attentionThreadCount: 0,
+      attentionMessageCount: 0,
     },
     metadata: {},
   }) as any;
 
-test("CommunicationRenderer: renders summary, queues, threads, messages, attention, recommendations", () => {
-  const vm = makeVm();
-  const html = renderToStaticMarkup(<CommunicationRenderer viewModel={vm} />);
-  assert.ok(html.includes("Communications"));
-  assert.ok(html.includes("Communication dashboard"));
-  assert.ok(html.includes(vm.summary));
-  assert.ok(html.includes("Queues"));
-  assert.ok(html.includes("Needs Attention"));
+const makeDetail = () =>
+  ({
+    thread: {
+      id: "ct_1",
+      subject: "Re: Your inquiry to Magna Mare",
+      channel: "email",
+      status: "open",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      latestMessageAt: "2026-07-01T00:00:00.000Z",
+    },
+    messages: [
+      {
+        id: "cm_1",
+        direction: "outbound",
+        channel: "email",
+        status: "queued",
+        subject: "Re: Your inquiry",
+        body: "Thank you for contacting Magna Mare.",
+        createdAt: "2026-07-01T00:00:00.000Z",
+        sentAt: null,
+        deliveredAt: null,
+        failedAt: null,
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+    ],
+    contact: {
+      partyId: "party_1",
+      displayName: "Alex Rivera",
+      email: "alex@example.com",
+    },
+    inquiry: {
+      requestId: "req_1",
+      requestType: "PROSPECT_INQUIRY",
+      text: "Looking for a 2-bedroom near downtown.",
+      receivedAt: "2026-07-01T00:00:00.000Z",
+    },
+    subject: {
+      id: "sub_1",
+      subjectType: "RENTAL_LISTING",
+      displayName: "12 Harbor View",
+      status: "active",
+      address: "12 Harbor View Dr",
+    },
+    interaction: null,
+  }) as const;
+
+test("CommunicationRenderer: renders executive inbox layout", () => {
+  const html = renderInbox(makeVm());
+
+  assert.ok(html.includes("Inbox"));
+  assert.ok(html.includes("Messages and follow-ups VIBETech is tracking for this business."));
   assert.ok(html.includes("Conversations"));
-  assert.ok(html.includes("Customer follow-up"));
-  assert.ok(html.includes("Messages"));
-  assert.ok(html.includes("Failed follow-up"));
-  assert.ok(html.includes("Needs attention"));
-  assert.ok(html.includes(vm.attention.items[0].summary));
-  assert.ok(html.includes("Recommended actions"));
-  assert.ok(html.includes(vm.recommendedActions[0].label));
+  assert.ok(html.includes("Queued"));
+  assert.ok(html.includes("Alex Rivera"));
+  assert.ok(html.includes("Thank you for contacting us about your inquiry."));
+  assert.ok(html.includes("/b/biz_1/inbox/ct_1"));
 });
 
-test("Context: CommunicationSummary reads from CommunicationViewModelContext", () => {
+test("CommunicationRenderer: compact empty state when no conversations", () => {
   const vm = makeVm();
+  vm.threads = [];
+  vm.messages = [];
+  vm.metrics.totalThreads = 0;
+  vm.metrics.queuedMessages = 0;
+
+  const html = renderInbox(vm);
+  assert.ok(html.includes("Messages from connected email, text, and other channels will appear here."));
+});
+
+test("CommunicationThreadDetailLayout: renders contact, inquiry, outbound response, and property interest", () => {
   const html = renderToStaticMarkup(
-    <CommunicationContextProvider viewModel={vm}>
-      <CommunicationSummary />
-    </CommunicationContextProvider>,
+    <CommunicationThreadDetailLayout businessId="biz_1" detail={makeDetail()} />,
   );
-  assert.ok(html.includes("Communication dashboard"));
-  assert.ok(html.includes(vm.summary));
+
+  assert.ok(html.includes("Inbox"));
+  assert.ok(html.includes("Alex Rivera"));
+  assert.ok(html.includes("alex@example.com"));
+  assert.ok(html.includes("Original inquiry"));
+  assert.ok(html.includes("Looking for a 2-bedroom near downtown."));
+  assert.ok(html.includes("Outbound response"));
+  assert.ok(html.includes("Thank you for contacting Magna Mare."));
+  assert.ok(html.includes("Property interest"));
+  assert.ok(html.includes("12 Harbor View"));
+  assert.ok(html.includes("Queued"));
 });
 
 test("Loading placeholders render deterministically", () => {
   const a = renderToStaticMarkup(<CommunicationLoading />);
   const b = renderToStaticMarkup(<CommunicationLoading />);
   assert.deepEqual(a, b);
-  assert.ok(a.includes("animate-pulse"));
-});
-
-test("Empty attention: attention renderer shows executive empty copy", () => {
-  const vm = makeVm();
-  vm.attention.items = [];
-  const html = renderToStaticMarkup(<CommunicationRenderer viewModel={vm} />);
-  assert.ok(html.includes("No communications require immediate attention."));
-});
-
-test("Empty queues: queue renderer shows configured message", () => {
-  const vm = makeVm();
-  vm.queues = [];
-  const html = renderToStaticMarkup(<CommunicationRenderer viewModel={vm} />);
-  assert.ok(html.includes("No communication queues have been configured yet."));
 });
 
 test("Error boundary: fallback renders when child throws", () => {
   const Thrower = () => {
     throw new Error("render fail");
   };
+
   const html = renderToStaticMarkup(
     <CommunicationErrorBoundary>
       <Thrower />
     </CommunicationErrorBoundary>,
   );
-  assert.ok(html.includes("Something went wrong while rendering communication."));
-});
 
+  assert.ok(html.includes("Something went wrong while rendering executive communications."));
+});

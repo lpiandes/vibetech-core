@@ -1,4 +1,4 @@
-import { mapRequestConvertedToPlatformEventInput } from "./RequestPlatformEventMapper.js";
+import { mapRequestConvertedToPlatformEventInput, mapRequestReceivedToPlatformEventInput } from "./RequestPlatformEventMapper.js";
 
 function fail(message) {
   throw new Error(`RequestPlatformEventValidator: ${message}`);
@@ -11,6 +11,42 @@ function isPlainObject(v) {
 function requireString(value, name) {
   if (!value || typeof value !== "string") fail(`${name} required string.`);
   return value;
+}
+
+export function validateRequestReceivedRequestToPlatformEvent({ request, receivedAtISO, sourceEventId } = {}) {
+  const eventInput = mapRequestReceivedToPlatformEventInput({
+    request,
+    receivedAtISO,
+    sourceEventId,
+  });
+  return validateRequestReceivedPlatformEventInput(eventInput);
+}
+
+export function validateRequestReceivedPlatformEventInput(input) {
+  if (!input || typeof input !== "object") fail("input required object.");
+  requireString(input.eventId, "eventId");
+  requireString(input.eventType, "eventType");
+  requireString(input.aggregateType, "aggregateType");
+  requireString(input.aggregateId, "aggregateId");
+  requireString(input.occurredAt, "occurredAt");
+  requireString(input.correlationId, "correlationId");
+  requireString(input.causationId, "causationId");
+  if (!isPlainObject(input.payload)) fail("payload required plain object.");
+  if (!isPlainObject(input.metadata)) fail("metadata required plain object.");
+
+  const p = input.payload;
+  requireString(p.requestId, "payload.requestId");
+  requireString(p.title, "payload.title");
+  requireString(p.description, "payload.description");
+  requireString(p.requestType, "payload.requestType");
+  requireString(p.priority, "payload.priority");
+  requireString(p.channel, "payload.channel");
+  requireString(p.source, "payload.source");
+  requireString(p.requester, "payload.requester");
+  requireString(p.receivedAt, "payload.receivedAt");
+  if (!isPlainObject(p.metadata)) fail("payload.metadata must be plain object.");
+
+  return { ok: true };
 }
 
 export function validateRequestConvertedPlatformEventInput(input) {

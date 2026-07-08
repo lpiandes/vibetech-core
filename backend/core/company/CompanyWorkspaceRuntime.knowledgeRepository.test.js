@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CompanyWorkspaceRuntime } from "./CompanyWorkspaceRuntime.js";
+import { CompanyWorkspaceRuntime, createABCPropertyGroupSeed } from "./CompanyWorkspaceRuntime.js";
 import { createCompanyEvent } from "./events/CompanyEvent.js";
 import { COMPANY_EVENT_TYPES } from "./events/CompanyEventTypes.js";
 
 test("Runtime: seeded knowledge repository preserves legacy getKnowledge() contract", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = new CompanyWorkspaceRuntime({ seed: createABCPropertyGroupSeed });
   const k = runtime.getKnowledge();
 
   assert.equal(k.faqs.length, 2);
@@ -28,7 +28,7 @@ test("Runtime: seeded knowledge repository preserves legacy getKnowledge() contr
 });
 
 test("Runtime: event integration updates repository via KNOWLEDGE_CREATED + KNOWLEDGE_REVISION_CREATED + KNOWLEDGE_ARCHIVED", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = new CompanyWorkspaceRuntime({ seed: createABCPropertyGroupSeed });
 
   const createdAtISO = "2026-06-25T00:00:00.000Z";
   const updatedAt1ISO = "2026-06-26T00:00:00.000Z";

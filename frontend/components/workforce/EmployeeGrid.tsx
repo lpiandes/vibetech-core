@@ -1,9 +1,9 @@
 import EmployeeCard from "./EmployeeCard";
 import type { EmployeeCardModel } from "./EmployeeCard";
-import { WorkspaceService } from "@/lib/workspace/WorkspaceService";
+import { getWorkspaceService } from "@/lib/workspace/getWorkspaceService";
 
 export default function EmployeeGrid() {
-  const service = new WorkspaceService();
+  const service = getWorkspaceService();
   const view = service.loadDigitalWorkforce();
 
   const employees: EmployeeCardModel[] = (view.employees ?? []).map((e: any) => ({

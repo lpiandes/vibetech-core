@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CompanyWorkspaceRuntime } from "../../company/CompanyWorkspaceRuntime.js";
+import { createSeededCompanyRuntime } from "../../company/fixtures/createSeededCompanyRuntime.js";
 import { CompanyBriefEngine } from "./CompanyBriefEngine.js";
 import { validateCompanyBrief } from "./CompanyBriefValidator.js";
 
@@ -12,7 +12,7 @@ function deepClone(obj) {
 }
 
 test("Company brief generation: deterministic and immutable", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const engine = new CompanyBriefEngine({ nowISO: NOW0 });
 
   const briefA = engine.generate({ companyRuntime: runtime });
@@ -25,7 +25,7 @@ test("Company brief generation: deterministic and immutable", () => {
 });
 
 test("Summary generation: matches deterministic executive summary", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const engine = new CompanyBriefEngine({ nowISO: NOW0 });
 
   const brief = engine.generate({ companyRuntime: runtime });
@@ -51,7 +51,7 @@ test("Summary generation: matches deterministic executive summary", () => {
 });
 
 test("Section generation: required sections exist and have items/actions", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const engine = new CompanyBriefEngine({ nowISO: NOW0 });
 
   const brief = engine.generate({ companyRuntime: runtime });
@@ -76,7 +76,7 @@ test("Section generation: required sections exist and have items/actions", () =>
 });
 
 test("Priority ordering: review queue is first", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const engine = new CompanyBriefEngine({ nowISO: NOW0 });
 
   const brief = engine.generate({ companyRuntime: runtime });
@@ -91,7 +91,7 @@ test("Priority ordering: review queue is first", () => {
 });
 
 test("Risk detection: disconnected systems + approval backlog present", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const engine = new CompanyBriefEngine({ nowISO: NOW0 });
 
   const brief = engine.generate({ companyRuntime: runtime });
@@ -103,7 +103,7 @@ test("Risk detection: disconnected systems + approval backlog present", () => {
 });
 
 test("Opportunity detection: connect missing systems and communication readiness are derived", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const engine = new CompanyBriefEngine({ nowISO: NOW0 });
 
   const brief = engine.generate({ companyRuntime: runtime });
@@ -126,7 +126,7 @@ test("Opportunity detection: connect missing systems and communication readiness
 });
 
 test("Action generation: review work + reconnect disconnected systems + view workforce", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const engine = new CompanyBriefEngine({ nowISO: NOW0 });
 
   const brief = engine.generate({ companyRuntime: runtime });
@@ -142,7 +142,7 @@ test("Action generation: review work + reconnect disconnected systems + view wor
 });
 
 test("Validation: validateCompanyBrief does not throw", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const engine = new CompanyBriefEngine({ nowISO: NOW0 });
   const brief = engine.generate({ companyRuntime: runtime });
   assert.deepEqual(validateCompanyBrief(brief), { ok: true });

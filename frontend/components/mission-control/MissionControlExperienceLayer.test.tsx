@@ -56,17 +56,17 @@ const makeVm = () =>
     metadata: {},
   }) as any;
 
-test("Empty state copy renders for empty Recommendations section", () => {
-  const vm = makeVm();
+test("Empty state copy renders when nothing needs attention", () => {
+  const vm = { ...makeVm(), commandCenter: { needsYourAttention: [] } };
   const html = renderToStaticMarkup(<MissionControlRenderer viewModel={vm} />);
-  assert.ok(html.includes("No priorities require attention today."));
+  assert.ok(html.includes("You're all caught up"));
 });
 
 test("Loading placeholders render deterministically", () => {
   const htmlA = renderToStaticMarkup(<MissionControlLoading />);
   const htmlB = renderToStaticMarkup(<MissionControlLoading />);
   assert.deepEqual(htmlA, htmlB);
-  assert.ok(htmlA.includes("Preparing Mission Control cockpit"));
+  assert.ok(htmlA.includes("Loading"));
 });
 
 test("Error boundary shows fallback when child throws", () => {

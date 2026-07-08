@@ -29,7 +29,7 @@ export class WorkspaceViewAdapter {
       recommendations: buildRecommendationsView({ workspaceConfig }),
       queues: buildQueueView({ workspaceConfig, runtime: this.runtime }),
       digitalWorkforce: buildDigitalWorkforceView({ workspaceConfig, runtime: this.runtime }),
-      knowledge: buildKnowledgeView({ workspaceConfig }),
+      knowledge: buildKnowledgeView({ workspaceConfig, runtime: this.runtime }),
       analytics: buildAnalyticsView({ workspaceConfig }),
       companyHealth: buildCompanyHealthView({ workspaceConfig }),
       morningBrief: buildMorningBriefView({ workspaceConfig }),
@@ -64,7 +64,7 @@ export class WorkspaceViewAdapter {
   }
 
   getKnowledgeView(workspaceConfig) {
-    return buildKnowledgeView({ workspaceConfig });
+    return buildKnowledgeView({ workspaceConfig, runtime: this.runtime });
   }
 }
 

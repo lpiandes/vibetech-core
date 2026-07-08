@@ -4,12 +4,6 @@ import { createTeamMember } from "./TeamMember.js";
 import { createTeamMetrics } from "./TeamMetrics.js";
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 
-function clampInt(n, min, max) {
-  const v = typeof n === "number" && Number.isFinite(n) ? n : 0;
-  const c = Math.max(min, Math.min(max, Math.round(v)));
-  return c;
-}
-
 function buildSeedDepartments() {
   const deps = [
     { id: "dept_executive", name: "Executive", metadata: { seeded: true } },
@@ -38,7 +32,6 @@ function buildSeedRoles() {
 }
 
 function buildSeedMembers() {
-  // These are deterministic defaults. They are industry-agnostic.
   const members = [
     {
       id: "tm_ceo",
@@ -135,6 +128,25 @@ function buildSeedMembers() {
   return members.map((m) => createTeamMember(m));
 }
 
+/** Industry workspaces start with no generic seed members — only installed package team. */
+export function buildEmptyTeamSeed() {
+  return deepFreeze({
+    members: [],
+    departments: buildSeedDepartments(),
+    roles: buildSeedRoles(),
+    status: "available",
+    metrics: createTeamMetrics({
+      assignedWork: 0,
+      completedWork: 0,
+      pendingWork: 0,
+      capacity: 0,
+      utilization: 0,
+      availability: 100,
+    }),
+    recommendations: [],
+  });
+}
+
 export function buildDefaultTeamSeed() {
   const departments = buildSeedDepartments();
   const roles = buildSeedRoles();
@@ -164,4 +176,3 @@ export function buildDefaultTeamSeed() {
     recommendations: [],
   });
 }
-

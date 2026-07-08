@@ -10,13 +10,16 @@ This sprint builds the first Team-style rendering framework for work (it is not 
   - orchestration entry point for rendering a `WorkViewModel`
 - `WorkContext`
   - provides `WorkViewModel` to the component tree
-- `WorkLayout`
-  - layout-only composition (single/two column)
-- Renderers (`WorkSummary`, `QueueRenderer`, `StageRenderer`, `WorkItemRenderer`, `AssignmentRenderer`, `AttentionRenderer`, `RecommendationRenderer`)
-  - render each section dynamically from the `WorkViewModel` fields
+- `WorkExecutiveLayout`
+  - executive-only workforce delivery cockpit that answers: “Can my business deliver?”
+  - uses only `frontend/components/executive/*` primitives + design tokens
+- `WorkLoading`
+  - route-level executive loading UX (deterministic skeletons)
+- `WorkErrorBoundary`
+  - presentation-safe error handling using executive primitives
 
 ## Relationship to `WorkViewModel`
-All renderers are view-only: they read from `WorkViewModel` and never recompute business intelligence.
+The executive view is view-only: it reads from `WorkViewModel` and never recomputes business intelligence.
 
 ## Future Integrations
 - Future workflow engine / approvals / automation: consume `WorkViewModel.recommendedActions` later.

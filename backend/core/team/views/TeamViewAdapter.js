@@ -32,6 +32,34 @@ function isOfflineCritical(member) {
   return String(member?.status ?? "") === "offline";
 }
 
+function isDigitalMember(member) {
+  const t = String(member?.memberType ?? "").toLowerCase();
+  return t === "digital" || t === "digital_employee";
+}
+
+function isHumanMember(member) {
+  return String(member?.memberType ?? "").toLowerCase() === "human";
+}
+
+function openWorkItems(workRuntime) {
+  return safeArray(workRuntime?.getWorkItems?.()).filter(
+    (w) => !["completed", "cancelled", "closed"].includes(String(w?.status ?? "").toLowerCase()),
+  );
+}
+
+function overdueWorkItems(workRuntime, nowISO) {
+  const now = new Date(String(nowISO ?? "2026-07-01T00:00:00.000Z")).getTime();
+  return openWorkItems(workRuntime).filter((w) => {
+    if (!w?.dueAt) return false;
+    const due = new Date(String(w.dueAt)).getTime();
+    return Number.isFinite(due) && due < now;
+  });
+}
+
+function workForMember(workRuntime, memberId) {
+  return openWorkItems(workRuntime).filter((w) => String(w?.assignedTo ?? "") === String(memberId));
+}
+
 function priorityFromMember(member) {
   const pending = Number(member?.workload?.pendingWork ?? 0);
   const utilization = Number(member?.metrics?.utilization ?? 0);
@@ -62,9 +90,11 @@ export class TeamViewAdapter {
   translate({
     teamRuntime,
     companyRuntime,
+    workRuntime,
     missionControl,
     companyBrief,
     companyHealth,
+    digitalEmployees,
     nowISO,
   } = {}) {
     const effectiveNowISO = nowISO ?? this.nowISO ?? "2026-07-01T00:00:00.000Z";
@@ -83,14 +113,18 @@ export class TeamViewAdapter {
     const departments = safeArray(teamRuntime.getDepartments?.());
     const roles = safeArray(teamRuntime.getRoles?.());
     const metrics = teamRuntime.getMetrics?.();
+    const openWork = openWorkItems(workRuntime);
+    const overdueWork = overdueWorkItems(workRuntime, effectiveNowISO);
+    const humanMembers = members.filter(isHumanMember);
+    const digitalMembers = members.filter(isDigitalMember);
+    const packageDigitalEmployees = safeArray(digitalEmployees);
 
     // Index lookups.
     const deptById = new Map(departments.map((d) => [String(d.id), d]));
     const roleById = new Map(roles.map((r) => [String(r.id), r]));
 
-    // Workload from team metrics.
-    const totalAssignedWork = Number(metrics?.assignedWork ?? 0);
-    const totalPendingWork = Number(metrics?.pendingWork ?? 0);
+    const totalAssignedWork = openWork.filter((w) => String(w.assignedTo ?? "") !== "unassigned" && w.assignedTo).length;
+    const totalPendingWork = openWork.length;
     const totalCompletedWork = Number(metrics?.completedWork ?? 0);
 
     const workload = createTeamWorkloadView({
@@ -103,17 +137,23 @@ export class TeamViewAdapter {
       totalAssignedWork,
       totalPendingWork,
       totalCompletedWork,
-      utilization: Number(metrics?.utilization ?? 0),
-      metadata: deepFreeze({ derivedFrom: { teamRuntime: true } }),
+      utilization: 0,
+      metadata: deepFreeze({
+        derivedFrom: { teamRuntime: true, workRuntime: Boolean(workRuntime) },
+        openWorkCount: totalPendingWork,
+        overdueWorkCount: overdueWork.length,
+        humanCount: humanMembers.length,
+        digitalWorkforceCount: packageDigitalEmployees.length || digitalMembers.length,
+      }),
     });
 
-    // Work queue waiting too long detection.
-    const workQueueItems = safeArray(companyRuntime.getWorkQueue?.());
     const now = new Date(effectiveNowISO).getTime();
-    const oldCutoffMs = 72 * 60 * 60 * 1000; // 3 days
-    const workWaitingTooLong = workQueueItems
-      .filter((w) => String(w.status ?? "") === "Needs Review" && w.createdTimeISO)
-      .filter((w) => now - new Date(String(w.createdTimeISO)).getTime() >= oldCutoffMs);
+    const oldCutoffMs = 72 * 60 * 60 * 1000;
+    const workWaitingTooLong = openWork.filter((w) => {
+      const created = w.createdAt ?? w.updatedAt;
+      if (!created) return false;
+      return now - new Date(String(created)).getTime() >= oldCutoffMs;
+    });
 
     const pendingApprovalsDecision = safeArray(companyBrief?.decisionsWaiting).find((d) => String(d?.id ?? "") === "decision_approve_communications");
     const pendingApprovalsCount = Number(pendingApprovalsDecision?.metadata?.pendingApprovalCommunications ?? 0);
@@ -121,18 +161,24 @@ export class TeamViewAdapter {
     const failedCommunicationRisks = safeArray(companyBrief?.risks).filter((r) => String(r?.id ?? "") === "risk_communication_failures");
 
     // Departments views.
-    const deptViews = departments.map((d) => {
+    const deptViews = departments
+      .map((d) => {
       const deptMembers = members.filter((m) => String(m.departmentId) === String(d.id));
       const memberCount = deptMembers.length;
       const activeCount = deptMembers.filter((m) => ["available", "busy"].includes(String(m.status))).length;
       const blockedCount = deptMembers.filter((m) => isBlocked(m)).length;
-      const assigned = deptMembers.reduce((sum, m) => sum + Number(m?.metrics?.assignedWork ?? 0), 0);
-      const pending = deptMembers.reduce((sum, m) => sum + Number(m?.metrics?.pendingWork ?? 0), 0);
+      const assigned = deptMembers.reduce((sum, m) => sum + workForMember(workRuntime, m.id).length, 0);
+      const pending = assigned;
       const completed = deptMembers.reduce((sum, m) => sum + Number(m?.metrics?.completedWork ?? 0), 0);
-      const capacity = deptMembers.reduce((sum, m) => sum + Number(m?.metrics?.capacity ?? m?.capacity ?? 0), 0);
-      const utilization = capacity > 0 ? (assigned / capacity) * 100 : 0;
 
-      const status = activeCount === 0 ? "critical" : blockedCount > 0 ? "needs_attention" : "healthy";
+      const status =
+        memberCount === 0
+          ? "inactive"
+          : activeCount === 0
+            ? "critical"
+            : blockedCount > 0
+              ? "needs_attention"
+              : "healthy";
 
       const actions = [];
       if (activeCount === 0) {
@@ -150,12 +196,13 @@ export class TeamViewAdapter {
         memberCount,
         activeCount,
         blockedCount,
-        workload: deepFreeze({ assignedWork: assigned, pendingWork: pending, completedWork: completed, utilization }),
+        workload: deepFreeze({ assignedWork: assigned, pendingWork: pending, completedWork: completed }),
         members: deepFreeze(deptMembers.map((m) => String(m.id))),
         actions,
         metadata: deepFreeze({ deptId: d.id }),
       });
-    });
+    })
+      .filter((dv) => Number(dv.memberCount ?? 0) > 0);
 
     // Member views + attention.
     const attentionItems = [];
@@ -200,8 +247,13 @@ export class TeamViewAdapter {
         );
       }
 
-      // Current work mapping is deterministic but best-effort.
-      const currentWork = [];
+      const currentWork = workForMember(workRuntime, m.id).map((w) =>
+        deepFreeze({
+          id: String(w.id),
+          title: String(w.title ?? w.workType ?? "Work"),
+          status: String(w.status ?? "open"),
+        }),
+      );
 
       const memberBadges = [];
       if (blocked) memberBadges.push("Blocked");
@@ -459,15 +511,14 @@ export class TeamViewAdapter {
     const recommendations = Array.from(uniqueActionsById.values()).sort((a, b) => String(a.priority).localeCompare(String(b.priority)) || String(a.id).localeCompare(String(b.id)));
 
     const summary = (() => {
-      const overloadCount = attentionItems.filter((x) => x.category === "overloaded_members").length;
-      const blockedCount = attentionItems.filter((x) => x.category === "blocked_members").length;
-      const waitingCount = attentionItems.filter((x) => x.category === "work_waiting_too_long").length;
-      if (overloadCount + blockedCount + waitingCount === 0) return "Team workload looks stable. No immediate attention required.";
+      const digitalCount = packageDigitalEmployees.length || digitalMembers.length;
       const parts = [];
-      if (blockedCount > 0) parts.push(`${blockedCount} blocked member(s)`);
-      if (overloadCount > 0) parts.push(`${overloadCount} overloaded member(s)`);
-      if (waitingCount > 0) parts.push(`${waitingCount} work waiting too long`);
-      return `Team attention required: ${parts.join(", ")}.`;
+      if (humanMembers.length > 0) parts.push(`${humanMembers.length} team member${humanMembers.length === 1 ? "" : "s"}`);
+      if (digitalCount > 0) parts.push(`${digitalCount} digital role${digitalCount === 1 ? "" : "s"} active`);
+      if (totalPendingWork > 0) parts.push(`${totalPendingWork} open work item${totalPendingWork === 1 ? "" : "s"}`);
+      if (overdueWork.length > 0) parts.push(`${overdueWork.length} overdue`);
+      if (attentionItems.length > 0) parts.push(`${attentionItems.length} need${attentionItems.length === 1 ? "s" : ""} attention`);
+      return parts.length ? parts.join(" · ") : "Team coverage is in place. Work will appear here as assignments are made.";
     })();
 
     const vm = createTeamViewModel({
@@ -480,7 +531,12 @@ export class TeamViewAdapter {
       workload,
       attention,
       recommendations,
-      metadata: deepFreeze({ derivedFrom: { teamRuntime: true } }),
+      metadata: deepFreeze({
+        derivedFrom: { teamRuntime: true, workRuntime: Boolean(workRuntime) },
+        openWorkCount: totalPendingWork,
+        overdueWorkCount: overdueWork.length,
+        digitalWorkforceCount: packageDigitalEmployees.length || digitalMembers.length,
+      }),
     });
 
     validateTeamViewModel(vm);

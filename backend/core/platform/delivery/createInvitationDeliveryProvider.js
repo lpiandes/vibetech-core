@@ -1,0 +1,67 @@
+import { NoopInvitationDeliveryProvider } from "./providers/NoopInvitationDeliveryProvider.js";
+import { ResendInvitationDeliveryProvider } from "./providers/ResendInvitationDeliveryProvider.js";
+import { SmtpInvitationDeliveryProvider } from "./providers/SmtpInvitationDeliveryProvider.js";
+import { InvitationDeliveryProvider } from "./InvitationDeliveryProvider.js";
+
+/** @type {import("../InvitationDeliveryProvider.js").InvitationDeliveryProvider | null} */
+let testProviderOverride = null;
+
+export function setInvitationDeliveryProviderForTests(provider) {
+  testProviderOverride = provider;
+}
+
+export function resetInvitationDeliveryProviderForTests() {
+  testProviderOverride = null;
+}
+
+function resolveFromAddress() {
+  return (
+    process.env.INVITATION_EMAIL_FROM ??
+    process.env.RESEND_FROM ??
+    process.env.SMTP_FROM ??
+    "VIBETech <invitations@vibetech.app>"
+  );
+}
+
+class UnconfiguredProductionDeliveryProvider extends InvitationDeliveryProvider {
+  async send() {
+    return {
+      sent: false,
+      reason: "email_not_configured",
+      message: "Invitation email delivery is not configured.",
+    };
+  }
+}
+
+export function createInvitationDeliveryProvider() {
+  if (testProviderOverride) return testProviderOverride;
+
+  const explicit = String(process.env.INVITATION_DELIVERY_PROVIDER ?? "").trim().toLowerCase();
+  if (explicit === "noop") return new NoopInvitationDeliveryProvider();
+
+  const resendApiKey = String(process.env.RESEND_API_KEY ?? "").trim();
+  if (resendApiKey) {
+    return new ResendInvitationDeliveryProvider({
+      apiKey: resendApiKey,
+      from: resolveFromAddress(),
+    });
+  }
+
+  const smtpHost = String(process.env.SMTP_HOST ?? "").trim();
+  if (smtpHost) {
+    return new SmtpInvitationDeliveryProvider({
+      host: smtpHost,
+      port: Number(process.env.SMTP_PORT ?? 587),
+      secure: String(process.env.SMTP_SECURE ?? "").toLowerCase() === "true",
+      user: String(process.env.SMTP_USER ?? "").trim() || undefined,
+      pass: String(process.env.SMTP_PASS ?? "").trim() || undefined,
+      from: resolveFromAddress(),
+    });
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return new UnconfiguredProductionDeliveryProvider();
+  }
+
+  return new NoopInvitationDeliveryProvider();
+}

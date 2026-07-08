@@ -11,7 +11,8 @@ Render an immutable `CapabilityViewModel` into the executive-facing Capabilities
 
 ## Components
 - `CapabilityRenderer`: page shell that wires the context.
-- `CapabilityLayout`: deterministic composition of summary, categories, providers, gaps, risks, and recommendations.
+- `CapabilitiesExecutiveLayout`: deterministic executive cockpit that answers:
+  "Can this business execute its strategy?"
 - `CapabilityLoading`: loading placeholders.
 - `CapabilityErrorBoundary`: render failure fallback.
 

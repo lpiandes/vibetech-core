@@ -27,6 +27,56 @@ function deterministicEventId({ requestId, convertedAtISO }) {
   return `evt_request_converted_${String(requestId)}_${String(convertedAtISO)}`;
 }
 
+function deterministicReceivedEventId({ requestId, receivedAtISO }) {
+  return `evt_request_received_${String(requestId)}_${String(receivedAtISO)}`;
+}
+
+/**
+ * Maps a received request into a canonical PlatformEvent input for REQUEST_RECEIVED.
+ */
+export function mapRequestReceivedToPlatformEventInput({ request, receivedAtISO, sourceEventId } = {}) {
+  if (!request) fail("request required.");
+
+  const timestampISO = receivedAtISO ?? request.receivedAt ?? request.createdAt ?? null;
+  if (!timestampISO || typeof timestampISO !== "string") fail("receivedAtISO (timestampISO) required.");
+
+  const requestId = requireString(String(request.id), "requestId");
+
+  const payload = {
+    requestId,
+    title: String(request.title),
+    description: String(request.description),
+    requestType: String(request.requestType),
+    priority: String(request.priority),
+    channel: String(request.channel),
+    source: String(request.source),
+    requester: String(request.requester),
+    receivedAt: String(timestampISO),
+    metadata: request.metadata && typeof request.metadata === "object" ? request.metadata : {},
+  };
+
+  requirePlainObject(payload.metadata, "payload.metadata");
+
+  const correlationId = String(requestId);
+  const causationId = String(sourceEventId ?? `request_received_${requestId}_${timestampISO}`);
+
+  return {
+    eventId: deterministicReceivedEventId({ requestId, receivedAtISO: timestampISO }),
+    eventType: "REQUEST_RECEIVED",
+    aggregateType: PLATFORM_EVENT_AGGREGATE_TYPE,
+    aggregateId: String(requestId),
+    occurredAt: String(timestampISO),
+    correlationId,
+    causationId,
+    payload,
+    metadata: {
+      derivedFrom: {
+        requestId: String(requestId),
+      },
+    },
+  };
+}
+
 /**
  * Maps a RequestRuntime REQUEST_CONVERTED event + current RequestRuntime state into
  * a canonical PlatformEvent *input* for PlatformEventPublisher.

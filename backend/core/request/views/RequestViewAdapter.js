@@ -59,6 +59,42 @@ function stableSortByReceivedAtDescThenId(requests) {
   return copy;
 }
 
+function isOperationalRequest(req) {
+  if (String(req?.requestType) === "crm_import_profile") return false;
+  if (req?.metadata?.importOnly === true) return false;
+  return true;
+}
+
+function computeOperationalRequestMetrics(requests, nowISO) {
+  const operational = safeArray(requests).filter(isOperationalRequest);
+  const totalRequests = operational.length;
+  const newRequests = operational.filter((r) => String(r.status) === "received").length;
+  const qualifiedRequests = operational.filter((r) => String(r.status) === "qualified").length;
+  const convertedRequests = operational.filter((r) => String(r.status) === "converted").length;
+  const closedRequests = operational.filter((r) => String(r.status) === "closed").length;
+  const nowMs = new Date(String(nowISO)).getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const averageAgeDays =
+    !totalRequests || !Number.isFinite(nowMs)
+      ? 0
+      : Math.round(
+          (operational.reduce((acc, r) => {
+            const receivedMs = new Date(String(r.receivedAt)).getTime();
+            return acc + (Number.isFinite(receivedMs) ? (nowMs - receivedMs) / dayMs : 0);
+          }, 0) /
+            totalRequests) *
+            100,
+        ) / 100;
+  return {
+    totalRequests,
+    newRequests,
+    qualifiedRequests,
+    convertedRequests,
+    closedRequests,
+    averageAgeDays,
+  };
+}
+
 function computeQueueTypeByRequest(req) {
   const status = String(req.status);
   if (status === "received") return "new_requests";
@@ -126,7 +162,8 @@ export class RequestViewAdapter {
     const effectiveNowISO = nowISO ?? this.nowISO ?? requestRuntime.nowISO ?? "2026-07-01T00:00:00.000Z";
     const companyId = String(companyRuntime.getCompany?.()?.companyName ?? "company");
 
-    const requests = stableSortByReceivedAtDescThenId(safeArray(requestRuntime.getRequests?.()));
+    const allRequests = safeArray(requestRuntime.getRequests?.());
+    const requests = stableSortByReceivedAtDescThenId(allRequests.filter(isOperationalRequest));
 
     // Work index for deterministic enrichment.
     const workItems = safeArray(workRuntime.getWorkItems?.());
@@ -441,6 +478,20 @@ export class RequestViewAdapter {
     const itemViews = requests.map((r) => {
       const rid = String(r.id);
       const age = daysHoursAge(String(r.receivedAt), String(effectiveNowISO));
+      // View-level deterministic enrichment: Requests may not carry assignment fields
+      // once connectedness hardening removes request-history re-conversion.
+      const derivedWorkId = `work_${rid}`;
+      const derivedWorkItem = workById.get(derivedWorkId) ?? null;
+      const effectiveAssignedWorkId = r.assignedWorkId
+        ? String(r.assignedWorkId)
+        : derivedWorkItem
+          ? String(derivedWorkId)
+          : null;
+      const effectiveAssignedTeamMemberId = r.assignedTeamMemberId
+        ? String(r.assignedTeamMemberId)
+        : derivedWorkItem && String(derivedWorkItem.assignedTo) !== "unassigned"
+          ? String(derivedWorkItem.assignedTo)
+          : null;
 
       const dueAt = r.dueAt === undefined ? null : r.dueAt;
       const dueAtISO = dueAt === null ? null : toISO(String(dueAt));
@@ -456,9 +507,10 @@ export class RequestViewAdapter {
       if (String(r.status) === "closed") badges.push("Closed");
       if (String(r.priority) === "high") badges.push("High Priority");
       if (dueAtDisplay && isFinalStatus(r.status) === false && new Date(String(dueAtDisplay)).getTime() < nowMsForOverdue) badges.push("Overdue");
-      if (!Boolean(r.assignedTeamMemberId ?? r.assignedWorkId) && ["received", "reviewing", "qualified"].includes(String(r.status))) badges.push("Missing assignment");
+      if (!Boolean(effectiveAssignedTeamMemberId ?? effectiveAssignedWorkId) && ["received", "reviewing", "qualified"].includes(String(r.status)))
+        badges.push("Missing assignment");
 
-      const assignedWorkId = r.assignedWorkId ? String(r.assignedWorkId) : null;
+      const assignedWorkId = effectiveAssignedWorkId;
       const w = assignedWorkId ? workById.get(assignedWorkId) : null;
       const wStatus = w ? String(w.status) : null;
       if (wStatus === "blocked") badges.push("Related work blocked");
@@ -470,10 +522,10 @@ export class RequestViewAdapter {
         nextAction = ACTION_TYPES.view_related_work;
       } else if (dueAtDisplay && new Date(String(dueAtDisplay)).getTime() < nowMsForOverdue && !isFinalStatus(r.status)) {
         nextAction = ACTION_TYPES.follow_up;
-      } else if (String(r.status) === "qualified" && !Boolean(r.assignedTeamMemberId ?? r.assignedWorkId)) {
+      } else if (String(r.status) === "qualified" && !Boolean(effectiveAssignedTeamMemberId ?? effectiveAssignedWorkId)) {
         // Qualified-but-not-ready should lead to conversion.
         nextAction = ACTION_TYPES.convert_to_work;
-      } else if (!Boolean(r.assignedTeamMemberId ?? r.assignedWorkId) && ["received", "reviewing", "qualified"].includes(String(r.status))) {
+      } else if (!Boolean(effectiveAssignedTeamMemberId ?? effectiveAssignedWorkId) && ["received", "reviewing", "qualified"].includes(String(r.status))) {
         nextAction = ACTION_TYPES.assign_request;
       } else if (String(r.status) === "received") {
         nextAction = ACTION_TYPES.review_request;
@@ -524,8 +576,8 @@ export class RequestViewAdapter {
         age,
         dueAt: dueAtDisplay,
         qualificationStatus: r.qualificationStatus === undefined ? null : r.qualificationStatus,
-        assignedWorkId: r.assignedWorkId === undefined ? null : r.assignedWorkId,
-        assignedTeamMemberId: r.assignedTeamMemberId === undefined ? null : r.assignedTeamMemberId,
+        assignedWorkId: effectiveAssignedWorkId === undefined ? null : effectiveAssignedWorkId,
+        assignedTeamMemberId: effectiveAssignedTeamMemberId === undefined ? null : effectiveAssignedTeamMemberId,
         attentionRequired: hasAttention,
         nextAction,
         badges,
@@ -565,7 +617,7 @@ export class RequestViewAdapter {
       attention: attentionView,
       recommendedActions,
       metrics: deepFreeze({
-        ...(requestRuntime.getMetrics?.() ?? {}),
+        ...computeOperationalRequestMetrics(allRequests, effectiveNowISO),
         attentionCount: attentionItems.length,
       }),
       metadata: deepFreeze({ derivedFrom: { requestRuntime: true, workRuntime: true, teamRuntime: true, companyRuntime: true }, version: REQUEST_VIEW_VERSION }),
@@ -575,4 +627,3 @@ export class RequestViewAdapter {
     return vm;
   }
 }
-

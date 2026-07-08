@@ -1,4 +1,5 @@
 import { DEFAULT_WORK_ITEM_STATUS, DEFAULT_WORK_STAGE_ID, DEFAULT_WORK_QUEUE_ID } from "./RequestToWorkDefaults.js";
+import { createEntityRef, ENTITY_TYPES } from "../../references/EntityRef.js";
 
 function fail(message) {
   throw new Error(`RequestToWorkMapper: ${message}`);
@@ -53,7 +54,7 @@ export function mapRequestConvertedToWorkItemInput(payload = {}) {
     dueAt: null,
     completedAt: null,
     blockedReason: null,
-    relatedObjects: deepFreeze([String(requestId)]),
+    relatedObjects: deepFreeze([createEntityRef({ entityType: ENTITY_TYPES.REQUEST, entityId: requestId })]),
     requirements: [],
     metadata: payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {},
     // channel is not directly used by WorkItem contract; included via metadata for traceability.

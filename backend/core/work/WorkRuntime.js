@@ -46,5 +46,9 @@ export class WorkRuntime {
     validateWorkRuntime(this);
     return this._state;
   }
+
+  exportState() {
+    return this._state;
+  }
 }
 

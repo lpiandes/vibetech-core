@@ -1,0 +1,113 @@
+{
+  "businesses": [
+    {
+      "id": "biz_juu49ze6",
+      "workspaceId": "ws_acme_property_co_53diw",
+      "name": "Acme Property Co",
+      "kind": "NORMAL",
+      "industryPackageId": "pkg_property_management",
+      "industryPackageVersion": 1,
+      "demoConfigurationId": null,
+      "packageConfiguration": {
+        "companyName": "Acme Property Co",
+        "portfolioType": null,
+        "operatingRegions": [],
+        "businessHours": null,
+        "humanTeamMembers": [],
+        "digitalEmployeesEnabled": [
+          "pm_resident_prospect_coordinator",
+          "pm_maintenance_coordinator",
+          "pm_owner_success_coordinator"
+        ],
+        "approvalRoles": [],
+        "communicationChannels": {
+          "email": {
+            "status": "not_connected"
+          },
+          "sms": {
+            "status": "not_connected"
+          },
+          "voice": {
+            "status": "not_connected"
+          }
+        },
+        "automationAssignedTo": {
+          "prospect": "unassigned",
+          "showing": "unassigned",
+          "maintenance": "unassigned",
+          "owner": "unassigned",
+          "vendor": "unassigned"
+        }
+      },
+      "createdAt": "2026-07-06T20:32:37.429Z",
+      "updatedAt": "2026-07-06T20:32:37.429Z"
+    },
+    {
+      "id": "biz_horizon_properties_demo",
+      "workspaceId": "ws_horizon_properties",
+      "name": "Horizon Properties",
+      "kind": "DEMO",
+      "industryPackageId": "pkg_property_management",
+      "industryPackageVersion": 1,
+      "demoConfigurationId": "horizon_properties",
+      "packageConfiguration": {
+        "companyName": "Horizon Properties",
+        "workspaceId": "ws_horizon_properties",
+        "portfolioType": "residential_multifamily",
+        "operatingRegions": [
+          "Hartford, CT"
+        ],
+        "businessHours": "Mon-Fri 9am-6pm ET",
+        "humanTeamMembers": [
+          {
+            "id": "tm_leasing",
+            "name": "Alex Morgan",
+            "role": "Leasing Manager"
+          },
+          {
+            "id": "tm_maintenance",
+            "name": "Jordan Lee",
+            "role": "Maintenance Lead"
+          },
+          {
+            "id": "tm_owner_relations",
+            "name": "Sam Patel",
+            "role": "Owner Relations"
+          }
+        ],
+        "digitalEmployeesEnabled": [
+          "pm_resident_prospect_coordinator",
+          "pm_maintenance_coordinator",
+          "pm_owner_success_coordinator"
+        ],
+        "approvalRoles": [
+          {
+            "id": "role_property_manager",
+            "displayName": "Property Manager"
+          }
+        ],
+        "communicationChannels": {
+          "email": {
+            "status": "connected",
+            "senderIdentity": "leasing@horizonproperties.example"
+          },
+          "sms": {
+            "status": "not_connected"
+          },
+          "voice": {
+            "status": "not_connected"
+          }
+        },
+        "automationAssignedTo": {
+          "prospect": "tm_leasing",
+          "showing": "tm_leasing",
+          "maintenance": "tm_maintenance",
+          "owner": "tm_owner_relations",
+          "vendor": "tm_maintenance"
+        }
+      },
+      "createdAt": "2026-07-06T20:36:58.250Z",
+      "updatedAt": "2026-07-06T20:36:58.250Z"
+    }
+  ]
+}

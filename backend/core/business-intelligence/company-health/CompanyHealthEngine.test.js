@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CompanyWorkspaceRuntime } from "../../company/CompanyWorkspaceRuntime.js";
+import { CompanyWorkspaceRuntime, createABCPropertyGroupSeed } from "../../company/CompanyWorkspaceRuntime.js";
 import { CompanyBriefEngine } from "../company-brief/CompanyBriefEngine.js";
 import { CompanyHealthEngine } from "./CompanyHealthEngine.js";
 import { validateCompanyHealth } from "./CompanyHealthValidator.js";
@@ -69,8 +69,12 @@ test("Score/status/trend determinism: trend matches score bands", () => {
   }
 });
 
+function seededRuntime() {
+  return new CompanyWorkspaceRuntime({ seed: createABCPropertyGroupSeed });
+}
+
 test("Strength detection: knowledge and employee activity produce strengths", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = seededRuntime();
   const healthEngine = new CompanyHealthEngine({ nowISO: NOW0 });
   const briefEngine = new CompanyBriefEngine({ nowISO: NOW0 });
   const brief = briefEngine.generate({ companyRuntime: runtime });
@@ -83,7 +87,7 @@ test("Strength detection: knowledge and employee activity produce strengths", ()
 });
 
 test("Risk detection: disconnected systems and approval backlog present", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = seededRuntime();
   const healthEngine = new CompanyHealthEngine({ nowISO: NOW0 });
   const briefEngine = new CompanyBriefEngine({ nowISO: NOW0 });
   const brief = briefEngine.generate({ companyRuntime: runtime });
@@ -96,7 +100,7 @@ test("Risk detection: disconnected systems and approval backlog present", () => 
 });
 
 test("Recommendation generation: includes reconnect email and review pending work", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = seededRuntime();
   const healthEngine = new CompanyHealthEngine({ nowISO: NOW0 });
   const briefEngine = new CompanyBriefEngine({ nowISO: NOW0 });
   const brief = briefEngine.generate({ companyRuntime: runtime });
@@ -109,7 +113,7 @@ test("Recommendation generation: includes reconnect email and review pending wor
 });
 
 test("Executive summary: includes deterministic knowledge + connected-system messaging", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = seededRuntime();
   const healthEngine = new CompanyHealthEngine({ nowISO: NOW0 });
   const briefEngine = new CompanyBriefEngine({ nowISO: NOW0 });
   const brief = briefEngine.generate({ companyRuntime: runtime });

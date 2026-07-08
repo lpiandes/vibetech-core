@@ -1,16 +1,32 @@
-import type { ReactNode } from "react";
-
+import { Suspense } from "react";
 import KnowledgeContextProvider from "./KnowledgeContext";
-import KnowledgeLayout from "./KnowledgeLayout";
+import KnowledgeExecutiveLayout from "./KnowledgeExecutiveLayout";
 import type { KnowledgeViewModel } from "./KnowledgeContext";
+import type { KnowledgeExecutiveContext, PlatformKnowledgeDocument } from "./knowledgeSemantics";
+import { ProductLoading } from "@/components/product";
 
-export default function KnowledgeRenderer({ viewModel }: { viewModel: KnowledgeViewModel }) {
+export type { PlatformKnowledgeDocument } from "./knowledgeSemantics";
+
+export type PlatformKnowledgeData = {
+  documents: PlatformKnowledgeDocument[];
+  businessId: string;
+  canManage: boolean;
+};
+
+export default function KnowledgeRenderer({
+  viewModel,
+  platformKnowledge,
+  knowledgeContext,
+}: {
+  viewModel: KnowledgeViewModel;
+  platformKnowledge?: PlatformKnowledgeData;
+  knowledgeContext?: KnowledgeExecutiveContext;
+}) {
   return (
     <KnowledgeContextProvider viewModel={viewModel}>
-      <div className="min-h-screen w-full bg-background text-foreground">
-        <KnowledgeLayout />
-      </div>
+      <Suspense fallback={<ProductLoading />}>
+        <KnowledgeExecutiveLayout platformKnowledge={platformKnowledge} knowledgeContext={knowledgeContext} />
+      </Suspense>
     </KnowledgeContextProvider>
   );
 }
-

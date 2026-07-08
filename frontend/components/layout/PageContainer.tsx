@@ -1,21 +1,21 @@
 import type { ReactNode } from "react";
 
-import { spacing, semanticColors } from "@/design/tokens";
+import { spacing, cockpitColors } from "@/design/tokens";
 
 export default function PageContainer({ children }: { children: ReactNode }) {
   return (
     <section
-      className="mx-auto w-full max-w-6xl"
+      className="mx-auto w-full"
       style={{
-        paddingLeft: spacing["2xl"],
-        paddingRight: spacing["2xl"],
-        paddingTop: spacing["3xl"],
-        paddingBottom: spacing["3xl"],
-        backgroundColor: semanticColors.background,
+        maxWidth: 1440,
+        paddingLeft: spacing.lg,
+        paddingRight: spacing.lg,
+        paddingTop: spacing.lg,
+        paddingBottom: spacing.xl,
+        backgroundColor: cockpitColors.background,
       }}
     >
       {children}
     </section>
   );
 }
-

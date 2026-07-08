@@ -1,4 +1,5 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
+import { toEntityRefs } from "../references/EntityRefResolver.js";
 
 import { isValidRequestSource } from "./RequestSource.js";
 import { isValidRequestType } from "./RequestType.js";
@@ -61,6 +62,8 @@ export function createRequest({
   qualificationStatus,
   attachments,
   metadata,
+  inboundAttribution = null,
+  subjectRefs = [],
 } = {}) {
   requireString(id, "id");
   requireString(title, "title");
@@ -93,6 +96,11 @@ export function createRequest({
     qualificationStatus: requireStringOrNull(qualificationStatus, "qualificationStatus"),
     attachments: deepFreeze(requireAttachments(attachments)),
     metadata: metadata && typeof metadata === "object" ? deepFreeze(metadata) : deepFreeze({}),
+    inboundAttribution:
+      inboundAttribution && typeof inboundAttribution === "object"
+        ? deepFreeze({ ...inboundAttribution })
+        : null,
+    subjectRefs: toEntityRefs(subjectRefs),
   };
 
   return deepFreeze(request);

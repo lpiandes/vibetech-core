@@ -4,10 +4,10 @@ import LiveActivityFeed, {
   type LiveActivityEntry,
 } from "./LiveActivityFeed";
 import QuickActions from "./QuickActions";
-import { WorkspaceService } from "@/lib/workspace/WorkspaceService";
+import { getWorkspaceService } from "@/lib/workspace/getWorkspaceService";
 
 export default function Dashboard() {
-  const service = new WorkspaceService();
+  const service = getWorkspaceService();
   const dashboardView = service.loadDashboard();
   const digitalWorkforceView = service.loadDigitalWorkforce();
   const timelineEntries: LiveActivityEntry[] = dashboardView.activityFeed ?? [];

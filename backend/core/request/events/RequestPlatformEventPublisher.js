@@ -1,7 +1,9 @@
 import { REQUEST_OS_PUBLISHER_ID } from "./RequestPlatformEventDefaults.js";
 
 import { mapRequestConvertedToPlatformEventInput } from "./RequestPlatformEventMapper.js";
+import { mapRequestReceivedToPlatformEventInput } from "./RequestPlatformEventMapper.js";
 import { validateRequestConvertedRequestToPlatformEvent } from "./RequestPlatformEventValidator.js";
+import { validateRequestReceivedRequestToPlatformEvent } from "./RequestPlatformEventValidator.js";
 import { createPlatformEventPublicationResult } from "../../events/publishing/PlatformEventPublicationResult.js";
 import { PUBLISHATION_STATUSES } from "../../events/publishing/PlatformEventPublisherDefaults.js";
 
@@ -19,6 +21,48 @@ export class RequestPlatformEventPublisher {
   constructor({ platformEventPublisher } = {}) {
     if (!platformEventPublisher) fail("platformEventPublisher required.");
     this.platformEventPublisher = platformEventPublisher;
+  }
+
+  publishRequestReceived({ request, receivedAtISO, sourceEventId, metadata } = {}) {
+    const nowISO = String(this.platformEventPublisher.nowISO ?? "2026-07-01T00:00:00.000Z");
+    const publisherId = String(this.platformEventPublisher.publisherId ?? REQUEST_OS_PUBLISHER_ID);
+    const requestId = request?.id ? String(request.id) : "evt_unknown";
+    const eventType = "REQUEST_RECEIVED";
+    const publicationId = `${publisherId}:${requestId}:${nowISO}`;
+
+    try {
+      validateRequestReceivedRequestToPlatformEvent({
+        request,
+        receivedAtISO,
+        sourceEventId,
+      });
+
+      const eventInput = mapRequestReceivedToPlatformEventInput({
+        request,
+        receivedAtISO,
+        sourceEventId,
+      });
+
+      return this.platformEventPublisher.publish({
+        eventInput,
+        metadata: metadata ?? { derivedFrom: { requestOS: true, publisherId: REQUEST_OS_PUBLISHER_ID } },
+      });
+    } catch (err) {
+      const errors = [String(err?.message ?? err)];
+      return createPlatformEventPublicationResult({
+        publicationId,
+        eventId: requestId,
+        eventType,
+        publisherId,
+        publishedAt: nowISO,
+        stored: false,
+        dispatched: false,
+        dispatchReport: null,
+        status: PUBLISHATION_STATUSES.FAILED_VALIDATION,
+        errors,
+        metadata: metadata ?? {},
+      });
+    }
   }
 
   publishRequestConverted({ requestRuntime, requestConvertedEvent, convertedRequest, convertedAtISO, metadata } = {}) {

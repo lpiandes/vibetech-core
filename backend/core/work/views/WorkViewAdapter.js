@@ -10,6 +10,11 @@ import { createWorkAssignmentView } from "./WorkAssignmentView.js";
 import { createWorkAttentionView } from "./WorkAttentionView.js";
 import { createWorkActionView } from "./WorkActionView.js";
 import { validateWorkViewModel } from "./WorkViewValidator.js";
+import { formatBusinessDateWithOverdue } from "../../presentation/formatBusinessDate.js";
+import {
+  resolveBusinessWorkLinks,
+  resolveWorkPartyId,
+} from "./resolveWorkRowLinks.js";
 
 function safeArray(v) {
   return Array.isArray(v) ? v : [];
@@ -80,9 +85,95 @@ function computeStageStatus({ items }) {
 }
 
 function safeGetAssignee(teamRuntime, assigneeId) {
+  const id = String(assigneeId ?? "");
+  if (!id || id === "unassigned" || id === "tm_system") return { name: null, type: null };
   const members = safeArray(teamRuntime?.getMembers?.());
-  const m = members.find((x) => String(x.id) === String(assigneeId));
-  return m ? { name: String(m.name), type: String(m.memberType) } : { name: "Unknown", type: "unknown" };
+  const m = members.find((x) => String(x.id) === id);
+  if (!m || m.metadata?.seeded) return { name: null, type: null };
+  return { name: String(m.name), type: String(m.memberType) };
+}
+
+function workTypeLabel(presentation, workType) {
+  const key = String(workType ?? "");
+  return (
+    presentation?.workTypeLabels?.[key] ??
+    presentation?.requestTypeLabels?.[key] ??
+    key.replace(/_/g, " ")
+  );
+}
+
+function workStatusLabel(presentation, status) {
+  const key = String(status ?? "");
+  return presentation?.workStatusLabels?.[key] ?? key.replace(/_/g, " ");
+}
+
+function resolveWorkDisplay({
+  w,
+  teamRuntime,
+  businessGraphRuntime,
+  businessSubjectRuntime,
+  requestRuntime,
+  presentation,
+  nowISO,
+  businessId,
+}) {
+  let requestId = w.requestId ? String(w.requestId) : null;
+  if (!requestId) {
+    for (const ref of safeArray(w.relatedObjects)) {
+      if (String(ref?.entityType) === "Request") {
+        requestId = String(ref.entityId);
+        break;
+      }
+    }
+  }
+
+  const request = requestId ? requestRuntime?.getRequest?.(requestId) : null;
+  const partyId = resolveWorkPartyId({ workItem: w, requestRuntime, businessGraphRuntime });
+
+  let subjectId = request?.subjectRefs?.[0]?.entityId ?? null;
+  if (!subjectId) {
+    for (const ref of safeArray(w.relatedObjects)) {
+      if (String(ref?.entityType) === "Subject") {
+        subjectId = ref.entityId;
+        break;
+      }
+    }
+  }
+  const partyName = partyId ? businessGraphRuntime?.getParty?.(String(partyId))?.displayName ?? null : null;
+  const subjectName = subjectId ? businessSubjectRuntime?.getSubject?.(String(subjectId))?.displayName ?? null : null;
+  const assignee = safeGetAssignee(teamRuntime, w.assignedTo);
+  const dueMeta = w.dueAt ? formatBusinessDateWithOverdue(w.dueAt, { nowISO }) : { label: null, overdue: false };
+
+  let nextStep = "In progress";
+  if (w.status === "blocked") nextStep = "Blocked — needs resolution";
+  else if (w.status === "waiting" || w.status === "pending") nextStep = "Waiting for confirmation";
+  else if (String(w.workType) === "showing_coordination") nextStep = "Confirm tour time";
+
+  const links = resolveBusinessWorkLinks({
+    partyId,
+    subjectId,
+    businessId,
+    businessGraphRuntime,
+    workItem: w,
+    requestRuntime,
+  });
+
+  return deepFreeze({
+    partyId: links.partyId,
+    partyName,
+    subjectId: subjectId ? String(subjectId) : null,
+    subjectName,
+    assigneeName: assignee.name,
+    workTypeLabel: workTypeLabel(presentation, w.workType),
+    statusLabel: workStatusLabel(presentation, w.status),
+    dueLabel: dueMeta.label,
+    overdue: Boolean(dueMeta.overdue),
+    nextStep,
+    personHref: links.personHref,
+    propertyHref: links.propertyHref,
+    rowHref: links.rowHref,
+    engagementHref: null,
+  });
 }
 
 export class WorkViewAdapter {
@@ -98,7 +189,12 @@ export class WorkViewAdapter {
     companyHealth,
     missionControl,
     teamViewModel,
+    businessGraphRuntime,
+    businessSubjectRuntime,
+    requestRuntime,
+    presentation,
     nowISO,
+    businessId,
   } = {}) {
     const effectiveNowISO = nowISO ?? this.nowISO ?? "2026-07-01T00:00:00.000Z";
     if (!workRuntime) throw new Error("WorkViewAdapter.translate requires workRuntime.");
@@ -494,6 +590,16 @@ export class WorkViewAdapter {
 
       const member = safeGetAssignee(teamRuntime, assignedTo);
       const owner = String(w.requestedBy ?? "");
+      const display = resolveWorkDisplay({
+        w,
+        teamRuntime,
+        businessGraphRuntime,
+        businessSubjectRuntime,
+        requestRuntime,
+        presentation: presentation ?? {},
+        nowISO: effectiveNowISO,
+        businessId,
+      });
 
       const itemActions = [];
       if (nextAction) {
@@ -538,7 +644,11 @@ export class WorkViewAdapter {
         relatedObjects: Array.isArray(w.relatedObjects) ? w.relatedObjects : [],
         badges,
         actions: itemActions,
-        metadata: deepFreeze({ derivedFrom: { workItemId: wid }, version: WORK_VIEW_VERSION }),
+        metadata: deepFreeze({
+          derivedFrom: { workItemId: wid },
+          version: WORK_VIEW_VERSION,
+          display,
+        }),
       });
     });
 

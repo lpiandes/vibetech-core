@@ -1,8 +1,8 @@
-# Communication Rendering Framework (Epic 13 Sprint 3)
+# Communications OS Executive Cockpit (Redesign)
 
 ## Responsibilities
-- Render an immutable `CommunicationViewModel` deterministically.
-- Present executive-ready communications: summary, queues, threads, messages, attention, and recommended actions.
+- Render an immutable `CommunicationViewModel` deterministically into an executive cockpit.
+- Present executive-ready relationship health signals only (no inbox UI): hero health, conversation health, customer attention, risks, recommendations, and calm executive empty states.
 
 ## Rendering Rules
 - React is presentation only.

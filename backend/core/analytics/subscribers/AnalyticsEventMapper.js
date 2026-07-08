@@ -121,6 +121,21 @@ function mapDimensionsForPlatformEvent(event) {
     addDim(dims, "capabilityCategory", cat ?? null);
   }
 
+  if (et === "CONNECTION_CONNECTED" || et === "CONNECTION_VERIFIED" || et === "CONNECTION_FAILED") {
+    addDim(dims, "connectionType", payload.connectionType ?? payload.displayName);
+    addDim(dims, "providerType", payload.providerType ?? providerType);
+  }
+
+  if (et === "EXTERNAL_ACTION_REQUESTED" || et === "EXTERNAL_ACTION_COMPLETED" || et === "EXTERNAL_ACTION_FAILED") {
+    addDim(dims, "providerType", payload.providerId ?? providerType);
+    addDim(dims, "capabilityCategory", payload.capability ?? null);
+  }
+
+  if (et === "INBOUND_EVENT_RECEIVED" || et === "INBOUND_EVENT_REJECTED") {
+    addDim(dims, "providerType", payload.provider ?? providerType);
+    addDim(dims, "channel", payload.channel ?? null);
+  }
+
   return dims;
 }
 

@@ -3,6 +3,8 @@ import { WORK_EVENT_TYPES } from "../../work/WorkEventTypes.js";
 import { WORK_ASSIGNMENT_STATUSES } from "../../work/WorkAssignmentTypes.js";
 import { createWorkAssignment } from "../../work/WorkAssignment.js";
 
+import { TEAM_EVENT_TYPES } from "../../team/TeamEventTypes.js";
+
 import {
   ASSIGNMENT_STATUSES,
   ASSIGNMENT_STATUS_REASON,

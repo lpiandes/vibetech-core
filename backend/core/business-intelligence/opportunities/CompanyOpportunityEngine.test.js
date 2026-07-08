@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CompanyWorkspaceRuntime } from "../../company/CompanyWorkspaceRuntime.js";
+import { createSeededCompanyRuntime } from "../../company/fixtures/createSeededCompanyRuntime.js";
 import { CompanyBriefEngine } from "../company-brief/CompanyBriefEngine.js";
 import { CompanyHealthEngine } from "../company-health/CompanyHealthEngine.js";
 import { CompanyInsightEngine } from "../insights/CompanyInsightEngine.js";
@@ -13,7 +13,7 @@ import { impactFromScore } from "./CompanyOpportunityDefaults.js";
 const NOW0 = "2026-07-01T00:00:00.000Z";
 
 function derivedEnvironment() {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const briefEngine = new CompanyBriefEngine({ nowISO: NOW0 });
   const healthEngine = new CompanyHealthEngine({ nowISO: NOW0 });
   const insightEngine = new CompanyInsightEngine({ nowISO: NOW0 });

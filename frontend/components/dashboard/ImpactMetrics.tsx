@@ -1,9 +1,9 @@
 import SectionHeader from "@/components/design-system/SectionHeader";
 import MetricCard from "@/components/design-system/MetricCard";
-import { WorkspaceService } from "@/lib/workspace/WorkspaceService";
+import { getWorkspaceService } from "@/lib/workspace/getWorkspaceService";
 
 export default function ImpactMetrics() {
-  const service = new WorkspaceService();
+  const service = getWorkspaceService();
   const view = service.loadDashboard();
   const impact = view.impactMetrics;
 

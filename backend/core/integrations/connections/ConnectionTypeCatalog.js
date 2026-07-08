@@ -1,0 +1,27 @@
+import { INTEGRATION_CAPABILITIES } from "../capabilities/IntegrationCapability.js";
+import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
+
+/**
+ * Universal mapping from industry connection type ids to enabled capabilities.
+ * No industry-specific logic — connection types are package-declared identifiers.
+ */
+export const CONNECTION_TYPE_CAPABILITIES = deepFreeze({
+  business_email: [INTEGRATION_CAPABILITIES.SEND_EMAIL],
+  sms_channel: [INTEGRATION_CAPABILITIES.SEND_SMS],
+  voice_channel: [INTEGRATION_CAPABILITIES.PLACE_VOICE_CALL, INTEGRATION_CAPABILITIES.RECEIVE_VOICE_CALL],
+  calendar: [
+    INTEGRATION_CAPABILITIES.CREATE_CALENDAR_EVENT,
+    INTEGRATION_CAPABILITIES.READ_CALENDAR_AVAILABILITY,
+  ],
+  property_management_system: [
+    INTEGRATION_CAPABILITIES.READ_EXTERNAL_RECORD,
+    INTEGRATION_CAPABILITIES.UPDATE_EXTERNAL_RECORD,
+    INTEGRATION_CAPABILITIES.CREATE_EXTERNAL_RECORD,
+  ],
+  accounting: [INTEGRATION_CAPABILITIES.READ_EXTERNAL_RECORD, INTEGRATION_CAPABILITIES.UPDATE_EXTERNAL_RECORD],
+  document_storage: [INTEGRATION_CAPABILITIES.INGEST_DOCUMENT, INTEGRATION_CAPABILITIES.READ_EXTERNAL_RECORD],
+});
+
+export function getCapabilitiesForConnectionType(connectionType) {
+  return CONNECTION_TYPE_CAPABILITIES[String(connectionType ?? "")] ?? [];
+}

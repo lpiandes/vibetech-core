@@ -13,6 +13,11 @@ coverage
 .nyc_output
 .DS_Store
 
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
 # Logs
 *.log
 npm-debug.log*
@@ -23,3 +28,6 @@ yarn-error.log*
 .idea/
 .vscode/
 *.swp
+
+# Local development artifacts
+.dev/

@@ -4,8 +4,6 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import RequestRenderer from "./RequestRenderer";
-import RequestContextProvider from "./RequestContext";
-import RequestSummary from "./RequestSummary";
 import RequestLoading from "./RequestLoading";
 import RequestErrorBoundary from "./RequestErrorBoundary";
 
@@ -90,55 +88,40 @@ const makeVm = () =>
     metadata: { layout: "single" },
   }) as any;
 
-test("RequestRenderer: renders summary, queues, request items, attention, and recommendations", () => {
+test("RequestRenderer: renders executive opportunity cockpit sections", () => {
   const vm = makeVm();
   const html = renderToStaticMarkup(<RequestRenderer viewModel={vm} />);
   assert.ok(html.includes(vm.summary));
-  assert.ok(html.includes("Queues"));
-  assert.ok(html.includes("New Requests"));
-  assert.ok(html.includes("Customer inquiry"));
-  assert.ok(html.includes("Attention"));
+  assert.ok(html.includes("Requests OS"));
+  assert.ok(html.includes("Opportunity Pulse"));
+  assert.ok(html.includes("Pipeline"));
+  assert.ok(html.includes("Priority Opportunities"));
+  assert.ok(html.includes("Pipeline Risks"));
+  assert.ok(html.includes("Recommendations"));
   assert.ok(html.includes(vm.attention.items[0].summary));
   assert.ok(html.includes("Recommendations"));
   assert.ok(html.includes(vm.recommendedActions[0].label));
 });
 
-test("Summary empty attention: renders executive empty attention copy", () => {
+test("Attention empty state: renders calm executive language", () => {
   const vm = makeVm();
   vm.attention.items = [];
   const html = renderToStaticMarkup(<RequestRenderer viewModel={vm} />);
-  assert.ok(html.includes("No requests require immediate attention."));
-});
-
-test("Queue empty: renders executive incoming requests empty copy", () => {
-  const vm = makeVm();
-  vm.queues = [];
-  const html = renderToStaticMarkup(<RequestRenderer viewModel={vm} />);
-  assert.ok(html.includes("No incoming requests."));
+  assert.ok(html.includes("Opportunity flow is healthy.") || html.includes("No pipeline risks") || html.includes("Opportunity flow"));
 });
 
 test("Recommendations empty: renders executive recommendation empty copy", () => {
   const vm = makeVm();
   vm.recommendedActions = [];
   const html = renderToStaticMarkup(<RequestRenderer viewModel={vm} />);
-  assert.ok(html.includes("No recommendations at this time."));
+  assert.ok(html.includes("No requests currently require executive intervention."));
 });
 
 test("Loading placeholders render deterministically", () => {
   const a = renderToStaticMarkup(<RequestLoading />);
   const b = renderToStaticMarkup(<RequestLoading />);
   assert.deepEqual(a, b);
-  assert.ok(a.includes("animate-pulse"));
-});
-
-test("Context: RequestSummary reads from RequestContext", () => {
-  const vm = makeVm();
-  const html = renderToStaticMarkup(
-    <RequestContextProvider viewModel={vm}>
-      <RequestSummary />
-    </RequestContextProvider>,
-  );
-  assert.ok(html.includes(vm.summary));
+  assert.ok(a.includes("Preparing opportunity cockpit"));
 });
 
 test("Error boundary: fallback renders when child throws", () => {

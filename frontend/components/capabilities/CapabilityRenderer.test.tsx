@@ -45,11 +45,13 @@ test("CapabilityRenderer: renders empty state executive copy deterministically",
   const vm = makeVm();
   const html = renderToStaticMarkup(<CapabilityRenderer viewModel={vm} />);
 
-  assert.ok(html.includes("Capabilities"));
-  assert.ok(html.includes("Overall readiness"));
+  assert.ok(html.includes("Capabilities OS"));
+  assert.ok(html.includes("Can this business execute its strategy?"));
+  assert.ok(html.includes("Capability Readiness"));
   assert.ok(html.includes("100% coverage"));
   assert.ok(html.includes("Your capabilities are fully covered."));
-  assert.ok(html.includes("No capability risks require attention."));
-  assert.ok(html.includes("No capability gaps have been identified."));
+  assert.ok(html.includes("No capability risks require executive attention."));
+  assert.ok(html.includes("No capability gaps require executive attention."));
+  assert.ok(html.includes("No recommendations require executive action."));
 });
 

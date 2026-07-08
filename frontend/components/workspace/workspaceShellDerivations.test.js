@@ -72,7 +72,7 @@ test("Navigation rendering: derived sidebar uses view-model ordering", () => {
 });
 
 test("Module rendering: active module mapping by pathname", () => {
-  assert.equal(getActiveModuleIdFromPathname("/mission-control"), "mission_control");
+  assert.equal(getActiveModuleIdFromPathname("/mission-control"), "command_center");
   assert.equal(getActiveModuleIdFromPathname("/team"), "digital_workforce");
   assert.equal(getActiveModuleIdFromPathname("/work"), "work_queue");
   assert.equal(getActiveModuleIdFromPathname("/work/pm1"), "work_queue");

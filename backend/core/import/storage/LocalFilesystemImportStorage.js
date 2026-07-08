@@ -1,0 +1,58 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+
+function storageRoot() {
+  return process.env.IMPORT_STORAGE_ROOT
+    ? path.resolve(process.env.IMPORT_STORAGE_ROOT)
+    : path.join(repoRoot, ".dev", "import-storage");
+}
+
+function businessDir(businessId) {
+  const root = storageRoot();
+  const dir = path.resolve(root, String(businessId));
+  if (!dir.startsWith(root + path.sep) && dir !== root) {
+    throw new Error("Invalid business storage path.");
+  }
+  return dir;
+}
+
+function objectPath(businessId, storageKey) {
+  const key = String(storageKey).replace(/[/\\]/g, "");
+  if (!key || key.includes("..")) {
+    throw new Error("Invalid storage key.");
+  }
+  const dir = businessDir(businessId);
+  const full = path.resolve(dir, key);
+  if (!full.startsWith(dir + path.sep)) {
+    throw new Error("Storage path traversal blocked.");
+  }
+  return full;
+}
+
+export class LocalFilesystemImportStorage {
+  async putObject({ businessId, storageKey, buffer }) {
+    const filePath = objectPath(businessId, storageKey);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    await fs.promises.writeFile(filePath, buffer);
+  }
+
+  async getObject({ businessId, storageKey }) {
+    const filePath = objectPath(businessId, storageKey);
+    return fs.promises.readFile(filePath);
+  }
+
+  async deleteObject({ businessId, storageKey }) {
+    const filePath = objectPath(businessId, storageKey);
+    try {
+      await fs.promises.unlink(filePath);
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        return;
+      }
+      throw err;
+    }
+  }
+}

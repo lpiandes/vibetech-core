@@ -45,3 +45,20 @@ export function validateWorkItemCreatedToPlatformEventInput({ workRuntime, workC
   return { ok: true };
 }
 
+export function validateWorkAssignedPlatformEventInput(input) {
+  if (!input || typeof input !== "object") fail("input required.");
+  if (String(input.eventType) !== "WORK_ASSIGNED") return { ok: false, skipped: true };
+
+  if (!isPlainObject(input.payload)) fail("payload must be plain object.");
+  const p = input.payload;
+  if (!("workId" in p)) fail("payload missing workId");
+  if (!("assignment" in p)) fail("payload missing assignment");
+  if (!isPlainObject(p.assignment)) fail("payload.assignment must be plain object");
+
+  const a = p.assignment;
+  for (const k of ["id", "assigneeId", "assigneeType", "status", "assignedAt"]) {
+    if (!(k in a)) fail(`assignment missing ${k}`);
+  }
+
+  return { ok: true, skipped: false, errors: [] };
+}

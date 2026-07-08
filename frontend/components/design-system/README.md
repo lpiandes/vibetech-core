@@ -1,3 +1,16 @@
+# Design System Playground (Internal)
+
+This internal route previews the VIBETech **Executive Component** library using deterministic sample data.
+
+Route: `/design-system`
+
+Rules:
+- Uses only `frontend/components/executive/*` primitives
+- Uses only `frontend/design/tokens/*`
+- No Storybook
+- No backend, runtimes, intelligence, or workspace calls
+- No React state; all mock data is deterministic
+
 # VIBETech Design System (Workspace UI)
 
 This folder contains the **reusable design-system components** used to build every VIBETech Workspace screen.

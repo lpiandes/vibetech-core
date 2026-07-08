@@ -2,13 +2,12 @@
 
 import type { MissionControlViewModel } from "./MissionControlContext";
 import MissionControlContextProvider from "./MissionControlContext";
-import MissionControlExecutiveLayout from "./MissionControlExecutiveLayout";
+import ForYouExecutiveLayout from "./ForYouExecutiveLayout";
 
 export default function MissionControlRenderer({ viewModel }: { viewModel: MissionControlViewModel }) {
   return (
     <MissionControlContextProvider viewModel={viewModel}>
-      <MissionControlExecutiveLayout />
+      <ForYouExecutiveLayout />
     </MissionControlContextProvider>
   );
 }
-

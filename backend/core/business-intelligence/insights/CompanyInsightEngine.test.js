@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CompanyWorkspaceRuntime } from "../../company/CompanyWorkspaceRuntime.js";
+import { createSeededCompanyRuntime } from "../../company/fixtures/createSeededCompanyRuntime.js";
 import { CompanyBriefEngine } from "../company-brief/CompanyBriefEngine.js";
 import { CompanyHealthEngine } from "../company-health/CompanyHealthEngine.js";
 import { CompanyInsightEngine } from "./CompanyInsightEngine.js";
@@ -25,7 +25,7 @@ function getDimensionById(health, dimId) {
 }
 
 test("Health score comparison: overall improved generates a health insight", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const briefEngine = new CompanyBriefEngine({ nowISO: NOW0 });
   const healthEngine = new CompanyHealthEngine({ nowISO: NOW0 });
   const insightEngine = new CompanyInsightEngine({ nowISO: NOW0 });
@@ -56,7 +56,7 @@ test("Health score comparison: overall improved generates a health insight", () 
 });
 
 test("Dimension comparison: knowledge health score change generates knowledge insight", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const briefEngine = new CompanyBriefEngine({ nowISO: NOW0 });
   const healthEngine = new CompanyHealthEngine({ nowISO: NOW0 });
   const insightEngine = new CompanyInsightEngine({ nowISO: NOW0 });
@@ -85,7 +85,7 @@ test("Dimension comparison: knowledge health score change generates knowledge in
 });
 
 test("Risk changes: removing a risk produces a resolved health insight", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const briefEngine = new CompanyBriefEngine({ nowISO: NOW0 });
   const healthEngine = new CompanyHealthEngine({ nowISO: NOW0 });
   const insightEngine = new CompanyInsightEngine({ nowISO: NOW0 });
@@ -112,7 +112,7 @@ test("Risk changes: removing a risk produces a resolved health insight", () => {
 });
 
 test("Recommendation changes: adding a recommendation produces a new health insight with recommendedAction", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const briefEngine = new CompanyBriefEngine({ nowISO: NOW0 });
   const healthEngine = new CompanyHealthEngine({ nowISO: NOW0 });
   const insightEngine = new CompanyInsightEngine({ nowISO: NOW0 });
@@ -144,7 +144,7 @@ test("Recommendation changes: adding a recommendation produces a new health insi
 });
 
 test("Work queue changes: pending review delta from CompanyBrief generates work_queue insight", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const briefEngine = new CompanyBriefEngine({ nowISO: NOW0 });
   const healthEngine = new CompanyHealthEngine({ nowISO: NOW0 });
   const insightEngine = new CompanyInsightEngine({ nowISO: NOW0 });
@@ -172,7 +172,7 @@ test("Work queue changes: pending review delta from CompanyBrief generates work_
 });
 
 test("Unchanged snapshots: identical inputs yield empty insights and stable summary", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const briefEngine = new CompanyBriefEngine({ nowISO: NOW0 });
   const healthEngine = new CompanyHealthEngine({ nowISO: NOW0 });
   const insightEngine = new CompanyInsightEngine({ nowISO: NOW0 });
@@ -192,7 +192,7 @@ test("Unchanged snapshots: identical inputs yield empty insights and stable summ
 });
 
 test("Immutability: generated insights are deep frozen", () => {
-  const runtime = new CompanyWorkspaceRuntime();
+  const runtime = createSeededCompanyRuntime();
   const briefEngine = new CompanyBriefEngine({ nowISO: NOW0 });
   const healthEngine = new CompanyHealthEngine({ nowISO: NOW0 });
   const insightEngine = new CompanyInsightEngine({ nowISO: NOW0 });

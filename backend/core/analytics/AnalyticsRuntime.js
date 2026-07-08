@@ -41,5 +41,9 @@ export class AnalyticsRuntime {
     validateAnalyticsRuntime(this);
     return this._state;
   }
+
+  exportState() {
+    return this._state;
+  }
 }
 

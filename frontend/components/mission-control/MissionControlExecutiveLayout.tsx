@@ -18,6 +18,9 @@ import RecommendationCard from "@/components/executive/RecommendationCard";
 import ExecutiveEmptyState from "@/components/executive/ExecutiveEmptyState";
 import StatusPill from "@/components/executive/StatusPill";
 
+import CommandCenterExecutiveSections from "./CommandCenterExecutiveSections";
+import DemoStoryMode from "./DemoStoryMode";
+
 import { semanticColors, spacing } from "@/design/tokens";
 
 function safeArray(v: any) {
@@ -182,16 +185,29 @@ export default function MissionControlExecutiveLayout() {
     gap: spacing.sm,
   } as const;
 
+  const commandCenterTitle =
+    viewModel?.productContext?.pageLabels?.commandCenter ??
+    viewModel?.commandCenter?.pageTitle ??
+    "Command Center";
+  const showDemoStory = viewModel?.productContext?.identity?.workspaceId === "ws_horizon_properties";
+
   return (
     <ExecutiveSurface>
       <div style={{ width: "100%", padding: spacing.xl }}>
         <ExecutiveStack gap="xl">
           <ExecutiveHeader
-            title="Mission Control"
-            subtitle={String(hero?.subtitle ?? viewModel.subheadline ?? "")}
+            title={commandCenterTitle}
+            subtitle={String(viewModel?.hero?.summary ?? hero?.subtitle ?? viewModel.subheadline ?? "")}
           />
 
-          {/* Top Hero Section */}
+          <CommandCenterExecutiveSections viewModel={viewModel} />
+
+          <ExecutiveDivider />
+
+          <ExecutiveHeader
+            title="Business Intelligence"
+            subtitle="Deeper signals and recommendations"
+          />
           <ExecutiveCard>
             <div style={{ display: "flex", gap: spacing.md, alignItems: "flex-start" }}>
               <div style={{ width: "100%", minWidth: 0 }}>
@@ -461,6 +477,7 @@ export default function MissionControlExecutiveLayout() {
           </div>
         </ExecutiveStack>
       </div>
+      <DemoStoryMode enabled={showDemoStory} steps={safeArray((viewModel as any).demoStorySteps)} />
     </ExecutiveSurface>
   );
 }
