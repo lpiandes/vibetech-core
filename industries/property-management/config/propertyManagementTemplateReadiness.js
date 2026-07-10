@@ -23,6 +23,8 @@ function checkReferences({ manifest, template }) {
   const packageFollowUpRules = asSet(manifest.followUpRules.map((rule) => rule.id));
   const packageOutcomes = asSet(manifest.outcomes.map((outcome) => outcome.id));
   const packageDraftTemplates = asSet(manifest.draftAssistance.map((draft) => draft.id));
+  const packageRecurringOperations = asSet(manifest.recurringOperationDefinitions.map((operation) => operation.id));
+  const packageCampaignTemplates = asSet(manifest.campaignTemplates.map((template) => template.id));
   const packageKnowledgeCategories = asSet(manifest.knowledgeCategories.map((category) => category.id));
   const packageIntelligenceSections = asSet(manifest.intelligenceSections.map((section) => section.id));
   const packageCapabilities = asSet([...manifest.capabilities.implemented, ...manifest.capabilities.setupRequired, ...manifest.capabilities.deferred]);
@@ -69,6 +71,16 @@ function checkReferences({ manifest, template }) {
       id: "draft_templates_registered",
       status: template.draftWordingRules.enabledTemplateIds.every((id) => packageDraftTemplates.has(id)) ? "ready" : "blocked",
       detail: "Draft wording rules resolve to package-owned draft templates.",
+    },
+    {
+      id: "recurring_operations_registered",
+      status: template.recurringOperationRefs.every((id) => packageRecurringOperations.has(id)) ? "ready" : "blocked",
+      detail: "Recurring operation references resolve to package-owned operation definitions.",
+    },
+    {
+      id: "campaign_templates_registered",
+      status: template.campaignTemplateRefs.every((id) => packageCampaignTemplates.has(id)) ? "ready" : "blocked",
+      detail: "Campaign template references resolve to package-owned draft preparation templates.",
     },
     {
       id: "knowledge_categories_registered",

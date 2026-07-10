@@ -10,6 +10,7 @@ import { MCBRIDE_QUALIFICATION_FIELD_SCHEMAS } from "./config/mcbrideQualificati
 import { MCBRIDE_IMPORT_PROFILES } from "./config/mcbrideImportProfiles.js";
 import { MCBRIDE_SUBJECT_IMPORT_PROFILES } from "./config/mcbrideSubjectImportProfiles.js";
 import { PM_RELATIONSHIP_FOLLOW_UP_DRAFT_ASSISTANCE } from "./config/relationshipFollowUpDraftAssistance.js";
+import { PM_CAMPAIGN_TEMPLATES, PM_RECURRING_OPERATION_DEFINITIONS } from "./config/campaignOperations.js";
 
 export const PM_AUTOMATION_CONFIGS = {
   prospectFollowUp: buildOutcomeAutomationConfiguration({
@@ -459,6 +460,8 @@ export const PROPERTY_MANAGEMENT_PACKAGE = createIndustryPackage({
   relationshipFollowUpRules: PM_RELATIONSHIP_FOLLOW_UP_RULES,
   relationshipFollowUpOutcomes: PM_RELATIONSHIP_FOLLOW_UP_OUTCOMES,
   relationshipFollowUpDraftAssistance: PM_RELATIONSHIP_FOLLOW_UP_DRAFT_ASSISTANCE,
+  recurringOperationDefinitions: PM_RECURRING_OPERATION_DEFINITIONS,
+  campaignTemplates: PM_CAMPAIGN_TEMPLATES,
   inboundRouting: [
     { eventKind: "form_submission", requestType: "PROSPECT_INQUIRY", acknowledgmentIntentId: "initial_prospect_response" },
     { eventKind: "missed_call", requestType: "PROSPECT_INQUIRY", acknowledgmentIntentId: "initial_prospect_response" },

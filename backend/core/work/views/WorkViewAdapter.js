@@ -180,6 +180,21 @@ function resolveWorkDisplay({
   });
 }
 
+function resolveCampaignPreparationReview({ workItem, communicationRuntime }) {
+  const campaign = workItem?.metadata?.campaignPreparation;
+  if (!campaign || typeof campaign !== "object") return null;
+  const messageId = String(campaign.messageId ?? "");
+  const message = messageId ? communicationRuntime?.getMessage?.(messageId) : null;
+  return deepFreeze({
+    ...campaign,
+    approvalStatus: String(workItem.status) === "approved" ? "approved" : campaign.approvalStatus ?? "pending_review",
+    communicationStatus: message?.status ?? campaign.communicationStatus ?? "draft",
+    sentAt: message?.sentAt ?? null,
+    deliveredAt: message?.deliveredAt ?? null,
+    failedAt: message?.failedAt ?? null,
+  });
+}
+
 export class WorkViewAdapter {
   constructor({ nowISO } = {}) {
     this.nowISO = nowISO;
@@ -196,6 +211,7 @@ export class WorkViewAdapter {
     businessGraphRuntime,
     businessSubjectRuntime,
     requestRuntime,
+    communicationRuntime,
     presentation,
     nowISO,
     businessId,
@@ -653,6 +669,7 @@ export class WorkViewAdapter {
           version: WORK_VIEW_VERSION,
           display,
           relationshipFollowUp: w.metadata?.relationshipFollowUp ?? null,
+          campaignPreparation: resolveCampaignPreparationReview({ workItem: w, communicationRuntime }),
         }),
       });
     });

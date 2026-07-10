@@ -16,6 +16,9 @@ export const MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE = deepFreeze({
     "relationship_follow_up_outcome_resolution",
     "knowledge_guided_draft_assistance",
     "relationship_operations_intelligence",
+    "recurring_campaign_preparation",
+    "campaign_audience_personalization",
+    "campaign_approval_readiness",
   ],
   relationshipConfig: {
     relationshipTypes: ["PROSPECT", "BUYER", "SELLER_PROSPECT", "SELLER", "PAST_BUYER", "PAST_SELLER", "OWNER", "RESIDENT", "VENDOR", "REFERRAL_SOURCE", "INVESTOR"],
@@ -67,7 +70,11 @@ export const MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE = deepFreeze({
     "property_demand",
     "future_follow_up_commitments",
     "draft_assistance_usage",
+    "recurring_campaign_operations",
+    "campaign_approval_readiness",
   ],
+  recurringOperationRefs: ["weekly_client_newsletter", "monthly_market_update", "past_client_reactivation_review"],
+  campaignTemplateRefs: ["weekly_newsletter", "monthly_market_update", "property_announcement", "cma_home_value", "past_client_reactivation", "referral_outreach"],
   onboardingChecklist: [
     "Upload CRM CSV and complete dry run review.",
     "Commit approved CRM import rows.",
@@ -78,6 +85,7 @@ export const MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE = deepFreeze({
     "Upload approved leasing and owner communication knowledge.",
     "Review imported consent state before any outreach.",
     "Complete a manual McBride walkthrough from People to Work to outcome to intelligence.",
+    "Review recurring campaign preparation Work and queue a draft without provider sending.",
   ],
   dataRequirements: [
     { id: "crm_csv", label: "CRM export CSV", requiredForLaunch: true },
@@ -96,13 +104,15 @@ export const MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE = deepFreeze({
     "Assigned follow-up work is completed through an outcome and recorded as memory.",
     "Draft assistance prepares a reviewable message without sending.",
     "Relationship operations intelligence reflects workload, outcomes, and property demand.",
+    "Recurring newsletter and campaign operations prepare evidence-backed audiences and draft communication for approval.",
+    "Approved campaign communication is queued only; provider execution remains deferred.",
   ],
   deferredFutureCapabilities: [
     { id: "sms_inquiry_response", active: false },
     { id: "email_sending", active: false },
-    { id: "newsletter_referral_campaigns", active: false },
     { id: "appfolio_api_sync", active: false },
     { id: "website_form_automation", active: false },
     { id: "phone_and_missed_call_automation", active: false },
+    { id: "provider_campaign_execution", active: false },
   ],
 });

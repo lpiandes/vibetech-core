@@ -12,6 +12,9 @@ const implementedCapabilityIds = [
   "relationship_follow_up_outcome_resolution",
   "knowledge_guided_draft_assistance",
   "relationship_operations_intelligence",
+  "recurring_campaign_preparation",
+  "campaign_audience_personalization",
+  "campaign_approval_readiness",
 ];
 
 const setupRequirementIds = [
@@ -27,8 +30,6 @@ const setupRequirementIds = [
 const deferredCapabilityIds = [
   "sms_sending",
   "email_sending",
-  "newsletters",
-  "referral_campaigns",
   "appfolio_api_sync",
   "website_form_automation",
   "missed_call_automation",
@@ -120,7 +121,23 @@ export const PROPERTY_MANAGEMENT_PACKAGE_MANIFEST = deepFreeze({
     { id: "property_demand", source: "RelationshipOperationsIntelligenceProjection" },
     { id: "future_follow_up_commitments", source: "RelationshipOperationsIntelligenceProjection" },
     { id: "draft_assistance_usage", source: "RelationshipOperationsIntelligenceProjection" },
+    { id: "recurring_campaign_operations", source: "CampaignOperationsProjection" },
+    { id: "campaign_approval_readiness", source: "CampaignOperationsProjection" },
   ],
+  recurringOperationDefinitions: PROPERTY_MANAGEMENT_PACKAGE.recurringOperationDefinitions.map((operation) => ({
+    id: operation.id,
+    name: operation.name,
+    cadence: operation.cadence,
+    enabledByDefault: operation.enabled !== false,
+    campaignTemplateId: operation.produces?.campaignTemplateId ?? null,
+  })),
+  campaignTemplates: PROPERTY_MANAGEMENT_PACKAGE.campaignTemplates.map((template) => ({
+    id: template.id,
+    name: template.name,
+    channel: template.channel,
+    audienceType: template.audience?.type ?? "all_marketable_contacts",
+    approvalRequired: template.approvalRequired !== false,
+  })),
   dashboardDefinitions: {
     presentationSource: "PROPERTY_MANAGEMENT_DASHBOARD_PRESENTATION",
     operatingHomeSource: "PROPERTY_MANAGEMENT_OPERATING_HOME_PRESENTATION",

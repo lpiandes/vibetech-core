@@ -95,6 +95,9 @@ export const getAuthorizedWorkspace = cache(async (businessId: string, requiredP
   await timer.time("SUBJECT_INTEREST_RECONCILIATION", () =>
     service.reconcileHistoricalSubjectInterestsIfNeeded(),
   );
+  await timer.time("RECURRING_CAMPAIGN_MATERIALIZATION", () =>
+    service.materializeDueRecurringCampaignOperationsIfNeeded(),
+  );
 
   timer.finish("TOTAL");
 

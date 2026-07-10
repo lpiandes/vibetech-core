@@ -51,6 +51,9 @@ import { RelationshipFollowUpWorkConversionService } from "../../../backend/core
 import { RelationshipFollowUpResolutionService } from "../../../backend/core/relationship-followup/RelationshipFollowUpResolutionService.js";
 import { RelationshipFollowUpDraftAssistanceService } from "../../../backend/core/work-assistance/RelationshipFollowUpDraftAssistanceService.js";
 import { buildRelationshipOperationsIntelligence } from "../../../backend/core/relationship-operations/RelationshipOperationsIntelligenceProjection.js";
+import { buildCampaignOperationsView } from "../../../backend/core/campaigns/CampaignOperationsProjection.js";
+import { CampaignPreparationService } from "../../../backend/core/campaigns/CampaignPreparationService.js";
+import { materializeDueRecurringOperations } from "../../../backend/core/campaigns/RecurringOperationService.js";
 import { buildDemoStorySteps } from "../../../backend/core/demo/buildDemoStorySteps.js";
 import { projectSegmentMembership } from "../../../backend/core/segments/SegmentProjectionEngine.js";
 import { checkCommunicationPermitted } from "../../../backend/core/communications/preferences/CommunicationPreferenceEnforcer.js";
@@ -90,6 +93,10 @@ const PM_SUBJECT_TYPES = ["property", "listing", "unit"];
 export const SELECTED_WORKSPACE_COOKIE_NAME = "vibetech_workspace_id";
 
 const NOW_ISO = "2026-07-01T00:00:00.000Z";
+
+function currentCampaignNowISO() {
+  return new Date().toISOString();
+}
 
 function describeAudiencePurpose(definition: Record<string, unknown>) {
   const id = String(definition.id ?? "");
@@ -298,6 +305,32 @@ export class WorkspaceService {
       });
     }
     connected.subjectInterestReconciliationComplete = true;
+    return result;
+  }
+
+  async materializeDueRecurringCampaignOperationsIfNeeded() {
+    const connected = this.connected as ConnectedBusinessWorkspace & { recurringCampaignMaterializationComplete?: boolean };
+    if (connected.recurringCampaignMaterializationComplete) {
+      return { ok: true, results: [], snapshotKinds: [] };
+    }
+    const stack = connected.operatingStack ?? connected.ctx;
+    const installation = connected.installationResult as Record<string, unknown>;
+    const result = (materializeDueRecurringOperations as any)({
+      stack,
+      businessId: this.workspaceId,
+      operationDefinitions: installation?.recurringOperationDefinitions ?? [],
+      campaignTemplates: installation?.campaignTemplates ?? [],
+      nowISO: currentCampaignNowISO(),
+    });
+    if (result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    connected.recurringCampaignMaterializationComplete = true;
     return result;
   }
 
@@ -550,6 +583,7 @@ export class WorkspaceService {
         businessGraphRuntime: this.connected.ctx.businessGraphRuntime,
         businessSubjectRuntime: this.connected.ctx.businessSubjectRuntime,
         requestRuntime: this.requestRuntime,
+        communicationRuntime: this.communicationRuntime,
         presentation,
         businessId: this.workspaceId,
       }),
@@ -831,20 +865,84 @@ export class WorkspaceService {
 
   loadRelationshipOperationsIntelligence() {
     const stack = this.connected.operatingStack ?? this.connected.ctx;
+    const installation = this.connected.installationResult as Record<string, unknown>;
+    const intelligence = (buildRelationshipOperationsIntelligence as any)({
+      businessId: this.workspaceId,
+      workRuntime: stack?.workRuntime ?? this.workRuntime,
+      interactionRuntime: stack?.interactionRuntime ?? this.connected.ctx.interactionRuntime,
+      businessGraphRuntime: stack?.businessGraphRuntime ?? this.connected.ctx.businessGraphRuntime,
+      businessSubjectRuntime: stack?.businessSubjectRuntime ?? this.connected.ctx.businessSubjectRuntime,
+      communicationRuntime: stack?.communicationRuntime ?? this.communicationRuntime,
+      teamRuntime: stack?.teamRuntime ?? this.teamRuntime,
+      relationshipTypes: this.connected.installationResult?.relationshipTypes ?? [],
+      nowISO: NOW_ISO,
+    });
+    const campaignOperations = (buildCampaignOperationsView as any)({
+      businessId: this.workspaceId,
+      stack,
+      operationDefinitions: installation?.recurringOperationDefinitions ?? [],
+      campaignTemplates: installation?.campaignTemplates ?? [],
+      nowISO: currentCampaignNowISO(),
+    });
     return attachProductContext(
-      (buildRelationshipOperationsIntelligence as any)({
-        businessId: this.workspaceId,
-        workRuntime: stack?.workRuntime ?? this.workRuntime,
-        interactionRuntime: stack?.interactionRuntime ?? this.connected.ctx.interactionRuntime,
-        businessGraphRuntime: stack?.businessGraphRuntime ?? this.connected.ctx.businessGraphRuntime,
-        businessSubjectRuntime: stack?.businessSubjectRuntime ?? this.connected.ctx.businessSubjectRuntime,
-        communicationRuntime: stack?.communicationRuntime ?? this.communicationRuntime,
-        teamRuntime: stack?.teamRuntime ?? this.teamRuntime,
-        relationshipTypes: this.connected.installationResult?.relationshipTypes ?? [],
-        nowISO: NOW_ISO,
-      }),
+      { ...intelligence, businessId: this.workspaceId, campaignOperations },
       this.connected,
     );
+  }
+
+  async prepareCampaign(input: { campaignTemplateId: string; subjectId?: string | null; operationId?: string | null; actorId?: string }, nowISO?: string) {
+    const stack = this.connected.operatingStack;
+    if (!stack) throw new Error("Campaign preparation is not available for this workspace.");
+    const installation = this.connected.installationResult as Record<string, unknown>;
+    const templates = Array.isArray(installation?.campaignTemplates) ? installation.campaignTemplates as Array<Record<string, unknown>> : [];
+    const operations = Array.isArray(installation?.recurringOperationDefinitions) ? installation.recurringOperationDefinitions as Array<Record<string, unknown>> : [];
+    const template = templates.find((entry) => String(entry.id) === String(input.campaignTemplateId));
+    if (!template) throw new Error("Campaign template not found.");
+    const operation = input.operationId ? operations.find((entry) => String(entry.id) === String(input.operationId)) ?? null : null;
+    const requiresSubject = String((template.audience as Record<string, unknown> | undefined)?.type ?? "") === "subject_interest";
+    const subjectId = input.subjectId ? String(input.subjectId) : null;
+    if (requiresSubject && !subjectId) throw new Error("Select a property before preparing this campaign.");
+    if (subjectId && !stack.businessSubjectRuntime?.getSubject?.(subjectId)) {
+      throw new Error("Selected property does not belong to this business.");
+    }
+    const effectiveNowISO = nowISO ?? currentCampaignNowISO();
+    const result = (new CampaignPreparationService() as any).execute({
+      stack,
+      businessId: this.workspaceId,
+      campaignTemplate: template,
+      operation,
+      occurrenceKey: effectiveNowISO,
+      subjectId,
+      nowISO: effectiveNowISO,
+    });
+    if (result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
+  }
+
+  async approveCampaignWork(workId: string, nowISO?: string) {
+    const stack = this.connected.operatingStack;
+    if (!stack) throw new Error("Campaign approval is not available for this workspace.");
+    const result = (new CampaignPreparationService() as any).approve({
+      stack,
+      workId,
+      nowISO: nowISO ?? NOW_ISO,
+    });
+    if (result.ok && result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
   }
 
   loadAudienceDashboard() {

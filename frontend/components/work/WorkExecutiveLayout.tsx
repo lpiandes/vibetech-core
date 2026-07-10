@@ -20,7 +20,9 @@ import {
   priorityLabel,
   priorityTone,
   resolveTargetWorkItem,
+  resolveCampaignReview,
   resolveWorkRowHref,
+  resolveCampaignApprovalPresentation,
   sortWorkQueueItems,
   statusTone,
   type WorkQueueFilter,
@@ -225,6 +227,153 @@ function WorkQueueRow({
   return <div style={rowStyle}>{rowBody}</div>;
 }
 
+function CampaignReviewPanel({
+  item,
+  businessId,
+}: {
+  item: WorkQueueItem;
+  businessId: string;
+}) {
+  const router = useRouter();
+  const review = resolveCampaignReview(item);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [optimisticQueued, setOptimisticQueued] = useState(false);
+  useEffect(() => {
+    setOptimisticQueued(false);
+    setError(null);
+  }, [item.id]);
+  if (!review) return null;
+
+  const approval = resolveCampaignApprovalPresentation(item, { requestPending: busy, optimisticQueued });
+
+  async function approveCampaign() {
+    if (busy || optimisticQueued) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/businesses/${encodeURIComponent(businessId)}/campaigns/work/${encodeURIComponent(String(item.id))}/approve`,
+        { method: "POST" },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(data?.error ?? "Could not approve campaign."));
+      setOptimisticQueued(true);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not approve campaign.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "grid", gap: spacing.md, padding: spacing.md, borderTop: `1px solid ${cockpitColors.panelBorder}` }}>
+      <div style={{ display: "grid", gap: 4 }}>
+        <div style={{ ...typography.cardTitle, color: cockpitColors.textPrimary }}>Campaign review</div>
+        <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
+          {review.purpose}
+          {review.operationName ? ` · ${review.operationName}` : ""}
+          {review.occurrenceKey ? ` · ${review.occurrenceKey}` : ""}
+          {review.subjectName ? ` · ${review.subjectName}` : ""}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: spacing.sm }}>
+        <div>
+          <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>Recipients</div>
+          <strong>{review.recipientCount}</strong>
+        </div>
+        <div>
+          <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>Excluded or suppressed</div>
+          <strong>{review.excludedCount}</strong>
+        </div>
+        <div>
+          <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>Delivery truth</div>
+          <strong>{approval.statusLabel}</strong>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gap: spacing.xs }}>
+        <div style={{ fontWeight: 700, color: cockpitColors.textPrimary }}>Draft</div>
+        <div style={{ border: `1px solid ${cockpitColors.panelBorder}`, borderRadius: radius.medium, padding: spacing.sm }}>
+          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>Subject</div>
+          <div style={{ color: cockpitColors.textPrimary, fontWeight: 650 }}>{review.draftSubject || "No subject prepared."}</div>
+          <div style={{ marginTop: spacing.sm, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>Body</div>
+          <pre style={{ margin: "4px 0 0", whiteSpace: "pre-wrap", fontFamily: "inherit", color: cockpitColors.textPrimary, lineHeight: 1.5 }}>
+            {review.draftBody || "No body prepared."}
+          </pre>
+          {review.cta ? (
+            <div style={{ marginTop: spacing.sm, color: cockpitColors.textSecondary, fontSize: typography.caption.fontSize }}>
+              CTA: {review.cta}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gap: spacing.xs }}>
+        <div style={{ fontWeight: 700, color: cockpitColors.textPrimary }}>Audience and evidence</div>
+        {review.evidenceSummary ? <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>{review.evidenceSummary}</div> : null}
+        {review.knowledgeSummary ? <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>{review.knowledgeSummary}</div> : null}
+        <div style={{ display: "grid", gap: 8 }}>
+          {review.recipients.length ? review.recipients.map((recipient) => (
+            <div key={String(recipient.partyId)} style={{ border: `1px solid ${cockpitColors.panelBorder}`, borderRadius: radius.medium, padding: spacing.sm }}>
+              <div style={{ fontWeight: 650, color: cockpitColors.textPrimary }}>{String(recipient.displayName ?? recipient.partyId ?? "Recipient")}</div>
+              <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
+                {(recipient.personalizationSummary ?? []).join("; ") || "Evidence-backed recipient"}
+              </div>
+              {recipient.subject || recipient.body ? (
+                <div style={{ marginTop: 6, color: cockpitColors.textSecondary, fontSize: typography.caption.fontSize }}>
+                  Prepared recipient draft: {String(recipient.subject ?? "Untitled")}
+                </div>
+              ) : (
+                <div style={{ marginTop: 6, color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>Generic fallback content.</div>
+              )}
+            </div>
+          )) : <PanelEmpty description="No eligible recipients are prepared for this campaign." />}
+          {review.exclusions.slice(0, 4).map((exclusion) => (
+            <div key={String(exclusion.partyId)} style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
+              Excluded: {String(exclusion.displayName ?? exclusion.partyId)} — {String(exclusion.reason ?? "Not eligible")}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {review.guardrails.length ? (
+        <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
+          {review.guardrails.join(" ")}
+        </div>
+      ) : null}
+
+      <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap", alignItems: "center" }}>
+        <button
+          type="button"
+          disabled={!approval.canApprove}
+          onClick={approveCampaign}
+          style={{
+            borderRadius: radius.medium,
+            border: `1px solid ${approval.canApprove ? cockpitColors.accent : cockpitColors.panelBorder}`,
+            backgroundColor: approval.canApprove ? cockpitColors.accent : cockpitColors.panel,
+            color: approval.canApprove ? "#fff" : cockpitColors.textMuted,
+            padding: "8px 12px",
+            fontSize: typography.caption.fontSize,
+            fontWeight: 700,
+            cursor: approval.canApprove ? "pointer" : "default",
+          }}
+        >
+          {approval.buttonLabel}
+        </button>
+        {approval.showApprovalHelper ? (
+          <span style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
+            Review requires prepared content and at least one eligible recipient.
+          </span>
+        ) : null}
+        {error ? <span style={{ color: cockpitColors.warning, fontSize: typography.caption.fontSize }}>{error}</span> : null}
+      </div>
+    </div>
+  );
+}
+
 function FilterChips({
   active,
   counts,
@@ -371,6 +520,7 @@ export default function WorkExecutiveLayout() {
             onDraftFollowUp={setDraftTarget}
             highlighted
           />
+          <CampaignReviewPanel item={targetWork} businessId={businessId} />
         </ShellPanel>
       ) : null}
 
