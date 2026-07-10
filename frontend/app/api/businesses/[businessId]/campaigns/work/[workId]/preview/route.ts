@@ -10,25 +10,16 @@ export async function POST(
   try {
     const { businessId, workId } = await params;
     const body = await request.json().catch(() => ({}));
-    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_MANAGE);
-    const result = await ctx.service.approveCampaignWork(
-      workId,
-      {
-        binding: body.binding ?? null,
-        actorId: String(ctx.user.id),
-      },
-      new Date().toISOString(),
-    );
+    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_VIEW);
+    const result = await ctx.service.previewCampaignWork(workId, body.partyId ? String(body.partyId) : null);
     if (!result.ok) {
-      const status = result.reason === "work_not_found" ? 404 : 400;
-      return NextResponse.json({ ok: false, error: result.reason ?? "Campaign approval failed." }, { status });
+      return NextResponse.json({ ok: false, error: result.reason ?? "Could not preview campaign." }, { status: 400 });
     }
     return NextResponse.json({
       ok: true,
-      workId: result.workId,
-      messageId: result.messageId,
-      communicationStatus: "queued",
-      approvalBinding: result.approvalBinding ?? null,
+      preview: result.preview,
+      contentVersion: result.contentVersion,
+      contentHash: result.contentHash,
     });
   } catch (err) {
     return authorizationErrorResponse(err);

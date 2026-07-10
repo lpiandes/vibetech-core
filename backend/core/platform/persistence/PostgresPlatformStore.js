@@ -10,6 +10,7 @@ import {
   generateInvitationToken,
 } from "./platformMappers.js";
 import { mapKnowledgeDocumentRow } from "../knowledge/BusinessKnowledgeDocument.js";
+import { mapBusinessCampaignTemplateRow } from "../campaigns/BusinessCampaignTemplate.js";
 import {
   mapImportArtifactRow,
   mapImportRunRow,
@@ -490,6 +491,113 @@ export class PostgresPlatformStore {
       ),
     );
     return Number(rows[0]?.count ?? 0);
+  }
+
+  async listCampaignTemplatesForBusiness(businessId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT *
+         FROM business_campaign_templates
+         WHERE business_id = $1 AND status = 'active' AND deleted_at IS NULL
+         ORDER BY updated_at DESC`,
+        [String(businessId)],
+      ),
+    );
+    return rows.map((row) => mapBusinessCampaignTemplateRow(row));
+  }
+
+  async getCampaignTemplateById(templateId, businessId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT *
+         FROM business_campaign_templates
+         WHERE id = $1 AND business_id = $2 AND deleted_at IS NULL`,
+        [String(templateId), String(businessId)],
+      ),
+    );
+    return mapBusinessCampaignTemplateRow(rows[0] ?? null);
+  }
+
+  async upsertCampaignTemplate({
+    id,
+    businessId,
+    name,
+    purpose = null,
+    channel = "email",
+    audience = {},
+    subjectLine = "",
+    previewText = null,
+    cta = null,
+    guardrails = [],
+    sections = [],
+    sourceTemplateId = null,
+    approvalRequired = true,
+    createdByUserId = null,
+    updatedByUserId = null,
+  }) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `INSERT INTO business_campaign_templates (
+           id, business_id, name, purpose, channel, audience, subject_line, preview_text,
+           cta, guardrails, sections, source_template_id, approval_required,
+           created_by_user_id, updated_by_user_id, status
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6::jsonb, $7, $8,
+           $9, $10::jsonb, $11::jsonb, $12, $13,
+           $14, $15, 'active'
+         )
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           purpose = EXCLUDED.purpose,
+           channel = EXCLUDED.channel,
+           audience = EXCLUDED.audience,
+           subject_line = EXCLUDED.subject_line,
+           preview_text = EXCLUDED.preview_text,
+           cta = EXCLUDED.cta,
+           guardrails = EXCLUDED.guardrails,
+           sections = EXCLUDED.sections,
+           source_template_id = EXCLUDED.source_template_id,
+           approval_required = EXCLUDED.approval_required,
+           updated_by_user_id = EXCLUDED.updated_by_user_id,
+           status = 'active',
+           deleted_at = NULL,
+           deleted_by_user_id = NULL,
+           updated_at = NOW()
+         WHERE business_campaign_templates.business_id = EXCLUDED.business_id
+         RETURNING *`,
+        [
+          String(id),
+          String(businessId),
+          String(name).trim(),
+          purpose == null ? null : String(purpose),
+          String(channel || "email"),
+          JSON.stringify(audience ?? {}),
+          String(subjectLine ?? ""),
+          previewText == null ? null : String(previewText),
+          cta == null ? null : String(cta),
+          JSON.stringify(Array.isArray(guardrails) ? guardrails : []),
+          JSON.stringify(Array.isArray(sections) ? sections : []),
+          sourceTemplateId == null ? null : String(sourceTemplateId),
+          approvalRequired !== false,
+          createdByUserId ? String(createdByUserId) : null,
+          updatedByUserId ? String(updatedByUserId) : null,
+        ],
+      ),
+    );
+    return mapBusinessCampaignTemplateRow(rows[0] ?? null);
+  }
+
+  async softDeleteCampaignTemplate({ templateId, businessId, deletedByUserId = null }) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `UPDATE business_campaign_templates
+         SET status = 'deleted', deleted_at = NOW(), deleted_by_user_id = $3, updated_at = NOW()
+         WHERE id = $1 AND business_id = $2 AND deleted_at IS NULL
+         RETURNING *`,
+        [String(templateId), String(businessId), deletedByUserId ? String(deletedByUserId) : null],
+      ),
+    );
+    return mapBusinessCampaignTemplateRow(rows[0] ?? null);
   }
 
   async isTeamInviteChecklistComplete(businessId) {

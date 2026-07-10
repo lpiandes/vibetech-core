@@ -46,6 +46,18 @@ export type WorkQueueItem = {
       evidenceSummary?: string;
       threadId?: string;
       messageId?: string;
+      subjectLine?: string;
+      previewText?: string | null;
+      contentVersion?: number;
+      contentHash?: string;
+      audienceFingerprint?: string | null;
+      document?: {
+        subjectLine?: string;
+        previewText?: string | null;
+        contentVersion?: number;
+        contentHash?: string;
+        sections?: Array<Record<string, unknown>>;
+      } | null;
       recipientPreparations?: Array<{
         partyId?: string;
         displayName?: string;
@@ -199,6 +211,7 @@ export function resolveCampaignReview(item: WorkQueueItem) {
   if (!campaign) return null;
   const recipients = Array.isArray(campaign.recipientPreparations) ? campaign.recipientPreparations : [];
   const firstRecipient = recipients[0] ?? {};
+  const document = campaign.document ?? null;
   return {
     campaignName: String(campaign.campaignName ?? item.title ?? "Campaign preparation"),
     purpose: String(campaign.purpose ?? item.description ?? ""),
@@ -207,9 +220,12 @@ export function resolveCampaignReview(item: WorkQueueItem) {
     subjectName: campaign.subject?.displayName ? String(campaign.subject.displayName) : null,
     recipientCount: Number(campaign.recipientCount ?? recipients.length),
     excludedCount: Number(campaign.excludedCount ?? 0),
-    draftSubject: String(firstRecipient.subject ?? ""),
+    draftSubject: String(document?.subjectLine ?? campaign.subjectLine ?? firstRecipient.subject ?? ""),
     draftBody: String(firstRecipient.body ?? ""),
     cta: String(campaign.cta ?? ""),
+    previewText: document?.previewText ?? campaign.previewText ?? null,
+    contentVersion: Number(document?.contentVersion ?? campaign.contentVersion ?? 1),
+    contentHash: String(document?.contentHash ?? campaign.contentHash ?? ""),
     knowledgeSummary: String(campaign.knowledgeSummary ?? ""),
     evidenceSummary: String(campaign.evidenceSummary ?? ""),
     approvalStatus: String(campaign.approvalStatus ?? item.status ?? "pending_review"),

@@ -273,6 +273,22 @@ export default function RelationshipOperationsIntelligenceLayout({ viewModel }: 
                   <div>Occurrence: <strong>{String(campaign.occurrenceKey ?? "Manual")}</strong></div>
                 </div>
                 <div style={{ marginTop: 10, color: cockpitColors.textMuted, fontSize: 12 }}>{String(campaign.deliveryTruth)}</div>
+                {campaign.deliverySummary?.counts ? (
+                  <div style={{ marginTop: 8, fontSize: 12, color: cockpitColors.textSecondary }}>
+                    Sent {String(campaign.deliverySummary.counts.sent)} · Failed {String(campaign.deliverySummary.counts.failed)} ·
+                    Excluded {String(campaign.deliverySummary.counts.excluded)}
+                  </div>
+                ) : null}
+                {safeArray(campaign.deliveryRecords).slice(0, 5).map((record: any) => (
+                  <div key={`${record.partyId}-${record.messageId ?? record.status}`} style={{ fontSize: 12, color: cockpitColors.textMuted, marginTop: 4 }}>
+                    {String(record.displayName ?? record.partyId)}: {String(record.status)}
+                    {record.failureReason ? ` — ${String(record.failureReason)}` : ""}
+                    {record.exclusionReason ? ` — ${String(record.exclusionReason)}` : ""}
+                  </div>
+                ))}
+                {campaign.knowledgeSummary ? (
+                  <div style={{ marginTop: 8, fontSize: 12, color: cockpitColors.textMuted }}>{String(campaign.knowledgeSummary)}</div>
+                ) : null}
                 <div style={{ display: "grid", gap: 6, marginTop: 12 }}>
                   {safeArray(campaign.recipients).slice(0, 4).map((recipient: any) => (
                     <div key={String(recipient.partyId)} style={{ fontSize: 13 }}>

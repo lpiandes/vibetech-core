@@ -11,25 +11,12 @@ export async function POST(
     const { businessId, workId } = await params;
     const body = await request.json().catch(() => ({}));
     const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_MANAGE);
-    const result = await ctx.service.approveCampaignWork(
-      workId,
-      {
-        binding: body.binding ?? null,
-        actorId: String(ctx.user.id),
-      },
-      new Date().toISOString(),
-    );
-    if (!result.ok) {
-      const status = result.reason === "work_not_found" ? 404 : 400;
-      return NextResponse.json({ ok: false, error: result.reason ?? "Campaign approval failed." }, { status });
-    }
-    return NextResponse.json({
-      ok: true,
-      workId: result.workId,
-      messageId: result.messageId,
-      communicationStatus: "queued",
-      approvalBinding: result.approvalBinding ?? null,
+    const template = await ctx.service.saveCampaignAsTemplate(workId, {
+      name: body.name ? String(body.name) : undefined,
+      templateId: body.templateId ? String(body.templateId) : null,
+      actorId: String(ctx.user.id),
     });
+    return NextResponse.json({ ok: true, template });
   } catch (err) {
     return authorizationErrorResponse(err);
   }

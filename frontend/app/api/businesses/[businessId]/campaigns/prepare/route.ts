@@ -13,7 +13,8 @@ export async function POST(
     const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_MANAGE);
     const result = await ctx.service.prepareCampaign(
       {
-        campaignTemplateId: String(body.campaignTemplateId ?? ""),
+        campaignTemplateId: body.campaignTemplateId ? String(body.campaignTemplateId) : undefined,
+        businessTemplateId: body.businessTemplateId ? String(body.businessTemplateId) : null,
         subjectId: body.subjectId ? String(body.subjectId) : null,
         operationId: body.operationId ? String(body.operationId) : null,
         actorId: String(ctx.user.id),

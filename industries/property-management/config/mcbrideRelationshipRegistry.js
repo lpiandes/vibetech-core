@@ -11,6 +11,7 @@ export const MCBRIDE_RELATIONSHIP_TYPES = deepFreeze([
   { type: "RESIDENT", label: "Resident", category: "property_management", lifecycleStage: "active_client" },
   { type: "VENDOR", label: "Vendor", category: "operations", lifecycleStage: "active" },
   { type: "REFERRAL_SOURCE", label: "Referral Source", category: "brokerage", lifecycleStage: "active" },
+  { type: "REFERRED_BY", label: "Referred By", category: "brokerage", lifecycleStage: "active" },
   { type: "INVESTOR", label: "Investor", category: "brokerage", lifecycleStage: "active" },
 ]);
 

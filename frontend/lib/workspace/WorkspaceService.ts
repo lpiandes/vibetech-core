@@ -53,7 +53,16 @@ import { RelationshipFollowUpDraftAssistanceService } from "../../../backend/cor
 import { buildRelationshipOperationsIntelligence } from "../../../backend/core/relationship-operations/RelationshipOperationsIntelligenceProjection.js";
 import { buildCampaignOperationsView } from "../../../backend/core/campaigns/CampaignOperationsProjection.js";
 import { CampaignPreparationService } from "../../../backend/core/campaigns/CampaignPreparationService.js";
+import { CampaignDocumentService, buildExpectedApprovalBinding } from "../../../backend/core/campaigns/CampaignDocumentService.js";
+import { CampaignDeliveryService } from "../../../backend/core/campaigns/CampaignDeliveryService.js";
+import { businessCampaignTemplateService } from "../../../backend/core/platform/campaigns/BusinessCampaignTemplateService.js";
+import { businessKnowledgeService } from "../../../backend/core/platform/knowledge/BusinessKnowledgeService.js";
+import { buildMcBrideReadinessProjection } from "../../../backend/core/campaigns/McBrideReadinessProjection.js";
+import { recordReferralIntroduction, buildReferralOperationsSummary } from "../../../backend/core/campaigns/ReferralLoopService.js";
+import { PM_CAMPAIGN_SECTION_TYPES } from "../../../industries/property-management/config/campaignSectionCatalog.js";
+import { MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE } from "../../../industries/property-management/config/mcbrideClientTemplate.js";
 import { materializeDueRecurringOperations } from "../../../backend/core/campaigns/RecurringOperationService.js";
+import { platformStore } from "../../../backend/core/platform/persistence/PostgresPlatformStore.js";
 import { buildDemoStorySteps } from "../../../backend/core/demo/buildDemoStorySteps.js";
 import { projectSegmentMembership } from "../../../backend/core/segments/SegmentProjectionEngine.js";
 import { checkCommunicationPermitted } from "../../../backend/core/communications/preferences/CommunicationPreferenceEnforcer.js";
@@ -884,19 +893,49 @@ export class WorkspaceService {
       campaignTemplates: installation?.campaignTemplates ?? [],
       nowISO: currentCampaignNowISO(),
     });
+    const referralOperations = buildReferralOperationsSummary({ stack });
     return attachProductContext(
-      { ...intelligence, businessId: this.workspaceId, campaignOperations },
+      { ...intelligence, businessId: this.workspaceId, campaignOperations, referralOperations },
       this.connected,
     );
   }
 
-  async prepareCampaign(input: { campaignTemplateId: string; subjectId?: string | null; operationId?: string | null; actorId?: string }, nowISO?: string) {
+  async prepareCampaign(input: {
+    campaignTemplateId?: string;
+    businessTemplateId?: string | null;
+    subjectId?: string | null;
+    operationId?: string | null;
+    actorId?: string;
+  }, nowISO?: string) {
     const stack = this.connected.operatingStack;
     if (!stack) throw new Error("Campaign preparation is not available for this workspace.");
     const installation = this.connected.installationResult as Record<string, unknown>;
     const templates = Array.isArray(installation?.campaignTemplates) ? installation.campaignTemplates as Array<Record<string, unknown>> : [];
     const operations = Array.isArray(installation?.recurringOperationDefinitions) ? installation.recurringOperationDefinitions as Array<Record<string, unknown>> : [];
-    const template = templates.find((entry) => String(entry.id) === String(input.campaignTemplateId));
+
+    let businessTemplate: Record<string, unknown> | null = null;
+    if (input.businessTemplateId) {
+      businessTemplate = await businessCampaignTemplateService.getTemplate(String(input.businessTemplateId), this.workspaceId) as Record<string, unknown> | null;
+      if (!businessTemplate) throw new Error("Business campaign template not found.");
+    }
+
+    const packageTemplateId = input.campaignTemplateId
+      || (businessTemplate?.sourceTemplateId ? String(businessTemplate.sourceTemplateId) : null)
+      || (businessTemplate?.id ? String(businessTemplate.id) : null);
+    const template = templates.find((entry) => String(entry.id) === String(packageTemplateId))
+      || (businessTemplate
+        ? {
+            id: String(businessTemplate.sourceTemplateId || businessTemplate.id),
+            name: businessTemplate.name,
+            purpose: businessTemplate.purpose || "Review campaign audience and draft.",
+            channel: businessTemplate.channel || "email",
+            audience: businessTemplate.audience || { type: "all_marketable_contacts" },
+            approvalRequired: businessTemplate.approvalRequired !== false,
+            defaultSubject: businessTemplate.subjectLine,
+            cta: businessTemplate.cta || "",
+            guardrails: businessTemplate.guardrails || [],
+          }
+        : null);
     if (!template) throw new Error("Campaign template not found.");
     const operation = input.operationId ? operations.find((entry) => String(entry.id) === String(input.operationId)) ?? null : null;
     const requiresSubject = String((template.audience as Record<string, unknown> | undefined)?.type ?? "") === "subject_interest";
@@ -906,14 +945,23 @@ export class WorkspaceService {
       throw new Error("Selected property does not belong to this business.");
     }
     const effectiveNowISO = nowISO ?? currentCampaignNowISO();
+    let knowledgeDocuments: Array<Record<string, unknown>> = [];
+    try {
+      knowledgeDocuments = await businessKnowledgeService.listOperationalDocuments(this.workspaceId);
+    } catch {
+      knowledgeDocuments = [];
+    }
     const result = (new CampaignPreparationService() as any).execute({
       stack,
       businessId: this.workspaceId,
       campaignTemplate: template,
+      businessTemplate,
       operation,
       occurrenceKey: effectiveNowISO,
       subjectId,
       nowISO: effectiveNowISO,
+      knowledgeDocuments,
+      knowledgeExpectations: (MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE as any).knowledgeExpectations ?? null,
     });
     if (result.snapshotKinds?.length) {
       await persistAffectedRuntimes({
@@ -926,12 +974,31 @@ export class WorkspaceService {
     return result;
   }
 
-  async approveCampaignWork(workId: string, nowISO?: string) {
+  async getCampaignWork(workId: string) {
     const stack = this.connected.operatingStack;
-    if (!stack) throw new Error("Campaign approval is not available for this workspace.");
-    const result = (new CampaignPreparationService() as any).approve({
+    if (!stack) throw new Error("Campaign studio is not available for this workspace.");
+    const result = (new CampaignDocumentService() as any).getCampaignWork(stack, workId);
+    if (!result.ok) return result;
+    return {
+      ...result,
+      sectionTypes: PM_CAMPAIGN_SECTION_TYPES,
+      expectedApprovalBinding: buildExpectedApprovalBinding(result.campaign, workId),
+    };
+  }
+
+  async updateCampaignDocument(workId: string, input: {
+    subjectLine?: string;
+    previewText?: string | null;
+    sections?: Array<Record<string, unknown>>;
+  }, nowISO?: string) {
+    const stack = this.connected.operatingStack;
+    if (!stack) throw new Error("Campaign studio is not available for this workspace.");
+    const result = (new CampaignDocumentService() as any).updateDocument({
       stack,
       workId,
+      subjectLine: input.subjectLine,
+      previewText: input.previewText,
+      sections: input.sections,
       nowISO: nowISO ?? NOW_ISO,
     });
     if (result.ok && result.snapshotKinds?.length) {
@@ -943,6 +1010,234 @@ export class WorkspaceService {
       });
     }
     return result;
+  }
+
+  async previewCampaignWork(workId: string, partyId?: string | null) {
+    const stack = this.connected.operatingStack;
+    if (!stack) throw new Error("Campaign studio is not available for this workspace.");
+    return (new CampaignDocumentService() as any).preview({
+      stack,
+      workId,
+      partyId: partyId ? String(partyId) : null,
+    });
+  }
+
+  async refreshCampaignAudience(workId: string, nowISO?: string) {
+    const stack = this.connected.operatingStack;
+    if (!stack) throw new Error("Campaign studio is not available for this workspace.");
+    const loaded = (new CampaignDocumentService() as any).getCampaignWork(stack, workId);
+    if (!loaded.ok) return loaded;
+    const installation = this.connected.installationResult as Record<string, unknown>;
+    const templates = Array.isArray(installation?.campaignTemplates) ? installation.campaignTemplates as Array<Record<string, unknown>> : [];
+    const template = templates.find((entry) => String(entry.id) === String(loaded.campaign.campaignTemplateId)) ?? null;
+    const result = (new CampaignDocumentService() as any).refreshAudience({
+      stack,
+      workId,
+      campaignTemplate: template,
+      nowISO: nowISO ?? NOW_ISO,
+    });
+    if (result.ok && result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
+  }
+
+  async listCampaignTemplates() {
+    const installation = this.connected.installationResult as Record<string, unknown>;
+    const packageTemplates = Array.isArray(installation?.campaignTemplates)
+      ? (installation.campaignTemplates as Array<Record<string, unknown>>).map((template) => ({
+          id: String(template.id),
+          name: String(template.name ?? template.id),
+          purpose: template.purpose ? String(template.purpose) : null,
+          channel: String(template.channel ?? "email"),
+          audience: template.audience ?? { type: "all_marketable_contacts" },
+          subjectLine: String(template.defaultSubject ?? ""),
+          origin: "package" as const,
+          immutable: true,
+        }))
+      : [];
+    const businessTemplates = await businessCampaignTemplateService.listTemplates(this.workspaceId);
+    return {
+      packageTemplates,
+      businessTemplates,
+      sectionTypes: PM_CAMPAIGN_SECTION_TYPES,
+    };
+  }
+
+  async saveCampaignAsTemplate(workId: string, input: { name?: string; templateId?: string | null; actorId?: string } = {}) {
+    const stack = this.connected.operatingStack;
+    if (!stack) throw new Error("Campaign studio is not available for this workspace.");
+    const loaded = (new CampaignDocumentService() as any).getCampaignWork(stack, workId);
+    if (!loaded.ok) throw new Error(loaded.reason === "work_not_found" ? "Campaign work not found." : "Not campaign work.");
+    const document = loaded.document;
+    const campaign = loaded.campaign;
+    return businessCampaignTemplateService.saveTemplate({
+      businessId: this.workspaceId,
+      ...(input.templateId ? { templateId: String(input.templateId) } : {}),
+      name: input.name || campaign.campaignName || document.subjectLine || "Saved campaign template",
+      purpose: campaign.purpose ?? null,
+      channel: document.channel,
+      audience: campaign.campaignTemplateId
+        ? ((this.connected.installationResult as any)?.campaignTemplates ?? []).find((entry: any) => String(entry.id) === String(campaign.campaignTemplateId))?.audience
+          ?? { type: "all_marketable_contacts" }
+        : { type: "all_marketable_contacts" },
+      subjectLine: document.subjectLine,
+      previewText: document.previewText,
+      cta: campaign.cta ?? null,
+      guardrails: campaign.guardrails ?? [],
+      sections: document.sections,
+      sourceTemplateId: campaign.campaignTemplateId ?? null,
+      approvalRequired: true,
+      actorUserId: input.actorId ?? null,
+    } as any);
+  }
+
+  async approveCampaignWork(workId: string, input: { binding?: Record<string, unknown> | null; actorId?: string } = {}, nowISO?: string) {
+    const stack = this.connected.operatingStack;
+    if (!stack) throw new Error("Campaign approval is not available for this workspace.");
+    const result = (new CampaignPreparationService() as any).approve({
+      stack,
+      workId,
+      binding: input.binding ?? null,
+      approvedBy: input.actorId ?? null,
+      nowISO: nowISO ?? NOW_ISO,
+    });
+    if (result.ok && result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
+  }
+
+  async previewCampaignSend(workId: string) {
+    const stack = this.connected.operatingStack;
+    if (!stack) throw new Error("Campaign delivery is not available for this workspace.");
+    return (new CampaignDeliveryService() as any).previewSend({
+      stack,
+      workId,
+      integrationPlatform: this.connected.integrationPlatform,
+    });
+  }
+
+  async sendCampaignWork(workId: string, input: { binding?: Record<string, unknown> | null; actorId?: string } = {}, nowISO?: string) {
+    const stack = this.connected.operatingStack;
+    if (!stack) throw new Error("Campaign delivery is not available for this workspace.");
+    const result = await (new CampaignDeliveryService() as any).executeSend({
+      stack,
+      workId,
+      binding: input.binding ?? null,
+      actorId: input.actorId ?? null,
+      integrationPlatform: this.connected.integrationPlatform,
+      nowISO: nowISO ?? NOW_ISO,
+    });
+    if (result.ok && result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
+  }
+
+  async refreshCampaignKnowledge(workId: string, nowISO?: string) {
+    const stack = this.connected.operatingStack;
+    if (!stack) throw new Error("Campaign studio is not available for this workspace.");
+    const loaded = (new CampaignDocumentService() as any).getCampaignWork(stack, workId);
+    if (!loaded.ok) return loaded;
+    let knowledgeDocuments: Array<Record<string, unknown>> = [];
+    try {
+      knowledgeDocuments = await businessKnowledgeService.listOperationalDocuments(this.workspaceId);
+    } catch {
+      knowledgeDocuments = [];
+    }
+    const { selectCampaignKnowledgeDocuments, campaignKnowledgeCategoryIdsForTemplate, attachKnowledgeToCampaignDocument } = await import("../../../backend/core/campaigns/CampaignKnowledgeAssembler.js") as any;
+    const categoryIds = campaignKnowledgeCategoryIdsForTemplate(
+      loaded.campaign.campaignTemplateId,
+      (MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE as any).knowledgeExpectations,
+    );
+    const sources = selectCampaignKnowledgeDocuments({
+      documents: knowledgeDocuments,
+      businessId: this.workspaceId,
+      allowedCategoryIds: categoryIds,
+      subjectId: loaded.campaign.subject?.id ?? null,
+    });
+    const attached = attachKnowledgeToCampaignDocument({
+      document: loaded.document,
+      knowledgeSources: sources,
+      knowledgeExpectations: (MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE as any).knowledgeExpectations,
+      campaignTemplateId: loaded.campaign.campaignTemplateId,
+    });
+    return (new CampaignDocumentService() as any).updateDocument({
+      stack,
+      workId,
+      sections: attached.sections,
+      nowISO: nowISO ?? NOW_ISO,
+    });
+  }
+
+  async loadMcBrideReadiness() {
+    const stack = this.connected.operatingStack;
+    let knowledgeDocumentCount = 0;
+    let knowledgeDocuments: Array<Record<string, unknown>> = [];
+    let membershipCount = 0;
+    try {
+      knowledgeDocumentCount = await platformStore.countActiveKnowledgeDocuments(this.workspaceId);
+      knowledgeDocuments = await businessKnowledgeService.listDocuments(this.workspaceId);
+      membershipCount = (await platformStore.listMembershipsForBusiness(this.workspaceId)).length;
+    } catch {
+      knowledgeDocumentCount = 0;
+    }
+    return (buildMcBrideReadinessProjection as any)({
+      businessId: this.workspaceId,
+      stack,
+      integrationPlatform: this.connected.integrationPlatform,
+      knowledgeDocumentCount,
+      knowledgeDocuments,
+      membershipCount,
+      template: MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE as any,
+    });
+  }
+
+  async recordReferralIntroduction(input: {
+    referrerPartyId: string;
+    introducedPartyId?: string | null;
+    introducedDisplayName?: string | null;
+    sourceInteractionId?: string | null;
+  }) {
+    const stack = this.connected.operatingStack;
+    if (!stack) throw new Error("Referral loop is not available for this workspace.");
+    const result = (recordReferralIntroduction as any)({
+      stack,
+      referrerPartyId: input.referrerPartyId,
+      introducedPartyId: input.introducedPartyId ?? null,
+      introducedDisplayName: input.introducedDisplayName ?? null,
+      sourceInteractionId: input.sourceInteractionId ?? null,
+      nowISO: NOW_ISO,
+    });
+    if (result.ok && result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
+  }
+
+  loadReferralOperationsSummary() {
+    return buildReferralOperationsSummary({ stack: this.connected.operatingStack });
   }
 
   loadAudienceDashboard() {

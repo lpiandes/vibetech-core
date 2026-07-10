@@ -5,17 +5,27 @@ import { RUNTIME_SNAPSHOT_KINDS } from "../persistence/RuntimeSnapshotKinds.js";
 
 import { buildCampaignAudiencePreview } from "./CampaignAudienceProjection.js";
 import { composeCampaignDraft } from "./CampaignDraftComposer.js";
+import {
+  approvalBindingsMatch,
+  createApprovalBinding,
+  messageIdForContentVersion,
+  normalizeCampaignDocumentFromPreparation,
+} from "./CampaignDocument.js";
+import { buildExpectedApprovalBinding } from "./CampaignDocumentService.js";
+import { renderCampaignDocumentBody, renderCampaignSubjectLine } from "./CampaignDocumentRenderer.js";
 
 function safeId(value) {
   return String(value ?? "").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase();
 }
 
-function campaignIds({ operationId, campaignTemplateId, occurrenceKey, subjectId }) {
+function campaignIds({ operationId, campaignTemplateId, occurrenceKey, subjectId, contentVersion = 1 }) {
   const base = [operationId || "manual", campaignTemplateId, occurrenceKey, subjectId].filter(Boolean).map(safeId).join("_");
+  const baseMessageId = `cm_campaign_${base}`;
   return {
     workId: `work_campaign_${base}`,
     threadId: `ct_campaign_${base}`,
-    messageId: `cm_campaign_${base}`,
+    baseMessageId,
+    messageId: messageIdForContentVersion(baseMessageId, contentVersion),
   };
 }
 
@@ -31,13 +41,29 @@ export class CampaignPreparationService {
     operation = null,
     occurrenceKey,
     subjectId = null,
+    businessTemplate = null,
+    knowledgeDocuments = [],
+    knowledgeExpectations = null,
     nowISO = new Date().toISOString(),
   } = {}) {
     if (!stack?.workRuntime || !stack?.communicationRuntime || !stack?.businessGraphRuntime) {
       throw new Error("CampaignPreparationService: stack with work, communication, and graph runtimes required.");
     }
-    if (!campaignTemplate?.id) throw new Error("CampaignPreparationService: campaignTemplate required.");
-    const requiresSubject = String(campaignTemplate?.audience?.type ?? "") === "subject_interest";
+    const template = businessTemplate
+      ? {
+          id: businessTemplate.sourceTemplateId || businessTemplate.id,
+          name: businessTemplate.name,
+          purpose: businessTemplate.purpose || "Review campaign audience and draft.",
+          channel: businessTemplate.channel || "email",
+          audience: businessTemplate.audience || { type: "all_marketable_contacts" },
+          approvalRequired: businessTemplate.approvalRequired !== false,
+          defaultSubject: businessTemplate.subjectLine,
+          cta: businessTemplate.cta || "",
+          guardrails: businessTemplate.guardrails || [],
+        }
+      : campaignTemplate;
+    if (!template?.id && !businessTemplate?.id) throw new Error("CampaignPreparationService: campaignTemplate required.");
+    const requiresSubject = String(template?.audience?.type ?? "") === "subject_interest";
     if (requiresSubject && !subjectId) throw new Error("CampaignPreparationService: subjectId required for subject campaign.");
     if (subjectId && !stack.businessSubjectRuntime?.getSubject?.(String(subjectId))) {
       throw new Error("CampaignPreparationService: subject does not exist in this business.");
@@ -46,9 +72,10 @@ export class CampaignPreparationService {
     const key = String(occurrenceKey ?? nowISO).slice(0, 10);
     const ids = campaignIds({
       operationId: operation?.id ?? null,
-      campaignTemplateId: campaignTemplate.id,
+      campaignTemplateId: template.id || businessTemplate?.id,
       occurrenceKey: key,
       subjectId,
+      contentVersion: 1,
     });
     const existing = existingCampaignWork(stack.workRuntime, ids.workId);
     if (existing) {
@@ -57,28 +84,47 @@ export class CampaignPreparationService {
         idempotent: true,
         workId: ids.workId,
         threadId: ids.threadId,
-        messageId: ids.messageId,
+        messageId: existing.metadata?.campaignPreparation?.messageId ?? ids.messageId,
         snapshotKinds: [],
       };
     }
 
     const audiencePreview = buildCampaignAudiencePreview({
       stack,
-      audience: campaignTemplate.audience,
+      audience: template.audience,
       subjectId,
-      channel: campaignTemplate.channel ?? "email",
+      channel: template.channel ?? "email",
     });
     const draft = composeCampaignDraft({
-      template: campaignTemplate,
+      template: campaignTemplate || template,
+      businessTemplate,
       audiencePreview,
       operation,
       nowISO,
+      documentId: `doc_${ids.workId}`,
+      contentVersion: 1,
+      knowledgeDocuments,
+      businessId,
+      knowledgeExpectations,
     });
 
     const relatedObjects = [
       createEntityRef({ entityType: ENTITY_TYPES.WORK, entityId: ids.workId }),
     ];
     if (subjectId) relatedObjects.push(createEntityRef({ entityType: ENTITY_TYPES.SUBJECT, entityId: String(subjectId) }));
+
+    const campaignPreparation = {
+      ...draft,
+      workId: ids.workId,
+      threadId: ids.threadId,
+      messageId: ids.messageId,
+      baseMessageId: ids.baseMessageId,
+      occurrenceKey: key,
+      approvalStatus: draft.approvalRequired ? "pending_review" : "not_required",
+      deliveryReadiness: "provider_required_for_sending",
+      approvalBinding: null,
+      versionHistory: [],
+    };
 
     stack.workRuntime.applyEvent({
       id: `evt_${ids.workId}_created`,
@@ -88,8 +134,8 @@ export class CampaignPreparationService {
       payload: {
         workItem: {
           id: ids.workId,
-          title: String(campaignTemplate.name ?? "Campaign preparation"),
-          description: String(campaignTemplate.purpose ?? "Review campaign audience and draft."),
+          title: String(template.name ?? "Campaign preparation"),
+          description: String(template.purpose ?? "Review campaign audience and draft."),
           workType: "campaign_preparation",
           status: "review_required",
           priority: "medium",
@@ -105,17 +151,7 @@ export class CampaignPreparationService {
           blockedReason: null,
           relatedObjects,
           requirements: ["review_audience", "approve_before_sending"],
-          metadata: {
-            campaignPreparation: {
-              ...draft,
-              workId: ids.workId,
-              threadId: ids.threadId,
-              messageId: ids.messageId,
-              occurrenceKey: key,
-              approvalStatus: draft.approvalRequired ? "pending_review" : "not_required",
-              deliveryReadiness: "provider_required_for_sending",
-            },
-          },
+          metadata: { campaignPreparation },
         },
       },
     });
@@ -128,20 +164,25 @@ export class CampaignPreparationService {
       payload: {
         thread: {
           id: ids.threadId,
-          subject: String(campaignTemplate.name ?? "Campaign preparation"),
-          channel: String(campaignTemplate.channel ?? "email"),
+          subject: String(template.name ?? "Campaign preparation"),
+          channel: String(template.channel ?? "email"),
           status: "draft",
           participants: [],
           messageIds: [],
           relatedObjects,
           createdAt: String(nowISO),
           updatedAt: String(nowISO),
-          metadata: { campaignPreparation: { workId: ids.workId, campaignTemplateId: campaignTemplate.id } },
+          metadata: { campaignPreparation: { workId: ids.workId, campaignTemplateId: template.id } },
         },
       },
     });
 
-    const first = draft.recipientPreparations[0] ?? {};
+    const sharedSubject = renderCampaignSubjectLine(draft.document, { subject: audiencePreview.subject });
+    const sharedBody = renderCampaignDocumentBody(draft.document, {
+      recipient: draft.recipientPreparations[0] ?? null,
+      subject: audiencePreview.subject,
+    });
+
     stack.communicationRuntime.applyEvent({
       id: `evt_${ids.messageId}_drafted`,
       timestampISO: String(nowISO),
@@ -152,7 +193,7 @@ export class CampaignPreparationService {
           id: ids.messageId,
           threadId: ids.threadId,
           direction: "outbound",
-          channel: String(campaignTemplate.channel ?? "email"),
+          channel: String(template.channel ?? "email"),
           status: "draft",
           sender: { id: "vibetech", type: "system" },
           recipients: draft.recipientPreparations.map((recipient) => ({
@@ -160,14 +201,14 @@ export class CampaignPreparationService {
             type: "party",
             metadata: { email: recipient.email, displayName: recipient.displayName },
           })),
-          subject: String(first.subject ?? campaignTemplate.defaultSubject ?? campaignTemplate.name),
-          body: String(first.body ?? "Review campaign draft before sending."),
+          subject: sharedSubject,
+          body: sharedBody || "Review campaign draft before sending.",
           createdAt: String(nowISO),
           sentAt: null,
           deliveredAt: null,
           failedAt: null,
           relatedObjects,
-          metadata: { campaignPreparation: draft },
+          metadata: { campaignPreparation },
         },
       },
     });
@@ -178,13 +219,19 @@ export class CampaignPreparationService {
       workId: ids.workId,
       threadId: ids.threadId,
       messageId: ids.messageId,
-      campaign: draft,
+      campaign: campaignPreparation,
       audiencePreview,
       snapshotKinds: [RUNTIME_SNAPSHOT_KINDS.WORK, RUNTIME_SNAPSHOT_KINDS.COMMUNICATION],
     };
   }
 
-  approve({ stack, workId, nowISO = new Date().toISOString() } = {}) {
+  approve({
+    stack,
+    workId,
+    binding = null,
+    approvedBy = null,
+    nowISO = new Date().toISOString(),
+  } = {}) {
     const work = stack?.workRuntime?.getWorkItem?.(String(workId));
     if (!work) return { ok: false, reason: "work_not_found", snapshotKinds: [] };
     const campaign = work.metadata?.campaignPreparation;
@@ -193,9 +240,30 @@ export class CampaignPreparationService {
     const message = stack.communicationRuntime?.getMessage?.(messageId);
     if (!message) return { ok: false, reason: "message_not_found", snapshotKinds: [] };
     const recipients = Array.isArray(campaign.recipientPreparations) ? campaign.recipientPreparations : [];
-    if (recipients.length === 0 || (!message.subject && !message.body)) {
+    const document = normalizeCampaignDocumentFromPreparation(campaign);
+    if (recipients.length === 0 || (!document.subjectLine && !message.subject && !message.body)) {
       return { ok: false, reason: "campaign_review_not_ready", snapshotKinds: [] };
     }
+
+    const expected = buildExpectedApprovalBinding(campaign, workId);
+    if (binding) {
+      if (!approvalBindingsMatch(expected, binding)) {
+        return { ok: false, reason: "stale_approval_binding", expected, snapshotKinds: [] };
+      }
+    } else if (campaign.approvalBinding && !approvalBindingsMatch(expected, campaign.approvalBinding)) {
+      return { ok: false, reason: "stale_approval_binding", expected, snapshotKinds: [] };
+    }
+
+    // Reject approving a protected historical message when work already points at a newer draft.
+    if (String(message.status) !== "draft" && String(work.status) === "review_required") {
+      return { ok: false, reason: "stale_approval_binding", expected, snapshotKinds: [] };
+    }
+
+    const approvalBinding = createApprovalBinding({
+      ...expected,
+      approvedAt: String(nowISO),
+      approvedBy: approvedBy ? String(approvedBy) : null,
+    });
 
     if (String(work.status) !== "approved") {
       stack.workRuntime.applyEvent({
@@ -206,6 +274,35 @@ export class CampaignPreparationService {
         payload: { workItemId: String(workId), status: "approved" },
       });
     }
+
+    stack.workRuntime.applyEvent({
+      id: `evt_${String(workId)}_campaign_binding_${Date.now()}`,
+      timestampISO: String(nowISO),
+      type: WORK_EVENT_TYPES.WORK_ITEM_UPDATED,
+      source: "campaign_preparation",
+      payload: {
+        workItemId: String(workId),
+        patch: {
+          metadata: {
+            ...(work.metadata ?? {}),
+            campaignPreparation: {
+              ...campaign,
+              document: {
+                ...document,
+                status: "approved",
+              },
+              approvalStatus: "approved",
+              communicationStatus: "queued",
+              approvalBinding,
+              contentVersion: document.contentVersion,
+              contentHash: document.contentHash,
+              audienceFingerprint: document.audienceFingerprint ?? campaign.audienceFingerprint,
+            },
+          },
+        },
+      },
+    });
+
     if (String(message.status) === "draft") {
       stack.communicationRuntime.applyEvent({
         id: `evt_${messageId}_queued_after_approval`,
@@ -215,6 +312,13 @@ export class CampaignPreparationService {
         payload: { messageId },
       });
     }
-    return { ok: true, workId: String(workId), messageId, snapshotKinds: [RUNTIME_SNAPSHOT_KINDS.WORK, RUNTIME_SNAPSHOT_KINDS.COMMUNICATION] };
+
+    return {
+      ok: true,
+      workId: String(workId),
+      messageId,
+      approvalBinding,
+      snapshotKinds: [RUNTIME_SNAPSHOT_KINDS.WORK, RUNTIME_SNAPSHOT_KINDS.COMMUNICATION],
+    };
   }
 }

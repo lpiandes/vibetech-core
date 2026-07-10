@@ -57,11 +57,21 @@ function campaignWorkRows({ workRuntime, communicationRuntime, businessId }) {
                 ? "Failed"
                 : "Draft",
         deliveryTruth:
-          communicationStatus === "sent"
-            ? "Provider/runtime evidence recorded a send."
-            : communicationStatus === "queued"
-              ? "Approved and queued, but not sent until provider evidence exists."
-              : "Draft only. Nothing has been sent.",
+          campaign.deliverySummary?.campaignDeliveryStatus === "sent"
+            ? `Sent to ${campaign.deliverySummary.counts.sent} recipient(s) with provider evidence.`
+            : campaign.deliverySummary?.campaignDeliveryStatus === "partially_sent"
+              || campaign.deliverySummary?.campaignDeliveryStatus === "completed_with_failures"
+              ? `Partial send: ${campaign.deliverySummary.counts.sent} sent, ${campaign.deliverySummary.counts.failed} failed, ${campaign.deliverySummary.counts.excluded} excluded.`
+            : communicationStatus === "sent"
+              ? "Provider/runtime evidence recorded a send."
+              : communicationStatus === "queued"
+                ? "Approved and queued, but not sent until an explicit send runs."
+                : "Draft only. Nothing has been sent.",
+        deliverySummary: campaign.deliverySummary ?? null,
+        deliveryRecords: safeArray(campaign.deliveryRecords),
+        contentVersion: campaign.contentVersion ?? campaign.document?.contentVersion ?? 1,
+        knowledgeSummary: campaign.knowledgeSummary ?? null,
+        knowledgeSources: safeArray(campaign.knowledgeSources),
         recipients: safeArray(campaign.recipientPreparations).map((recipient) => ({
           partyId: String(recipient.partyId),
           displayName: String(recipient.displayName),
