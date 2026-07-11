@@ -47,7 +47,7 @@ export const authConfig = {
         return false;
       }
 
-      if (pathname.startsWith("/platform")) {
+      if (pathname.startsWith("/platform") || pathname.startsWith("/admin")) {
         return auth?.user?.platformRole === "PLATFORM_ADMIN";
       }
 

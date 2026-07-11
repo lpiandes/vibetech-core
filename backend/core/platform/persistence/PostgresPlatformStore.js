@@ -1264,10 +1264,170 @@ export class PostgresPlatformStore {
     );
     return rows.map(mapAiBuilderSessionRow);
   }
+
+  async listAuditEvents({ limit = 50 } = {}) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM audit_events ORDER BY created_at DESC LIMIT $1`,
+        [Number(limit) || 50],
+      ),
+    );
+    return rows.map((row) => ({
+      id: String(row.id),
+      actorUserId: row.actor_user_id ? String(row.actor_user_id) : null,
+      businessId: row.business_id ? String(row.business_id) : null,
+      action: String(row.action),
+      targetType: row.target_type ? String(row.target_type) : null,
+      targetId: row.target_id ? String(row.target_id) : null,
+      metadata: row.metadata ?? {},
+      createdAt: row.created_at?.toISOString?.() ?? row.created_at,
+    }));
+  }
+
+  async listUsers() {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT id, email, name, platform_role, status, created_at
+         FROM users
+         ORDER BY created_at DESC
+         LIMIT 500`,
+      ),
+    );
+    return rows.map((row) => ({
+      id: String(row.id),
+      email: String(row.email),
+      name: row.name ? String(row.name) : null,
+      platformRole: row.platform_role ? String(row.platform_role) : null,
+      status: row.status ? String(row.status) : "active",
+      createdAt: row.created_at?.toISOString?.() ?? row.created_at,
+    }));
+  }
+
+  async listActiveSupportSessions() {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM support_access_sessions
+         WHERE status = 'active' AND (expires_at IS NULL OR expires_at > NOW())
+         ORDER BY started_at DESC
+         LIMIT 100`,
+      ),
+    );
+    return rows.map(mapSupportAccessSessionRow);
+  }
+
+  async upsertSupportAccessSession(session) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `INSERT INTO support_access_sessions (
+           id, session_id, business_id, admin_user_id, reason, mode, status,
+           started_at, expires_at, ended_at, permanent_membership_granted, metadata, updated_at
+         ) VALUES (
+           $1, $2, $3::uuid, $4::uuid, $5, $6, $7,
+           $8::timestamptz, $9::timestamptz, $10::timestamptz, $11, $12::jsonb, NOW()
+         )
+         ON CONFLICT (session_id) DO UPDATE SET
+           status = EXCLUDED.status,
+           ended_at = EXCLUDED.ended_at,
+           expires_at = EXCLUDED.expires_at,
+           metadata = EXCLUDED.metadata,
+           updated_at = NOW()
+         RETURNING *`,
+        [
+          session.sessionId,
+          session.sessionId,
+          String(session.businessId),
+          String(session.adminUserId),
+          String(session.reason),
+          String(session.mode ?? "read_only"),
+          String(session.status ?? "active"),
+          session.startedAt ?? new Date().toISOString(),
+          session.expiresAt ?? null,
+          session.endedAt ?? null,
+          Boolean(session.permanentMembershipGranted),
+          JSON.stringify(session.metadata ?? {}),
+        ],
+      ),
+    );
+    return mapSupportAccessSessionRow(rows[0]);
+  }
+
+  async getActiveSupportAccessSession(adminUserId, businessId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM support_access_sessions
+         WHERE admin_user_id = $1::uuid AND business_id = $2::uuid AND status = 'active'
+           AND (expires_at IS NULL OR expires_at > NOW())
+         ORDER BY started_at DESC
+         LIMIT 1`,
+        [String(adminUserId), String(businessId)],
+      ),
+    );
+    return mapSupportAccessSessionRow(rows[0] ?? null);
+  }
+
+  async getSupportAccessSession(sessionId) {
+    const { rows } = await withClient((client) =>
+      client.query(`SELECT * FROM support_access_sessions WHERE session_id = $1`, [String(sessionId)]),
+    );
+    return mapSupportAccessSessionRow(rows[0] ?? null);
+  }
+
+  async upsertBusinessAnalyticsDefinitions({ businessId, payload }) {
+    const id = `analytics_defs_${businessId}`;
+    const { rows } = await withClient((client) =>
+      client.query(
+        `INSERT INTO business_analytics_definitions (id, business_id, payload, updated_at)
+         VALUES ($1, $2::uuid, $3::jsonb, NOW())
+         ON CONFLICT (business_id) DO UPDATE SET
+           payload = EXCLUDED.payload,
+           updated_at = NOW()
+         RETURNING *`,
+        [id, String(businessId), JSON.stringify(payload ?? {})],
+      ),
+    );
+    return mapAnalyticsDefinitionsRow(rows[0]);
+  }
+
+  async getBusinessAnalyticsDefinitions(businessId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM business_analytics_definitions WHERE business_id = $1::uuid`,
+        [String(businessId)],
+      ),
+    );
+    return mapAnalyticsDefinitionsRow(rows[0] ?? null);
+  }
 }
 
 export const platformStore = new PostgresPlatformStore();
 
+function mapSupportAccessSessionRow(row) {
+  if (!row) return null;
+  return {
+    sessionId: String(row.session_id),
+    businessId: String(row.business_id),
+    adminUserId: String(row.admin_user_id),
+    reason: String(row.reason),
+    mode: String(row.mode),
+    status: String(row.status),
+    startedAt: row.started_at?.toISOString?.() ?? row.started_at,
+    expiresAt: row.expires_at?.toISOString?.() ?? row.expires_at,
+    endedAt: row.ended_at?.toISOString?.() ?? row.ended_at,
+    permanentMembershipGranted: Boolean(row.permanent_membership_granted),
+    metadata: row.metadata ?? {},
+  };
+}
+
+function mapAnalyticsDefinitionsRow(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    businessId: String(row.business_id),
+    payload: row.payload ?? {},
+    createdAt: row.created_at?.toISOString?.() ?? row.created_at,
+    updatedAt: row.updated_at?.toISOString?.() ?? row.updated_at,
+  };
+}
 function mapBusinessOSSpecificationRow(row) {
   if (!row) return null;
   return {
