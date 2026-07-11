@@ -1,6 +1,8 @@
 export const DASHBOARD_CARD_TYPES = Object.freeze([
   "metric_cards",
+  "kpi_cards",
   "attention_queue",
+  "recent_activity",
   "work_queue",
   "digital_workforce",
   "pipeline",
@@ -9,6 +11,8 @@ export const DASHBOARD_CARD_TYPES = Object.freeze([
   "calendar_deadlines",
   "readiness",
   "charts",
+  "reports",
+  "operational_alerts",
 ]);
 
 export function isRegisteredDashboardCard(type) {

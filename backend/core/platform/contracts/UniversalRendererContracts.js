@@ -1,7 +1,9 @@
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 
 /**
- * Universal Renderer contracts — formalize only; no frontend rewrite in this epic.
+ * Universal Renderer contracts.
+ * Live portal implementations live under frontend/lib/portal-renderer and
+ * frontend/components/portal-renderer — registered components only, never arbitrary UI.
  */
 export const UNIVERSAL_RENDERERS = Object.freeze([
   {

@@ -57,11 +57,32 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  const newActions = [
-    { label: "Add property", href: `${base}/properties?add=1` },
-    { label: "Add knowledge", href: `${base}/knowledge?add=1` },
-    { label: "Invite team", href: `${base}/team` },
-  ];
+  const newActions = (() => {
+    const fromOs = scope.installedBusinessOS?.primaryActions ?? [];
+    if (fromOs.length) {
+      return fromOs.slice(0, 4).map((action) => ({ label: action.label, href: action.href }));
+    }
+    const subjects = scope.installedBusinessOS?.subjectTypes ?? [];
+    const subjectLabel = subjects.includes("property") || subjects.length === 0
+      ? "Add property"
+      : `Add ${String(subjects[0]).replace(/_/g, " ")}`;
+    const subjectHref = subjects.includes("property") || subjects.length === 0
+      ? `${base}/properties?add=1`
+      : `${base}/people`;
+    return [
+      { label: subjectLabel, href: subjectHref },
+      { label: "Add knowledge", href: `${base}/knowledge?add=1` },
+      { label: "Invite team", href: `${base}/team` },
+    ];
+  })();
+
+  const searchPlaceholder = (() => {
+    const terminology = scope.installedBusinessOS?.terminology as any;
+    const entities = terminology?.entityLabels ?? terminology?.presentation?.entityLabels ?? {};
+    const people = entities.people ?? entities.person ?? "people";
+    const subjects = entities.property ?? entities.subject ?? (scope.installedBusinessOS?.subjectTypes?.[0] ?? "records");
+    return `Search ${people}, ${String(subjects).replace(/_/g, " ")}, work…`;
+  })();
 
   return (
     <div
@@ -116,7 +137,7 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => query.trim() && setOpen(true)}
             onBlur={() => setTimeout(() => setOpen(false), 150)}
-            placeholder="Search people, properties, work…"
+            placeholder={searchPlaceholder}
             aria-label="Search workspace"
             style={{
               width: "100%",

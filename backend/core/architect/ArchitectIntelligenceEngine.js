@@ -7,6 +7,7 @@ import {
   BlueprintMatchingStage,
   ComponentMatchingStage,
   EmployeeGenerationStage,
+  ObjectGenerationStage,
   WorkflowGenerationStage,
   NavigationGenerationStage,
   DashboardGenerationStage,
@@ -39,6 +40,7 @@ export class ArchitectIntelligenceEngine {
     blueprintMatching = new BlueprintMatchingStage(),
     componentMatching = new ComponentMatchingStage(),
     employeeGeneration = new EmployeeGenerationStage(),
+    objectGeneration = new ObjectGenerationStage(),
     workflowGeneration = new WorkflowGenerationStage(),
     navigationGeneration = new NavigationGenerationStage(),
     dashboardGeneration = new DashboardGenerationStage(),
@@ -57,6 +59,7 @@ export class ArchitectIntelligenceEngine {
     this.blueprintMatching = blueprintMatching;
     this.componentMatching = componentMatching;
     this.employeeGeneration = employeeGeneration;
+    this.objectGeneration = objectGeneration;
     this.workflowGeneration = workflowGeneration;
     this.navigationGeneration = navigationGeneration;
     this.dashboardGeneration = dashboardGeneration;
@@ -115,7 +118,19 @@ export class ArchitectIntelligenceEngine {
     });
     early.push(employees);
 
-    const workflows = this.workflowGeneration.generate({ dna: ctx.dna });
+    const objects = this.objectGeneration.generate({
+      dna: ctx.dna,
+      businessSummary: ctx.businessSummary,
+      businessId: ctx.businessId ?? null,
+    });
+    early.push(objects);
+
+    const workflows = this.workflowGeneration.generate({
+      dna: ctx.dna,
+      businessSummary: ctx.businessSummary,
+      businessId: ctx.businessId ?? null,
+      organization: employees.outputs?.organization ?? null,
+    });
     early.push(workflows);
 
     // Assemble once from reusable assets, then derive navigation/dashboard/etc.
@@ -136,15 +151,22 @@ export class ArchitectIntelligenceEngine {
       dna: ctx.dna,
       specification: ctx.specification,
       businessSummary: ctx.businessSummary,
+      businessId: ctx.businessId ?? null,
     });
     const knowledge = this.knowledgeGeneration.generate({ dna: ctx.dna });
-    const integrations = this.integrationGeneration.generate({ dna: ctx.dna });
+    const integrations = this.integrationGeneration.generate({
+      dna: ctx.dna,
+      businessSummary: ctx.businessSummary,
+      businessId: ctx.businessId ?? null,
+    });
     const gaps = this.gapAnalysis.analyze({
       dna: ctx.dna,
       businessSummary: ctx.businessSummary,
       recommendations: [
         ...(blueprint.outputs?.recommendations ?? []),
         ...(employees.outputs?.employees ?? []),
+        ...(objects.outputs?.objects ?? []),
+        ...(workflows.outputs?.workflows ?? []),
       ],
     });
     const preview = this.previewGeneration.generate({

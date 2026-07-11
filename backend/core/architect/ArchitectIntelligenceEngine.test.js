@@ -130,8 +130,13 @@ test("component reuse, employees, workflows, dashboards, and gaps", async () => 
 
   assert.ok(result.stages.find((entry) => entry.stageId === "component_matching").outputs.recommendations.length);
   assert.ok(result.stages.find((entry) => entry.stageId === "employee_generation").outputs.employees.length);
+  assert.ok(result.stages.find((entry) => entry.stageId === "object_generation").outputs.objects.length);
   assert.ok(result.stages.find((entry) => entry.stageId === "workflow_generation").outputs.workflows.length);
+  assert.ok(result.stages.find((entry) => entry.stageId === "workflow_generation").outputs.workflowModel);
+  assert.ok(result.stages.find((entry) => entry.stageId === "integration_generation").outputs.integrations.length);
+  assert.ok(result.stages.find((entry) => entry.stageId === "integration_generation").outputs.integrationModel);
   assert.ok(result.stages.find((entry) => entry.stageId === "dashboard_generation").outputs.dashboard.cards.length);
+  assert.ok(result.stages.find((entry) => entry.stageId === "dashboard_generation").outputs.analyticsModel);
   const gaps = result.stages.find((entry) => entry.stageId === "gap_analysis").outputs.gaps;
   assert.ok(gaps.some((gap) => /payroll/i.test(gap.label) || gap.architectClass === "unsupported"));
   assert.ok(result.specification?.modules?.length);

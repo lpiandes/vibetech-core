@@ -4,6 +4,9 @@ import { resolveReusePreference } from "../platform/constitution/BlueprintResolu
 import { BlueprintRecommendationEngine } from "../ai-builder/BlueprintRecommendationEngine.js";
 import { ComponentRecommendationEngine } from "../ai-builder/ComponentRecommendationEngine.js";
 import { EmployeeArchetypeRecommendationEngine } from "../ai-builder/EmployeeArchetypeRecommendationEngine.js";
+import { ObjectRecommendationEngine } from "../ai-builder/ObjectRecommendationEngine.js";
+import { WorkflowRecommendationEngine } from "../ai-builder/WorkflowRecommendationEngine.js";
+import { IntegrationRecommendationEngine } from "../ai-builder/IntegrationRecommendationEngine.js";
 import { CapabilityGapDetector } from "../ai-builder/CapabilityGapDetector.js";
 import { DashboardRecommendationEngine } from "../ai-builder/DashboardRecommendationEngine.js";
 import { buildBusinessOSNavigation } from "../business-os/BusinessOSNavigationBuilder.js";
@@ -163,47 +166,122 @@ export class EmployeeGenerationStage {
       roles: dna?.team?.map((entry) => entry.label),
       repetitiveWork: dna?.recurringWork,
     };
-    const result = this.engine.recommend({ businessSummary: summary });
+    const result = this.engine.recommend({ businessSummary: summary, dna });
+    const organization = result.organization ?? null;
     return createArchitectStageResult({
       stageId: "employee_generation",
-      inputs: { teamSignals: summary.roles ?? [] },
+      inputs: { teamSignals: summary.roles ?? [], industry: summary.industry ?? null },
       outputs: {
         employees: result.recommendations,
+        organization,
+        businessOsMapping: result.businessOsMapping ?? null,
         gaps: result.gaps ?? [],
+        workforceRecommendations: result.allRecommendations ?? result.recommendations,
       },
       confidence: result.recommendations.length ? "medium" : "low",
-      evidence: [],
+      evidence: organization
+        ? [`departments:${organization.departments?.length ?? 0}`, `ai_employees:${organization.aiEmployees?.length ?? 0}`]
+        : [],
       unresolvedQuestions: [],
-      recommendations: result.recommendations,
-      explanation: "Specialize reusable employee archetypes — do not invent hidden custom agents.",
+      recommendations: result.allRecommendations ?? result.recommendations,
+      explanation: "Assemble departments, roles, and reusable AI employee archetypes — never invent hidden one-off agents.",
+    });
+  }
+}
+
+export class ObjectGenerationStage {
+  constructor({ engine = new ObjectRecommendationEngine() } = {}) {
+    this.engine = engine;
+  }
+
+  generate({ dna, businessSummary = null, businessId = null } = {}) {
+    const summary = businessSummary ?? {
+      industry: dna?.company?.industry,
+      description: dna?.company?.whatTheyDo ?? dna?.company?.description,
+    };
+    const result = this.engine.recommend({ businessSummary: summary, dna, businessId });
+    const dataModel = result.dataModel ?? null;
+    return createArchitectStageResult({
+      stageId: "object_generation",
+      inputs: { industry: summary.industry ?? null, businessId },
+      outputs: {
+        objects: result.recommendations,
+        dataModel,
+        businessOsMapping: result.businessOsMapping ?? null,
+        gaps: result.gaps ?? [],
+        dataFormsRecommendations: result.allRecommendations ?? result.recommendations,
+      },
+      confidence: result.recommendations.length ? "medium" : "low",
+      evidence: dataModel
+        ? [
+          `objects:${dataModel.objects?.length ?? 0}`,
+          `forms:${dataModel.forms?.length ?? 0}`,
+          `views:${dataModel.views?.length ?? 0}`,
+          `relationships:${dataModel.relationships?.length ?? 0}`,
+        ]
+        : [],
+      unresolvedQuestions: [],
+      recommendations: result.allRecommendations ?? result.recommendations,
+      explanation: "Assemble business objects, fields, forms, views, and search from reusable object archetypes — never invent one-off schemas.",
     });
   }
 }
 
 export class WorkflowGenerationStage {
-  generate({ dna } = {}) {
-    const workflows = (dna?.workflows ?? []).map((entry, index) => ({
-      workflowId: `wf_${index}_${String(entry.label).toLowerCase().replace(/\W+/g, "_")}`.slice(0, 64),
+  constructor({ engine = new WorkflowRecommendationEngine() } = {}) {
+    this.engine = engine;
+  }
+
+  generate({ dna, businessSummary = null, businessId = null, organization = null } = {}) {
+    const summary = businessSummary ?? {
+      industry: dna?.company?.industry,
+      description: dna?.company?.whatTheyDo ?? dna?.company?.description,
+    };
+    const result = this.engine.recommend({
+      businessSummary: summary,
+      dna,
+      businessId,
+      organization,
+    });
+    const workflowModel = result.workflowModel ?? null;
+    const legacyWorkflows = (workflowModel?.workflows ?? []).map((entry) => ({
+      workflowId: entry.workflowId,
       label: entry.label,
       kind: entry.kind ?? "operations",
-      approvalRequired: /campaign|parent|customer|patient/i.test(entry.label),
+      approvalRequired: Boolean(entry.approvals?.length),
     }));
+
+    // Preserve DNA-only signal when engine returned nothing unexpected.
+    const unresolvedQuestions = legacyWorkflows.length ? [] : [{
+      questionId: "q_repetitive_work",
+      prompt: "What repetitive work takes the most time?",
+    }];
+
     return createArchitectStageResult({
       stageId: "workflow_generation",
-      inputs: { dnaWorkflowCount: dna?.workflows?.length ?? 0 },
-      outputs: { workflows },
-      confidence: workflows.length ? "medium" : "low",
-      evidence: [],
-      unresolvedQuestions: workflows.length ? [] : [{
-        questionId: "q_repetitive_work",
-        prompt: "What repetitive work takes the most time?",
-      }],
-      recommendations: workflows.slice(0, 3).map((entry) => ({
-        kind: "workflow",
-        label: entry.label,
-        why: "High-frequency work should become governed Work types.",
-      })),
-      explanation: "Workflows come from Business DNA, not invented runtimes.",
+      inputs: {
+        dnaWorkflowCount: dna?.workflows?.length ?? 0,
+        industry: summary.industry ?? null,
+        businessId,
+      },
+      outputs: {
+        workflows: legacyWorkflows.length ? legacyWorkflows : result.recommendations,
+        workflowModel,
+        businessOsMapping: result.businessOsMapping ?? null,
+        gaps: result.gaps ?? [],
+        workflowRecommendations: result.allRecommendations ?? result.recommendations,
+      },
+      confidence: legacyWorkflows.length || result.recommendations.length ? "medium" : "low",
+      evidence: workflowModel
+        ? [
+          `workflows:${workflowModel.workflows?.length ?? 0}`,
+          `approvals:${workflowModel.metrics?.approvalGated ?? 0}`,
+          `escalations:${workflowModel.metrics?.withEscalations ?? 0}`,
+        ]
+        : [],
+      unresolvedQuestions,
+      recommendations: result.allRecommendations ?? result.recommendations,
+      explanation: "Assemble workflows from reusable archetypes — stages, triggers, approvals, and escalations — never invent one-off runtimes.",
     });
   }
 }
@@ -253,7 +331,7 @@ export class DashboardGenerationStage {
     this.engine = engine;
   }
 
-  generate({ dna, specification = null, businessSummary = null } = {}) {
+  generate({ dna, specification = null, businessSummary = null, businessId = null, evidence = {} } = {}) {
     const summary = businessSummary ?? {
       industry: dna?.company?.industry,
       businessName: dna?.company?.name,
@@ -261,18 +339,34 @@ export class DashboardGenerationStage {
     const result = this.engine.recommend({
       businessSummary: summary,
       modules: specification?.modules ?? [],
+      dna,
+      evidence,
+      businessId,
     });
     return createArchitectStageResult({
       stageId: "dashboard_generation",
-      inputs: { industry: summary.industry ?? null },
-      outputs: { dashboard: result.dashboard },
+      inputs: { industry: summary.industry ?? null, businessId },
+      outputs: {
+        dashboard: result.dashboard,
+        analyticsModel: result.analyticsModel ?? null,
+        businessOsMapping: result.businessOsMapping ?? null,
+        analyticsRecommendations: result.recommendations ?? [],
+      },
       confidence: "medium",
-      recommendations: [{
-        kind: "honesty",
-        label: "Never fabricate metrics",
-        why: "Empty states must stay truthful until canonical data exists.",
-      }],
-      explanation: "Dashboards adapt by business while keeping VIBETech composition rules.",
+      evidence: result.analyticsModel
+        ? [
+          `metrics:${result.analyticsModel.metrics?.length ?? 0}`,
+          `alerts:${result.analyticsModel.alerts?.length ?? 0}`,
+        ]
+        : [],
+      recommendations: result.recommendations?.length
+        ? result.recommendations.slice(0, 8)
+        : [{
+          kind: "honesty",
+          label: "Never fabricate metrics",
+          why: "Empty states must stay truthful until canonical data exists.",
+        }],
+      explanation: "Dashboards and KPIs come from reusable metric definitions and real evidence — never fabricated series.",
     });
   }
 }
@@ -300,25 +394,54 @@ export class KnowledgeGenerationStage {
 }
 
 export class IntegrationGenerationStage {
-  generate({ dna } = {}) {
-    const integrations = (dna?.integrations ?? []).map((entry) => ({
+  constructor({ engine = new IntegrationRecommendationEngine() } = {}) {
+    this.engine = engine;
+  }
+
+  generate({ dna, businessSummary = null, businessId = null } = {}) {
+    const summary = businessSummary ?? {
+      industry: dna?.company?.industry,
+      integrations: dna?.integrations?.map((entry) => entry.label),
+      description: dna?.company?.whatTheyDo ?? dna?.company?.description,
+    };
+    const result = this.engine.recommend({
+      businessSummary: summary,
+      dna,
+      businessId,
+    });
+    const integrationModel = result.integrationModel ?? null;
+    const legacyIntegrations = (integrationModel?.connections ?? []).map((entry) => ({
       label: entry.label,
-      status: /email|inbox|crm|calendar/i.test(entry.label) ? "needs_setup" : "review",
+      status: entry.health?.statusId === "connected" ? "connected" : "needs_setup",
+      providerId: entry.providerId,
     }));
-    if (!integrations.length) {
-      integrations.push({ label: "Email / inbox", status: "needs_setup" });
-    }
+
     return createArchitectStageResult({
       stageId: "integration_generation",
-      inputs: { integrationSignals: dna?.integrations?.length ?? 0 },
-      outputs: { integrations },
-      confidence: "medium",
-      recommendations: integrations.map((entry) => ({
-        kind: "integration",
-        label: entry.label,
-        why: "Integrations are setup requirements — never silently connected.",
-      })),
-      explanation: "Integrations become readiness/setup items, not invented connectors.",
+      inputs: {
+        integrationSignals: dna?.integrations?.length ?? 0,
+        industry: summary.industry ?? null,
+        businessId,
+      },
+      outputs: {
+        integrations: legacyIntegrations.length
+          ? legacyIntegrations
+          : [{ label: "Email / inbox", status: "needs_setup" }],
+        integrationModel,
+        businessOsMapping: result.businessOsMapping ?? null,
+        gaps: result.gaps ?? [],
+        integrationRecommendations: result.allRecommendations ?? result.recommendations,
+      },
+      confidence: legacyIntegrations.length || result.recommendations.length ? "medium" : "low",
+      evidence: integrationModel
+        ? [
+          `providers:${integrationModel.connections?.length ?? 0}`,
+          `detected:${integrationModel.detectedSoftware?.length ?? 0}`,
+        ]
+        : [],
+      unresolvedQuestions: [],
+      recommendations: result.allRecommendations ?? result.recommendations,
+      explanation: "Integrations are reusable providers mapped to capabilities — never silently connected, never one-off connectors.",
     });
   }
 }

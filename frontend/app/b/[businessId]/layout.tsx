@@ -4,6 +4,7 @@ import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceSe
 import { BusinessScopeProvider } from "@/lib/platform/BusinessScopeContext";
 import WorkspaceRenderer from "@/components/workspace/WorkspaceRenderer";
 import { platformStore } from "../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { composePortalModel } from "@/lib/portal-renderer/composePortalModel.js";
 
 export default async function BusinessScopedLayout({
   children,
@@ -17,18 +18,41 @@ export default async function BusinessScopedLayout({
   const permissions = Array.from(ctx.permissions).map(String);
   const businessName = ctx.authz.business.name;
 
-  let installedNavigation = null;
+  let installedNavigation = null as any;
+  let installedBusinessOS = null as any;
   try {
     const installation = await platformStore.getBusinessOSInstallation(businessId);
-    if (installation?.configuration) {
+    let specification = null;
+    if (installation?.specificationId) {
+      try {
+        const specRow = await platformStore.getBusinessOSSpecification({
+          businessId,
+          specificationId: installation.specificationId,
+        });
+        specification = specRow?.specification ?? null;
+      } catch {
+        specification = null;
+      }
+    }
+
+    if (installation?.configuration || specification) {
+      const portalModel = composePortalModel({
+        businessId,
+        role: String(ctx.role),
+        permissions,
+        configuration: installation?.configuration ?? null,
+        specification,
+      } as any);
+      installedBusinessOS = portalModel as any;
       installedNavigation = {
-        modules: installation.configuration.modules ?? [],
-        navigation: installation.configuration.navigation ?? null,
-        roles: installation.configuration.roles ?? installation.configuration.roleDefinitions ?? [],
+        modules: portalModel.modules,
+        navigation: portalModel.navigation,
+        roles: portalModel.roles,
       };
     }
   } catch {
     installedNavigation = null;
+    installedBusinessOS = null;
   }
 
   return (
@@ -39,6 +63,7 @@ export default async function BusinessScopedLayout({
         permissions,
         businessName,
         installedNavigation,
+        installedBusinessOS,
         supportAccess: ctx.authz.supportAccess ?? null,
       }}
     >

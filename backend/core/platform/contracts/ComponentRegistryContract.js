@@ -19,6 +19,11 @@ import {
   listDashboardComponentTypes,
   isRegisteredDashboardComponent,
 } from "../../business-os/BusinessOSDashboardComponentRegistry.js";
+import {
+  UNIVERSAL_COMPONENT_TYPES,
+  isRegisteredUniversalComponent,
+  validateUniversalComponentRegistry,
+} from "../../../../frontend/lib/universal-components/registry.js";
 
 /**
  * Component Registry contract — everything rendered later must be registered.
@@ -29,6 +34,7 @@ export const COMPONENT_REGISTRY_FAMILIES = Object.freeze([
   "record_view",
   "action",
   "business_os_dashboard",
+  "universal",
 ]);
 
 export function listRegisteredComponentCatalog() {
@@ -40,6 +46,7 @@ export function listRegisteredComponentCatalog() {
       record_view: [...RECORD_VIEW_TYPES],
       action: [...ACTION_COMPONENT_TYPES],
       business_os_dashboard: listDashboardComponentTypes(),
+      universal: [...UNIVERSAL_COMPONENT_TYPES],
     },
   });
 }
@@ -56,6 +63,8 @@ export function isRegisteredComponent(family, type) {
       return isRegisteredActionComponent(type);
     case "business_os_dashboard":
       return isRegisteredDashboardComponent(type);
+    case "universal":
+      return isRegisteredUniversalComponent(type);
     default:
       return false;
   }
@@ -86,5 +95,10 @@ export function validateComponentRegistryContract() {
   if (isRegisteredComponent("dashboard_card", "evil_custom_widget")) {
     errors.push("unknown_type_accepted");
   }
-  return deepFreeze({ ok: errors.length === 0, errors, catalog });
+  if (isRegisteredComponent("universal", "evil_custom_widget")) {
+    errors.push("unknown_universal_accepted");
+  }
+  const universal = validateUniversalComponentRegistry();
+  if (!universal.ok) errors.push(...universal.errors.map((error) => `universal:${error}`));
+  return deepFreeze({ ok: errors.length === 0, errors, catalog, universal });
 }

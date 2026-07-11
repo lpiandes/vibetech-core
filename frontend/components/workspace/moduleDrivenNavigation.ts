@@ -4,6 +4,7 @@ import {
   isSafeModuleRoute as isSafeModuleRouteRaw,
 } from "../../../backend/core/business-os/BusinessOSSafeRoutes.js";
 import { resolveRoleAccess as resolveRoleAccessRaw } from "../../../backend/core/business-os/BusinessOSRoleAccess.js";
+import { applyTerminology, sectionIdForModuleType } from "../../lib/portal-renderer/composePortalModel.js";
 
 const buildBusinessOSNavigation = buildBusinessOSNavigationRaw as (input: Record<string, unknown>) => {
   primaryItems: Array<{
@@ -32,6 +33,7 @@ export type NavItem = {
   iconName: string;
   href: string;
   permission: string | null;
+  moduleType?: string;
   badges?: { type: string; value: string }[];
   overflowItems?: NavItem[];
 };
@@ -59,6 +61,7 @@ type InstalledNavigationInput = {
   navigation?: Record<string, unknown>;
   roleDefinitions?: unknown[];
   roles?: unknown[];
+  terminology?: Record<string, unknown> | null;
 };
 
 const DEFAULT_MCBRIDE_MODULES: ModuleLike[] = [
@@ -100,7 +103,7 @@ const ICON_BY_MODULE: Record<string, string> = {
 
 /**
  * Module-driven navigation with McBride-compatible default fallback.
- * Only safe registered routes are emitted.
+ * Only safe registered routes are emitted. Sectioning follows moduleType from Business OS.
  */
 export function getModuleDrivenNavSections(
   businessId: string,
@@ -113,8 +116,11 @@ export function getModuleDrivenNavSections(
 ): NavSection[] {
   const permSet = permissions instanceof Set ? permissions : new Set(permissions ?? []);
   const installed = options?.installed ?? null;
+  const terminology = installed?.terminology ?? null;
   const modules = (installed?.modules?.length ? installed.modules : DEFAULT_MCBRIDE_MODULES)
     .filter((module) => isSafeModuleRoute(module.moduleId) || module.moduleId === "for_you");
+
+  const moduleTypeById = new Map(modules.map((module) => [module.moduleId, module.moduleType ?? "operations"]));
 
   const roleAccess = resolveRoleAccess({
     configuration: {
@@ -131,6 +137,7 @@ export function getModuleDrivenNavSections(
       .filter((module) => visible.has(module.moduleId))
       .map((module) => ({
         ...module,
+        label: applyTerminology(module.label, terminology as any),
         href: resolveSafeModuleHref(module.moduleId, { businessId }),
         iconName: module.iconName ?? ICON_BY_MODULE[module.moduleId] ?? "folder",
         primaryNavigationEligible: module.primaryNavigationEligible !== false,
@@ -171,10 +178,11 @@ export function getModuleDrivenNavSections(
     return {
       id: item.id ?? `nav_${item.moduleId}`,
       moduleId: item.moduleId,
-      label: item.label,
+      label: applyTerminology(item.label, terminology as any),
       iconName: item.iconName ?? ICON_BY_MODULE[item.moduleId] ?? "folder",
       href,
       permission: item.permission ?? null,
+      moduleType: moduleTypeById.get(item.moduleId),
       badges: [],
     };
   };
@@ -193,20 +201,20 @@ export function getModuleDrivenNavSections(
     return can(item.permission);
   });
 
-  const dailyIds = new Set(["home", "for_you", "work", "people", "properties", "inbox", "teams", "players", "schedule", "practices"]);
-  const businessIds = new Set(["digital_workforce", "team", "knowledge", "performance", "reports", "drills", "scouting", "campaigns"]);
-  const systemIds = new Set(["integrations", "settings", "readiness"]);
-
   const sections: NavSection[] = [
-    { id: "daily", title: "", items: filtered.filter((item) => dailyIds.has(item.moduleId) || item.moduleId === "more") },
-    { id: "business", title: "", items: filtered.filter((item) => businessIds.has(item.moduleId)) },
-    { id: "system", title: "", items: filtered.filter((item) => systemIds.has(item.moduleId)) },
+    { id: "daily", title: "", items: [] },
+    { id: "business", title: "", items: [] },
+    { id: "system", title: "", items: [] },
   ];
 
-  // Keep overflow More attached to daily when present.
-  const more = filtered.find((item) => item.moduleId === "more");
-  if (more && !sections[0].items.some((item) => item.moduleId === "more")) {
-    sections[0].items.push(more);
+  for (const item of filtered) {
+    if (item.moduleId === "more") {
+      sections[0].items.push(item);
+      continue;
+    }
+    const sectionId = sectionIdForModuleType(item.moduleType);
+    const section = sections.find((entry) => entry.id === sectionId) ?? sections[0];
+    section.items.push(item);
   }
 
   return sections.filter((section) => section.items.length > 0);

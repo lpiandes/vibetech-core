@@ -13,6 +13,7 @@ export const ARCHITECT_PIPELINE_STAGES = Object.freeze([
   "blueprint_matching",
   "component_matching",
   "employee_generation",
+  "object_generation",
   "workflow_generation",
   "navigation_generation",
   "dashboard_generation",

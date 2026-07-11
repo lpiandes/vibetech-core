@@ -8,6 +8,12 @@ export const MODULE_COMPONENT_TYPES = Object.freeze([
   "metrics",
   "setup_card",
   "knowledge_list",
+  "communications",
+  "team",
+  "performance",
+  "home",
+  "subjects",
+  "people",
 ]);
 
 export function isRegisteredModuleComponent(type) {
