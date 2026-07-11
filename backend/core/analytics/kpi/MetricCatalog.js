@@ -1,0 +1,242 @@
+import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
+import { createMetricDefinition } from "./MetricDefinition.js";
+
+/**
+ * Reusable metric archetypes — Architect specializes these; never invent one-off vanity metrics.
+ */
+export const METRIC_CATALOG = deepFreeze({
+  open_work_count: createMetricDefinition({
+    metricId: "open_work_count",
+    label: "Open work",
+    description: "Active Work items that are not completed.",
+    category: "operational",
+    valueType: "count",
+    aggregation: "count",
+    sourceRuntime: "work",
+    sourceFields: ["status"],
+    filters: { statusNotIn: ["COMPLETED", "CANCELLED"] },
+    dimensions: ["status", "assignee"],
+    timeWindow: "current",
+    target: null,
+    thresholds: { warnAbove: 25, criticalAbove: 50 },
+    permissions: ["OWNER", "MANAGER", "EMPLOYEE"],
+    drillDownRoute: "/work",
+    evidenceContract: { requiredEvidence: ["workItems"], freshnessHours: 24 },
+    emptyState: "Open work appears after the first Work item is created.",
+  }),
+  overdue_work_count: createMetricDefinition({
+    metricId: "overdue_work_count",
+    label: "Overdue work",
+    description: "Work past due date still open.",
+    category: "operational",
+    valueType: "aging",
+    aggregation: "count",
+    sourceRuntime: "work",
+    sourceFields: ["dueAt", "status"],
+    thresholds: { warnAbove: 3, criticalAbove: 10 },
+    permissions: ["OWNER", "MANAGER", "EMPLOYEE"],
+    drillDownRoute: "/work?filter=overdue",
+    evidenceContract: { requiredEvidence: ["workItems"], freshnessHours: 24 },
+    emptyState: "Overdue work shows once due dates exist on open Work.",
+  }),
+  unassigned_work_count: createMetricDefinition({
+    metricId: "unassigned_work_count",
+    label: "Unassigned work",
+    description: "Open Work with no assignee.",
+    category: "team",
+    valueType: "workload",
+    aggregation: "count",
+    sourceRuntime: "work",
+    sourceFields: ["assigneeId", "status"],
+    thresholds: { warnAbove: 2, criticalAbove: 8 },
+    permissions: ["OWNER", "MANAGER"],
+    drillDownRoute: "/work",
+    evidenceContract: { requiredEvidence: ["workItems"] },
+  }),
+  pending_approvals_count: createMetricDefinition({
+    metricId: "pending_approvals_count",
+    label: "Pending approvals",
+    description: "Approvals waiting on a human decision.",
+    category: "workflow",
+    valueType: "backlog",
+    aggregation: "count",
+    sourceRuntime: "approvals",
+    sourceFields: ["status"],
+    thresholds: { warnAbove: 5, criticalAbove: 15 },
+    permissions: ["OWNER", "MANAGER"],
+    drillDownRoute: "/work",
+    evidenceContract: { requiredEvidence: ["approvals"] },
+  }),
+  work_completion_rate: createMetricDefinition({
+    metricId: "work_completion_rate",
+    label: "Work completion rate",
+    description: "Completed Work divided by Work closed or completed in the window.",
+    category: "workflow",
+    valueType: "completion_rate",
+    aggregation: "ratio",
+    sourceRuntime: "work",
+    sourceFields: ["status", "completedAt"],
+    timeWindow: "7d",
+    comparisonWindow: "previous_7d",
+    target: 0.8,
+    permissions: ["OWNER", "MANAGER"],
+    drillDownRoute: "/work",
+    evidenceContract: { requiredEvidence: ["workItems"], minSamples: 3 },
+  }),
+  avg_response_hours: createMetricDefinition({
+    metricId: "avg_response_hours",
+    label: "Average response time",
+    description: "Average hours from Work open to first human action.",
+    category: "customer",
+    valueType: "response_time",
+    aggregation: "average",
+    sourceRuntime: "work",
+    sourceFields: ["openedAt", "firstResponseAt"],
+    timeWindow: "7d",
+    target: 24,
+    thresholds: { warnAbove: 48, criticalAbove: 72 },
+    permissions: ["OWNER", "MANAGER"],
+    evidenceContract: { requiredEvidence: ["workItems"], minSamples: 3 },
+  }),
+  sla_compliance_rate: createMetricDefinition({
+    metricId: "sla_compliance_rate",
+    label: "SLA compliance",
+    description: "Share of Work completed within SLA.",
+    category: "quality",
+    valueType: "sla_compliance",
+    aggregation: "ratio",
+    sourceRuntime: "work",
+    sourceFields: ["slaBreached", "status"],
+    timeWindow: "30d",
+    target: 0.95,
+    permissions: ["OWNER", "MANAGER"],
+    evidenceContract: { requiredEvidence: ["workItems"], minSamples: 5 },
+  }),
+  integration_health_count: createMetricDefinition({
+    metricId: "integration_health_count",
+    label: "Healthy integrations",
+    description: "Connected integrations in healthy state.",
+    category: "integration",
+    valueType: "count",
+    aggregation: "count",
+    sourceRuntime: "integrations",
+    sourceFields: ["health"],
+    permissions: ["OWNER", "MANAGER"],
+    drillDownRoute: "/integrations",
+    evidenceContract: { requiredEvidence: ["integrations"] },
+    emptyState: "Connect an integration to measure health.",
+  }),
+  failed_integrations_count: createMetricDefinition({
+    metricId: "failed_integrations_count",
+    label: "Failed integrations",
+    description: "Integrations in error or needs-attention state.",
+    category: "integration",
+    valueType: "count",
+    aggregation: "count",
+    sourceRuntime: "integrations",
+    sourceFields: ["health"],
+    thresholds: { warnAbove: 1, criticalAbove: 3 },
+    permissions: ["OWNER", "MANAGER"],
+    drillDownRoute: "/integrations",
+    evidenceContract: { requiredEvidence: ["integrations"] },
+  }),
+  knowledge_document_count: createMetricDefinition({
+    metricId: "knowledge_document_count",
+    label: "Knowledge documents",
+    description: "Active knowledge documents available to AI employees.",
+    category: "readiness",
+    valueType: "count",
+    aggregation: "count",
+    sourceRuntime: "knowledge",
+    sourceFields: ["documentCount"],
+    permissions: ["OWNER", "MANAGER", "EMPLOYEE"],
+    drillDownRoute: "/knowledge",
+    evidenceContract: { requiredEvidence: ["knowledgeDocumentCount"] },
+  }),
+  business_health_score: createMetricDefinition({
+    metricId: "business_health_score",
+    label: "Business health",
+    description: "Composite readiness from work, knowledge, and integrations when evidence exists.",
+    category: "executive",
+    valueType: "percentage",
+    aggregation: "average",
+    sourceRuntime: "composite",
+    sourceFields: ["open_work_count", "knowledge_document_count", "integration_health_count"],
+    permissions: ["OWNER", "MANAGER"],
+    evidenceContract: { requiredEvidence: ["workItems", "knowledgeDocumentCount"], minSamples: 1 },
+  }),
+  team_capacity_utilization: createMetricDefinition({
+    metricId: "team_capacity_utilization",
+    label: "Team capacity",
+    description: "Open Work per active teammate.",
+    category: "team",
+    valueType: "capacity",
+    aggregation: "ratio",
+    sourceRuntime: "team",
+    sourceFields: ["workItems", "memberCount"],
+    target: 8,
+    thresholds: { warnAbove: 12, criticalAbove: 20 },
+    permissions: ["OWNER", "MANAGER"],
+    evidenceContract: { requiredEvidence: ["workItems", "memberCount"], minSamples: 1 },
+  }),
+  // Financial metrics exist only when real financial evidence is supplied — never fabricated.
+  revenue_total: createMetricDefinition({
+    metricId: "revenue_total",
+    label: "Revenue",
+    description: "Sum of verified revenue events in the window.",
+    category: "financial",
+    valueType: "revenue",
+    aggregation: "sum",
+    sourceRuntime: "financial",
+    sourceFields: ["amount"],
+    requiresFinancialEvidence: true,
+    permissions: ["OWNER"],
+    evidenceContract: { requiredEvidence: ["financialEvents"], minSamples: 1 },
+    emptyState: "Revenue appears only after verified financial evidence is connected.",
+  }),
+});
+
+/** Industry templates pick reusable metrics — not vertical analytics engines. */
+export const ANALYTICS_TEMPLATES = deepFreeze({
+  property_management: {
+    metricIds: [
+      "business_health_score", "open_work_count", "overdue_work_count", "unassigned_work_count",
+      "pending_approvals_count", "work_completion_rate", "integration_health_count",
+      "failed_integrations_count", "knowledge_document_count", "team_capacity_utilization",
+    ],
+  },
+  dental: {
+    metricIds: [
+      "business_health_score", "open_work_count", "overdue_work_count", "avg_response_hours",
+      "pending_approvals_count", "sla_compliance_rate", "knowledge_document_count",
+      "integration_health_count", "work_completion_rate",
+    ],
+  },
+  sports: {
+    metricIds: [
+      "business_health_score", "open_work_count", "pending_approvals_count",
+      "team_capacity_utilization", "knowledge_document_count", "integration_health_count",
+      "work_completion_rate", "unassigned_work_count",
+    ],
+  },
+  default: {
+    metricIds: [
+      "business_health_score", "open_work_count", "overdue_work_count", "pending_approvals_count",
+      "work_completion_rate", "integration_health_count", "failed_integrations_count",
+      "knowledge_document_count", "team_capacity_utilization", "unassigned_work_count",
+    ],
+  },
+});
+
+export function getMetricDefinition(metricId) {
+  return METRIC_CATALOG[String(metricId)] ?? null;
+}
+
+export function listMetricIds() {
+  return Object.keys(METRIC_CATALOG);
+}
+
+export function resolveAnalyticsTemplate(industry) {
+  const key = String(industry ?? "default");
+  return ANALYTICS_TEMPLATES[key] ?? ANALYTICS_TEMPLATES.default;
+}
