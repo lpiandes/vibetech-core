@@ -1,4 +1,4 @@
-import BuilderProposalClient from "@/components/builder/BuilderProposalScreens";
+import { redirect } from "next/navigation";
 
 export default async function BuilderProposalPage({
   params,
@@ -6,5 +6,5 @@ export default async function BuilderProposalPage({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  return <BuilderProposalClient sessionId={sessionId} />;
+  redirect(`/builder/${sessionId}`);
 }

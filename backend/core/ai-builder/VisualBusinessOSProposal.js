@@ -63,7 +63,14 @@ export function buildVisualBusinessOSProposal({
         id: employee.employeeId,
         label: employee.label,
         purpose: employee.purpose,
+        responsibilities: employee.responsibilities ?? employee.duties ?? [
+          employee.purpose,
+        ].filter(Boolean),
         approvals: employee.approvalRequirements ?? [],
+        knowledgeNeeded: employee.requiredKnowledge ?? [],
+        integrationsNeeded: employee.requiredIntegrations ?? [],
+        readiness: employee.readinessState ?? "needs setup",
+        escalation: employee.escalationRules ?? "Escalate to the owner when unsure.",
       })),
     },
     rolesAccess: {
@@ -72,8 +79,10 @@ export function buildVisualBusinessOSProposal({
       items: (specification.roleDefinitions ?? []).map((role) => ({
         id: role.roleId,
         label: role.label,
-        modules: role.moduleVisibility ?? [],
-        denied: role.deniedModules ?? [],
+        modules: (role.moduleVisibility ?? [])
+          .map((moduleId) => specification.modules?.find((module) => module.moduleId === moduleId)?.label ?? moduleId),
+        denied: (role.deniedModules ?? [])
+          .map((moduleId) => specification.modules?.find((module) => module.moduleId === moduleId)?.label ?? moduleId),
       })),
     },
     communications: {
