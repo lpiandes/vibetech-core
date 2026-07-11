@@ -4,6 +4,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 
 import { cockpitColors, spacing } from "@/design/tokens";
+import { formatProductErrorMessage } from "@/lib/platform/productErrors";
 import {
   builderCanvas,
   builderCard,
@@ -35,7 +36,7 @@ export function BuilderDryRunClient({ sessionId }: { sessionId: string }) {
       if (!response.ok || !data.ok) throw new Error(data.error ?? data.reason ?? "Dry run failed.");
       setResult(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Dry run failed.");
+      setError(formatProductErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -137,7 +138,7 @@ export function BuilderInstallClient({ sessionId }: { sessionId: string }) {
       setApproved(true);
       setStatus("awaiting_approval");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Approval failed.");
+      setError(formatProductErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -175,7 +176,7 @@ export function BuilderInstallClient({ sessionId }: { sessionId: string }) {
       setOpenHref(data.openHref);
     } catch (err) {
       setStatus("failed");
-      setError(err instanceof Error ? err.message : "Install failed.");
+      setError(formatProductErrorMessage(err));
     } finally {
       clearInterval(timer);
       setBusy(false);

@@ -9,6 +9,24 @@ export const ACCESS_REQUEST_KINDS = Object.freeze([
   "temporary_access",
 ]);
 
+const REQUEST_KIND_ALIASES = Object.freeze({
+  module: "module_access",
+  module_access: "module_access",
+  permission: "action_permission",
+  action_permission: "action_permission",
+  role: "role_upgrade",
+  role_upgrade: "role_upgrade",
+  scope: "record_scope",
+  record_scope: "record_scope",
+  temporary: "temporary_access",
+  temporary_access: "temporary_access",
+});
+
+export function normalizeAccessRequestKind(requestKind) {
+  const key = String(requestKind ?? "").trim().toLowerCase();
+  return REQUEST_KIND_ALIASES[key] ?? null;
+}
+
 export const ACCESS_REQUEST_STATUSES = Object.freeze([
   "pending",
   "approved",
@@ -48,14 +66,15 @@ export function createAccessRequest({
 } = {}) {
   if (!businessId) fail("businessId required.");
   if (!requesterUserId) fail("requesterUserId required.");
-  if (!ACCESS_REQUEST_KINDS.includes(String(requestKind))) fail(`unsupported requestKind: ${requestKind}`);
+  const normalizedKind = normalizeAccessRequestKind(requestKind);
+  if (!normalizedKind) fail(`unsupported requestKind: ${requestKind}`);
   if (!reason || typeof reason !== "string") fail("reason required.");
   if (!ACCESS_REQUEST_STATUSES.includes(String(status))) fail(`unsupported status: ${status}`);
 
   const identitySeed = [
     businessId,
     requesterUserId,
-    requestKind,
+    normalizedKind,
     requestedPermission ?? "",
     requestedModuleId ?? "",
     requestedRoleId ?? "",
@@ -69,7 +88,7 @@ export function createAccessRequest({
     accessRequestId: String(id),
     businessId: String(businessId),
     requesterUserId: String(requesterUserId),
-    requestKind: String(requestKind),
+    requestKind: normalizedKind,
     requestedPermission: requestedPermission == null ? null : String(requestedPermission),
     requestedModuleId: requestedModuleId == null ? null : String(requestedModuleId),
     requestedRoleId: requestedRoleId == null ? null : String(requestedRoleId),

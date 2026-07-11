@@ -115,9 +115,54 @@ const adminAccess = await authorizeBusinessAccess({
 if (!adminAccess.isPlatformAdmin) throw new Error("Expected platform admin access");
 if (!adminAccess.supportAccess?.active) throw new Error("Expected active support access indicator");
 
+const { createDurableAccessRequestService } = await import("../backend/core/access-requests/AccessRequestService.js");
+const { applyAccessRequestMembershipGrant } = await import("../backend/core/access-requests/applyAccessRequestMembershipGrant.js");
+const access = createDurableAccessRequestService(platformStore);
+const accessCreated = await access.requestAccess({
+  businessId: business.id,
+  requesterUserId: employee.id,
+  requestKind: "module",
+  requestedModuleId: "performance",
+  reason: "Need performance for monthly review",
+});
+if (!accessCreated.ok) throw new Error("Expected access request create");
+
+const accessAgain = createDurableAccessRequestService(platformStore);
+const openAfterRestart = await accessAgain.store.listOpen(business.id);
+if (!openAfterRestart.some((row) => row.accessRequestId === accessCreated.accessRequest.accessRequestId)) {
+  throw new Error("Expected durable access request to survive service recreation");
+}
+
+const decided = await accessAgain.decide({
+  businessId: business.id,
+  accessRequestId: accessCreated.accessRequest.accessRequestId,
+  actorUserId: owner.id,
+  actorRole: MEMBERSHIP_ROLES.OWNER,
+  decision: "approved",
+  membershipUpdater: async (grant) => {
+    const applied = await applyAccessRequestMembershipGrant(platformStore, {
+      ...grant,
+      approverUserId: owner.id,
+    });
+    if (!applied?.ok) throw new Error(`Expected membership grant apply: ${applied?.reason}`);
+  },
+});
+if (!decided.ok) throw new Error("Expected access request approval");
+
+const employeeMembership = await platformStore.getMembership(employee.id, business.id);
+if (!employeeMembership || employeeMembership.role === MEMBERSHIP_ROLES.EMPLOYEE) {
+  throw new Error(`Expected employee role bump after access approval, got ${employeeMembership?.role}`);
+}
+
+const foreignOpen = await accessAgain.store.listOpen(businessB.business.id);
+if (foreignOpen.some((row) => row.accessRequestId === accessCreated.accessRequest.accessRequestId)) {
+  throw new Error("Access request leaked across tenants");
+}
+
 console.log("Journey smoke test passed.");
 console.log(`  business: ${business.name} (${business.id})`);
 console.log(`  owner invite: ${ownerInvite.inviteUrl}`);
 console.log(`  employee invite: ${employeeInvite.inviteUrl}`);
+console.log(`  access request: ${accessCreated.accessRequest.accessRequestId} → ${employeeMembership.role}`);
 
 await closePool();

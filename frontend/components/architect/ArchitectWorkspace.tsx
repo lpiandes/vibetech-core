@@ -195,10 +195,19 @@ export default function ArchitectWorkspace({ sessionId }: { sessionId: string })
         const textPreview = file.type.startsWith("text") || /\.(csv|md|txt|json)$/i.test(file.name)
           ? await file.text().then((text) => text.slice(0, 4000)).catch(() => "")
           : "";
+        let contentBase64: string | null = null;
+        if (file.size > 0 && file.size <= 2_000_000) {
+          const buffer = await file.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          let binary = "";
+          for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+          contentBase64 = btoa(binary);
+        }
         await refresh("upload", {
           filename: file.name,
           mimeType: file.type,
           textPreview,
+          contentBase64,
           notes: "Uploaded during Architect discovery",
         });
       }

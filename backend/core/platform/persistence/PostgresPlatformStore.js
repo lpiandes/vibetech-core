@@ -1372,6 +1372,125 @@ export class PostgresPlatformStore {
     return mapSupportAccessSessionRow(rows[0] ?? null);
   }
 
+  async upsertAccessRequest(record) {
+    const id = String(record.accessRequestId);
+    const approverId = isUuidLike(record.approverUserId) ? String(record.approverUserId) : null;
+    const { rows } = await withClient((client) =>
+      client.query(
+        `INSERT INTO business_access_requests (
+           id, access_request_id, business_id, requester_user_id, request_kind,
+           requested_permission, requested_module_id, requested_role_id, record_scope,
+           reason, duration_hours, risk_level, status, approver_user_id,
+           work_item_id, approval_request_id, current_access, decision_notes, decided_at, metadata, updated_at
+         ) VALUES (
+           $1, $2, $3::uuid, $4::uuid, $5,
+           $6, $7, $8, $9,
+           $10, $11, $12, $13, $14::uuid,
+           $15, $16, $17::jsonb, $18, $19::timestamptz, $20::jsonb, NOW()
+         )
+         ON CONFLICT (business_id, access_request_id) DO UPDATE SET
+           request_kind = EXCLUDED.request_kind,
+           requested_permission = EXCLUDED.requested_permission,
+           requested_module_id = EXCLUDED.requested_module_id,
+           requested_role_id = EXCLUDED.requested_role_id,
+           record_scope = EXCLUDED.record_scope,
+           reason = EXCLUDED.reason,
+           duration_hours = EXCLUDED.duration_hours,
+           risk_level = EXCLUDED.risk_level,
+           status = EXCLUDED.status,
+           approver_user_id = EXCLUDED.approver_user_id,
+           work_item_id = EXCLUDED.work_item_id,
+           approval_request_id = EXCLUDED.approval_request_id,
+           current_access = EXCLUDED.current_access,
+           decision_notes = EXCLUDED.decision_notes,
+           decided_at = EXCLUDED.decided_at,
+           metadata = EXCLUDED.metadata,
+           updated_at = NOW()
+         RETURNING *`,
+        [
+          id,
+          id,
+          String(record.businessId),
+          String(record.requesterUserId),
+          String(record.requestKind),
+          record.requestedPermission ?? null,
+          record.requestedModuleId ?? null,
+          record.requestedRoleId ?? null,
+          record.recordScope ?? null,
+          String(record.reason),
+          record.durationHours ?? null,
+          String(record.riskLevel ?? "medium"),
+          String(record.status ?? "pending"),
+          approverId,
+          record.workItemId ?? null,
+          record.approvalRequestId ?? null,
+          JSON.stringify(record.currentAccess ?? {}),
+          record.decisionNotes ?? null,
+          record.decidedAt ?? null,
+          JSON.stringify(record.metadata ?? {}),
+        ],
+      ),
+    );
+    return mapAccessRequestRow(rows[0]);
+  }
+
+  async getAccessRequest(businessId, accessRequestId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM business_access_requests
+         WHERE business_id = $1::uuid AND access_request_id = $2
+         LIMIT 1`,
+        [String(businessId), String(accessRequestId)],
+      ),
+    );
+    return mapAccessRequestRow(rows[0] ?? null);
+  }
+
+  async getAccessRequestByWorkItemId(workItemId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM business_access_requests WHERE work_item_id = $1 LIMIT 1`,
+        [String(workItemId)],
+      ),
+    );
+    return mapAccessRequestRow(rows[0] ?? null);
+  }
+
+  async getAccessRequestByApprovalId(approvalRequestId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM business_access_requests WHERE approval_request_id = $1 LIMIT 1`,
+        [String(approvalRequestId)],
+      ),
+    );
+    return mapAccessRequestRow(rows[0] ?? null);
+  }
+
+  async listOpenAccessRequests(businessId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM business_access_requests
+         WHERE business_id = $1::uuid AND status = 'pending'
+         ORDER BY created_at DESC`,
+        [String(businessId)],
+      ),
+    );
+    return rows.map(mapAccessRequestRow);
+  }
+
+  async listAccessRequests(businessId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM business_access_requests
+         WHERE business_id = $1::uuid
+         ORDER BY created_at DESC
+         LIMIT 200`,
+        [String(businessId)],
+      ),
+    );
+    return rows.map(mapAccessRequestRow);
+  }
+
   async upsertBusinessAnalyticsDefinitions({ businessId, payload }) {
     const id = `analytics_defs_${businessId}`;
     const { rows } = await withClient((client) =>
@@ -1415,6 +1534,39 @@ function mapSupportAccessSessionRow(row) {
     endedAt: row.ended_at?.toISOString?.() ?? row.ended_at,
     permanentMembershipGranted: Boolean(row.permanent_membership_granted),
     metadata: row.metadata ?? {},
+  };
+}
+
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value ?? ""));
+}
+
+function mapAccessRequestRow(row) {
+  if (!row) return null;
+  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  return {
+    accessRequestId: String(row.access_request_id),
+    businessId: String(row.business_id),
+    requesterUserId: String(row.requester_user_id),
+    requestKind: String(row.request_kind),
+    requestedPermission: row.requested_permission == null ? null : String(row.requested_permission),
+    requestedModuleId: row.requested_module_id == null ? null : String(row.requested_module_id),
+    requestedRoleId: row.requested_role_id == null ? null : String(row.requested_role_id),
+    recordScope: row.record_scope == null ? null : String(row.record_scope),
+    reason: String(row.reason),
+    durationHours: row.duration_hours == null ? null : Number(row.duration_hours),
+    currentAccess: row.current_access ?? {},
+    riskLevel: String(row.risk_level ?? "medium"),
+    approverUserId: row.approver_user_id == null
+      ? (metadata.approverLabel ? String(metadata.approverLabel) : null)
+      : String(row.approver_user_id),
+    status: String(row.status),
+    createdAt: row.created_at?.toISOString?.() ?? row.created_at,
+    decidedAt: row.decided_at?.toISOString?.() ?? row.decided_at ?? null,
+    decisionNotes: row.decision_notes == null ? null : String(row.decision_notes),
+    workItemId: row.work_item_id == null ? null : String(row.work_item_id),
+    approvalRequestId: row.approval_request_id == null ? null : String(row.approval_request_id),
+    metadata,
   };
 }
 

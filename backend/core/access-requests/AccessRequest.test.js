@@ -9,14 +9,14 @@ import { MEMBERSHIP_ROLES } from "../platform/permissions/rolePermissions.js";
 
 const NOW = "2026-07-10T23:30:00.000Z";
 
-test("access request creates approval Work and blocks duplicates", () => {
+test("access request creates approval Work and blocks duplicates", async () => {
   const store = createInMemoryAccessRequestStore();
   const service = new AccessRequestService({
     store,
     nowISO: () => NOW,
   });
 
-  const created = service.requestAccess({
+  const created = await service.requestAccess({
     businessId: "biz_a",
     requesterUserId: "user_emp",
     requestKind: "module_access",
@@ -32,7 +32,7 @@ test("access request creates approval Work and blocks duplicates", () => {
   assert.equal(created.approval.status, "PENDING");
   assert.ok(store.listAudits().some((entry) => entry.action === "access_request.created"));
 
-  const duplicate = service.requestAccess({
+  const duplicate = await service.requestAccess({
     businessId: "biz_a",
     requesterUserId: "user_emp",
     requestKind: "module_access",
@@ -43,10 +43,10 @@ test("access request creates approval Work and blocks duplicates", () => {
   assert.equal(duplicate.reason, "duplicate_open_request");
 });
 
-test("owner approve updates access and records audit; reject remembers decision", () => {
+test("owner approve updates access and records audit; reject remembers decision", async () => {
   const store = createInMemoryAccessRequestStore();
   const service = new AccessRequestService({ store, nowISO: () => NOW });
-  const created = service.requestAccess({
+  const created = await service.requestAccess({
     businessId: "biz_a",
     requesterUserId: "user_emp",
     requestKind: "action_permission",
@@ -55,7 +55,7 @@ test("owner approve updates access and records audit; reject remembers decision"
     approverUserId: "user_owner",
   });
 
-  const approved = service.decide({
+  const approved = await service.decide({
     businessId: "biz_a",
     accessRequestId: created.accessRequest.accessRequestId,
     actorUserId: "user_owner",
@@ -69,14 +69,14 @@ test("owner approve updates access and records audit; reject remembers decision"
   assert.ok(store.listAudits().some((entry) => entry.action === "access_request.approved"));
   assert.ok(store.listAudits().some((entry) => entry.action === "access_request.requester_notified"));
 
-  const rejectedFlow = service.requestAccess({
+  const rejectedFlow = await service.requestAccess({
     businessId: "biz_a",
     requesterUserId: "user_emp",
     requestKind: "module_access",
     requestedModuleId: "settings",
     reason: "Want settings",
   });
-  const rejected = service.decide({
+  const rejected = await service.decide({
     businessId: "biz_a",
     accessRequestId: rejectedFlow.accessRequest.accessRequestId,
     actorUserId: "user_owner",
@@ -89,10 +89,10 @@ test("owner approve updates access and records audit; reject remembers decision"
   assert.equal(store.getApproval(rejectedFlow.approval.id).status, "REJECTED");
 });
 
-test("tenant isolation and final owner protection", () => {
+test("tenant isolation and final owner protection", async () => {
   const store = createInMemoryAccessRequestStore();
   const service = new AccessRequestService({ store, nowISO: () => NOW });
-  const created = service.requestAccess({
+  const created = await service.requestAccess({
     businessId: "biz_a",
     requesterUserId: "user_emp",
     requestKind: "role_upgrade",
@@ -100,7 +100,7 @@ test("tenant isolation and final owner protection", () => {
     reason: "Promotion",
   });
 
-  const foreign = service.decide({
+  const foreign = await service.decide({
     businessId: "biz_b",
     accessRequestId: created.accessRequest.accessRequestId,
     actorUserId: "user_owner",
@@ -119,4 +119,18 @@ test("tenant isolation and final owner protection", () => {
   });
   assert.equal(protection.ok, false);
   assert.equal(protection.reason, "cannot_remove_final_owner_access");
+});
+
+test("module alias normalizes to module_access", async () => {
+  const store = createInMemoryAccessRequestStore();
+  const service = new AccessRequestService({ store, nowISO: () => NOW });
+  const created = await service.requestAccess({
+    businessId: "biz_a",
+    requesterUserId: "user_emp",
+    requestKind: "module",
+    requestedModuleId: "performance",
+    reason: "Need performance",
+  });
+  assert.equal(created.ok, true);
+  assert.equal(created.accessRequest.requestKind, "module_access");
 });

@@ -8,6 +8,7 @@ import PrimaryButton from "@/components/product/PrimaryButton";
 import SecondaryButton from "@/components/product/SecondaryButton";
 import { copyInviteLink } from "@/lib/platform/inviteLinks";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
+import { formatProductErrorMessage } from "@/lib/platform/productErrors";
 
 const INVITE_ROLES = [
   { value: "ADMIN", label: "Administrator" },
@@ -46,7 +47,7 @@ export default function InvitePersonDialog({
     const data = await res.json();
     setBusy(false);
     if (!res.ok) {
-      setError(data.error ?? "Could not send invitation.");
+      setError(formatProductErrorMessage(data.productError ?? data.error ?? "Could not send invitation."));
       return;
     }
     if (!data.emailSent && data.inviteUrl) {
@@ -55,7 +56,7 @@ export default function InvitePersonDialog({
       return;
     }
     if (!data.emailSent) {
-      setError(data.deliveryMessage ?? "Invitation was created, but the email could not be sent. Resend it from the pending list.");
+      setError(formatProductErrorMessage(data.deliveryMessage ?? data.delivery?.reason ?? "email_not_configured"));
       router.refresh();
       return;
     }

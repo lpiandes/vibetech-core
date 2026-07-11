@@ -23,9 +23,28 @@ Manual / smoke checklist for live pilot. Mark each PASS/FAIL.
 ## Automated gates
 
 ```bash
+npm run db:verify:empty-migrate
 npm run db:test:setup
 npm run test:platform
 npm run test:journey
 npm --prefix frontend run build:prod
 git diff --check
 ```
+
+## Restart recovery checks
+
+| Surface | Expect after process restart |
+|---------|------------------------------|
+| Access requests | Still listed / decided in Postgres |
+| Architect sessions | Resume `/architect/{id}` |
+| Support access | Active sessions still in DB until exit/expiry |
+| Knowledge / Architect upload bytes | Present under `KNOWLEDGE_STORAGE_ROOT` |
+| Invitations | Pending invites still accept |
+
+## Tenant isolation checks
+
+| Check | Expect |
+|-------|--------|
+| Owner A opens `/b/{B}` | Denied |
+| Access request for A not listed under B | Isolated |
+| Platform admin without support session | Support required |

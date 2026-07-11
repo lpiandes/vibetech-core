@@ -3,6 +3,7 @@ import { getAiBuilderService } from "@/lib/builder/getAiBuilderService";
 import { ContinuousBusinessBuilderService } from "../../../../../../../backend/core/ai-builder/ContinuousBusinessBuilderService.js";
 import { platformStore } from "../../../../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
 import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceService";
+import { presentProductError } from "@/lib/platform/productErrors";
 
 type Params = { params: Promise<{ businessId: string }> };
 
@@ -39,12 +40,22 @@ export async function POST(request: Request, { params }: Params) {
     });
 
     if (!result.ok) {
-      return NextResponse.json(result, { status: 400 });
+      const productError = presentProductError(result.reason ?? result);
+      return NextResponse.json({
+        ...result,
+        error: productError.message,
+        productError,
+      }, { status: 400 });
     }
     return NextResponse.json(result);
   } catch (error) {
+    const productError = presentProductError(error);
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Could not start improvement." },
+      {
+        ok: false,
+        error: productError.message,
+        productError,
+      },
       { status: 500 },
     );
   }

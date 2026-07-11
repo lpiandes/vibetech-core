@@ -7,6 +7,7 @@ import { useOptionalBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { MissionControlViewModelContext } from "./MissionControlContext";
 import DemoStoryMode from "./DemoStoryMode";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
+import { formatProductErrorMessage } from "@/lib/platform/productErrors";
 
 type Experience = {
   executiveBriefing?: {
@@ -138,10 +139,12 @@ export default function MissionControlExperience() {
         body: JSON.stringify({ prompt }),
       });
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error ?? "Could not open Architect.");
+      if (!response.ok || !data.ok) {
+        throw new Error(data.productError?.message ?? data.error ?? data.reason ?? "Could not open Architect.");
+      }
       router.push(data.openHref ?? `/architect/${data.session.sessionId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open Architect.");
+      setError(formatProductErrorMessage(err));
     } finally {
       setBusyId(null);
     }

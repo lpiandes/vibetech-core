@@ -236,9 +236,46 @@ export class AiBuilderService {
     });
   }
 
-  async upload({ sessionId, filename, mimeType = "", notes = "", textPreview = "" }) {
+  async upload({
+    sessionId,
+    filename,
+    mimeType = "",
+    notes = "",
+    textPreview = "",
+    contentBase64 = null,
+    storage = null,
+  }) {
     const session = await this.requireSession(sessionId);
     const artifactId = `art_${filename}`.slice(0, 64);
+    let storageKey = null;
+    let bytesStored = false;
+
+    if (contentBase64 || textPreview) {
+      try {
+        const { createKnowledgeStorageProvider } = await import(
+          "../platform/knowledge/createKnowledgeStorageProvider.js"
+        );
+        const objectStorage = storage ?? createKnowledgeStorageProvider();
+        const buffer = contentBase64
+          ? Buffer.from(String(contentBase64), "base64")
+          : Buffer.from(String(textPreview), "utf8");
+        storageKey = `architect_${String(sessionId).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40)}_${artifactId}`;
+        await objectStorage.putObject({
+          businessId: session.businessId ?? "architect-draft",
+          storageKey,
+          buffer,
+        });
+        bytesStored = true;
+      } catch (err) {
+        // Discovery can continue with text evidence; durable bytes are best-effort when storage is misconfigured.
+        storageKey = null;
+        bytesStored = false;
+        if (process.env.NODE_ENV === "production" && contentBase64) {
+          throw new Error(`upload_failed: ${err instanceof Error ? err.message : "storage unavailable"}`);
+        }
+      }
+    }
+
     const extracted = extractBuilderArtifactEvidence({
       artifactId,
       filename,
@@ -252,7 +289,7 @@ export class AiBuilderService {
       kind: "upload",
       label: filename,
       source: "upload",
-      payload: { extracted, mapping },
+      payload: { extracted, mapping, storageKey, bytesStored },
       mutatesCanonicalData: false,
     });
     const updated = withBuilderSessionPatch(session, {
@@ -260,7 +297,7 @@ export class AiBuilderService {
       evidence: [...session.evidence, evidence],
     });
     await this.repository.save(updated);
-    return deepFreeze({ ok: true, session: updated, extracted, mapping });
+    return deepFreeze({ ok: true, session: updated, extracted, mapping, storageKey, bytesStored });
   }
 
   async propose({ sessionId }) {

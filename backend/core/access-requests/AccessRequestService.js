@@ -8,6 +8,8 @@ import { createWorkItem } from "../work/WorkItem.js";
 import { createApprovalRequest } from "../approvals/ApprovalRequest.js";
 import { APPROVAL_REQUEST_STATUSES } from "../approvals/ApprovalEventTypes.js";
 import { MEMBERSHIP_ROLES } from "../platform/permissions/rolePermissions.js";
+import { platformStore as defaultPlatformStore } from "../platform/persistence/PostgresPlatformStore.js";
+import { createPostgresAccessRequestStore } from "./PostgresAccessRequestStore.js";
 
 function fail(message) {
   throw new Error(`AccessRequestService: ${message}`);
@@ -28,7 +30,7 @@ export class AccessRequestService {
     this.nowISO = nowISO;
   }
 
-  requestAccess({
+  async requestAccess({
     businessId,
     requesterUserId,
     requestKind,
@@ -58,7 +60,7 @@ export class AccessRequestService {
       createdAt: this.nowISO(),
     });
 
-    const open = this.store.listOpen(businessId).find((entry) => (
+    const open = (await Promise.resolve(this.store.listOpen(businessId))).find((entry) => (
       accessRequestOpenKey(entry) === accessRequestOpenKey(draft)
     ));
     if (open) {
@@ -89,7 +91,7 @@ export class AccessRequestService {
       ],
       metadata: {
         accessRequestId: draft.accessRequestId,
-        requestKind,
+        requestKind: draft.requestKind,
         businessId,
       },
     });
@@ -104,7 +106,7 @@ export class AccessRequestService {
       requestedBy: String(requesterUserId),
       requiredApprover: String(approverUserId),
       context: {
-        requestKind,
+        requestKind: draft.requestKind,
         requestedPermission,
         requestedModuleId,
         requestedRoleId,
@@ -120,16 +122,16 @@ export class AccessRequestService {
       status: "pending",
     });
 
-    this.store.save(record);
-    this.store.saveWork(workItem);
-    this.store.saveApproval(approval);
-    this._audit({
+    await Promise.resolve(this.store.save(record));
+    await Promise.resolve(this.store.saveWork(workItem));
+    await Promise.resolve(this.store.saveApproval(approval));
+    await this._audit({
       actorUserId: requesterUserId,
       businessId,
       action: "access_request.created",
       targetType: "access_request",
       targetId: record.accessRequestId,
-      metadata: { requestKind, workItemId, approvalRequestId },
+      metadata: { requestKind: draft.requestKind, workItemId, approvalRequestId },
     });
 
     return deepFreeze({
@@ -140,7 +142,7 @@ export class AccessRequestService {
     });
   }
 
-  decide({
+  async decide({
     businessId,
     accessRequestId,
     actorUserId,
@@ -157,7 +159,7 @@ export class AccessRequestService {
       return deepFreeze({ ok: false, reason: "approver_role_required" });
     }
 
-    const existing = this.store.get(businessId, accessRequestId);
+    const existing = await Promise.resolve(this.store.get(businessId, accessRequestId));
     if (!existing) return deepFreeze({ ok: false, reason: "not_found" });
     if (String(existing.businessId) !== String(businessId)) {
       return deepFreeze({ ok: false, reason: "foreign_business_rejection" });
@@ -178,12 +180,12 @@ export class AccessRequestService {
     let membershipUpdate = null;
     if (decision === "approved") {
       if (existing.requestedRoleId === "owner" || existing.requestedRoleId === MEMBERSHIP_ROLES.OWNER) {
-        // Never silently escalate to final owner via access request without explicit owner grant path.
         if (String(actorRole) !== MEMBERSHIP_ROLES.OWNER) {
           return deepFreeze({ ok: false, reason: "owner_escalation_requires_owner" });
         }
       }
       membershipUpdate = {
+        accessRequestId: existing.accessRequestId,
         userId: existing.requesterUserId,
         businessId,
         permission: grantPermission ?? existing.requestedPermission,
@@ -196,34 +198,34 @@ export class AccessRequestService {
           : null,
       };
       if (typeof membershipUpdater === "function") {
-        membershipUpdater(membershipUpdate);
+        await Promise.resolve(membershipUpdater(membershipUpdate));
       }
-      this.store.saveGrant(membershipUpdate);
+      await Promise.resolve(this.store.saveGrant(membershipUpdate));
     }
 
-    this.store.save(updated);
-    const approval = this.store.getApproval(existing.approvalRequestId);
+    await Promise.resolve(this.store.save(updated));
+    const approval = await Promise.resolve(this.store.getApproval(existing.approvalRequestId));
     if (approval) {
-      this.store.saveApproval(deepFreeze({
+      await Promise.resolve(this.store.saveApproval(deepFreeze({
         ...approval,
         status: decision === "approved"
           ? APPROVAL_REQUEST_STATUSES.GRANTED
           : APPROVAL_REQUEST_STATUSES.REJECTED,
         decision: String(decision),
         decidedAt: now,
-      }));
+      })));
     }
-    const work = this.store.getWork(existing.workItemId);
+    const work = await Promise.resolve(this.store.getWork(existing.workItemId));
     if (work) {
-      this.store.saveWork(deepFreeze({
+      await Promise.resolve(this.store.saveWork(deepFreeze({
         ...work,
         status: decision === "approved" ? "approved" : "rejected",
         updatedAt: now,
         completedAt: now,
-      }));
+      })));
     }
 
-    this._audit({
+    await this._audit({
       actorUserId,
       businessId,
       action: decision === "approved" ? "access_request.approved" : "access_request.rejected",
@@ -232,7 +234,7 @@ export class AccessRequestService {
       metadata: { membershipUpdate, notes },
     });
 
-    this._audit({
+    await this._audit({
       actorUserId,
       businessId,
       action: "access_request.requester_notified",
@@ -260,12 +262,14 @@ export class AccessRequestService {
     return deepFreeze({ ok: true });
   }
 
-  _audit(event) {
+  async _audit(event) {
     if (typeof this.auditRecorder === "function") {
-      this.auditRecorder(event);
+      await Promise.resolve(this.auditRecorder(event));
       return;
     }
-    this.store.recordAudit?.(event);
+    if (typeof this.store.recordAudit === "function") {
+      await Promise.resolve(this.store.recordAudit(event));
+    }
   }
 }
 
@@ -321,6 +325,12 @@ export function createInMemoryAccessRequestStore() {
       return [...audits];
     },
   };
+}
+
+export function createDurableAccessRequestService(platformStore = defaultPlatformStore) {
+  return new AccessRequestService({
+    store: createPostgresAccessRequestStore(platformStore),
+  });
 }
 
 export { ACCESS_REQUEST_STATUSES };

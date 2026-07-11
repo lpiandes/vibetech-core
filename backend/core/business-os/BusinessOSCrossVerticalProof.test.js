@@ -241,7 +241,7 @@ test("Hockey fixture proves same universal runtime with different OS shape", asy
   // Employee can request missing access via Work
   const accessStore = createInMemoryAccessRequestStore();
   const accessService = new AccessRequestService({ store: accessStore, nowISO: () => NOW });
-  const request = accessService.requestAccess({
+  const request = await accessService.requestAccess({
     businessId: hockeyId,
     requesterUserId: "coach_assistant",
     requestKind: "module_access",
@@ -252,7 +252,7 @@ test("Hockey fixture proves same universal runtime with different OS shape", asy
   });
   assert.equal(request.ok, true);
   assert.equal(request.workItem.workType, "access_request_approval");
-  const decided = accessService.decide({
+  const decided = await accessService.decide({
     businessId: hockeyId,
     accessRequestId: request.accessRequest.accessRequestId,
     actorUserId: "owner_hockey",

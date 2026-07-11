@@ -1,4 +1,5 @@
-import { AccessRequestService } from "../../../backend/core/access-requests/AccessRequestService.js";
+import { createDurableAccessRequestService } from "../../../backend/core/access-requests/AccessRequestService.js";
+import { platformStore } from "../../../backend/core/platform/persistence/PostgresPlatformStore.js";
 
-/** Shared in-process access-request service for the app runtime. */
-export const accessRequestService = new AccessRequestService();
+/** Shared durable access-request service for the app runtime (survives restart). */
+export const accessRequestService = createDurableAccessRequestService(platformStore);

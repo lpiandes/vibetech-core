@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import PrimaryButton from "@/components/product/PrimaryButton";
 import { cockpitColors, spacing } from "@/design/tokens";
+import { formatProductErrorMessage } from "@/lib/platform/productErrors";
 
 export default function SupportEnterForm({
   businessId,
@@ -29,7 +30,7 @@ export default function SupportEnterForm({
     const data = await res.json();
     setBusy(false);
     if (!res.ok || !data.ok) {
-      setError(data.reason ?? data.error ?? "Unable to enter support access");
+      setError(formatProductErrorMessage(data.productError ?? data.reason ?? data.error ?? "Unable to enter support access"));
       return;
     }
     router.push(`/b/${businessId}/home`);

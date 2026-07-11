@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import PrimaryButton from "@/components/product/PrimaryButton";
 import { cockpitColors, spacing } from "@/design/tokens";
+import { formatProductErrorMessage } from "@/lib/platform/productErrors";
 
 export default function ArchitectSessionCreateForm({ actorId }: { actorId: string }) {
   const router = useRouter();
@@ -29,7 +30,7 @@ export default function ArchitectSessionCreateForm({ actorId }: { actorId: strin
     const data = await res.json();
     setBusy(false);
     if (!res.ok || data.ok === false) {
-      setError(data.error ?? data.reason ?? "Unable to create session");
+      setError(formatProductErrorMessage(data.productError ?? data.error ?? data.reason ?? "Unable to create session"));
       return;
     }
     const sessionId = data.session?.sessionId ?? data.sessionId;

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { cockpitColors, spacing, radius } from "@/design/tokens";
+import { formatProductErrorMessage } from "@/lib/platform/productErrors";
 
 /**
  * Owner entry point: Improve this business / Ask VIBETech.
@@ -33,10 +34,12 @@ export default function ImproveBusinessButton({
         body: JSON.stringify({ prompt }),
       });
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error ?? data.message ?? "Could not start.");
+      if (!response.ok || !data.ok) {
+        throw new Error(data.productError?.message ?? data.error ?? data.message ?? "Could not start.");
+      }
       router.push(data.openHref ?? `/architect/${data.session.sessionId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start.");
+      setError(formatProductErrorMessage(err));
     } finally {
       setBusy(false);
     }

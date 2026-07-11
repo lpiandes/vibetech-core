@@ -45,6 +45,7 @@ export async function POST(request: Request, { params }: Params) {
         mimeType: body.mimeType,
         notes: body.notes,
         textPreview: body.textPreview,
+        contentBase64: body.contentBase64 ?? null,
       }));
     }
     if (action === "research") {
