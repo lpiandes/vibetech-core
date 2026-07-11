@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceService";
 import { BusinessScopeProvider } from "@/lib/platform/BusinessScopeContext";
 import WorkspaceRenderer from "@/components/workspace/WorkspaceRenderer";
+import RememberBusinessCookie from "@/components/platform/RememberBusinessCookie";
 import { platformStore } from "../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
 import { composePortalModel } from "@/lib/portal-renderer/composePortalModel.js";
 
@@ -67,6 +68,7 @@ export default async function BusinessScopedLayout({
         supportAccess: ctx.authz.supportAccess ?? null,
       }}
     >
+      <RememberBusinessCookie businessId={businessId} />
       <WorkspaceRenderer>{children}</WorkspaceRenderer>
     </BusinessScopeProvider>
   );

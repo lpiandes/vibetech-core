@@ -102,6 +102,33 @@ export default function NavigationSidebar({ variant = "dark" }: { variant?: "lig
             {supportAccess.reason ? (
               <div style={{ marginTop: 4, opacity: 0.85 }}>Reason: {supportAccess.reason}</div>
             ) : null}
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await fetch("/api/admin/support/exit", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ businessId: scope.businessId }),
+                  });
+                  window.location.href = "/admin/support";
+                } catch {
+                  window.location.href = "/admin/support";
+                }
+              }}
+              style={{
+                marginTop: 8,
+                border: "1px solid rgba(15,23,42,.2)",
+                background: "#fff",
+                borderRadius: 8,
+                padding: "6px 10px",
+                cursor: "pointer",
+                fontWeight: 650,
+                color: "#0F172A",
+              }}
+            >
+              Exit support access
+            </button>
           </div>
         ) : null}
       </div>

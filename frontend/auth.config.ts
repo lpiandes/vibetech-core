@@ -28,12 +28,17 @@ export const authConfig = {
       if (
         pathname.startsWith("/_next") ||
         pathname.startsWith("/favicon") ||
-        pathname.startsWith("/api/auth")
+        pathname.startsWith("/api/auth") ||
+        pathname === "/api/health"
       ) {
         return true;
       }
 
-      if (pathname === "/login" || pathname.startsWith("/invite/") || pathname.startsWith("/api/invite/")) {
+      if (
+        pathname === "/login"
+        || pathname.startsWith("/invite/")
+        || pathname.startsWith("/api/invite/")
+      ) {
         return true;
       }
 

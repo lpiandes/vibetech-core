@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 import StatusPill from "@/components/executive/StatusPill";
+import BusinessSwitcher from "@/components/platform/BusinessSwitcher";
 
 type SearchResult = { id: string; label: string; sublabel?: string; href: string };
 
@@ -58,12 +59,10 @@ export default function Topbar() {
         zIndex: 20,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: spacing.sm }}>
-        <Link href="/" style={{ textDecoration: "none", color: cockpitColors.textMuted, fontSize: 12 }}>
-          Businesses
-        </Link>
+      <div style={{ display: "flex", alignItems: "center", gap: spacing.sm, minWidth: 0 }}>
+        <BusinessSwitcher />
         <span style={{ color: cockpitColors.textMuted }}>/</span>
-        <div style={{ fontWeight: 600, fontSize: typography.sectionTitle.fontSize, color: cockpitColors.textPrimary }}>
+        <div style={{ fontWeight: 600, fontSize: typography.sectionTitle.fontSize, color: cockpitColors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {businessName}
         </div>
       </div>

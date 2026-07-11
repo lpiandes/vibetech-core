@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAiBuilderService } from "@/lib/builder/getAiBuilderService";
+import { requireArchitectActor, architectApiError } from "@/lib/builder/requireArchitectActor";
 
 export async function GET(request: Request) {
   try {
+    await requireArchitectActor();
     const url = new URL(request.url);
     const businessId = url.searchParams.get("businessId");
     const service = getAiBuilderService();
@@ -10,15 +12,14 @@ export async function GET(request: Request) {
       businessId: (businessId || null) as never,
     }));
   } catch (error) {
-    return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Could not list builder sessions." },
-      { status: 500 },
-    );
+    const mapped = architectApiError(error);
+    return NextResponse.json(mapped.body, { status: mapped.status });
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const user = await requireArchitectActor();
     const body = await request.json().catch(() => ({}));
     const service = getAiBuilderService();
     const mode = body.mode === "operator" || body.mode === "internal_vibetech_build"
@@ -31,14 +32,12 @@ export async function POST(request: Request) {
       businessName: body.businessName ?? null,
       websiteUrl: body.websiteUrl ?? null,
       businessId: body.businessId ?? null,
-      actorId: body.actorId ?? null,
+      actorId: body.actorId ?? user.id ?? null,
       description: body.description ?? body.businessName ?? null,
     });
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Could not start builder session." },
-      { status: 500 },
-    );
+    const mapped = architectApiError(error);
+    return NextResponse.json(mapped.body, { status: mapped.status });
   }
 }

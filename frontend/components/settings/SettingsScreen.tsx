@@ -11,6 +11,7 @@ import ShellPanel from "@/components/shell/ShellPanel";
 import ShellMetricStrip from "@/components/shell/ShellMetricStrip";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
 import { deriveSetupStatusSummary, incompleteSetupItems, settingsHubLinks, type SetupChecklistItem } from "./settingsSemantics";
+import AccessRequestsPanel from "./AccessRequestsPanel";
 
 function HubLinkRow({ title, description, href }: { title: string; description: string; href: string }) {
   return (
@@ -140,6 +141,12 @@ export default function SettingsScreen({
             Finish remaining setup so your Digital Employees can operate with full context.
           </div>
         ) : null}
+      </ShellPanel>
+
+      <ShellPanel title="Access requests">
+        <div style={{ padding: spacing.md }}>
+          <AccessRequestsPanel />
+        </div>
       </ShellPanel>
 
       <ShellPanel title="Support & account">

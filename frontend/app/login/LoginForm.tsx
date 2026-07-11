@@ -10,9 +10,14 @@ import { cockpitColors, spacing, typography } from "@/design/tokens";
 export default function LoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  const routeError = searchParams.get("error");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    routeError === "no_business"
+      ? "No business membership was found for this account. Ask an owner for an invitation, or open Architect to design a new business."
+      : null,
+  );
   const [busy, setBusy] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
