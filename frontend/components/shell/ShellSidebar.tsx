@@ -4,6 +4,7 @@ import Link from "next/link";
 import { HelpCircle } from "lucide-react";
 
 import NavigationSidebar from "@/components/workspace/NavigationSidebar";
+import ImproveBusinessButton from "@/components/builder/ImproveBusinessButton";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
 
@@ -21,8 +22,11 @@ export default function ShellSidebar() {
           padding: spacing.md,
           borderTop: `1px solid ${cockpitColors.sidebarBorder}`,
           flexShrink: 0,
+          display: "grid",
+          gap: spacing.sm,
         }}
       >
+        <ImproveBusinessButton compact />
         <Link
           href={helpHref}
           style={{
