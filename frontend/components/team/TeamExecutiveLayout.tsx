@@ -15,6 +15,7 @@ import StatusBadge from "@/components/product/StatusBadge";
 import EntityAvatar from "@/components/shell/EntityAvatar";
 import ShellMetricStrip from "@/components/shell/ShellMetricStrip";
 import ShellPanel from "@/components/shell/ShellPanel";
+import OrganizationWorkspace from "@/components/workforce/OrganizationWorkspace";
 import { copyInviteLink } from "@/lib/platform/inviteLinks";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 import {
@@ -183,9 +184,16 @@ function DigitalEmployeeCard({ employee, businessId }: { employee: TeamDigitalEm
   );
 }
 
-export default function TeamExecutiveLayout({ platformTeam }: { platformTeam?: PlatformTeamData }) {
+export default function TeamExecutiveLayout({
+  platformTeam,
+  organization = null,
+}: {
+  platformTeam?: PlatformTeamData;
+  organization?: any;
+}) {
   const viewModel = useContext<TeamViewModel | null>(TeamViewModelContext);
   const [showInvite, setShowInvite] = useState(false);
+  const [workspace, setWorkspace] = useState<"organization" | "team">("organization");
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
@@ -298,15 +306,83 @@ export default function TeamExecutiveLayout({ platformTeam }: { platformTeam?: P
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>
       <PageHeader
-        title="Team"
-        description="People and Digital Employees working in this business."
+        title="Organization"
+        description="Departments, teams, humans, AI employees, responsibilities, and reporting lines."
         action={inviteAction}
       />
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={() => setWorkspace("organization")}
+          style={{
+            borderRadius: 999,
+            border: `1px solid ${cockpitColors.panelBorder}`,
+            background: workspace === "organization" ? cockpitColors.accent : cockpitColors.panel,
+            color: workspace === "organization" ? "#fff" : cockpitColors.textPrimary,
+            padding: "8px 14px",
+            fontWeight: 650,
+            cursor: "pointer",
+          }}
+        >
+          Organization
+        </button>
+        <button
+          type="button"
+          onClick={() => setWorkspace("team")}
+          style={{
+            borderRadius: 999,
+            border: `1px solid ${cockpitColors.panelBorder}`,
+            background: workspace === "team" ? cockpitColors.accent : cockpitColors.panel,
+            color: workspace === "team" ? "#fff" : cockpitColors.textPrimary,
+            padding: "8px 14px",
+            fontWeight: 650,
+            cursor: "pointer",
+          }}
+        >
+          Team roster
+        </button>
+      </div>
 
       {copyMessage ? (
         <p style={{ ...typography.caption, color: cockpitColors.accent, margin: 0 }}>{copyMessage}</p>
       ) : null}
 
+      {workspace === "organization" ? (
+        <OrganizationWorkspace organization={organization ?? {
+          hasOrganization: platformMembers.length > 0 || digitalEmployees.length > 0,
+          departments: [],
+          teams: [],
+          humanRoles: [],
+          humans: platformMembers.map((member) => ({
+            id: member.id,
+            label: member.name,
+            detail: member.roleLabel,
+            email: member.email,
+          })),
+          aiEmployees: digitalEmployees.map((employee) => ({
+            id: String(employee.id ?? employee.name),
+            label: String(employee.name ?? "AI employee"),
+            detail: String(employee.responsibility ?? employee.role ?? ""),
+            responsibilities: [],
+          })),
+          reportingLines: [],
+          coverageRules: [],
+          responsibilities: [],
+          approvals: [],
+          kpis: [],
+          knowledgeOwnership: [],
+          metrics: [
+            { id: "humans", label: "Humans", value: platformMembers.length },
+            { id: "ai", label: "AI employees", value: digitalEmployees.length },
+            { id: "departments", label: "Departments", value: 0 },
+            { id: "teams", label: "Teams", value: 0 },
+          ],
+        }} />
+      ) : null}
+
+      {workspace === "team" ? (
+        <>
       <ShellMetricStrip metrics={metricStrip} />
 
       <ShellPanel
@@ -389,6 +465,8 @@ export default function TeamExecutiveLayout({ platformTeam }: { platformTeam?: P
           </div>
         )}
       </ShellPanel>
+        </>
+      ) : null}
 
       {showInvite && businessId ? (
         <InvitePersonDialog

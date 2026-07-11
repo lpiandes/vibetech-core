@@ -20,6 +20,12 @@ export const BUSINESS_OS_EMPLOYEE_ARCHETYPES = deepFreeze([
   { archetypeId: "marketing_coordinator", label: "Marketing coordinator", purpose: "Prepare marketing work under approval." },
   { archetypeId: "compliance_reviewer", label: "Compliance reviewer", purpose: "Review sensitive actions against policy." },
   { archetypeId: "reporting_analyst", label: "Reporting analyst", purpose: "Prepare truthful performance summaries." },
+  { archetypeId: "communications_specialist", label: "Communications specialist", purpose: "Draft and route customer communications under approval." },
+  { archetypeId: "dispatcher", label: "Dispatcher", purpose: "Assign and route field or operating work." },
+  { archetypeId: "bookkeeper", label: "Bookkeeper", purpose: "Prepare bookkeeping drafts and reconciliation checks." },
+  { archetypeId: "recruiter", label: "Recruiter", purpose: "Coordinate hiring pipelines with human approval." },
+  { archetypeId: "quality_reviewer", label: "Quality reviewer", purpose: "Review quality outcomes before release." },
+  { archetypeId: "executive_assistant", label: "Executive assistant", purpose: "Support owner priorities and briefing packs." },
 ]);
 
 export function listEmployeeArchetypeIds() {

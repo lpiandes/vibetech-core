@@ -4,6 +4,8 @@ import { getDevInvitationLink } from "../../../../../backend/core/platform/servi
 import { PERMISSIONS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { MEMBERSHIP_ROLE_LABELS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 import TeamRenderer from "@/components/team/TeamRenderer";
+import { composeOrganizationView } from "@/lib/workforce/composeOrganizationView.js";
+import { WorkforceEngine } from "../../../../../backend/core/workforce/WorkforceEngine.js";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
 
@@ -31,16 +33,48 @@ export default async function TeamPage({ params }: { params: Promise<{ businessI
     const memberEmails = new Set(members.map((m: { email: string }) => String(m.email).toLowerCase()));
     const filteredPending = pending.filter((p: { email: string }) => !memberEmails.has(String(p.email).toLowerCase()));
 
+    const platformMembers = members.map((m: { userId: string; userName?: string; email: string; role: string }) => ({
+      id: m.userId,
+      name: m.userName || m.email,
+      email: m.email,
+      roleLabel: MEMBERSHIP_ROLE_LABELS[m.role as keyof typeof MEMBERSHIP_ROLE_LABELS] ?? m.role,
+    }));
+
+    let configuration = null;
+    let workforceOrganization = null;
+    try {
+      const installation = await platformStore.getBusinessOSInstallation(businessId);
+      configuration = installation?.configuration ?? null;
+      if (!configuration?.employees?.length) {
+        const industry = (ctx as any).authz?.business?.industry
+          ?? (ctx as any).service?.businessProfile?.industry
+          ?? "default";
+        const recommended = new WorkforceEngine().recommendOrganization({
+          businessSummary: { industry },
+        });
+        workforceOrganization = recommended.organization;
+        if (!configuration) {
+          configuration = recommended.businessOsMapping;
+        }
+      }
+    } catch {
+      configuration = null;
+      workforceOrganization = null;
+    }
+
+    const organization = composeOrganizationView({
+      configuration,
+      workforceOrganization,
+      platformMembers,
+      digitalEmployees: (viewModel as any)?.digitalEmployees ?? [],
+    });
+
     return (
       <TeamRenderer
         viewModel={viewModel}
+        organization={organization}
         platformTeam={{
-          members: members.map((m: { userId: string; userName?: string; email: string; role: string }) => ({
-            id: m.userId,
-            name: m.userName || m.email,
-            email: m.email,
-            roleLabel: MEMBERSHIP_ROLE_LABELS[m.role as keyof typeof MEMBERSHIP_ROLE_LABELS] ?? m.role,
-          })),
+          members: platformMembers,
           pending: filteredPending.map((p: { id: string; email: string; role: string }) => ({
             id: p.id,
             email: p.email,

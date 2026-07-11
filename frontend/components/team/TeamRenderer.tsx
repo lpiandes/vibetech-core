@@ -14,13 +14,15 @@ export type PlatformTeamData = {
 export default function TeamRenderer({
   viewModel,
   platformTeam,
+  organization = null,
 }: {
   viewModel: TeamViewModel;
   platformTeam?: PlatformTeamData;
+  organization?: any;
 }) {
   return (
     <TeamContextProvider viewModel={viewModel}>
-      <TeamExecutiveLayout platformTeam={platformTeam} />
+      <TeamExecutiveLayout platformTeam={platformTeam} organization={organization} />
     </TeamContextProvider>
   );
 }
