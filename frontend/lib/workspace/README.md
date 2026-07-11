@@ -26,5 +26,6 @@ The frontend screens will continue to call:
 - `WorkspaceService.loadDigitalWorkforce()`
 - `WorkspaceService.loadWorkQueue()`
 
-No UI changes are required beyond swapping the underlying API client.
+## Provider boundary
+`MockWorkspaceApi` may compose backend *domain engines* (runtime, generators, communication engine) for local projection, but must not import backend *infrastructure providers* (e.g. `GmailProvider` / `googleapis`). Outbound email delivery stays in backend communications/integration adapters; the mock uses an in-process local email stub to exercise APPROVED → SENT without pulling provider SDKs into the Next.js bundle graph.
 

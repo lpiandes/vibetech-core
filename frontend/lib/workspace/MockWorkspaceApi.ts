@@ -5,9 +5,24 @@ import { COMPANY_EVENT_TYPES } from "../../../backend/core/company/events/Compan
 import { createCompanyEvent } from "../../../backend/core/company/events/CompanyEvent.js";
 import { PropertyInterestCoordinator } from "../../../backend/core/employees/property-interest-coordinator/PropertyInterestCoordinator.js";
 import { CommunicationEngine } from "../../../backend/core/communication/CommunicationEngine.js";
-import { GmailProvider } from "../../../backend/providers/email/GmailProvider.js";
 
 const NOW_ISO = "2026-07-01T00:00:00.000Z";
+
+/**
+ * In-process delivery stub for MockWorkspaceApi.
+ * Real Gmail delivery belongs in backend communications/integration providers
+ * (googleapis), not in the frontend workspace adapter.
+ */
+class LocalWorkspaceEmailProvider {
+  async send({ communication }: { communication?: { communicationId?: string } } = {}) {
+    const id = String(communication?.communicationId ?? "unknown");
+    return {
+      providerMessageId: `local_${id}`,
+      providerStatus: "sent",
+      sentTimestampISO: new Date().toISOString(),
+    };
+  }
+}
 
 function makeCapabilitiesReady(overrides: Record<string, any> = {}) {
   const base = [
@@ -46,21 +61,6 @@ function parseSubjectAndBody(draftContent: string) {
   }
 
   return { subject: "Buyer response", body: String(draftContent ?? "") };
-}
-
-function hasGmailConfig() {
-  const required = [
-    "GMAIL_CLIENT_ID",
-    "GMAIL_CLIENT_SECRET",
-    "GMAIL_REDIRECT_URI",
-    "GMAIL_REFRESH_TOKEN",
-    "GMAIL_SENDER_EMAIL",
-  ];
-
-  return required.every((k) => {
-    const v = process.env[k];
-    return typeof v === "string" && v.trim().length > 0;
-  });
 }
 
 export class MockWorkspaceApi {
@@ -284,16 +284,10 @@ export class MockWorkspaceApi {
       );
     }
 
-    if (hasGmailConfig()) {
-      const provider = new GmailProvider();
-      await communicationEngine.sendCommunication({ communicationId, provider });
-    } else {
-      communicationEngine.markFailed({
-        communicationId,
-        failedAtISO: new Date().toISOString(),
-        reason: "Gmail provider not configured (missing required env vars).",
-      });
-    }
+    await communicationEngine.sendCommunication({
+      communicationId,
+      provider: new LocalWorkspaceEmailProvider(),
+    });
 
     return this.loadReviewWork(workItemId);
   }
