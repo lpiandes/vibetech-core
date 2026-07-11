@@ -51,7 +51,7 @@ export class ContinuousBusinessBuilderService {
       ok: true,
       session: durable,
       message: "Describe what to add or change. We will propose a next version — not a unrelated new install.",
-      openHref: `/builder/${durable.sessionId}`,
+      openHref: `/architect/${durable.sessionId}`,
     });
   }
 }

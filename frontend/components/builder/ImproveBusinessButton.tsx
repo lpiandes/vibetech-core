@@ -34,7 +34,7 @@ export default function ImproveBusinessButton({
       });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error ?? data.message ?? "Could not start.");
-      router.push(data.openHref ?? `/builder/${data.session.sessionId}`);
+      router.push(data.openHref ?? `/architect/${data.session.sessionId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start.");
     } finally {

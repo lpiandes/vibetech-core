@@ -1,10 +1,10 @@
-import BuilderWorkspace from "@/components/builder/BuilderWorkspace";
+import { redirect } from "next/navigation";
 
-export default async function BuilderSessionPage({
+export default async function BuilderSessionRedirect({
   params,
 }: {
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  return <BuilderWorkspace sessionId={sessionId} />;
+  redirect(`/architect/${sessionId}`);
 }

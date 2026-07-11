@@ -1,10 +1,10 @@
-import { BuilderDryRunClient } from "@/components/builder/BuilderInstallFlow";
+import { redirect } from "next/navigation";
 
-export default async function BuilderDryRunPage({
+export default async function BuilderDryRunRedirect({
   params,
 }: {
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  return <BuilderDryRunClient sessionId={sessionId} />;
+  redirect(`/architect/${sessionId}/dry-run`);
 }

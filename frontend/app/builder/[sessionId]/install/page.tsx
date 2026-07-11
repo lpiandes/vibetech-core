@@ -1,10 +1,10 @@
-import { BuilderInstallClient } from "@/components/builder/BuilderInstallFlow";
+import { redirect } from "next/navigation";
 
-export default async function BuilderInstallPage({
+export default async function BuilderInstallRedirect({
   params,
 }: {
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  return <BuilderInstallClient sessionId={sessionId} />;
+  redirect(`/architect/${sessionId}/install`);
 }

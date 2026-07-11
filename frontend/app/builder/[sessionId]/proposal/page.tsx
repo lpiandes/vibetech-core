@@ -6,5 +6,5 @@ export default async function BuilderProposalPage({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  redirect(`/builder/${sessionId}`);
+  redirect(`/architect/${sessionId}`);
 }

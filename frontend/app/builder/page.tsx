@@ -1,5 +1,5 @@
-import BuilderHomePage from "@/components/builder/BuilderScreens";
+import { redirect } from "next/navigation";
 
-export default function BuilderPage() {
-  return <BuilderHomePage />;
+export default function BuilderHomeRedirect() {
+  redirect("/architect");
 }
