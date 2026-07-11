@@ -4,7 +4,6 @@ import {
   permissionsForSupportMode,
 } from "./SupportAccessSession.js";
 import { isPlatformAdmin } from "../persistence/platformMappers.js";
-import { platformStore as defaultPlatformStore } from "../persistence/platformStore.js";
 import { createPostgresSupportAccessStore } from "./PostgresSupportAccessStore.js";
 
 function fail(message) {
@@ -222,7 +221,10 @@ export function getDefaultSupportAccessService() {
   return getDefaultSupportAccessService._instance;
 }
 
-export function createDurableSupportAccessService(platformStore = defaultPlatformStore) {
+export function createDurableSupportAccessService(platformStore) {
+  if (!platformStore) {
+    throw new Error("createDurableSupportAccessService requires a platform store");
+  }
   return new SupportAccessService({
     store: createPostgresSupportAccessStore(platformStore),
     platformStore,

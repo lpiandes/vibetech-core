@@ -20,7 +20,7 @@ import { runMigrations } from "../backend/core/platform/db/migrate.js";
 import { closePool } from "../backend/core/platform/db/pool.js";
 import { platformStore } from "../backend/core/platform/persistence/platformStore.js";
 import { hashPassword } from "../backend/core/platform/services/AuthCredentialService.js";
-import { createBusinessWithOwnerInvite } from "../backend/core/platform/services/PlatformBusinessService.js";
+import { createBusinessWithOwnerInvite } from "../backend/core/platform/services/platformBusinessService.default.js";
 import { connectBusinessEmailDev } from "../backend/core/integrations/use-cases/connectBusinessEmailDev.js";
 import { runProspectInquiryOperatingLoop } from "../backend/core/integration/ProspectInquiryOperatingLoopService.js";
 import { workspaceCompositionRegistry } from "../frontend/lib/workspace/WorkspaceCompositionRegistry.js";

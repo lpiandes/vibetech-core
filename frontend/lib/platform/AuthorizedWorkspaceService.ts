@@ -2,7 +2,7 @@ import { cache } from "react";
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
-import { authorizeBusinessAccess, AuthorizationError } from "../../../backend/core/platform/authorizeBusinessAccess.js";
+import { authorizeBusinessAccess, AuthorizationError } from "@/lib/server/compose";
 import { resolveWorkspaceRuntimeSnapshots } from "../../../backend/core/persistence/resolveWorkspaceRuntimeSnapshots.js";
 import { createWorkspaceRequestTimer } from "../../../backend/core/persistence/workspaceRequestTiming.js";
 import { timeRequestStage } from "../../../backend/core/platform/requestTiming.js";

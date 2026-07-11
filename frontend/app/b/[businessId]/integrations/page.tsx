@@ -1,5 +1,5 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
-import { platformStore } from "@/lib/server/platformStore";
+import { platformStore } from "@/lib/server/compose";
 import ConnectionsRenderer from "@/components/connections/ConnectionsRenderer";
 import IntegrationWorkspace from "@/components/integrations/IntegrationWorkspace";
 import { composeIntegrationView } from "@/lib/integrations/composeIntegrationView.js";

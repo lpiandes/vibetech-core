@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { resendPendingInvitation } from "../../../../../../../../backend/core/platform/services/InvitationService.js";
+import { resendPendingInvitation } from "@/lib/server/compose";
 import { PERMISSIONS } from "../../../../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 

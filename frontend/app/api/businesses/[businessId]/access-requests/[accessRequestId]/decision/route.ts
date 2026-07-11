@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 import { accessRequestService } from "@/lib/platform/accessRequestService";
 import { presentProductError } from "@/lib/platform/productErrors";
-import { platformStore } from "@/lib/server/platformStore";
+import { platformStore } from "@/lib/server/compose";
 import { applyAccessRequestMembershipGrant } from "../../../../../../../../backend/core/access-requests/applyAccessRequestMembershipGrant.js";
 
 export async function POST(

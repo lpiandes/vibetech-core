@@ -1,9 +1,5 @@
 /**
- * Frontend server adapter for platform persistence.
- * Instantiates the shared PostgresPlatformStore with the frontend DB port
- * so Next.js never resolves backend/core/platform/db/pool.js → pg.
+ * @deprecated Import platformStore from @/lib/server/compose instead.
+ * Kept as a thin re-export for gradual migration.
  */
-import { PostgresPlatformStore } from "../../../backend/core/platform/persistence/PostgresPlatformStore.js";
-import { withClient } from "@/lib/server/db";
-
-export const platformStore = new PostgresPlatformStore(withClient);
+export { platformStore, getPlatformStore } from "@/lib/server/compose";

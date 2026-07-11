@@ -20,7 +20,7 @@ import { runMigrations } from "../db/migrate.js";
 import { closePool } from "../db/pool.js";
 import { platformStore } from "../persistence/platformStore.js";
 import { hashPassword } from "../services/AuthCredentialService.js";
-import { authorizeBusinessAccess, AuthorizationError } from "../authorizeBusinessAccess.js";
+import { authorizeBusinessAccess, AuthorizationError } from "../authorizeBusinessAccess.default.js";
 import {
   BusinessKnowledgeService,
   sanitizeFilename,
@@ -54,7 +54,10 @@ async function createTestBusiness(name = `Knowledge Co ${uid()}`) {
 
 function makeService() {
   process.env.KNOWLEDGE_STORAGE_ROOT = testStorageRoot;
-  return new BusinessKnowledgeService({ storage: new LocalFilesystemKnowledgeStorage() });
+  return new BusinessKnowledgeService({
+    storage: new LocalFilesystemKnowledgeStorage(),
+    store: platformStore,
+  });
 }
 
 before(async () => {
@@ -297,7 +300,7 @@ test("storage failure does not leave incorrect successful database state", async
       return false;
     },
   };
-  const service = new BusinessKnowledgeService({ storage: failingStorage });
+  const service = new BusinessKnowledgeService({ storage: failingStorage, store: platformStore });
   await assert.rejects(() =>
     service.uploadDocument({
       businessId: business.id,

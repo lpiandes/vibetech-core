@@ -16,7 +16,7 @@ import { runMigrations } from "../backend/core/platform/db/migrate.js";
 import { closePool } from "../backend/core/platform/db/pool.js";
 import { platformStore } from "../backend/core/platform/persistence/platformStore.js";
 import { bootstrapPlatformAdmin, hashPassword } from "../backend/core/platform/services/AuthCredentialService.js";
-import { createAndDeliverInvitation } from "../backend/core/platform/services/InvitationService.js";
+import { createAndDeliverInvitation } from "../backend/core/platform/services/invitationService.default.js";
 import { MEMBERSHIP_ROLES } from "../backend/core/platform/permissions/rolePermissions.js";
 import { authorizeBusinessAccess, AuthorizationError } from "../backend/core/platform/authorizeBusinessAccess.js";
 import { AiBuilderService } from "../backend/core/ai-builder/AiBuilderService.js";
@@ -25,7 +25,7 @@ import { ContinuousBusinessBuilderService } from "../backend/core/ai-builder/Con
 import { createDurableAccessRequestService } from "../backend/core/access-requests/AccessRequestService.js";
 import { applyAccessRequestMembershipGrant } from "../backend/core/access-requests/applyAccessRequestMembershipGrant.js";
 import { createKnowledgeStorageProvider } from "../backend/core/platform/knowledge/createKnowledgeStorageProvider.js";
-import { createBusinessWithOwnerInvite } from "../backend/core/platform/services/PlatformBusinessService.js";
+import { createBusinessWithOwnerInvite } from "../backend/core/platform/services/platformBusinessService.default.js";
 
 const suffix = Date.now();
 const storageRoot = process.env.KNOWLEDGE_STORAGE_ROOT

@@ -22,18 +22,15 @@ import { hashPassword } from "./services/AuthCredentialService.js";
 import { MEMBERSHIP_ROLES } from "./permissions/rolePermissions.js";
 import { buildEmptyPropertyManagementConfiguration } from "../../../industries/property-management/config/buildEmptyPropertyManagementConfiguration.js";
 import { PROPERTY_MANAGEMENT_PACKAGE_ID } from "../workspace/activation/activateWorkspace.js";
-import {
-  createAndDeliverInvitation,
-  resendPendingInvitation,
-} from "./services/InvitationService.js";
+import { createAndDeliverInvitation, resendPendingInvitation } from "./services/invitationService.default.js";
 import { AuthorizationError } from "./authorizeBusinessAccess.js";
-import { authorizeBusinessAccess } from "./authorizeBusinessAccess.js";
+import { authorizeBusinessAccess } from "./authorizeBusinessAccess.default.js";
 import {
   resetInvitationDeliveryProviderForTests,
   setInvitationDeliveryProviderForTests,
 } from "./delivery/createInvitationDeliveryProvider.js";
 import { InvitationDeliveryProvider } from "./delivery/InvitationDeliveryProvider.js";
-import { listDevelopmentInvitations } from "./services/DevInvitationService.js";
+import { listDevelopmentInvitations } from "./services/devInvitationService.default.js";
 import { listDevInvitationLinks } from "./services/DevInvitationMailbox.js";
 
 function uid() {

@@ -13,19 +13,19 @@ import { CrmImportDryRunExecutor } from "./CrmImportDryRunExecutor.js";
 import { CrmImportCommitExecutor } from "./CrmImportCommitExecutor.js";
 import { SubjectImportDryRunExecutor } from "./subjects/SubjectImportDryRunExecutor.js";
 import { SubjectImportCommitExecutor } from "./subjects/SubjectImportCommitExecutor.js";
-import { createImportArtifactStore } from "./storage/ImportArtifactStore.js";
-import { importRunRepository } from "./persistence/ImportRunRepository.js";
 
 export class CrmImportOrchestrationService {
   constructor({
-    repository = importRunRepository,
-    artifactStore = createImportArtifactStore(),
+    repository,
+    artifactStore,
     parser = new CsvImportParser(),
     dryRunExecutor = new CrmImportDryRunExecutor(),
     commitExecutor = new CrmImportCommitExecutor(),
     subjectDryRunExecutor = new SubjectImportDryRunExecutor(),
     subjectCommitExecutor = new SubjectImportCommitExecutor(),
   } = {}) {
+    if (!repository) throw new Error("CrmImportOrchestrationService requires a repository");
+    if (!artifactStore) throw new Error("CrmImportOrchestrationService requires an artifactStore");
     this.repository = repository;
     this.artifactStore = artifactStore;
     this.parser = parser;
@@ -313,5 +313,3 @@ export class CrmImportOrchestrationService {
 export function createCrmImportOrchestrationService(options = {}) {
   return new CrmImportOrchestrationService(options);
 }
-
-export const crmImportOrchestrationService = createCrmImportOrchestrationService();

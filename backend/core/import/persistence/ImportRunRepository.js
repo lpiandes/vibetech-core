@@ -1,7 +1,6 @@
-import { platformStore } from "../../platform/persistence/platformStore.js";
-
 export class ImportRunRepository {
-  constructor({ store = platformStore } = {}) {
+  constructor({ store } = {}) {
+    if (!store) throw new Error("ImportRunRepository requires a platform store");
     this.store = store;
   }
 
@@ -52,4 +51,6 @@ export class ImportRunRepository {
   }
 }
 
-export const importRunRepository = new ImportRunRepository();
+export function createImportRunRepository(deps) {
+  return new ImportRunRepository(deps);
+}

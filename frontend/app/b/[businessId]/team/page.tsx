@@ -1,6 +1,6 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
-import { platformStore } from "@/lib/server/platformStore";
-import { getDevInvitationLink } from "../../../../../backend/core/platform/services/DevInvitationMailbox.js";
+import { platformStore } from "@/lib/server/compose";
+import { getDevInvitationLink } from "@/lib/server/compose";
 import { PERMISSIONS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { MEMBERSHIP_ROLE_LABELS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 import TeamRenderer from "@/components/team/TeamRenderer";

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withClient } from "@/lib/server/db";
+import { withClient } from "@/lib/server/compose";
 
 /**
  * Production health probe for load balancers and uptime monitors.

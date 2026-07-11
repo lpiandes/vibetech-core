@@ -1,9 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
 
-import { platformStore } from "../../platform/persistence/platformStore.js";
-import { LocalFilesystemImportStorage } from "./LocalFilesystemImportStorage.js";
-
 const DEFAULT_MAX_BYTES = 25 * 1024 * 1024;
 
 export function getMaxImportUploadBytes() {
@@ -67,7 +64,9 @@ export function validateImportUpload({ buffer, filename, mimeType }) {
 }
 
 export class ImportArtifactStore {
-  constructor({ storage = new LocalFilesystemImportStorage(), store = platformStore } = {}) {
+  constructor({ storage, store } = {}) {
+    if (!store) throw new Error("ImportArtifactStore requires a platform store");
+    if (!storage) throw new Error("ImportArtifactStore requires a storage provider");
     this.storage = storage;
     this.store = store;
   }

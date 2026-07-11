@@ -1,5 +1,5 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
-import { platformStore } from "@/lib/server/platformStore";
+import { platformStore } from "@/lib/server/compose";
 import WorkRenderer from "@/components/work/WorkRenderer";
 import WorkflowWorkspace from "@/components/workflows/WorkflowWorkspace";
 import ModuleRenderer from "@/components/workspace/ModuleRenderer";

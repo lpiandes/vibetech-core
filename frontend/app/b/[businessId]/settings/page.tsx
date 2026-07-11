@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS, MEMBERSHIP_ROLE_LABELS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
-import { platformStore } from "@/lib/server/platformStore";
+import { platformStore } from "@/lib/server/compose";
 import SettingsScreen from "@/components/settings/SettingsScreen";
 
 export default async function SettingsPage({ params }: { params: Promise<{ businessId: string }> }) {

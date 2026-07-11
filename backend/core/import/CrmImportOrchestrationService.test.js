@@ -42,8 +42,11 @@ let testStorageRoot = "";
 function makeService() {
   process.env.IMPORT_STORAGE_ROOT = testStorageRoot;
   return new CrmImportOrchestrationService({
-    repository: new ImportRunRepository(),
-    artifactStore: new ImportArtifactStore({ storage: new LocalFilesystemImportStorage() }),
+    repository: new ImportRunRepository({ store: platformStore }),
+    artifactStore: new ImportArtifactStore({
+      storage: new LocalFilesystemImportStorage(),
+      store: platformStore,
+    }),
   });
 }
 

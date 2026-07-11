@@ -6,7 +6,7 @@ import { MockSmsIntegrationProvider } from "./fixtures/MockSmsIntegrationProvide
 import { MockExternalSystemIntegrationProvider } from "./fixtures/MockExternalSystemIntegrationProvider.js";
 import { MockFormSubmissionProvider } from "./fixtures/MockFormSubmissionProvider.js";
 import { MockVoiceProvider } from "./fixtures/MockVoiceProvider.js";
-import { GmailIntegrationAdapter } from "./adapters/GmailIntegrationAdapter.js";
+import { GmailIntegrationAdapterStub } from "./adapters/GmailIntegrationAdapterStub.js";
 import { ConnectionService } from "./use-cases/ConnectionService.js";
 import { ExternalActionOrchestrationService } from "./actions/ExternalActionOrchestrationService.js";
 import { CommunicationActionService } from "./use-cases/CommunicationActionService.js";
@@ -15,14 +15,22 @@ import { IntegrationPlatformEventPublisher } from "./events/IntegrationPlatformE
 import { CommunicationPlatformEventPublisher } from "../communications/events/CommunicationPlatformEventPublisher.js";
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 
-export function createDefaultIntegrationProviderRegistry({ nowISO } = {}) {
+/**
+ * Default mock providers for workspace activation.
+ * Gmail (googleapis) must be injected by the composition root when needed —
+ * never imported here so Next.js does not pull googleapis into the server graph.
+ */
+export function createDefaultIntegrationProviderRegistry({ nowISO, extraProviders = [] } = {}) {
   const registry = new IntegrationProviderRegistry();
   registry.register(new MockEmailIntegrationProvider({ nowISO }));
   registry.register(new MockSmsIntegrationProvider({ nowISO }));
   registry.register(new MockExternalSystemIntegrationProvider({ nowISO }));
   registry.register(new MockFormSubmissionProvider({ nowISO }));
   registry.register(new MockVoiceProvider({ nowISO }));
-  registry.register(new GmailIntegrationAdapter({ nowISO }));
+  registry.register(new GmailIntegrationAdapterStub({ nowISO }));
+  for (const provider of extraProviders) {
+    registry.register(provider);
+  }
   return registry;
 }
 
@@ -36,12 +44,13 @@ export function createIntegrationPlatform({
   platformEventPublisher = null,
   platformEventBus = null,
   platformEventStore = null,
+  extraProviders = [],
 } = {}) {
   const effectiveWorkspaceId = String(workspaceId ?? "default");
   const connectionRuntime = connectionRuntimeSeed
     ? new ConnectionRuntime({ seed: () => connectionRuntimeSeed })
     : new ConnectionRuntime();
-  const providerRegistry = createDefaultIntegrationProviderRegistry({ nowISO });
+  const providerRegistry = createDefaultIntegrationProviderRegistry({ nowISO, extraProviders });
   const credentialResolver = createMockCredentialResolver();
   const integrationPlatformEventPublisher =
     platformEventPublisher ??

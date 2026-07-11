@@ -1,4 +1,4 @@
-import { createHorizonDemoBusiness } from "../../../../../backend/core/platform/DemoWorkspaceProvisioner.js";
+import { createHorizonDemoBusiness } from "@/lib/server/compose";
 import { workspaceCompositionRegistry } from "../../../../lib/workspace/WorkspaceCompositionRegistry.js";
 import { HORIZON_WORKSPACE_ID } from "../../../../../backend/core/integration/HorizonDemoBootstrapRegistry.js";
 import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";

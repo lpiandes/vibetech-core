@@ -27,6 +27,19 @@ function isLocalHost(hostname) {
 }
 
 async function main() {
+  // Static composition-boundary guard (Next must not import backend infra singletons).
+  try {
+    const { spawnSync } = await import("node:child_process");
+    const guard = spawnSync(process.execPath, ["--test", path.join(root, "scripts/assert-frontend-composition-boundary.js")], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    const ok = guard.status === 0;
+    record("composition_boundary", ok, ok ? "frontend does not import backend infra singletons" : (guard.stderr || guard.stdout || "").slice(0, 300));
+  } catch (err) {
+    record("composition_boundary", false, err instanceof Error ? err.message : String(err));
+  }
+
   try {
     const addrs = await lookup(host, { all: true });
     record("dns", addrs.length > 0, addrs.map((a) => a.address).join(", "));

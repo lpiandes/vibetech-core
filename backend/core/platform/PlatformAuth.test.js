@@ -18,10 +18,10 @@ import { runMigrations } from "./db/migrate.js";
 import { closePool, withClient } from "./db/pool.js";
 import { platformStore } from "./persistence/platformStore.js";
 import { bootstrapPlatformAdmin, hashPassword } from "./services/AuthCredentialService.js";
-import { authorizeBusinessAccess, authorizePlatformAdmin, AuthorizationError } from "./authorizeBusinessAccess.js";
-import { createBusinessWithOwnerInvite, provisionEmptyBusinessWorkspace } from "./services/PlatformBusinessService.js";
-import { createAndDeliverInvitation } from "./services/InvitationService.js";
-import { listDevelopmentInvitations } from "./services/DevInvitationService.js";
+import { authorizeBusinessAccess, authorizePlatformAdmin, AuthorizationError } from "./authorizeBusinessAccess.default.js";
+import { createBusinessWithOwnerInvite, provisionEmptyBusinessWorkspace } from "./services/platformBusinessService.default.js";
+import { createAndDeliverInvitation } from "./services/invitationService.default.js";
+import { listDevelopmentInvitations } from "./services/devInvitationService.default.js";
 import { listDevInvitationLinks } from "./services/DevInvitationMailbox.js";
 import {
   MEMBERSHIP_ROLES,

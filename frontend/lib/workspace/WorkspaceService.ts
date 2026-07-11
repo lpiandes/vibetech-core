@@ -58,14 +58,14 @@ import { buildCampaignOperationsView } from "../../../backend/core/campaigns/Cam
 import { CampaignPreparationService } from "../../../backend/core/campaigns/CampaignPreparationService.js";
 import { CampaignDocumentService, buildExpectedApprovalBinding } from "../../../backend/core/campaigns/CampaignDocumentService.js";
 import { CampaignDeliveryService } from "../../../backend/core/campaigns/CampaignDeliveryService.js";
-import { businessCampaignTemplateService } from "../../../backend/core/platform/campaigns/BusinessCampaignTemplateService.js";
-import { businessKnowledgeService } from "../../../backend/core/platform/knowledge/BusinessKnowledgeService.js";
+import { businessCampaignTemplateService } from "@/lib/server/compose";
+import { businessKnowledgeService } from "@/lib/server/compose";
 import { buildMcBrideReadinessProjection } from "../../../backend/core/campaigns/McBrideReadinessProjection.js";
 import { recordReferralIntroduction, buildReferralOperationsSummary } from "../../../backend/core/campaigns/ReferralLoopService.js";
 import { PM_CAMPAIGN_SECTION_TYPES } from "../../../industries/property-management/config/campaignSectionCatalog.js";
 import { MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE } from "../../../industries/property-management/config/mcbrideClientTemplate.js";
 import { materializeDueRecurringOperations } from "../../../backend/core/campaigns/RecurringOperationService.js";
-import { platformStore } from "@/lib/server/platformStore";
+import { platformStore } from "@/lib/server/compose";
 import { buildDemoStorySteps } from "../../../backend/core/demo/buildDemoStorySteps.js";
 import { projectSegmentMembership } from "../../../backend/core/segments/SegmentProjectionEngine.js";
 import { checkCommunicationPermitted } from "../../../backend/core/communications/preferences/CommunicationPreferenceEnforcer.js";

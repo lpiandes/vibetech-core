@@ -1,12 +1,22 @@
-import { withClient } from "../platform/db/pool.js";
 import { WorkspacePersistencePort } from "./WorkspacePersistencePort.js";
 
 const SCHEMA_VERSION = 1;
 
 export class PostgresWorkspacePersistence extends WorkspacePersistencePort {
+  /**
+   * @param {(fn: (client: any) => Promise<any>) => Promise<any>} withClient
+   */
+  constructor(withClient) {
+    super();
+    if (typeof withClient !== "function") {
+      throw new Error("PostgresWorkspacePersistence requires a withClient database port");
+    }
+    this.withClient = withClient;
+  }
+
   async loadRuntimeSnapshots(workspaceId) {
     const wid = String(workspaceId ?? "");
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT runtime_kind, schema_version, state
          FROM workspace_runtime_snapshots
@@ -25,7 +35,7 @@ export class PostgresWorkspacePersistence extends WorkspacePersistencePort {
     const wid = String(workspaceId ?? "");
     if (!snapshots?.length) return;
 
-    await withClient(async (client) => {
+    await this.withClient(async (client) => {
       await client.query("BEGIN");
       try {
         for (const snapshot of snapshots) {

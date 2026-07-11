@@ -2,9 +2,9 @@ import { AuthError } from "next-auth";
 import { NextResponse } from "next/server";
 
 import { signIn } from "@/auth";
-import { platformStore } from "@/lib/server/platformStore";
-import { hashPassword, verifyPassword } from "@/lib/server/authCredentials";
-import { validateInvitationForDisplay } from "../../../../../../backend/core/platform/services/InvitationService.js";
+import { platformStore } from "@/lib/server/compose";
+import { hashPassword, verifyPassword } from "@/lib/server/compose";
+import { validateInvitationForDisplay } from "@/lib/server/compose";
 import { getSessionUser } from "@/lib/platform/AuthorizedWorkspaceService";
 
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {

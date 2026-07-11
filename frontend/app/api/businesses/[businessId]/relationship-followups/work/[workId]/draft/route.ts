@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
-import { businessKnowledgeService } from "../../../../../../../../../backend/core/platform/knowledge/BusinessKnowledgeService.js";
+import { businessKnowledgeService } from "@/lib/server/compose";
 import { PERMISSIONS } from "../../../../../../../../../backend/core/platform/permissions/rolePermissions.js";
 
 export async function POST(

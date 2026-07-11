@@ -1,5 +1,5 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
-import { platformStore } from "@/lib/server/platformStore";
+import { platformStore } from "@/lib/server/compose";
 import RelationshipOperationsIntelligenceLayout from "@/components/performance/RelationshipOperationsIntelligenceLayout";
 import AnalyticsWorkspace from "@/components/analytics/AnalyticsWorkspace";
 import { composeAnalyticsView } from "@/lib/analytics/composeAnalyticsView.js";

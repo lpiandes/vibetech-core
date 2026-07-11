@@ -1,4 +1,4 @@
-import { authorizePlatformAdmin } from "../../../backend/core/platform/authorizeBusinessAccess.js";
+import { authorizePlatformAdmin } from "@/lib/server/compose";
 import { requireSessionUser } from "@/lib/platform/AuthorizedWorkspaceService";
 
 export async function requirePlatformAdmin() {

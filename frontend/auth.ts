@@ -2,7 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 
 import { authConfig } from "./auth.config";
-import { authenticateUser } from "@/lib/server/authCredentials";
+import { authenticateUser } from "@/lib/server/compose";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,

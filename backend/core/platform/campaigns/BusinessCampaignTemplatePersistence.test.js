@@ -56,7 +56,7 @@ test("business templates persist across restart and are tenant-isolated", async 
   await platformStore.createMembership({ userId: owner.id, businessId: businessA.id, role: "OWNER" });
   await platformStore.createMembership({ userId: owner.id, businessId: businessB.id, role: "OWNER" });
 
-  const service = new BusinessCampaignTemplateService();
+  const service = new BusinessCampaignTemplateService({ store: platformStore });
   const sections = buildPackageCampaignSectionRecipe(PM_CAMPAIGN_TEMPLATES[0]);
   const saved = await service.saveTemplate({
     businessId: businessA.id,
@@ -87,7 +87,7 @@ test("package templates remain immutable seeds separate from business templates"
   assert.ok(Object.isFrozen(packageTemplate));
   assert.equal(packageTemplate.origin, undefined);
   const business = await createTestBusiness(`Pkg ${uid()}`);
-  const service = new BusinessCampaignTemplateService();
+  const service = new BusinessCampaignTemplateService({ store: platformStore });
   const saved = await service.saveTemplate({
     businessId: business.id,
     name: "Business copy",

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { platformStore } from "@/lib/server/platformStore";
-import { validateInvitationForDisplay } from "../../../../../backend/core/platform/services/InvitationService.js";
+import { platformStore } from "@/lib/server/compose";
+import { validateInvitationForDisplay } from "@/lib/server/compose";
 import { MEMBERSHIP_ROLE_LABELS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {

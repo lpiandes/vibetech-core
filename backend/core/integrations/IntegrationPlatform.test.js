@@ -208,12 +208,11 @@ test("Horizon Properties: mock email activation changes readiness truthfully", a
   }, nowISO: NOW_ISO });
 
   const emailConn = result.integrationPlatform.connectionRuntime.getConnectionByType("business_email");
-  assert.equal(emailConn.status, CONNECTION_STATUSES.NOT_CONNECTED);
+  // Horizon demo wires mock business email as connected so operating loops can run.
+  assert.equal(emailConn.status, CONNECTION_STATUSES.CONNECTED);
+  assert.equal(emailConn.providerType, "provider_mock_email");
 
-  const { connectionService, actionOrchestrator } = result.integrationPlatform;
-  connectionService.startConfiguration({ connectionId: emailConn.id, providerType: "provider_mock_email" });
-  connectionService.attachMockCredentials({ connectionId: emailConn.id, providerType: "provider_mock_email" });
-  await connectionService.verifyConnection({ connectionId: emailConn.id, credentialResolver: result.integrationPlatform.credentialResolver });
+  const { actionOrchestrator } = result.integrationPlatform;
 
   const actionResult = await actionOrchestrator.execute(
     createExternalActionRequest({

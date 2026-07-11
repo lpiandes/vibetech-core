@@ -1,5 +1,4 @@
 import { InMemoryWorkspacePersistence } from "./InMemoryWorkspacePersistence.js";
-import { PostgresWorkspacePersistence } from "./PostgresWorkspacePersistence.js";
 
 let defaultInstance = null;
 let testOverride = null;
@@ -13,6 +12,10 @@ export function resetWorkspacePersistenceForTests() {
   defaultInstance = null;
 }
 
+export function setWorkspacePersistence(persistence) {
+  defaultInstance = persistence ?? null;
+}
+
 export function getWorkspacePersistence() {
   if (testOverride) return testOverride;
   if (!defaultInstance) {
@@ -20,7 +23,9 @@ export function getWorkspacePersistence() {
     if (provider === "memory" || !process.env.DATABASE_URL) {
       defaultInstance = new InMemoryWorkspacePersistence();
     } else {
-      defaultInstance = new PostgresWorkspacePersistence();
+      throw new Error(
+        "Workspace persistence is not configured. Next.js must call setWorkspacePersistence from frontend/lib/server/compose.ts; backend scripts must import backend persistence bootstrap.",
+      );
     }
   }
   return defaultInstance;

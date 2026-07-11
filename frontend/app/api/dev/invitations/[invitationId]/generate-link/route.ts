@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { generateDevelopmentInvitationLink } from "../../../../../../../backend/core/platform/services/DevInvitationService.js";
+import { generateDevelopmentInvitationLink } from "@/lib/server/compose";
 import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
 import { authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { businessKnowledgeService } from "../../../../../../backend/core/platform/knowledge/BusinessKnowledgeService.js";
-import { platformStore } from "@/lib/server/platformStore";
+import { businessKnowledgeService } from "@/lib/server/compose";
+import { platformStore } from "@/lib/server/compose";
 import { PERMISSIONS } from "../../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 

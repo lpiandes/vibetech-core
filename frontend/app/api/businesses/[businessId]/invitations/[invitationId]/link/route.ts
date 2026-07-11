@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { platformStore } from "@/lib/server/platformStore";
-import { generateDevelopmentInvitationLink } from "../../../../../../../../backend/core/platform/services/DevInvitationService.js";
-import { getDevInvitationLink } from "../../../../../../../../backend/core/platform/services/DevInvitationMailbox.js";
+import { platformStore } from "@/lib/server/compose";
+import { generateDevelopmentInvitationLink } from "@/lib/server/compose";
+import { getDevInvitationLink } from "@/lib/server/compose";
 import { PERMISSIONS } from "../../../../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 

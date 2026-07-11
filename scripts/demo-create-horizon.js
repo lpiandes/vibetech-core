@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHorizonDemoBusiness } from "../backend/core/platform/DemoWorkspaceProvisioner.js";
+import { createHorizonDemoBusiness } from "../backend/core/platform/demoWorkspaceProvisioner.default.js";
 
 const result = await createHorizonDemoBusiness();
 console.log("Horizon Properties DEMO workspace created.");

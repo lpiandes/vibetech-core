@@ -1,6 +1,6 @@
 import { AiBuilderService } from "../../../backend/core/ai-builder/AiBuilderService.js";
 import { BuilderSessionRepository } from "../../../backend/core/ai-builder/BuilderSessionRepository.js";
-import { platformStore } from "@/lib/server/platformStore";
+import { platformStore } from "@/lib/server/compose";
 
 declare global {
   // eslint-disable-next-line no-var

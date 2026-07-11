@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "../../../../../../backend/core/platform/permissions/rolePermissions.js";
-import { platformStore } from "@/lib/server/platformStore";
+import { platformStore } from "@/lib/server/compose";
 import { isDigitalEmployeeOperationalReady } from "../../../../../../backend/core/industries/employees/digitalEmployeeReadinessHelpers.js";
 
 export async function POST(

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { crmImportOrchestrationService } from "../../../../../../../../backend/core/import/CrmImportOrchestrationService.js";
+import { crmImportOrchestrationService } from "@/lib/server/compose";
 import { PERMISSIONS } from "../../../../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 

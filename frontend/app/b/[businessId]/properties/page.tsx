@@ -1,5 +1,5 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
-import { platformStore } from "@/lib/server/platformStore";
+import { platformStore } from "@/lib/server/compose";
 import { PERMISSIONS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 import PropertiesRenderer from "@/components/properties/PropertiesRenderer";
 import RecordsWorkspace from "@/components/data-forms/RecordsWorkspace";

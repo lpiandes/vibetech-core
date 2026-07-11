@@ -1,9 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 
-import { platformStore } from "../persistence/platformStore.js";
 import { KNOWLEDGE_SOURCE_TYPES, toPublicKnowledgeDocument } from "./BusinessKnowledgeDocument.js";
-import { createKnowledgeStorageProvider } from "./createKnowledgeStorageProvider.js";
 
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_OPERATIONAL_CONTENT_BYTES = 32 * 1024;
@@ -100,7 +98,9 @@ function boundedText(buffer, maxChars = DEFAULT_OPERATIONAL_CONTENT_CHARS) {
 }
 
 export class BusinessKnowledgeService {
-  constructor({ storage = createKnowledgeStorageProvider(), store = platformStore } = {}) {
+  constructor({ storage, store } = {}) {
+    if (!store) throw new Error("BusinessKnowledgeService requires a platform store");
+    if (!storage) throw new Error("BusinessKnowledgeService requires a storage provider");
     this.storage = storage;
     this.store = store;
   }
@@ -249,4 +249,6 @@ export class BusinessKnowledgeService {
   }
 }
 
-export const businessKnowledgeService = new BusinessKnowledgeService();
+export function createBusinessKnowledgeService(deps) {
+  return new BusinessKnowledgeService(deps);
+}

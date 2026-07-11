@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { platformStore } from "@/lib/server/platformStore";
+import { platformStore } from "@/lib/server/compose";
 import { PLATFORM_ROLES } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 
 /**

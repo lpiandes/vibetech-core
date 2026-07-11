@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 
-import { platformStore } from "@/lib/server/platformStore";
+import { platformStore } from "@/lib/server/compose";
 import { LAST_BUSINESS_COOKIE } from "@/lib/platform/businessCookies";
 import { PLATFORM_ROLES } from "../../backend/core/platform/permissions/rolePermissions.js";
 

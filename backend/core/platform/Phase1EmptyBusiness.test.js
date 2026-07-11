@@ -6,7 +6,7 @@ import { resolveDefaultActivationForWorkspace } from "../workspace/activation/ac
 import { CompanyWorkspaceRuntime } from "../company/CompanyWorkspaceRuntime.js";
 import { createABCPropertyGroupSeed } from "../company/fixtures/ABCPropertyGroupSeed.js";
 import { createEmptyBusiness } from "./EmptyBusinessProvisioner.js";
-import { createHorizonDemoBusiness } from "./DemoWorkspaceProvisioner.js";
+import { createHorizonDemoBusiness } from "./demoWorkspaceProvisioner.default.js";
 import { buildEmptyPropertyManagementConfiguration } from "../../../industries/property-management/config/buildEmptyPropertyManagementConfiguration.js";
 import { getHorizonTaylorPartyId } from "../integration/FirstClientOperatingLoopRunner.js";
 

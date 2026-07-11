@@ -1,7 +1,6 @@
-import { platformStore } from "../persistence/platformStore.js";
 import { MEMBERSHIP_ROLE_LABELS } from "../permissions/rolePermissions.js";
 import { recordDevInvitation, listDevInvitationLinks } from "./DevInvitationMailbox.js";
-import { buildInvitationUrl, createAndDeliverInvitation } from "./InvitationService.js";
+import { buildInvitationUrl } from "./InvitationService.js";
 import { isTestEmail } from "../platformTestData.js";
 
 function invitationStatus(invitation) {
@@ -11,80 +10,87 @@ function invitationStatus(invitation) {
   return "Pending";
 }
 
-export async function listDevelopmentInvitations({ includeTestData = false } = {}) {
-  const pending = await platformStore.listAllPendingInvitations();
-  const links = listDevInvitationLinks();
-
-  return pending
-    .filter((invitation) => includeTestData || !isTestEmail(invitation.email))
-    .map((invitation) => ({
-      id: invitation.id,
-      businessId: invitation.businessId,
-      businessName: invitation.businessName,
-      email: invitation.email,
-      role: invitation.role,
-      roleLabel: MEMBERSHIP_ROLE_LABELS[invitation.role] ?? invitation.role,
-      expiresAt: invitation.expiresAt,
-      status: invitationStatus(invitation),
-      inviteUrl: links[invitation.id]?.inviteUrl ?? null,
-      hasLink: Boolean(links[invitation.id]?.inviteUrl),
-      createdAt: invitation.createdAt,
-    }));
-}
-
 /**
- * Dev-only: issue a fresh invitation token and persist the URL locally.
- * PostgreSQL stores only the hash; the raw token exists in the dev mailbox file.
+ * @param {{ store: object, createAndDeliverInvitation?: Function }} deps
  */
-export async function generateDevelopmentInvitationLink({ invitationId, actorUserId }) {
-  const existing = await platformStore.getInvitationById(invitationId);
-  if (!existing) {
-    throw new Error("INVITATION_NOT_FOUND");
-  }
-  if (existing.acceptedAt) {
-    throw new Error("INVITATION_ALREADY_ACCEPTED");
-  }
-  if (existing.revokedAt) {
-    throw new Error("INVITATION_REVOKED");
-  }
-  if (new Date(existing.expiresAt).getTime() < Date.now()) {
-    throw new Error("INVITATION_EXPIRED");
+export function createDevInvitationService({ store, createAndDeliverInvitation = null }) {
+  if (!store) throw new Error("createDevInvitationService requires a platform store");
+
+  async function listDevelopmentInvitations({ includeTestData = false } = {}) {
+    const pending = await store.listAllPendingInvitations();
+    const links = listDevInvitationLinks();
+
+    return pending
+      .filter((invitation) => includeTestData || !isTestEmail(invitation.email))
+      .map((invitation) => ({
+        id: invitation.id,
+        businessId: invitation.businessId,
+        businessName: invitation.businessName,
+        email: invitation.email,
+        role: invitation.role,
+        roleLabel: MEMBERSHIP_ROLE_LABELS[invitation.role] ?? invitation.role,
+        expiresAt: invitation.expiresAt,
+        status: invitationStatus(invitation),
+        inviteUrl: links[invitation.id]?.inviteUrl ?? null,
+        hasLink: Boolean(links[invitation.id]?.inviteUrl),
+        createdAt: invitation.createdAt,
+      }));
   }
 
-  const business = await platformStore.getBusinessById(existing.businessId);
-  const { invitation, token } = await platformStore.createInvitation({
-    businessId: existing.businessId,
-    email: existing.email,
-    role: existing.role,
-    invitedByUserId: actorUserId,
-  });
+  async function generateDevelopmentInvitationLink({ invitationId, actorUserId }) {
+    const existing = await store.getInvitationById(invitationId);
+    if (!existing) {
+      throw new Error("INVITATION_NOT_FOUND");
+    }
+    if (existing.acceptedAt) {
+      throw new Error("INVITATION_ALREADY_ACCEPTED");
+    }
+    if (existing.revokedAt) {
+      throw new Error("INVITATION_REVOKED");
+    }
+    if (new Date(existing.expiresAt).getTime() < Date.now()) {
+      throw new Error("INVITATION_EXPIRED");
+    }
 
-  const inviteUrl = await buildInvitationUrl(token);
-  recordDevInvitation({
-    invitationId: invitation.id,
-    businessId: invitation.businessId,
-    email: invitation.email,
-    businessName: business?.name ?? "Business",
-    inviteUrl,
-    role: invitation.role,
-    expiresAt: invitation.expiresAt,
-  });
+    const business = await store.getBusinessById(existing.businessId);
+    const { invitation, token } = await store.createInvitation({
+      businessId: existing.businessId,
+      email: existing.email,
+      role: existing.role,
+      invitedByUserId: actorUserId,
+    });
 
-  await platformStore.recordAuditEvent({
-    actorUserId,
-    businessId: invitation.businessId,
-    action: "invitation.dev_link_generated",
-    targetType: "invitation",
-    targetId: invitation.id,
-    metadata: { email: invitation.email, role: invitation.role },
-  });
+    const inviteUrl = await buildInvitationUrl(token);
+    recordDevInvitation({
+      invitationId: invitation.id,
+      businessId: invitation.businessId,
+      email: invitation.email,
+      businessName: business?.name ?? "Business",
+      inviteUrl,
+      role: invitation.role,
+      expiresAt: invitation.expiresAt,
+    });
+
+    await store.recordAuditEvent({
+      actorUserId,
+      businessId: invitation.businessId,
+      action: "invitation.dev_link_generated",
+      targetType: "invitation",
+      targetId: invitation.id,
+      metadata: { email: invitation.email, role: invitation.role },
+    });
+
+    return {
+      invitation,
+      inviteUrl,
+      roleLabel: MEMBERSHIP_ROLE_LABELS[invitation.role] ?? invitation.role,
+      businessName: business?.name ?? "Business",
+    };
+  }
 
   return {
-    invitation,
-    inviteUrl,
-    roleLabel: MEMBERSHIP_ROLE_LABELS[invitation.role] ?? invitation.role,
-    businessName: business?.name ?? "Business",
+    listDevelopmentInvitations,
+    generateDevelopmentInvitationLink,
+    createAndDeliverInvitation,
   };
 }
-
-export { createAndDeliverInvitation };

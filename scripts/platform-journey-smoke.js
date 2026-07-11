@@ -18,9 +18,9 @@ import { runMigrations } from "../backend/core/platform/db/migrate.js";
 import { closePool } from "../backend/core/platform/db/pool.js";
 import { platformStore } from "../backend/core/platform/persistence/platformStore.js";
 import { bootstrapPlatformAdmin, hashPassword } from "../backend/core/platform/services/AuthCredentialService.js";
-import { createBusinessWithOwnerInvite } from "../backend/core/platform/services/PlatformBusinessService.js";
+import { createBusinessWithOwnerInvite } from "../backend/core/platform/services/platformBusinessService.default.js";
 import { authorizeBusinessAccess, AuthorizationError } from "../backend/core/platform/authorizeBusinessAccess.js";
-import { createAndDeliverInvitation } from "../backend/core/platform/services/InvitationService.js";
+import { createAndDeliverInvitation } from "../backend/core/platform/services/invitationService.default.js";
 import { MEMBERSHIP_ROLES, PLATFORM_ROLES } from "../backend/core/platform/permissions/rolePermissions.js";
 
 const suffix = Date.now();

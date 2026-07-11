@@ -7,4 +7,4 @@ export function createEmptyBusiness() {
   );
 }
 
-export { createBusinessWithOwnerInvite, provisionEmptyBusinessWorkspace } from "./services/PlatformBusinessService.js";
+export { createBusinessWithOwnerInvite, provisionEmptyBusinessWorkspace } from "./services/platformBusinessService.default.js";

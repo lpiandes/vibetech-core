@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { platformStore } from "@/lib/server/platformStore";
-import { removeDevInvitationLink } from "../../../../../../../backend/core/platform/services/DevInvitationMailbox.js";
+import { platformStore } from "@/lib/server/compose";
+import { removeDevInvitationLink } from "@/lib/server/compose";
 import { PERMISSIONS } from "../../../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 

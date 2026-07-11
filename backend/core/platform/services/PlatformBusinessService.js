@@ -1,11 +1,9 @@
 import crypto from "node:crypto";
 
-import { platformStore } from "../persistence/platformStore.js";
 import { businessRecordToActivation } from "../persistence/platformMappers.js";
 import { activateWorkspace, PROPERTY_MANAGEMENT_PACKAGE_ID } from "../../workspace/activation/activateWorkspace.js";
 import { buildEmptyPropertyManagementConfiguration } from "../../../../industries/property-management/config/buildEmptyPropertyManagementConfiguration.js";
 import { workspaceActivationRegistry } from "../../workspace/activation/WorkspaceActivationRegistry.js";
-import { createAndDeliverInvitation } from "./InvitationService.js";
 import { MEMBERSHIP_ROLES } from "../permissions/rolePermissions.js";
 
 const NOW_ISO = "2026-07-01T00:00:00.000Z";
@@ -24,46 +22,61 @@ export function provisionEmptyBusinessWorkspace(business) {
   return activation;
 }
 
-export async function createBusinessWithOwnerInvite({
-  name,
-  ownerEmail,
-  createdByUserId,
-  industryPackageId = PROPERTY_MANAGEMENT_PACKAGE_ID,
-}) {
-  const businessId = crypto.randomUUID();
-  const businessName = String(name).trim() || "New Business";
-  const packageConfiguration = buildEmptyPropertyManagementConfiguration({
-    companyName: businessName,
-    workspaceId: businessId,
-  });
+/**
+ * @param {{ store: object, createAndDeliverInvitation: Function }} deps
+ */
+export function createPlatformBusinessService({ store, createAndDeliverInvitation }) {
+  if (!store) throw new Error("createPlatformBusinessService requires a platform store");
+  if (typeof createAndDeliverInvitation !== "function") {
+    throw new Error("createPlatformBusinessService requires createAndDeliverInvitation");
+  }
 
-  const business = await platformStore.createBusiness({
-    id: businessId,
-    name: businessName,
-    kind: "NORMAL",
-    industryPackageId,
-    industryPackageVersion: 1,
-    packageConfiguration,
-  });
+  async function createBusinessWithOwnerInvite({
+    name,
+    ownerEmail,
+    createdByUserId,
+    industryPackageId = PROPERTY_MANAGEMENT_PACKAGE_ID,
+  }) {
+    const businessId = crypto.randomUUID();
+    const businessName = String(name).trim() || "New Business";
+    const packageConfiguration = buildEmptyPropertyManagementConfiguration({
+      companyName: businessName,
+      workspaceId: businessId,
+    });
 
-  provisionEmptyBusinessWorkspace(business);
+    const business = await store.createBusiness({
+      id: businessId,
+      name: businessName,
+      kind: "NORMAL",
+      industryPackageId,
+      industryPackageVersion: 1,
+      packageConfiguration,
+    });
 
-  const invite = await createAndDeliverInvitation({
-    businessId: business.id,
-    email: ownerEmail,
-    role: MEMBERSHIP_ROLES.OWNER,
-    invitedByUserId: createdByUserId,
-    businessName: business.name,
-  });
+    provisionEmptyBusinessWorkspace(business);
 
-  await platformStore.recordAuditEvent({
-    actorUserId: createdByUserId,
-    businessId: business.id,
-    action: "business.created",
-    targetType: "business",
-    targetId: business.id,
-    metadata: { name: business.name, ownerEmail },
-  });
+    const invite = await createAndDeliverInvitation({
+      businessId: business.id,
+      email: ownerEmail,
+      role: MEMBERSHIP_ROLES.OWNER,
+      invitedByUserId: createdByUserId,
+      businessName: business.name,
+    });
 
-  return { business, invitation: invite };
+    await store.recordAuditEvent({
+      actorUserId: createdByUserId,
+      businessId: business.id,
+      action: "business.created",
+      targetType: "business",
+      targetId: business.id,
+      metadata: { name: business.name, ownerEmail },
+    });
+
+    return { business, invitation: invite };
+  }
+
+  return {
+    provisionEmptyBusinessWorkspace,
+    createBusinessWithOwnerInvite,
+  };
 }

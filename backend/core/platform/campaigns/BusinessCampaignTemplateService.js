@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 
-import { platformStore } from "../persistence/platformStore.js";
 import { toPublicBusinessCampaignTemplate } from "./BusinessCampaignTemplate.js";
 import { createCampaignDocument, sortCampaignSections, createCampaignSection } from "../../campaigns/CampaignDocument.js";
 import { isSupportedCampaignSectionType } from "../../../../industries/property-management/config/campaignSectionCatalog.js";
@@ -21,7 +20,8 @@ function normalizeSections(sections) {
 }
 
 export class BusinessCampaignTemplateService {
-  constructor({ store = platformStore } = {}) {
+  constructor({ store } = {}) {
+    if (!store) throw new Error("BusinessCampaignTemplateService requires a platform store");
     this.store = store;
   }
 
@@ -114,4 +114,6 @@ export class BusinessCampaignTemplateService {
   }
 }
 
-export const businessCampaignTemplateService = new BusinessCampaignTemplateService();
+export function createBusinessCampaignTemplateService(deps) {
+  return new BusinessCampaignTemplateService(deps);
+}
