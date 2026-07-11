@@ -293,6 +293,57 @@ export class BusinessOSCompiler {
       }));
     }
 
+    for (const role of asArray(specification.roleDefinitions)) {
+      actions.push(createInstallAction({
+        specification,
+        type: "INSTALL_ROLE",
+        targetId: role.roleId,
+        label: `Install role: ${role.label ?? role.roleId}`,
+        explanation: clientExplanation(`Define ${role.label ?? role.roleId} with module and permission visibility.`),
+        payload: role,
+      }));
+    }
+
+    for (const policy of asArray(specification.permissionPolicies)) {
+      actions.push(createInstallAction({
+        specification,
+        type: "CONFIGURE_PERMISSION",
+        targetId: policy.policyId ?? `policy_${policy.roleId}`,
+        label: `Permission policy: ${policy.policyId ?? policy.roleId}`,
+        explanation: clientExplanation("Apply role permission policy without silent elevation."),
+        payload: policy,
+      }));
+    }
+
+    for (const policy of asArray(specification.accessRequestPolicies)) {
+      actions.push(createInstallAction({
+        specification,
+        type: "CONFIGURE_ACCESS_REQUEST_POLICY",
+        targetId: policy.policyId,
+        label: `Access request policy: ${policy.label ?? policy.policyId}`,
+        explanation: clientExplanation("Employees can request access; owners must approve — never auto-approve."),
+        payload: policy,
+      }));
+    }
+
+    const supportPolicy = asArray(specification.governancePolicies).find((entry) => (
+      entry.policyId === "support_access" || entry.kind === "support_access"
+    )) ?? {
+      policyId: "support_access_default",
+      label: "VIBETech support access",
+      requiresReason: true,
+      permanentMembership: false,
+      audited: true,
+    };
+    actions.push(createInstallAction({
+      specification,
+      type: "CONFIGURE_SUPPORT_ACCESS_POLICY",
+      targetId: supportPolicy.policyId,
+      label: "Configure support access policy",
+      explanation: clientExplanation("VIBETech admins may enter only with explicit, audited support access — never silent ownership."),
+      payload: supportPolicy,
+    }));
+
     if (unresolvedQuestions.length) {
       actions.push(createInstallAction({
         specification,
