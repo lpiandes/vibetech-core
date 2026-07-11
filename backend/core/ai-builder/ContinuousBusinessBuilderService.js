@@ -1,6 +1,5 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { AiBuilderService } from "./AiBuilderService.js";
-import { withBuilderSessionPatch } from "./BuilderSession.js";
 
 /**
  * Continuous improvement: load installed OS and propose next version.
@@ -33,30 +32,26 @@ export class ContinuousBusinessBuilderService {
       description: prompt,
     });
 
-    // Seed proposal cache with current installed specification as baseline.
-    this.aiBuilder.proposals.set(started.session.sessionId, {
+    const seeded = await this.aiBuilder.seedProposalState({
+      sessionId: started.session.sessionId,
       specification: installedSpecification,
-      assemblyPlan: { selectedBlueprints: [], selectedComponents: [], capabilityGaps: [] },
-      proposal: null,
-    });
-
-    const updated = withBuilderSessionPatch(started.session, {
-      currentStage: "awaiting_review",
-      specificationId: installedSpecification.specificationId,
-      specificationContentHash: installedSpecification.contentHash,
-      metadata: {
-        ...started.session.metadata,
+      extraMetadata: {
         continuousImprovement: true,
         baselineSpecificationVersion: installedSpecification.version,
       },
     });
-    await this.aiBuilder.repository.save(updated);
+
+    const durable = await this.aiBuilder.persistProposalState(
+      seeded.session,
+      seeded.proposalState,
+      { currentStage: "awaiting_review" },
+    );
 
     return deepFreeze({
       ok: true,
-      session: updated,
+      session: durable,
       message: "Describe what to add or change. We will propose a next version — not a unrelated new install.",
-      openHref: `/builder/${updated.sessionId}`,
+      openHref: `/builder/${durable.sessionId}`,
     });
   }
 }

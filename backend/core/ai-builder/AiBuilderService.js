@@ -11,8 +11,14 @@ import {
 } from "./BuilderArtifactClassifier.js";
 import { createBuilderEvidence } from "./BuilderEvidence.js";
 import { withBuilderSessionPatch } from "./BuilderSession.js";
+import {
+  createBuilderProposalState,
+  readProposalStateFromSession,
+  withProposalStateMetadata,
+} from "./BuilderProposalState.js";
 import { BusinessOSCompiler } from "../business-os/BusinessOSCompiler.js";
 import { BusinessOSInstaller } from "../business-os/BusinessOSInstaller.js";
+import { BusinessOSInstallationRepository } from "../business-os/BusinessOSInstallationRepository.js";
 import {
   createBusinessOSInstallationApproval,
 } from "../business-os/BusinessOSInstallationApproval.js";
@@ -25,6 +31,10 @@ import {
 
 /**
  * End-to-end AI Builder façade used by API routes.
+ *
+ * Authoritative proposal/plan/dry-run/approval state is persisted on the Builder
+ * session (and mirrored into BusinessOSInstallationRepository). this.proposals
+ * is only a rebuildable process-local cache.
  */
 export class AiBuilderService {
   constructor({
@@ -34,7 +44,8 @@ export class AiBuilderService {
     assembler = new BuilderSpecificationAssembler(),
     researchService = new BusinessWebsiteResearchService(),
     compiler = new BusinessOSCompiler(),
-    installer = new BusinessOSInstaller(),
+    installationRepository = new BusinessOSInstallationRepository(),
+    installer = null,
     intelligence = new DeterministicBuilderIntelligenceProvider(),
     changePlanner = new BuilderSpecificationChangePlanner(),
     nowISO = () => new Date().toISOString(),
@@ -45,10 +56,12 @@ export class AiBuilderService {
     this.assembler = assembler;
     this.researchService = researchService;
     this.compiler = compiler;
-    this.installer = installer;
+    this.installationRepository = installationRepository;
+    this.installer = installer ?? new BusinessOSInstaller({ repository: installationRepository });
     this.intelligence = intelligence;
     this.changePlanner = changePlanner;
     this.nowISO = nowISO;
+    /** @type {Map<string, object>} rebuildable cache only */
     this.proposals = new Map();
   }
 
@@ -131,14 +144,12 @@ export class AiBuilderService {
     });
     if (!assembled.ok) return assembled;
 
-    const proposal = buildVisualBusinessOSProposal({
-      session,
+    const proposalState = createBuilderProposalState({
       specification: assembled.specification,
       assemblyPlan,
-      businessId: session.businessId ?? "preview",
+      updatedAt: this.nowISO(),
     });
-
-    const updated = withBuilderSessionPatch(session, {
+    const updated = await this.persistProposalState(session, proposalState, {
       currentStage: "proposal_ready",
       selectedBlueprints: assemblyPlan.selectedBlueprints,
       selectedComponents: assemblyPlan.selectedComponents,
@@ -146,12 +157,13 @@ export class AiBuilderService {
       assumptions: [...session.assumptions, ...assemblyPlan.assumptions],
       specificationId: assembled.specification.specificationId,
       specificationContentHash: assembled.specification.contentHash,
+      installationPlanId: null,
+      installationPlanHash: null,
     });
-    await this.repository.save(updated);
-    this.proposals.set(sessionId, {
-      specification: assembled.specification,
-      assemblyPlan,
-      proposal,
+
+    this.installationRepository.saveSpecification({
+      ...assembled.specification,
+      businessId: session.businessId ?? assembled.specification.businessId,
     });
 
     return deepFreeze({
@@ -159,14 +171,14 @@ export class AiBuilderService {
       session: updated,
       specification: assembled.specification,
       assemblyPlan,
-      proposal,
+      proposal: this.buildPreview(updated, proposalState),
     });
   }
 
   async chat({ sessionId, text }) {
     const session = await this.requireSession(sessionId);
     const interpreted = await this.intelligence.interpretChangeRequest({ text });
-    const stored = this.proposals.get(sessionId);
+    const stored = await this.loadProposalState(session);
     if (!stored?.specification) {
       return deepFreeze({
         ok: false,
@@ -180,12 +192,6 @@ export class AiBuilderService {
       change: { ...interpreted, text },
     });
 
-    const proposal = buildVisualBusinessOSProposal({
-      session,
-      specification: planned.nextSpecification,
-      assemblyPlan: stored.assemblyPlan,
-    });
-
     const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
       messageId: `msg_user_change_${Date.now()}`,
       role: "user",
@@ -197,7 +203,17 @@ export class AiBuilderService {
       text: `Proposed change: ${interpreted.kind.replace(/_/g, " ")}. Dry run and approval are required before install.`,
     }));
 
-    const updated = withBuilderSessionPatch(session, {
+    const proposalState = createBuilderProposalState({
+      ...stored,
+      specification: planned.nextSpecification,
+      plan: null,
+      dryRunResult: null,
+      approval: null,
+      change: planned,
+      updatedAt: this.nowISO(),
+    });
+
+    const updated = await this.persistProposalState(session, proposalState, {
       conversation: withAssistant,
       currentStage: "awaiting_review",
       specificationId: planned.nextSpecification.specificationId,
@@ -205,18 +221,16 @@ export class AiBuilderService {
       installationPlanId: null,
       installationPlanHash: null,
     });
-    await this.repository.save(updated);
-    this.proposals.set(sessionId, {
-      specification: planned.nextSpecification,
-      assemblyPlan: stored.assemblyPlan,
-      proposal,
-      change: planned,
+
+    this.installationRepository.saveSpecification({
+      ...planned.nextSpecification,
+      businessId: session.businessId ?? planned.nextSpecification.businessId,
     });
 
     return deepFreeze({
       ok: true,
       session: updated,
-      proposal,
+      proposal: this.buildPreview(updated, proposalState),
       specification: planned.nextSpecification,
       changeImpact: {
         kind: interpreted.kind,
@@ -230,7 +244,7 @@ export class AiBuilderService {
 
   async dryRun({ sessionId }) {
     const session = await this.requireSession(sessionId);
-    const stored = this.proposals.get(sessionId);
+    const stored = await this.loadProposalState(session);
     if (!stored?.specification) return deepFreeze({ ok: false, reason: "proposal_required" });
 
     const compiled = this.compiler.compile(stored.specification, { nowISO: this.nowISO() });
@@ -244,14 +258,20 @@ export class AiBuilderService {
       nowISO: this.nowISO(),
     });
 
-    const updated = withBuilderSessionPatch(session, {
+    const proposalState = createBuilderProposalState({
+      ...stored,
+      plan: compiled.plan,
+      dryRunResult: dry,
+      approval: null,
+      updatedAt: this.nowISO(),
+    });
+
+    const updated = await this.persistProposalState(session, proposalState, {
       currentStage: dry.ok ? "dry_run_ready" : "blocked",
       installationPlanId: compiled.plan.planId,
       installationPlanHash: compiled.plan.planHash,
       businessId,
     });
-    await this.repository.save(updated);
-    this.proposals.set(sessionId, { ...stored, plan: compiled.plan, dryRunResult: dry });
 
     return deepFreeze({
       ok: dry.ok,
@@ -268,17 +288,16 @@ export class AiBuilderService {
     });
   }
 
-  async install({ sessionId, approved = false, actorId = null }) {
+  async approve({ sessionId, actorId = null }) {
     const session = await this.requireSession(sessionId);
-    const stored = this.proposals.get(sessionId);
-    if (!stored?.specification || !stored?.plan || !stored?.dryRunResult) {
+    const stored = await this.loadProposalState(session);
+    if (!stored?.specification || !stored?.plan || !stored?.dryRunResult?.ok) {
       return deepFreeze({ ok: false, reason: "dry_run_required" });
     }
-    if (!approved) return deepFreeze({ ok: false, reason: "approval_required" });
 
     const businessId = session.businessId ?? `draft_${session.sessionId}`;
     const approval = createBusinessOSInstallationApproval({
-      approvalId: `appr_${session.sessionId}`,
+      approvalId: `appr_${session.sessionId}_${stored.specification.contentHash.slice(0, 8)}`,
       businessId,
       specificationId: stored.specification.specificationId,
       specificationVersion: stored.specification.version,
@@ -289,6 +308,43 @@ export class AiBuilderService {
       approvedAt: this.nowISO(),
     });
 
+    this.installationRepository.saveApproval(approval);
+
+    const proposalState = createBuilderProposalState({
+      ...stored,
+      approval,
+      updatedAt: this.nowISO(),
+    });
+    const updated = await this.persistProposalState(session, proposalState, {
+      currentStage: "awaiting_approval",
+      businessId,
+    });
+
+    return deepFreeze({ ok: true, session: updated, approval });
+  }
+
+  async install({
+    sessionId,
+    approved = false,
+    actorId = null,
+    failAtOperationId = null,
+  }) {
+    const session = await this.requireSession(sessionId);
+    let stored = await this.loadProposalState(session);
+    if (!stored?.specification || !stored?.plan || !stored?.dryRunResult) {
+      return deepFreeze({ ok: false, reason: "dry_run_required" });
+    }
+
+    if (!stored.approval) {
+      if (!approved) return deepFreeze({ ok: false, reason: "approval_required" });
+      const approvedResult = await this.approve({ sessionId, actorId });
+      if (!approvedResult.ok) return approvedResult;
+      stored = await this.loadProposalState(await this.requireSession(sessionId));
+    }
+
+    const businessId = session.businessId ?? `draft_${session.sessionId}`;
+    this.hydrateInstallationRepository(businessId, stored);
+
     const installing = withBuilderSessionPatch(session, { currentStage: "installing" });
     await this.repository.save(installing);
 
@@ -297,16 +353,22 @@ export class AiBuilderService {
       plan: stored.plan,
       businessId,
       dryRunResult: stored.dryRunResult,
-      approval,
+      approval: stored.approval,
       actorUserId: actorId ?? session.actorId,
       nowISO: this.nowISO(),
+      failAtOperationId,
     });
 
-    const updated = withBuilderSessionPatch(installing, {
+    const proposalState = createBuilderProposalState({
+      ...stored,
+      installation: installed.installation ?? stored.installation,
+      updatedAt: this.nowISO(),
+    });
+
+    const updated = await this.persistProposalState(installing, proposalState, {
       currentStage: installed.ok ? "installed" : "failed",
       businessId,
     });
-    await this.repository.save(updated);
 
     return deepFreeze({
       ok: installed.ok,
@@ -314,6 +376,123 @@ export class AiBuilderService {
       installation: installed,
       openHref: installed.ok ? `/b/${businessId}/home` : null,
     });
+  }
+
+  async resumeInstall({ sessionId, actorId = null, failAtOperationId = null }) {
+    const session = await this.requireSession(sessionId);
+    const stored = await this.loadProposalState(session);
+    if (!stored?.approval) {
+      return deepFreeze({ ok: false, reason: "approval_required" });
+    }
+    return this.install({
+      sessionId,
+      approved: true,
+      actorId: actorId ?? session.actorId,
+      failAtOperationId,
+    });
+  }
+
+  async getProposal(sessionId) {
+    const session = await this.requireSession(sessionId);
+    const stored = await this.loadProposalState(session);
+    if (!stored?.specification) {
+      return deepFreeze({ ok: false, reason: "proposal_required" });
+    }
+    return deepFreeze({
+      ok: true,
+      session,
+      specification: stored.specification,
+      assemblyPlan: stored.assemblyPlan,
+      plan: stored.plan,
+      dryRunResult: stored.dryRunResult,
+      approval: stored.approval,
+      installation: stored.installation,
+      proposal: this.buildPreview(session, stored),
+    });
+  }
+
+  async seedProposalState({ sessionId, specification, assemblyPlan = null, extraMetadata = {} }) {
+    const session = await this.requireSession(sessionId);
+    const proposalState = createBuilderProposalState({
+      specification,
+      assemblyPlan: assemblyPlan ?? { selectedBlueprints: [], selectedComponents: [], capabilityGaps: [] },
+      updatedAt: this.nowISO(),
+    });
+    const updated = await this.persistProposalState(session, proposalState, {
+      currentStage: session.currentStage,
+      specificationId: specification.specificationId,
+      specificationContentHash: specification.contentHash,
+      metadata: {
+        ...session.metadata,
+        ...extraMetadata,
+      },
+    });
+    this.installationRepository.saveSpecification({
+      ...specification,
+      businessId: session.businessId ?? specification.businessId,
+    });
+    return deepFreeze({ ok: true, session: updated, proposalState });
+  }
+
+  buildPreview(session, proposalState) {
+    if (!proposalState?.specification) return null;
+    return buildVisualBusinessOSProposal({
+      session,
+      specification: proposalState.specification,
+      assemblyPlan: proposalState.assemblyPlan,
+      businessId: session.businessId ?? "preview",
+    });
+  }
+
+  async loadProposalState(session) {
+    const sessionId = session.sessionId;
+    if (this.proposals.has(sessionId)) {
+      return createBuilderProposalState(this.proposals.get(sessionId));
+    }
+    const durable = readProposalStateFromSession(session);
+    if (durable) {
+      this.proposals.set(sessionId, durable);
+      this.hydrateInstallationRepository(session.businessId ?? `draft_${sessionId}`, durable);
+      return durable;
+    }
+    return null;
+  }
+
+  async persistProposalState(session, proposalState, patch = {}) {
+    const nextState = createBuilderProposalState(proposalState);
+    const metadataPatch = patch.metadata
+      ? withProposalStateMetadata({ metadata: patch.metadata }, nextState)
+      : withProposalStateMetadata(session, nextState);
+    const { metadata: _ignored, ...rest } = patch;
+    const updated = withBuilderSessionPatch(session, {
+      ...rest,
+      metadata: metadataPatch,
+    });
+    await this.repository.save(updated);
+    this.proposals.set(updated.sessionId, nextState);
+    return updated;
+  }
+
+  hydrateInstallationRepository(businessId, proposalState) {
+    if (!proposalState) return;
+    if (proposalState.specification) {
+      this.installationRepository.saveSpecification({
+        ...proposalState.specification,
+        businessId: businessId ?? proposalState.specification.businessId,
+      });
+    }
+    if (proposalState.dryRunResult) {
+      this.installationRepository.saveDryRun(proposalState.dryRunResult);
+    }
+    if (proposalState.approval) {
+      this.installationRepository.saveApproval(proposalState.approval);
+    }
+    if (proposalState.installation) {
+      this.installationRepository.saveInstallation(proposalState.installation);
+      for (const checkpoint of proposalState.installation.actionCheckpoints ?? []) {
+        this.installationRepository.saveOperationCheckpoint(businessId, checkpoint);
+      }
+    }
   }
 
   async requireSession(sessionId) {
