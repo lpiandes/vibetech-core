@@ -26,6 +26,10 @@ export const BUSINESS_OS_SAFE_ROUTES = Object.freeze({
   settings: "settings",
   setup: "settings",
   readiness: "readiness",
+  appointments: "work",
+  treatment_plans: "people",
+  billing: "performance",
+  referrals: "people",
   // Hockey fixture modules map to safe universal routes (subject/work surfaces).
   teams: "people",
   players: "people",

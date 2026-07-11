@@ -24,11 +24,16 @@ export default function BuilderHomePage() {
       const response = await fetch("/api/builder/sessions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ businessName, websiteUrl, mode: "operator" }),
+        body: JSON.stringify({
+          businessName,
+          websiteUrl,
+          description: businessName ? `${businessName}${websiteUrl ? ` — ${websiteUrl}` : ""}` : null,
+          mode: "new_business",
+        }),
       });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error ?? "Could not start.");
-      router.push(`/builder/${data.session.sessionId}/discovery`);
+      router.push(`/builder/${data.session.sessionId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start.");
     } finally {

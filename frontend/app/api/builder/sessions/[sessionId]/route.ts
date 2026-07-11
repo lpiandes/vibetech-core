@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getBusinessBuilderService } from "@/lib/builder/getBusinessBuilderService";
+import { getAiBuilderService } from "@/lib/builder/getAiBuilderService";
 
 type Params = { params: Promise<{ sessionId: string }> };
 
 export async function GET(_request: Request, { params }: Params) {
   const { sessionId } = await params;
-  const service = getBusinessBuilderService();
-  const session = service.getSession(sessionId);
+  const service = getAiBuilderService();
+  const session = await service.getSession(sessionId);
   if (!session) return NextResponse.json({ ok: false, error: "Session not found." }, { status: 404 });
   return NextResponse.json({ ok: true, session });
 }
@@ -15,50 +15,48 @@ export async function POST(request: Request, { params }: Params) {
   try {
     const { sessionId } = await params;
     const body = await request.json().catch(() => ({}));
-    const service = getBusinessBuilderService();
+    const service = getAiBuilderService();
     const action = String(body.action ?? "");
 
-    if (action === "next_questions") {
-      return NextResponse.json(service.getDiscoveryState(sessionId));
-    }
     if (action === "answer") {
-      return NextResponse.json(service.answerQuestion({
+      return NextResponse.json(await service.answer({
         sessionId,
         questionId: body.questionId,
         answer: body.answer,
-        confidence: body.confidence,
+        skipped: Boolean(body.skipped),
+        unknown: Boolean(body.unknown),
       }));
     }
+    if (action === "chat") {
+      return NextResponse.json(await service.chat({ sessionId, text: body.text }));
+    }
     if (action === "upload") {
-      return NextResponse.json(service.attachUpload({
+      return NextResponse.json(await service.upload({
         sessionId,
         filename: body.filename,
         mimeType: body.mimeType,
         notes: body.notes,
+        textPreview: body.textPreview,
       }));
     }
     if (action === "research") {
-      return NextResponse.json(await service.attachWebsiteResearch({
+      return NextResponse.json(await service.research({
         sessionId,
         websiteUrl: body.websiteUrl,
+        manualFallbackText: body.manualFallbackText,
       }));
     }
     if (action === "propose") {
-      return NextResponse.json(service.propose({ sessionId }));
+      return NextResponse.json(await service.propose({ sessionId }));
     }
     if (action === "dry_run") {
-      return NextResponse.json(service.dryRun({
-        sessionId,
-        specification: body.specification,
-      }));
+      return NextResponse.json(await service.dryRun({ sessionId }));
     }
     if (action === "install") {
-      return NextResponse.json(service.install({
+      return NextResponse.json(await service.install({
         sessionId,
-        specification: body.specification,
-        plan: body.plan,
-        dryRunResult: body.dryRunResult,
         approved: Boolean(body.approved),
+        actorId: body.actorId ?? null,
       }));
     }
     return NextResponse.json({ ok: false, error: "Unknown action." }, { status: 400 });
