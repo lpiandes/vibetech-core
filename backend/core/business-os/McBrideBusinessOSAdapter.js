@@ -306,6 +306,77 @@ export function exportMcBrideBusinessOSSpecification({
       { permissionId: "integrations.manage", label: "Manage integrations" },
       { permissionId: "settings.manage", label: "Manage settings" },
     ],
+    roleDefinitions: [
+      {
+        roleId: "owner",
+        label: "Owner",
+        membershipRole: "OWNER",
+        moduleVisibility: modules.map((module) => module.moduleId),
+        permissions: ["*"],
+      },
+      {
+        roleId: "manager",
+        label: "Manager",
+        membershipRole: "MANAGER",
+        moduleVisibility: ["home", "work", "people", "properties", "inbox", "knowledge", "performance"],
+        permissions: ["work.view", "work.manage", "people.view", "inbox.view", "inbox.manage", "performance.view"],
+      },
+      {
+        roleId: "maintenance_technician",
+        label: "Maintenance Technician",
+        membershipRole: "EMPLOYEE",
+        moduleVisibility: ["home", "work", "properties", "inbox"],
+        permissions: ["work.view", "people.view", "inbox.view"],
+        deniedModules: ["campaigns", "performance", "integrations", "settings"],
+      },
+      {
+        roleId: "marketing_manager",
+        label: "Marketing Manager",
+        membershipRole: "MANAGER",
+        moduleVisibility: ["home", "work", "people", "campaigns", "inbox", "knowledge", "performance"],
+        permissions: ["work.view", "people.view", "inbox.view", "inbox.manage", "performance.view", "knowledge.manage"],
+        deniedModules: ["settings"],
+      },
+    ],
+    permissionPolicies: [
+      { policyId: "owner_full_access", roleId: "owner", effect: "allow", permissions: ["*"] },
+      { policyId: "technician_ops_only", roleId: "maintenance_technician", effect: "deny", modules: ["campaigns", "settings"] },
+      { policyId: "marketing_no_payroll", roleId: "marketing_manager", effect: "deny", modules: ["settings"] },
+    ],
+    accessRequestPolicies: [
+      {
+        policyId: "module_access_request",
+        label: "Request module or permission access",
+        requestKinds: ["module_access", "action_permission", "role_upgrade", "record_scope", "temporary_access"],
+        requiresApproval: true,
+        autoApprove: false,
+        approverRoles: ["OWNER", "ADMIN"],
+      },
+    ],
+    teamDefinitions: [
+      { teamId: "ops", label: "Operations", roleIds: ["manager", "maintenance_technician"] },
+      { teamId: "marketing", label: "Marketing", roleIds: ["marketing_manager"] },
+    ],
+    source: {
+      kind: "gold_blueprint",
+      blueprintId: "bp_gold_property_management_mcbride",
+      packageId: industryPackage.id,
+      clientTemplateId: template.id,
+    },
+    provenance: {
+      exportedFrom: "McBrideBusinessOSAdapter",
+      packageId: industryPackage.id,
+      clientTemplateId: template.id,
+      gold: true,
+    },
+    assumptions: [
+      { id: "email_primary", text: "Business email is the primary outbound channel for launch." },
+      { id: "sms_deferred", text: "SMS remains deferred until a reusable platform capability exists." },
+    ],
+    capabilityGaps: [
+      { capabilityId: "sms_messaging", label: "SMS messaging", reason: "Deferred platform capability" },
+      { capabilityId: "appfolio_api_sync", label: "AppFolio sync", reason: "Deferred integration" },
+    ],
     governancePolicies: [
       { policyId: "human_approval_customer_comms", label: "Human approval required for customer-facing communications", enforced: true },
       { policyId: "no_silent_campaign_send", label: "Campaign send is an explicit separate action", enforced: true },

@@ -126,6 +126,36 @@ test("hockey travel club fixture validates and exposes owner-relevant modules", 
   )));
   assert.ok(!spec.modules.some((module) => module.moduleId === employeeAsNav(spec)));
   assert.ok(spec.subjectDefinitions.some((entry) => entry.subjectType === "drill"));
+  assert.ok(spec.roleDefinitions.some((role) => role.roleId === "head_coach"));
+  assert.ok(spec.employeeDefinitions.some((employee) => employee.label === "Travel Coordinator"));
+});
+
+test("specification hashing is stable and explanation is human-readable", async () => {
+  const { hashBusinessOSSpecification } = await import("./BusinessOSSpecificationHasher.js");
+  const { explainBusinessOSSpecification } = await import("./BusinessOSExplanationProjection.js");
+  const { createBusinessModuleDefinition } = await import("./BusinessModuleDefinition.js");
+
+  const spec = createBusinessOSSpecification({
+    specificationId: "bos_stable_hash",
+    status: "draft",
+    businessProfile: { businessName: "Stable Co" },
+    modules: [
+      createBusinessModuleDefinition({
+        moduleId: "work",
+        label: "Work",
+        moduleType: "operations",
+      }),
+    ],
+    roleDefinitions: [{ roleId: "owner", label: "Owner" }],
+  });
+  assert.equal(hashBusinessOSSpecification(spec), spec.contentHash);
+  assert.equal(
+    hashBusinessOSSpecification({ ...spec, updatedAt: "2099-01-01T00:00:00.000Z" }),
+    spec.contentHash,
+  );
+  const explanation = explainBusinessOSSpecification(spec);
+  assert.match(explanation.summary, /Stable Co/);
+  assert.ok(explanation.sections.some((section) => section.id === "roles"));
 });
 
 function employeeAsNav(spec) {
