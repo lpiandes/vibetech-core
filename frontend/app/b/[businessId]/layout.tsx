@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceService";
 import { BusinessScopeProvider } from "@/lib/platform/BusinessScopeContext";
 import WorkspaceRenderer from "@/components/workspace/WorkspaceRenderer";
-import { platformStore } from "../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
 
 export default async function BusinessScopedLayout({
   children,

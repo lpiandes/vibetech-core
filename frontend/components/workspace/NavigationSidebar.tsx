@@ -59,7 +59,7 @@ export default function NavigationSidebar({ variant = "dark" }: { variant?: "lig
   const { displayPath, beginNavigation } = useWorkspaceNavigation();
   const grouped = getModuleDrivenNavSections(scope.businessId, scope.permissions, {
     role: scope.role,
-    installed: scope.installedNavigation ?? null,
+    installed: (scope.installedNavigation ?? null) as never,
   });
   const activeModuleId = getActiveModuleIdFromPathname(displayPath);
   const businessName = scope.businessName || "VIBETech";

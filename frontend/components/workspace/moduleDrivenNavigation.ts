@@ -1,6 +1,29 @@
-import { buildBusinessOSNavigation } from "../../../backend/core/business-os/BusinessOSNavigationBuilder.js";
-import { resolveSafeModuleHref, isSafeModuleRoute } from "../../../backend/core/business-os/BusinessOSSafeRoutes.js";
-import { resolveRoleAccess } from "../../../backend/core/business-os/BusinessOSRoleAccess.js";
+import { buildBusinessOSNavigation as buildBusinessOSNavigationRaw } from "../../../backend/core/business-os/BusinessOSNavigationBuilder.js";
+import {
+  resolveSafeModuleHref as resolveSafeModuleHrefRaw,
+  isSafeModuleRoute as isSafeModuleRouteRaw,
+} from "../../../backend/core/business-os/BusinessOSSafeRoutes.js";
+import { resolveRoleAccess as resolveRoleAccessRaw } from "../../../backend/core/business-os/BusinessOSRoleAccess.js";
+
+const buildBusinessOSNavigation = buildBusinessOSNavigationRaw as (input: Record<string, unknown>) => {
+  primaryItems: Array<{
+    id?: string;
+    moduleId: string;
+    label: string;
+    href?: string | null;
+    iconName?: string;
+    permission?: string | null;
+    overflowItems?: unknown[];
+  }>;
+};
+const resolveSafeModuleHref = resolveSafeModuleHrefRaw as (
+  moduleId: string,
+  options?: { businessId?: string | null },
+) => string | null;
+const isSafeModuleRoute = isSafeModuleRouteRaw as (moduleId: string) => boolean;
+const resolveRoleAccess = resolveRoleAccessRaw as (input: Record<string, unknown>) => {
+  visibleModuleIds: string[];
+};
 
 export type NavItem = {
   id: string;
@@ -116,7 +139,7 @@ export function getModuleDrivenNavSections(
       maximumPrimaryItems: options?.maximumPrimaryItems ?? 8,
       overflowBehavior: "more",
       ...(installed?.navigation ?? {}),
-      primaryItems: undefined, // let builder derive from eligible modules for live shell
+      primaryItems: undefined,
     },
     permissions: permSet,
   });
