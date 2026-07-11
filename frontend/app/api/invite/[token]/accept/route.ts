@@ -2,8 +2,8 @@ import { AuthError } from "next-auth";
 import { NextResponse } from "next/server";
 
 import { signIn } from "@/auth";
-import { platformStore } from "../../../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
-import { hashPassword, verifyPassword } from "../../../../../../backend/core/platform/services/AuthCredentialService.js";
+import { platformStore } from "@/lib/server/platformStore";
+import { hashPassword, verifyPassword } from "@/lib/server/authCredentials";
 import { validateInvitationForDisplay } from "../../../../../../backend/core/platform/services/InvitationService.js";
 import { getSessionUser } from "@/lib/platform/AuthorizedWorkspaceService";
 

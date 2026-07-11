@@ -1,4 +1,4 @@
-import { platformStore } from "./persistence/PostgresPlatformStore.js";
+import { platformStore } from "./persistence/platformStore.js";
 import { businessRecordToActivation, isPlatformAdmin } from "./persistence/platformMappers.js";
 import { permissionsForRole, hasPermission } from "./permissions/rolePermissions.js";
 import {

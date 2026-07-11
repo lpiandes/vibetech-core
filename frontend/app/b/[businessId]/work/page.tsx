@@ -1,5 +1,5 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
-import { platformStore } from "../../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "@/lib/server/platformStore";
 import WorkRenderer from "@/components/work/WorkRenderer";
 import WorkflowWorkspace from "@/components/workflows/WorkflowWorkspace";
 import ModuleRenderer from "@/components/workspace/ModuleRenderer";

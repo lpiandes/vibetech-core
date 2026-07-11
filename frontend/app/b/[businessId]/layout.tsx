@@ -4,7 +4,7 @@ import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceSe
 import { BusinessScopeProvider } from "@/lib/platform/BusinessScopeContext";
 import WorkspaceRenderer from "@/components/workspace/WorkspaceRenderer";
 import RememberBusinessCookie from "@/components/platform/RememberBusinessCookie";
-import { platformStore } from "../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "@/lib/server/platformStore";
 import { composePortalModel } from "@/lib/portal-renderer/composePortalModel.js";
 
 export default async function BusinessScopedLayout({

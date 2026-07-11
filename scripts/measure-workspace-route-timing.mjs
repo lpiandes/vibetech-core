@@ -12,7 +12,7 @@ dotenv.config({ path: path.join(root, "frontend/.env.local") });
 
 import { runMigrations } from "../backend/core/platform/db/migrate.js";
 import { closePool } from "../backend/core/platform/db/pool.js";
-import { platformStore } from "../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "../backend/core/platform/persistence/platformStore.js";
 import { businessRecordToActivation } from "../backend/core/platform/persistence/platformMappers.js";
 import { authorizeBusinessAccess } from "../backend/core/platform/authorizeBusinessAccess.js";
 import { loadRuntimeSnapshotsMap } from "../backend/core/persistence/createWorkspacePersistence.js";

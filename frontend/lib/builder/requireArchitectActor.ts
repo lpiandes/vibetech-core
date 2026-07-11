@@ -1,7 +1,7 @@
 import { requireSessionUser } from "@/lib/platform/AuthorizedWorkspaceService";
 import { presentProductError } from "@/lib/platform/productErrors";
 import { PLATFORM_ROLES } from "../../../backend/core/platform/permissions/rolePermissions.js";
-import { platformStore } from "../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "@/lib/server/platformStore";
 
 export async function requireArchitectActor() {
   const user = await requireSessionUser();

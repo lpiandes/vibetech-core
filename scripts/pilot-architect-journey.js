@@ -14,7 +14,7 @@ dotenv.config({ path: path.join(root, "frontend/.env.local") });
 
 import { runMigrations } from "../backend/core/platform/db/migrate.js";
 import { closePool } from "../backend/core/platform/db/pool.js";
-import { platformStore } from "../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "../backend/core/platform/persistence/platformStore.js";
 import { bootstrapPlatformAdmin, hashPassword } from "../backend/core/platform/services/AuthCredentialService.js";
 import { createAndDeliverInvitation } from "../backend/core/platform/services/InvitationService.js";
 import { MEMBERSHIP_ROLES } from "../backend/core/platform/permissions/rolePermissions.js";

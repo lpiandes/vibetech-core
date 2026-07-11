@@ -1,5 +1,5 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
-import { platformStore } from "../../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "@/lib/server/platformStore";
 import { PERMISSIONS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 import PropertiesRenderer from "@/components/properties/PropertiesRenderer";
 import RecordsWorkspace from "@/components/data-forms/RecordsWorkspace";

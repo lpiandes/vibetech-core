@@ -1,4 +1,4 @@
-import { platformStore } from "../../platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "../../platform/persistence/platformStore.js";
 
 export class ImportRunRepository {
   constructor({ store = platformStore } = {}) {

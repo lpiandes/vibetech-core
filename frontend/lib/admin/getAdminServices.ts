@@ -1,4 +1,4 @@
-import { platformStore } from "../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "@/lib/server/platformStore";
 import { AdminPlatformService } from "../../../backend/core/admin/AdminPlatformService.js";
 import { createDurableSupportAccessService } from "../../../backend/core/platform/support/SupportAccessService.js";
 

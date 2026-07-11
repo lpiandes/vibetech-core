@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { platformStore } from "../persistence/PostgresPlatformStore.js";
+import { platformStore } from "../persistence/platformStore.js";
 import { toPublicBusinessCampaignTemplate } from "./BusinessCampaignTemplate.js";
 import { createCampaignDocument, sortCampaignSections, createCampaignSection } from "../../campaigns/CampaignDocument.js";
 import { isSupportedCampaignSectionType } from "../../../../industries/property-management/config/campaignSectionCatalog.js";

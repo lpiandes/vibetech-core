@@ -17,7 +17,7 @@ process.env.AUTH_SECRET = process.env.AUTH_SECRET ?? "test-auth-secret-for-invit
 
 import { runMigrations } from "./db/migrate.js";
 import { closePool, withClient } from "./db/pool.js";
-import { platformStore } from "./persistence/PostgresPlatformStore.js";
+import { platformStore } from "./persistence/platformStore.js";
 import { hashPassword } from "./services/AuthCredentialService.js";
 import { MEMBERSHIP_ROLES } from "./permissions/rolePermissions.js";
 import { buildEmptyPropertyManagementConfiguration } from "../../../industries/property-management/config/buildEmptyPropertyManagementConfiguration.js";

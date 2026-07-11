@@ -1,5 +1,5 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
-import { platformStore } from "../../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "@/lib/server/platformStore";
 import EmptyBusinessHome from "@/components/home/EmptyBusinessHome";
 import SetupChecklistBanner from "@/components/home/SetupChecklistBanner";
 import FirstLoginBriefingBanner from "@/components/home/FirstLoginBriefingBanner";

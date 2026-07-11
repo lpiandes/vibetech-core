@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 
-import { platformStore } from "../../platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "../../platform/persistence/platformStore.js";
 import { LocalFilesystemImportStorage } from "./LocalFilesystemImportStorage.js";
 
 const DEFAULT_MAX_BYTES = 25 * 1024 * 1024;

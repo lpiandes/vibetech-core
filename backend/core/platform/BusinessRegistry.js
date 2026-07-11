@@ -1,4 +1,4 @@
-import { platformStore } from "./persistence/PostgresPlatformStore.js";
+import { platformStore } from "./persistence/platformStore.js";
 import { businessRecordToActivation } from "./persistence/platformMappers.js";
 
 /**

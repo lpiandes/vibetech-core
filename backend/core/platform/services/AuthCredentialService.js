@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 
-import { platformStore } from "../persistence/PostgresPlatformStore.js";
+import { platformStore } from "../persistence/platformStore.js";
 import { PLATFORM_ROLES } from "../permissions/rolePermissions.js";
 
 const SALT_ROUNDS = 12;

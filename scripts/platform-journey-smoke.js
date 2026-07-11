@@ -16,7 +16,7 @@ process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
 
 import { runMigrations } from "../backend/core/platform/db/migrate.js";
 import { closePool } from "../backend/core/platform/db/pool.js";
-import { platformStore } from "../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "../backend/core/platform/persistence/platformStore.js";
 import { bootstrapPlatformAdmin, hashPassword } from "../backend/core/platform/services/AuthCredentialService.js";
 import { createBusinessWithOwnerInvite } from "../backend/core/platform/services/PlatformBusinessService.js";
 import { authorizeBusinessAccess, AuthorizationError } from "../backend/core/platform/authorizeBusinessAccess.js";

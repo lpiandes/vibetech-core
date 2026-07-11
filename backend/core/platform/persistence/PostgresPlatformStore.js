@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 
-import { withClient } from "../db/pool.js";
 import {
   mapUserRow,
   mapBusinessRow,
@@ -20,9 +19,17 @@ import { encryptInvitationToken, decryptInvitationToken } from "../delivery/Invi
 import { INVITATION_TTL_DAYS, MEMBERSHIP_ROLES } from "../permissions/rolePermissions.js";
 
 export class PostgresPlatformStore {
+  /** @param {(fn: (client: any) => Promise<any>) => Promise<any>} withClient */
+  constructor(withClient) {
+    if (typeof withClient !== "function") {
+      throw new Error("PostgresPlatformStore requires a withClient database port");
+    }
+    this.withClient = withClient;
+  }
+
   async createUser({ email, name, passwordHash, platformRole = null }) {
     const normalizedEmail = String(email).trim().toLowerCase();
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO users (email, name, password_hash, platform_role)
          VALUES ($1, $2, $3, $4)
@@ -35,21 +42,21 @@ export class PostgresPlatformStore {
 
   async getUserByEmail(email) {
     const normalizedEmail = String(email).trim().toLowerCase();
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM users WHERE email = $1`, [normalizedEmail]),
     );
     return mapUserRow(rows[0] ?? null);
   }
 
   async getUserById(userId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM users WHERE id = $1`, [String(userId)]),
     );
     return mapUserRow(rows[0] ?? null);
   }
 
   async updateUserName(userId, name) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `UPDATE users SET name = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
         [String(userId), String(name).trim()],
@@ -59,7 +66,7 @@ export class PostgresPlatformStore {
   }
 
   async setUserPassword(userId, passwordHash) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
         [String(userId), passwordHash],
@@ -78,7 +85,7 @@ export class PostgresPlatformStore {
     packageConfiguration = {},
     status = "ACTIVE",
   }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO businesses (id, name, kind, industry_package_id, industry_package_version, demo_configuration_id, package_configuration, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
@@ -99,21 +106,21 @@ export class PostgresPlatformStore {
   }
 
   async getBusinessById(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM businesses WHERE id = $1`, [String(businessId)]),
     );
     return mapBusinessRow(rows[0] ?? null);
   }
 
   async listBusinesses() {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM businesses ORDER BY created_at DESC`),
     );
     return rows.map(mapBusinessRow);
   }
 
   async listBusinessesForUser(userId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT b.* FROM businesses b
          INNER JOIN business_memberships m ON m.business_id = b.id
@@ -126,7 +133,7 @@ export class PostgresPlatformStore {
   }
 
   async createMembership({ userId, businessId, role, status = "ACTIVE" }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO business_memberships (user_id, business_id, role, status)
          VALUES ($1, $2, $3, $4)
@@ -140,7 +147,7 @@ export class PostgresPlatformStore {
 
   async getActiveMembershipByEmail(businessId, email) {
     const normalizedEmail = String(email).trim().toLowerCase();
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT m.*, u.email, u.name AS user_name
          FROM business_memberships m
@@ -159,7 +166,7 @@ export class PostgresPlatformStore {
   }
 
   async getMembership(userId, businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM business_memberships WHERE user_id = $1 AND business_id = $2`,
         [String(userId), String(businessId)],
@@ -169,7 +176,7 @@ export class PostgresPlatformStore {
   }
 
   async listMembershipsForBusiness(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT m.*, u.email, u.name AS user_name
          FROM business_memberships m
@@ -187,7 +194,7 @@ export class PostgresPlatformStore {
   }
 
   async getOwnerMembership(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT m.*, u.email, u.name AS user_name
          FROM business_memberships m
@@ -211,7 +218,7 @@ export class PostgresPlatformStore {
     const expiresAt = new Date(Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000);
     const tokenHash = hashToken(token);
 
-    const { rows: revokedRows } = await withClient((client) =>
+    const { rows: revokedRows } = await this.withClient((client) =>
       client.query(
         `UPDATE invitations SET revoked_at = NOW()
          WHERE business_id = $1 AND email = $2 AND accepted_at IS NULL AND revoked_at IS NULL
@@ -223,7 +230,7 @@ export class PostgresPlatformStore {
       await this.deleteInvitationDeliveryToken(String(row.id));
     }
 
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO invitations (business_id, email, role, invited_by_user_id, token_hash, expires_at)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -237,21 +244,21 @@ export class PostgresPlatformStore {
 
   async getInvitationByToken(token) {
     const tokenHash = hashToken(token);
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM invitations WHERE token_hash = $1`, [tokenHash]),
     );
     return mapInvitationRow(rows[0] ?? null);
   }
 
   async getInvitationById(invitationId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM invitations WHERE id = $1`, [String(invitationId)]),
     );
     return mapInvitationRow(rows[0] ?? null);
   }
 
   async listAllPendingInvitations() {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT i.*, b.name AS business_name
          FROM invitations i
@@ -267,7 +274,7 @@ export class PostgresPlatformStore {
   }
 
   async listPendingInvitationsForBusiness(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM invitations
          WHERE business_id = $1 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()
@@ -279,7 +286,7 @@ export class PostgresPlatformStore {
   }
 
   async revokeInvitation(invitationId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `UPDATE invitations SET revoked_at = NOW() WHERE id = $1 AND accepted_at IS NULL RETURNING *`,
         [String(invitationId)],
@@ -294,7 +301,7 @@ export class PostgresPlatformStore {
 
   async saveInvitationDeliveryToken(invitationId, token) {
     const tokenCiphertext = encryptInvitationToken(token);
-    await withClient((client) =>
+    await this.withClient((client) =>
       client.query(
         `INSERT INTO invitation_delivery_tokens (invitation_id, token_ciphertext)
          VALUES ($1, $2)
@@ -305,7 +312,7 @@ export class PostgresPlatformStore {
   }
 
   async getInvitationDeliveryToken(invitationId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT token_ciphertext FROM invitation_delivery_tokens WHERE invitation_id = $1`, [
         String(invitationId),
       ]),
@@ -315,13 +322,13 @@ export class PostgresPlatformStore {
   }
 
   async deleteInvitationDeliveryToken(invitationId) {
-    await withClient((client) =>
+    await this.withClient((client) =>
       client.query(`DELETE FROM invitation_delivery_tokens WHERE invitation_id = $1`, [String(invitationId)]),
     );
   }
 
   async acceptInvitation({ invitationId, userId }) {
-    return withClient(async (client) => {
+    return this.withClient(async (client) => {
       await client.query("BEGIN");
       try {
         const { rows: invRows } = await client.query(`SELECT * FROM invitations WHERE id = $1 FOR UPDATE`, [
@@ -374,7 +381,7 @@ export class PostgresPlatformStore {
    * @param {{ actorUserId?: string | null, businessId?: string | null, action: string, targetType?: string | null, targetId?: string | null, metadata?: Record<string, unknown> }} input
    */
   async recordAuditEvent({ actorUserId, businessId = null, action, targetType = null, targetId = null, metadata = {} }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO audit_events (actor_user_id, business_id, action, target_type, target_id, metadata)
          VALUES ($1, $2, $3, $4, $5, $6::jsonb)
@@ -396,7 +403,7 @@ export class PostgresPlatformStore {
     const ownerMembership = await this.getOwnerMembership(businessId);
     if (ownerMembership) return "Active";
 
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT 1 FROM invitations
          WHERE business_id = $1 AND role = $2 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()
@@ -418,7 +425,7 @@ export class PostgresPlatformStore {
     sourceType,
     uploadedByUserId,
   }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO business_knowledge_documents (
            business_id, title, original_filename, storage_key, mime_type, size_bytes,
@@ -442,7 +449,7 @@ export class PostgresPlatformStore {
   }
 
   async listKnowledgeDocumentsForBusiness(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT d.*, u.name AS uploaded_by_name
          FROM business_knowledge_documents d
@@ -456,7 +463,7 @@ export class PostgresPlatformStore {
   }
 
   async getKnowledgeDocumentById(documentId, businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT d.*, u.name AS uploaded_by_name
          FROM business_knowledge_documents d
@@ -469,7 +476,7 @@ export class PostgresPlatformStore {
   }
 
   async softDeleteKnowledgeDocument({ documentId, businessId, deletedByUserId }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `UPDATE business_knowledge_documents
          SET status = 'deleted', deleted_at = NOW(), deleted_by_user_id = $3, updated_at = NOW()
@@ -482,7 +489,7 @@ export class PostgresPlatformStore {
   }
 
   async countActiveKnowledgeDocuments(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT COUNT(*)::int AS count
          FROM business_knowledge_documents
@@ -494,7 +501,7 @@ export class PostgresPlatformStore {
   }
 
   async listCampaignTemplatesForBusiness(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT *
          FROM business_campaign_templates
@@ -507,7 +514,7 @@ export class PostgresPlatformStore {
   }
 
   async getCampaignTemplateById(templateId, businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT *
          FROM business_campaign_templates
@@ -535,7 +542,7 @@ export class PostgresPlatformStore {
     createdByUserId = null,
     updatedByUserId = null,
   }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO business_campaign_templates (
            id, business_id, name, purpose, channel, audience, subject_line, preview_text,
@@ -588,7 +595,7 @@ export class PostgresPlatformStore {
   }
 
   async softDeleteCampaignTemplate({ templateId, businessId, deletedByUserId = null }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `UPDATE business_campaign_templates
          SET status = 'deleted', deleted_at = NOW(), deleted_by_user_id = $3, updated_at = NOW()
@@ -601,7 +608,7 @@ export class PostgresPlatformStore {
   }
 
   async isTeamInviteChecklistComplete(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT EXISTS (
            SELECT 1 FROM business_memberships
@@ -630,7 +637,7 @@ export class PostgresPlatformStore {
     sizeBytes,
     uploadedByUserId = null,
   }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO import_artifacts (
            business_id, source_system, original_filename, storage_key,
@@ -653,7 +660,7 @@ export class PostgresPlatformStore {
   }
 
   async getImportArtifactById(artifactId, businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM import_artifacts WHERE id = $1 AND business_id = $2`, [
         String(artifactId),
         String(businessId),
@@ -673,7 +680,7 @@ export class PostgresPlatformStore {
     stats = {},
     planSummary = null,
   }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO import_runs (
            business_id, artifact_id, source_system, profile_id, status,
@@ -697,7 +704,7 @@ export class PostgresPlatformStore {
   }
 
   async getImportRunById(runId, businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM import_runs WHERE id = $1 AND business_id = $2`, [
         String(runId),
         String(businessId),
@@ -733,7 +740,7 @@ export class PostgresPlatformStore {
     fields.push(`updated_at = NOW()`);
     values.push(String(runId), String(businessId));
 
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `UPDATE import_runs SET ${fields.join(", ")}
          WHERE id = $${idx} AND business_id = $${idx + 1}
@@ -745,7 +752,7 @@ export class PostgresPlatformStore {
   }
 
   async deleteImportRunRowResults(importRunId) {
-    await withClient((client) =>
+    await this.withClient((client) =>
       client.query(`DELETE FROM import_run_row_results WHERE import_run_id = $1`, [String(importRunId)]),
     );
   }
@@ -753,7 +760,7 @@ export class PostgresPlatformStore {
   async insertImportRunRowResults(importRunId, rows = []) {
     if (!rows.length) return [];
     const inserted = [];
-    await withClient(async (client) => {
+    await this.withClient(async (client) => {
       for (const row of rows) {
         const { rows: result } = await client.query(
           `INSERT INTO import_run_row_results (
@@ -824,8 +831,8 @@ export class PostgresPlatformStore {
       ORDER BY r.row_number ASC
       LIMIT ${limit} OFFSET ${offset}`;
 
-    const { rows: countRows } = await withClient((client) => client.query(countQuery, params));
-    const { rows } = await withClient((client) => client.query(dataQuery, params));
+    const { rows: countRows } = await this.withClient((client) => client.query(countQuery, params));
+    const { rows } = await this.withClient((client) => client.query(dataQuery, params));
 
     return {
       totalRows: Number(countRows[0]?.count ?? 0),
@@ -836,7 +843,7 @@ export class PostgresPlatformStore {
   }
 
   async listAllImportRunRowResults({ importRunId, businessId } = {}) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT r.*
          FROM import_run_row_results r
@@ -859,7 +866,7 @@ export class PostgresPlatformStore {
     committedAt = null,
     incrementAttempts = false,
   } = {}) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `UPDATE import_run_row_results r
          SET commit_status = $4,
@@ -889,7 +896,7 @@ export class PostgresPlatformStore {
   }
 
   async countImportRunRowResults(importRunId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT COUNT(*)::int AS count FROM import_run_row_results WHERE import_run_id = $1`, [
         String(importRunId),
       ]),
@@ -909,7 +916,7 @@ export class PostgresPlatformStore {
     createdByUserId = null,
     updatedByUserId = null,
   }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO business_os_specifications (
            id, business_id, specification_id, specification_version, schema_version,
@@ -950,12 +957,12 @@ export class PostgresPlatformStore {
       sql += ` ORDER BY specification_version DESC`;
     }
     sql += ` LIMIT 1`;
-    const { rows } = await withClient((client) => client.query(sql, params));
+    const { rows } = await this.withClient((client) => client.query(sql, params));
     return mapBusinessOSSpecificationRow(rows[0] ?? null);
   }
 
   async listBusinessOSSpecifications(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM business_os_specifications WHERE business_id = $1 ORDER BY updated_at DESC`,
         [String(businessId)],
@@ -980,7 +987,7 @@ export class PostgresPlatformStore {
     actorUserId = null,
     installedAt = null,
   }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO business_os_installations (
            id, business_id, specification_row_id, specification_id, specification_version,
@@ -1025,7 +1032,7 @@ export class PostgresPlatformStore {
   }
 
   async getBusinessOSInstallation(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM business_os_installations WHERE business_id = $1`, [String(businessId)]),
     );
     return mapBusinessOSInstallationRow(rows[0] ?? null);
@@ -1042,7 +1049,7 @@ export class PostgresPlatformStore {
     createdByUserId = null,
     updatedByUserId = null,
   }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO business_builder_sessions (
            id, business_id, status, mode, discovery, evidence, specification_row_id,
@@ -1081,7 +1088,7 @@ export class PostgresPlatformStore {
       sql += ` AND business_id = $2`;
       params.push(String(businessId));
     }
-    const { rows } = await withClient((client) => client.query(sql, params));
+    const { rows } = await this.withClient((client) => client.query(sql, params));
     return mapBusinessBuilderSessionRow(rows[0] ?? null);
   }
 
@@ -1100,7 +1107,7 @@ export class PostgresPlatformStore {
     status = "proposed",
     createdByUserId = null,
   }) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO business_capability_proposals (
            id, business_id, proposal_id, requested_outcome, evidence, affected_businesses,
@@ -1141,7 +1148,7 @@ export class PostgresPlatformStore {
   }
 
   async listBusinessCapabilityProposals(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM business_capability_proposals WHERE business_id = $1 ORDER BY updated_at DESC`,
         [String(businessId)],
@@ -1151,7 +1158,7 @@ export class PostgresPlatformStore {
   }
 
   async getBusinessCapabilityProposal(proposalId, businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM business_capability_proposals WHERE proposal_id = $1 AND business_id = $2`,
         [String(proposalId), String(businessId)],
@@ -1162,7 +1169,7 @@ export class PostgresPlatformStore {
 
   async upsertAiBuilderSession(session) {
     const sessionId = String(session.sessionId);
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO ai_builder_sessions (
            id, session_id, business_id, actor_user_id, mode, current_stage,
@@ -1242,14 +1249,14 @@ export class PostgresPlatformStore {
   }
 
   async getAiBuilderSession(sessionId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM ai_builder_sessions WHERE session_id = $1`, [String(sessionId)]),
     );
     return mapAiBuilderSessionRow(rows[0] ?? null);
   }
 
   async listAiBuilderSessionsForBusiness(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM ai_builder_sessions WHERE business_id = $1 ORDER BY updated_at DESC`,
         [String(businessId)],
@@ -1259,14 +1266,14 @@ export class PostgresPlatformStore {
   }
 
   async listAiBuilderSessions() {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM ai_builder_sessions ORDER BY updated_at DESC LIMIT 500`),
     );
     return rows.map(mapAiBuilderSessionRow);
   }
 
   async listAuditEvents({ limit = 50 } = {}) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM audit_events ORDER BY created_at DESC LIMIT $1`,
         [Number(limit) || 50],
@@ -1285,7 +1292,7 @@ export class PostgresPlatformStore {
   }
 
   async listUsers() {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT id, email, name, platform_role, status, created_at
          FROM users
@@ -1304,7 +1311,7 @@ export class PostgresPlatformStore {
   }
 
   async listActiveSupportSessions() {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM support_access_sessions
          WHERE status = 'active' AND (expires_at IS NULL OR expires_at > NOW())
@@ -1316,7 +1323,7 @@ export class PostgresPlatformStore {
   }
 
   async upsertSupportAccessSession(session) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO support_access_sessions (
            id, session_id, business_id, admin_user_id, reason, mode, status,
@@ -1352,7 +1359,7 @@ export class PostgresPlatformStore {
   }
 
   async getActiveSupportAccessSession(adminUserId, businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM support_access_sessions
          WHERE admin_user_id = $1::uuid AND business_id = $2::uuid AND status = 'active'
@@ -1366,7 +1373,7 @@ export class PostgresPlatformStore {
   }
 
   async getSupportAccessSession(sessionId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM support_access_sessions WHERE session_id = $1`, [String(sessionId)]),
     );
     return mapSupportAccessSessionRow(rows[0] ?? null);
@@ -1375,7 +1382,7 @@ export class PostgresPlatformStore {
   async upsertAccessRequest(record) {
     const id = String(record.accessRequestId);
     const approverId = isUuidLike(record.approverUserId) ? String(record.approverUserId) : null;
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO business_access_requests (
            id, access_request_id, business_id, requester_user_id, request_kind,
@@ -1435,7 +1442,7 @@ export class PostgresPlatformStore {
   }
 
   async getAccessRequest(businessId, accessRequestId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM business_access_requests
          WHERE business_id = $1::uuid AND access_request_id = $2
@@ -1447,7 +1454,7 @@ export class PostgresPlatformStore {
   }
 
   async getAccessRequestByWorkItemId(workItemId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM business_access_requests WHERE work_item_id = $1 LIMIT 1`,
         [String(workItemId)],
@@ -1457,7 +1464,7 @@ export class PostgresPlatformStore {
   }
 
   async getAccessRequestByApprovalId(approvalRequestId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM business_access_requests WHERE approval_request_id = $1 LIMIT 1`,
         [String(approvalRequestId)],
@@ -1467,7 +1474,7 @@ export class PostgresPlatformStore {
   }
 
   async listOpenAccessRequests(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM business_access_requests
          WHERE business_id = $1::uuid AND status = 'pending'
@@ -1479,7 +1486,7 @@ export class PostgresPlatformStore {
   }
 
   async listAccessRequests(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM business_access_requests
          WHERE business_id = $1::uuid
@@ -1493,7 +1500,7 @@ export class PostgresPlatformStore {
 
   async upsertBusinessAnalyticsDefinitions({ businessId, payload }) {
     const id = `analytics_defs_${businessId}`;
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO business_analytics_definitions (id, business_id, payload, updated_at)
          VALUES ($1, $2::uuid, $3::jsonb, NOW())
@@ -1508,7 +1515,7 @@ export class PostgresPlatformStore {
   }
 
   async getBusinessAnalyticsDefinitions(businessId) {
-    const { rows } = await withClient((client) =>
+    const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT * FROM business_analytics_definitions WHERE business_id = $1::uuid`,
         [String(businessId)],
@@ -1518,7 +1525,6 @@ export class PostgresPlatformStore {
   }
 }
 
-export const platformStore = new PostgresPlatformStore();
 
 function mapSupportAccessSessionRow(row) {
   if (!row) return null;

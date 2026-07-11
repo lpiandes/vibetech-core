@@ -1,5 +1,5 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
-import { platformStore } from "../../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "@/lib/server/platformStore";
 import { getDevInvitationLink } from "../../../../../backend/core/platform/services/DevInvitationMailbox.js";
 import { PERMISSIONS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { MEMBERSHIP_ROLE_LABELS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";

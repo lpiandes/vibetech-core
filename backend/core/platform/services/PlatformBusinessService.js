@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { platformStore } from "../persistence/PostgresPlatformStore.js";
+import { platformStore } from "../persistence/platformStore.js";
 import { businessRecordToActivation } from "../persistence/platformMappers.js";
 import { activateWorkspace, PROPERTY_MANAGEMENT_PACKAGE_ID } from "../../workspace/activation/activateWorkspace.js";
 import { buildEmptyPropertyManagementConfiguration } from "../../../../industries/property-management/config/buildEmptyPropertyManagementConfiguration.js";

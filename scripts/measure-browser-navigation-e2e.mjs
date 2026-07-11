@@ -18,7 +18,7 @@ dotenv.config({ path: path.join(root, "frontend/.env.local") });
 
 import { runMigrations } from "../backend/core/platform/db/migrate.js";
 import { closePool } from "../backend/core/platform/db/pool.js";
-import { platformStore } from "../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "../backend/core/platform/persistence/platformStore.js";
 import { hashPassword } from "../backend/core/platform/services/AuthCredentialService.js";
 import { createBusinessWithOwnerInvite } from "../backend/core/platform/services/PlatformBusinessService.js";
 import { connectBusinessEmailDev } from "../backend/core/integrations/use-cases/connectBusinessEmailDev.js";

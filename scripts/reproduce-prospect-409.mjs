@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 dotenv.config({ path: path.join(root, "frontend/.env.local") });
 
-import { platformStore } from "../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "../backend/core/platform/persistence/platformStore.js";
 import { businessRecordToActivation } from "../backend/core/platform/persistence/platformMappers.js";
 import { workspaceActivationRegistry } from "../backend/core/workspace/activation/WorkspaceActivationRegistry.js";
 import { workspaceCompositionRegistry } from "../frontend/lib/workspace/WorkspaceCompositionRegistry.js";

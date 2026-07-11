@@ -65,7 +65,7 @@ import { recordReferralIntroduction, buildReferralOperationsSummary } from "../.
 import { PM_CAMPAIGN_SECTION_TYPES } from "../../../industries/property-management/config/campaignSectionCatalog.js";
 import { MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE } from "../../../industries/property-management/config/mcbrideClientTemplate.js";
 import { materializeDueRecurringOperations } from "../../../backend/core/campaigns/RecurringOperationService.js";
-import { platformStore } from "../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "@/lib/server/platformStore";
 import { buildDemoStorySteps } from "../../../backend/core/demo/buildDemoStorySteps.js";
 import { projectSegmentMembership } from "../../../backend/core/segments/SegmentProjectionEngine.js";
 import { checkCommunicationPermitted } from "../../../backend/core/communications/preferences/CommunicationPreferenceEnforcer.js";

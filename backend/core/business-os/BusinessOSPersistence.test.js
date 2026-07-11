@@ -15,7 +15,7 @@ process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
 
 import { runMigrations } from "../platform/db/migrate.js";
 import { closePool } from "../platform/db/pool.js";
-import { platformStore } from "../platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "../platform/persistence/platformStore.js";
 import { hashPassword } from "../platform/services/AuthCredentialService.js";
 import { buildEmptyPropertyManagementConfiguration } from "../../../industries/property-management/config/buildEmptyPropertyManagementConfiguration.js";
 import { PROPERTY_MANAGEMENT_PACKAGE_ID } from "../workspace/activation/activateWorkspace.js";

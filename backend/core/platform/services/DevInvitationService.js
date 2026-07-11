@@ -1,4 +1,4 @@
-import { platformStore } from "../persistence/PostgresPlatformStore.js";
+import { platformStore } from "../persistence/platformStore.js";
 import { MEMBERSHIP_ROLE_LABELS } from "../permissions/rolePermissions.js";
 import { recordDevInvitation, listDevInvitationLinks } from "./DevInvitationMailbox.js";
 import { buildInvitationUrl, createAndDeliverInvitation } from "./InvitationService.js";

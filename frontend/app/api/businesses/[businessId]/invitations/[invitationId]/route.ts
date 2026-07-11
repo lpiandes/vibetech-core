@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { platformStore } from "../../../../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "@/lib/server/platformStore";
 import { removeDevInvitationLink } from "../../../../../../../backend/core/platform/services/DevInvitationMailbox.js";
 import { PERMISSIONS } from "../../../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";

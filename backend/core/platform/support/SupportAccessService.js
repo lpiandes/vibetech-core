@@ -4,7 +4,7 @@ import {
   permissionsForSupportMode,
 } from "./SupportAccessSession.js";
 import { isPlatformAdmin } from "../persistence/platformMappers.js";
-import { platformStore as defaultPlatformStore } from "../persistence/PostgresPlatformStore.js";
+import { platformStore as defaultPlatformStore } from "../persistence/platformStore.js";
 import { createPostgresSupportAccessStore } from "./PostgresSupportAccessStore.js";
 
 function fail(message) {

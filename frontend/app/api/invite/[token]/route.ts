@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { platformStore } from "../../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "@/lib/server/platformStore";
 import { validateInvitationForDisplay } from "../../../../../backend/core/platform/services/InvitationService.js";
 import { MEMBERSHIP_ROLE_LABELS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 

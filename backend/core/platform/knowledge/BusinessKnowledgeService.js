@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 
-import { platformStore } from "../persistence/PostgresPlatformStore.js";
+import { platformStore } from "../persistence/platformStore.js";
 import { KNOWLEDGE_SOURCE_TYPES, toPublicKnowledgeDocument } from "./BusinessKnowledgeDocument.js";
 import { createKnowledgeStorageProvider } from "./createKnowledgeStorageProvider.js";
 

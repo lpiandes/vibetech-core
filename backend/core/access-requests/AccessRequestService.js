@@ -8,7 +8,7 @@ import { createWorkItem } from "../work/WorkItem.js";
 import { createApprovalRequest } from "../approvals/ApprovalRequest.js";
 import { APPROVAL_REQUEST_STATUSES } from "../approvals/ApprovalEventTypes.js";
 import { MEMBERSHIP_ROLES } from "../platform/permissions/rolePermissions.js";
-import { platformStore as defaultPlatformStore } from "../platform/persistence/PostgresPlatformStore.js";
+import { platformStore as defaultPlatformStore } from "../platform/persistence/platformStore.js";
 import { createPostgresAccessRequestStore } from "./PostgresAccessRequestStore.js";
 
 function fail(message) {

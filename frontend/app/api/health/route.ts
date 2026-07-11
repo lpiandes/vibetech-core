@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withClient } from "../../../../backend/core/platform/db/pool.js";
+import { withClient } from "@/lib/server/db";
 
 /**
  * Production health probe for load balancers and uptime monitors.
@@ -9,7 +9,7 @@ export async function GET() {
   const started = Date.now();
   let database: "ok" | "unavailable" = "unavailable";
   try {
-    await withClient((client: { query: (sql: string) => Promise<unknown> }) => client.query("SELECT 1 AS ok"));
+    await withClient((client) => client.query("SELECT 1 AS ok"));
     database = "ok";
   } catch {
     database = "unavailable";

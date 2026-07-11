@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createBusinessWithOwnerInvite } from "../../../../../backend/core/platform/services/PlatformBusinessService.js";
-import { platformStore } from "../../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "@/lib/server/platformStore";
 import { isLikelyAutomatedTestBusiness } from "../../../../../backend/core/platform/platformTestData.js";
 import { MEMBERSHIP_ROLES } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAiBuilderService } from "@/lib/builder/getAiBuilderService";
 import { ContinuousBusinessBuilderService } from "../../../../../../../backend/core/ai-builder/ContinuousBusinessBuilderService.js";
-import { platformStore } from "../../../../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { platformStore } from "@/lib/server/platformStore";
 import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceService";
 import { presentProductError } from "@/lib/platform/productErrors";
 
