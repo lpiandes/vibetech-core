@@ -59,7 +59,11 @@ export default function NavigationSidebar({ variant = "dark" }: { variant?: "lig
   const { displayPath, beginNavigation } = useWorkspaceNavigation();
   const grouped = getModuleDrivenNavSections(scope.businessId, scope.permissions, {
     role: scope.role,
-    installed: (scope.installedNavigation ?? null) as never,
+    installed: {
+      ...(scope.installedNavigation ?? {}),
+      modules: scope.installedBusinessOS?.modules ?? scope.installedNavigation?.modules,
+      terminology: scope.installedBusinessOS?.terminology ?? null,
+    } as never,
   });
   const activeModuleId = getActiveModuleIdFromPathname(displayPath);
   const businessName = scope.businessName || "VIBETech";
@@ -95,6 +99,9 @@ export default function NavigationSidebar({ variant = "dark" }: { variant?: "lig
             }}
           >
             Support access{supportAccess.mode ? ` (${supportAccess.mode})` : ""} — viewing as VIBETech admin
+            {supportAccess.reason ? (
+              <div style={{ marginTop: 4, opacity: 0.85 }}>Reason: {supportAccess.reason}</div>
+            ) : null}
           </div>
         ) : null}
       </div>

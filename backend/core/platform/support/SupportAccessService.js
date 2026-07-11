@@ -4,6 +4,8 @@ import {
   permissionsForSupportMode,
 } from "./SupportAccessSession.js";
 import { isPlatformAdmin } from "../persistence/platformMappers.js";
+import { platformStore as defaultPlatformStore } from "../persistence/PostgresPlatformStore.js";
+import { createPostgresSupportAccessStore } from "./PostgresSupportAccessStore.js";
 
 function fail(message) {
   throw new Error(`SupportAccessService: ${message}`);
@@ -40,7 +42,7 @@ export class SupportAccessService {
     return deepFreeze({ ok: true, businesses });
   }
 
-  enter({
+  async enter({
     adminUserId,
     platformRole,
     businessId,
@@ -69,8 +71,8 @@ export class SupportAccessService {
       status: "active",
     });
 
-    this.store.saveSession(session);
-    this._audit({
+    await Promise.resolve(this.store.saveSession(session));
+    await Promise.resolve(this._audit({
       actorUserId: adminUserId,
       businessId,
       action: "support_access.entered",
@@ -82,7 +84,7 @@ export class SupportAccessService {
         mode,
         permanentMembershipGranted: false,
       },
-    });
+    }));
 
     return deepFreeze({
       ok: true,
@@ -97,10 +99,13 @@ export class SupportAccessService {
     });
   }
 
-  exit({ adminUserId, businessId, sessionId = null }) {
+  /**
+   * @param {{ adminUserId: string, businessId: string, sessionId?: string | null }} input
+   */
+  async exit({ adminUserId, businessId, sessionId = null }) {
     const active = sessionId
-      ? this.store.getSession(sessionId)
-      : this.store.getActiveSession(adminUserId, businessId);
+      ? await Promise.resolve(this.store.getSession(sessionId))
+      : await Promise.resolve(this.store.getActiveSession(adminUserId, businessId));
     if (!active || active.status !== "active") {
       return deepFreeze({ ok: false, reason: "no_active_support_session" });
     }
@@ -116,37 +121,37 @@ export class SupportAccessService {
       status: "ended",
       endedAt: this.nowISO(),
     });
-    this.store.saveSession(ended);
-    this._audit({
+    await Promise.resolve(this.store.saveSession(ended));
+    await Promise.resolve(this._audit({
       actorUserId: adminUserId,
       businessId,
       action: "support_access.exited",
       targetType: "business",
       targetId: businessId,
       metadata: { sessionId: ended.sessionId },
-    });
+    }));
     return deepFreeze({ ok: true, session: ended });
   }
 
-  getActiveSession(adminUserId, businessId) {
-    const session = this.store.getActiveSession(adminUserId, businessId);
+  async getActiveSession(adminUserId, businessId) {
+    const session = await Promise.resolve(this.store.getActiveSession(adminUserId, businessId));
     if (!session || session.status !== "active") return null;
     if (session.expiresAt && Date.parse(session.expiresAt) < Date.parse(this.nowISO())) {
-      this.store.saveSession(createSupportAccessSession({
+      await Promise.resolve(this.store.saveSession(createSupportAccessSession({
         ...session,
         status: "expired",
         endedAt: this.nowISO(),
-      }));
+      })));
       return null;
     }
     return session;
   }
 
-  resolveAuthorization({ adminUserId, platformRole, businessId }) {
+  async resolveAuthorization({ adminUserId, platformRole, businessId }) {
     if (!isPlatformAdmin({ platformRole })) {
       return deepFreeze({ ok: false, reason: "platform_admin_required" });
     }
-    const session = this.getActiveSession(adminUserId, businessId);
+    const session = await this.getActiveSession(adminUserId, businessId);
     if (!session) {
       return deepFreeze({ ok: false, reason: "support_access_required" });
     }
@@ -211,9 +216,17 @@ export function createInMemorySupportAccessStore({ businesses = [] } = {}) {
 
 export function getDefaultSupportAccessService() {
   if (!getDefaultSupportAccessService._instance) {
+    // Runtime default stays in-memory for unit tests; Admin APIs inject Postgres store.
     getDefaultSupportAccessService._instance = new SupportAccessService();
   }
   return getDefaultSupportAccessService._instance;
+}
+
+export function createDurableSupportAccessService(platformStore = defaultPlatformStore) {
+  return new SupportAccessService({
+    store: createPostgresSupportAccessStore(platformStore),
+    platformStore,
+  });
 }
 
 getDefaultSupportAccessService._instance = null;

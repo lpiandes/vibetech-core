@@ -95,10 +95,9 @@ try {
 }
 if (!supportRequired) throw new Error("Expected support access requirement for platform admin");
 
-const { getDefaultSupportAccessService, resetDefaultSupportAccessServiceForTests } = await import("../backend/core/platform/support/SupportAccessService.js");
-resetDefaultSupportAccessServiceForTests();
-const support = getDefaultSupportAccessService();
-const entered = support.enter({
+const { createDurableSupportAccessService } = await import("../backend/core/platform/support/SupportAccessService.js");
+const support = createDurableSupportAccessService(platformStore);
+const entered = await support.enter({
   adminUserId: admin.user.id,
   platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
   businessId: business.id,
@@ -111,6 +110,7 @@ const adminAccess = await authorizeBusinessAccess({
   userId: admin.user.id,
   businessId: business.id,
   platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
+  supportAccessService: support,
 });
 if (!adminAccess.isPlatformAdmin) throw new Error("Expected platform admin access");
 if (!adminAccess.supportAccess?.active) throw new Error("Expected active support access indicator");

@@ -2,7 +2,7 @@ import { platformStore } from "./persistence/PostgresPlatformStore.js";
 import { businessRecordToActivation, isPlatformAdmin } from "./persistence/platformMappers.js";
 import { permissionsForRole, hasPermission } from "./permissions/rolePermissions.js";
 import {
-  getDefaultSupportAccessService,
+  createDurableSupportAccessService,
 } from "./support/SupportAccessService.js";
 
 export class AuthorizationError extends Error {
@@ -35,8 +35,10 @@ export async function authorizeBusinessAccess({
   }
 
   if (isPlatformAdmin({ platformRole })) {
-    const support = supportAccessService ?? getDefaultSupportAccessService();
-    const resolved = support.resolveAuthorization({
+    // Production path uses durable Postgres sessions (Admin enter → portal access).
+    // Tests may inject an in-memory SupportAccessService via supportAccessService.
+    const support = supportAccessService ?? createDurableSupportAccessService();
+    const resolved = await support.resolveAuthorization({
       adminUserId: userId,
       platformRole,
       businessId,

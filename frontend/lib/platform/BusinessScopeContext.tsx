@@ -2,6 +2,21 @@
 
 import { createContext, useContext } from "react";
 
+export type InstalledBusinessOSScope = {
+  drivenByBusinessOS: boolean;
+  modules?: Array<Record<string, unknown>>;
+  navigation?: Record<string, unknown> | null;
+  roles?: Array<Record<string, unknown>>;
+  dashboards?: Array<Record<string, unknown>>;
+  homeDashboard?: Record<string, unknown> | null;
+  terminology?: Record<string, unknown> | null;
+  emptyStates?: any;
+  primaryActions?: Array<{ id: string; label: string; href: string; moduleId?: string }>;
+  subjectTypes?: string[];
+  landingModuleId?: string;
+  [key: string]: any;
+};
+
 export type BusinessScope = {
   businessId: string;
   role: string;
@@ -13,6 +28,7 @@ export type BusinessScope = {
     roles?: Array<Record<string, unknown>>;
     roleDefinitions?: Array<Record<string, unknown>>;
   } | null;
+  installedBusinessOS?: InstalledBusinessOSScope | null;
   supportAccess?: {
     active: boolean;
     mode?: string | null;

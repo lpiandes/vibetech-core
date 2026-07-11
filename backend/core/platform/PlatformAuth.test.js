@@ -272,10 +272,9 @@ test("cross-business access is denied for members and unauthenticated users", as
     (err) => err instanceof AuthorizationError && err.code === "SUPPORT_ACCESS_REQUIRED",
   );
 
-  const { getDefaultSupportAccessService, resetDefaultSupportAccessServiceForTests } = await import("./support/SupportAccessService.js");
-  resetDefaultSupportAccessServiceForTests();
-  const support = getDefaultSupportAccessService();
-  const entered = support.enter({
+  const { createDurableSupportAccessService } = await import("./support/SupportAccessService.js");
+  const support = createDurableSupportAccessService(platformStore);
+  const entered = await support.enter({
     adminUserId: admin.id,
     platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
     businessId: businessB.id,
@@ -288,6 +287,7 @@ test("cross-business access is denied for members and unauthenticated users", as
     userId: admin.id,
     businessId: businessB.id,
     platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
+    supportAccessService: support,
   });
   assert.equal(adminEntry.isPlatformAdmin, true);
   assert.equal(adminEntry.supportAccess.active, true);

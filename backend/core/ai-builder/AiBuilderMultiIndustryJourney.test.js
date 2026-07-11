@@ -168,7 +168,7 @@ test("hockey travel club AI Builder journey with tenant isolation and support ac
     }),
     nowISO: NOW,
   });
-  const entered = support.enter({
+  const entered = await support.enter({
     adminUserId: "vt_admin",
     platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
     businessId: "biz_builder_hockey",
@@ -177,11 +177,11 @@ test("hockey travel club AI Builder journey with tenant isolation and support ac
   assert.equal(entered.ok, true);
   assert.equal(entered.session.actorIdentity.userId, "vt_admin");
   assert.equal(
-    support.resolveAuthorization({
+    (await support.resolveAuthorization({
       adminUserId: "vt_admin",
       platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
       businessId: "biz_builder_pm_iso",
-    }).ok,
+    })).ok,
     false,
   );
 

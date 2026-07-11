@@ -123,7 +123,7 @@ test("McBride gold blueprint compiles, dry-runs, installs, and leaves gold untou
   assert.equal(goldAgain.metadata.mcbrideContentHash, goldFingerprint);
 });
 
-test("Hockey fixture proves same universal runtime with different OS shape", () => {
+test("Hockey fixture proves same universal runtime with different OS shape", async () => {
   const mcbrideId = "biz_mcbride_isolation";
   const hockeyId = "biz_hockey_proof";
 
@@ -276,7 +276,7 @@ test("Hockey fixture proves same universal runtime with different OS shape", () 
   assert.equal(directory.ok, true);
   assert.equal(directory.businesses.length, 2);
 
-  const enterHockey = support.enter({
+  const enterHockey = await support.enter({
     adminUserId: "vt_admin",
     platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
     businessId: hockeyId,
@@ -286,7 +286,7 @@ test("Hockey fixture proves same universal runtime with different OS shape", () 
   assert.equal(enterHockey.ok, true);
   assert.equal(enterHockey.session.permanentMembershipGranted, false);
 
-  const mcbrideSupport = support.resolveAuthorization({
+  const mcbrideSupport = await support.resolveAuthorization({
     adminUserId: "vt_admin",
     platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
     businessId: mcbrideId,
@@ -294,7 +294,7 @@ test("Hockey fixture proves same universal runtime with different OS shape", () 
   assert.equal(mcbrideSupport.ok, false);
   assert.equal(mcbrideSupport.reason, "support_access_required");
 
-  const hockeySupport = support.resolveAuthorization({
+  const hockeySupport = await support.resolveAuthorization({
     adminUserId: "vt_admin",
     platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
     businessId: hockeyId,
@@ -302,6 +302,6 @@ test("Hockey fixture proves same universal runtime with different OS shape", () 
   assert.equal(hockeySupport.ok, true);
   assert.equal(hockeySupport.supportAccess.actorUserId, "vt_admin");
 
-  const exited = support.exit({ adminUserId: "vt_admin", businessId: hockeyId });
+  const exited = await support.exit({ adminUserId: "vt_admin", businessId: hockeyId });
   assert.equal(exited.ok, true);
 });
