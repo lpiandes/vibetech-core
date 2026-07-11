@@ -2,8 +2,9 @@
 
 import type { ReactNode } from "react";
 
-import ProductShell from "@/components/shell/ProductShell";
+import PortalWorkspaceRenderer from "@/components/portal-renderer/WorkspaceRenderer";
 
+/** @deprecated Prefer portal-renderer WorkspaceRenderer — kept as stable import path. */
 export default function WorkspaceRenderer({ children }: { children: ReactNode }) {
-  return <ProductShell>{children}</ProductShell>;
+  return <PortalWorkspaceRenderer>{children}</PortalWorkspaceRenderer>;
 }
