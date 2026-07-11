@@ -3,7 +3,14 @@
  * Production pilot gates for app.vtechdevelopment.com (or PILOT_BASE_URL).
  * Does not mutate production data. Exits non-zero on blockers.
  */
+import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { lookup } from "node:dns/promises";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+dotenv.config({ path: path.join(root, "frontend/.env.local") });
+dotenv.config({ path: path.join(root, "frontend/.env.production.local") });
 
 const BASE = String(process.env.PILOT_BASE_URL ?? "https://app.vtechdevelopment.com").replace(/\/$/, "");
 const host = new URL(BASE).hostname;
@@ -15,8 +22,11 @@ function record(name, ok, detail) {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
 }
 
+function isLocalHost(hostname) {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
 async function main() {
-  // 1. DNS
   try {
     const addrs = await lookup(host, { all: true });
     record("dns", addrs.length > 0, addrs.map((a) => a.address).join(", "));
@@ -24,7 +34,6 @@ async function main() {
     record("dns", false, err instanceof Error ? err.message : String(err));
   }
 
-  // 2. HTTPS + health
   try {
     const res = await fetch(`${BASE}/api/health`, { redirect: "manual" });
     const body = await res.json().catch(() => ({}));
@@ -34,7 +43,6 @@ async function main() {
     record("health", false, err instanceof Error ? err.message : String(err));
   }
 
-  // 3. Login page
   try {
     const res = await fetch(`${BASE}/login`, { redirect: "manual" });
     record("login_page", res.status === 200, `HTTP ${res.status}`);
@@ -42,18 +50,28 @@ async function main() {
     record("login_page", false, err instanceof Error ? err.message : String(err));
   }
 
-  // 4. TLS is implied by https fetch success
   record("https_scheme", BASE.startsWith("https://"), BASE);
 
-  // 5. Env presence hints (local gate only — never print values)
-  const required = [
-    "DATABASE_URL",
-    "AUTH_SECRET",
-    "NEXTAUTH_URL",
-  ];
-  for (const key of required) {
-    record(`env_${key}`, Boolean(process.env[key]), process.env[key] ? "set" : "missing in process env");
+  if (process.env.DATABASE_URL) {
+    try {
+      const u = new URL(process.env.DATABASE_URL);
+      record("env_DATABASE_URL", !isLocalHost(u.hostname), `set (${u.hostname})`);
+    } catch {
+      record("env_DATABASE_URL", false, "set but unparseable");
+    }
+  } else {
+    record("env_DATABASE_URL", false, "missing");
   }
+
+  record("env_AUTH_SECRET", Boolean(process.env.AUTH_SECRET), process.env.AUTH_SECRET ? "set" : "missing");
+
+  if (process.env.NEXTAUTH_URL) {
+    const local = process.env.NEXTAUTH_URL.includes("localhost");
+    record("env_NEXTAUTH_URL", !local, process.env.NEXTAUTH_URL);
+  } else {
+    record("env_NEXTAUTH_URL", false, "missing");
+  }
+
   const emailOk = Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST);
   record("env_email_provider", emailOk, emailOk ? "Resend or SMTP set" : "missing RESEND_API_KEY and SMTP_HOST");
   record(
