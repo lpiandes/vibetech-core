@@ -1210,8 +1210,8 @@ export class PostgresPlatformStore {
         [
           sessionId,
           sessionId,
-          session.businessId ? String(session.businessId) : null,
-          session.actorId ? String(session.actorId) : null,
+          isUuidLike(session.businessId) ? String(session.businessId) : null,
+          isUuidLike(session.actorId) ? String(session.actorId) : null,
           String(session.mode),
           String(session.currentStage),
           JSON.stringify(session.businessSummary ?? {}),

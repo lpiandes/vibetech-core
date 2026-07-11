@@ -14,6 +14,7 @@ export function getAiBuilderService() {
       repository: new BuilderSessionRepository({
         platformStore: platformStore as never,
       }),
+      platformStore: platformStore as never,
     });
   }
   return globalThis.__vibetechAiBuilderService;

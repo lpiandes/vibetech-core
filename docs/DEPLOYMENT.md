@@ -87,13 +87,14 @@ Expect HTTP 200 when DB is reachable; 503 when degraded.
 - Rollback: redeploy previous app image; DB roll-forward only
 - Keep last known-good `AUTH_SECRET` and DB snapshot
 
-## Post-deploy smoke
+## Pilot commands
 
-1. `GET /api/health`
-2. Login as platform admin → `/admin`
-3. Open `/architect` → start session → upload a small text file → resume after refresh
-4. Install → `/b/{id}/home` Mission Control
-5. Invite owner (confirm SMTP delivery) → accept invite
-6. Employee access request → owner approve → role/module grant persists after restart
-7. Support enter/exit from `/admin/support` and in-shell Exit
-8. Recommendation → Preview → Dry Run → Approve → Install
+```bash
+# Live host gates (DNS/HTTPS/health/env)
+PILOT_BASE_URL=https://app.vtechdevelopment.com npm run pilot:gates
+
+# Product journey against configured DATABASE_URL (Architect → install → invites → improve)
+npm run pilot:architect-journey
+```
+
+See also: `docs/PRODUCTION_OPS.md`, `docs/ROLLBACK.md`, `docs/env.production.example`.

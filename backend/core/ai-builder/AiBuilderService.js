@@ -56,6 +56,7 @@ export class AiBuilderService {
     installer = null,
     intelligence = new DeterministicBuilderIntelligenceProvider(),
     changePlanner = new BuilderSpecificationChangePlanner(),
+    platformStore = null,
     nowISO = () => new Date().toISOString(),
   } = {}) {
     this.repository = repository;
@@ -68,13 +69,21 @@ export class AiBuilderService {
     this.installer = installer ?? new BusinessOSInstaller({ repository: installationRepository });
     this.intelligence = intelligence;
     this.changePlanner = changePlanner;
+    this.platformStore = platformStore ?? repository?.platformStore ?? null;
     this.nowISO = nowISO;
     /** @type {Map<string, object>} rebuildable cache only */
     this.proposals = new Map();
   }
 
-  startSession(input) {
-    return this.sessionService.startSession(input);
+  async startSession(input = {}) {
+    let businessId = input.businessId ?? null;
+    if ((!businessId || String(businessId).startsWith("draft_")) && this.platformStore?.createBusiness) {
+      const created = await this.platformStore.createBusiness({
+        name: String(input.businessName ?? "New Business").trim() || "New Business",
+      });
+      businessId = String(created.id);
+    }
+    return this.sessionService.startSession({ ...input, businessId });
   }
 
   getSession(sessionId) {
@@ -420,7 +429,7 @@ export class AiBuilderService {
     const compiled = this.compiler.compile(stored.specification, { nowISO: this.nowISO() });
     if (!compiled.ok) return compiled;
 
-    const businessId = session.businessId ?? `draft_${session.sessionId}`;
+    const businessId = await this.ensurePlatformBusinessId(session, stored);
     const dry = this.installer.dryRun({
       specification: { ...stored.specification, businessId },
       plan: compiled.plan,
@@ -518,7 +527,7 @@ export class AiBuilderService {
       stored = await this.loadProposalState(await this.requireSession(sessionId));
     }
 
-    const businessId = session.businessId ?? `draft_${session.sessionId}`;
+    const businessId = await this.ensurePlatformBusinessId(session, stored);
     this.hydrateInstallationRepository(businessId, stored);
 
     const installing = withBuilderSessionPatch(session, { currentStage: "installing" });
@@ -669,6 +678,34 @@ export class AiBuilderService {
         this.installationRepository.saveOperationCheckpoint(businessId, checkpoint);
       }
     }
+  }
+
+  /**
+   * Ensure install lands on a real platform business UUID (required for invites/memberships).
+   */
+  async ensurePlatformBusinessId(session, stored) {
+    const existingId = session.businessId && !String(session.businessId).startsWith("draft_")
+      ? String(session.businessId)
+      : null;
+    const name = String(
+      session.businessName
+        ?? stored?.specification?.businessName
+        ?? stored?.specification?.name
+        ?? "New Business",
+    ).trim() || "New Business";
+
+    if (this.platformStore?.getBusinessById && this.platformStore?.createBusiness) {
+      if (existingId) {
+        const row = await this.platformStore.getBusinessById(existingId);
+        if (row) return existingId;
+        const created = await this.platformStore.createBusiness({ id: existingId, name });
+        return String(created.id);
+      }
+      const created = await this.platformStore.createBusiness({ name });
+      return String(created.id);
+    }
+
+    return existingId ?? `draft_${session.sessionId}`;
   }
 
   async requireSession(sessionId) {
