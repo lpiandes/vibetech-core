@@ -1,4 +1,5 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
+import { resolveSafeModuleHref, isSafeModuleRoute } from "./BusinessOSSafeRoutes.js";
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -11,12 +12,14 @@ function moduleById(modules, moduleId) {
 /**
  * Builds primary/secondary/utility navigation from modules.
  * Employees never become top-level sidebar tabs.
+ * Only safe registered routes are emitted.
  */
 export function buildBusinessOSNavigation({
   modules = [],
   navigation = {},
   role = null,
   permissions = null,
+  businessId = null,
 } = {}) {
   const maxPrimary = Number(navigation.maximumPrimaryItems ?? 8);
   const overflowBehavior = String(navigation.overflowBehavior ?? "more");
@@ -28,16 +31,20 @@ export function buildBusinessOSNavigation({
   const configuredPrimary = asArray(roleOverrides?.primaryItems ?? navigation.primaryItems);
   const eligibleModules = asArray(modules)
     .filter((module) => module.primaryNavigationEligible !== false)
+    .filter((module) => isSafeModuleRoute(module.moduleId) || module.href)
     .sort((a, b) => Number(a.navigationPriority ?? 100) - Number(b.navigationPriority ?? 100));
 
   let primarySource = configuredPrimary.length
     ? configuredPrimary.map((item) => {
         const module = moduleById(modules, item.moduleId ?? item.id);
+        const moduleId = item.moduleId ?? item.id;
         return {
-          id: `nav_${item.moduleId ?? item.id}`,
-          moduleId: item.moduleId ?? item.id,
-          label: item.label ?? module?.label ?? String(item.moduleId ?? item.id),
-          href: item.href ?? module?.href ?? null,
+          id: `nav_${moduleId}`,
+          moduleId,
+          label: item.label ?? module?.label ?? String(moduleId),
+          href: item.href
+            ?? module?.href
+            ?? resolveSafeModuleHref(moduleId, { businessId }),
           iconName: item.iconName ?? module?.iconName ?? "folder",
           permission: item.permission ?? module?.roleVisibility?.[0] ?? null,
         };
@@ -46,16 +53,17 @@ export function buildBusinessOSNavigation({
         id: `nav_${module.moduleId}`,
         moduleId: module.moduleId,
         label: module.label,
-        href: module.href ?? null,
+        href: module.href ?? resolveSafeModuleHref(module.moduleId, { businessId }),
         iconName: module.iconName ?? "folder",
         permission: asArray(module.roleVisibility)[0] ?? null,
       }));
+
+  primarySource = primarySource.filter((item) => item.moduleId === "more" || Boolean(item.href));
 
   if (permissionSet.size > 0) {
     primarySource = primarySource.filter((item) => !item.permission || permissionSet.has(item.permission));
   }
 
-  // Digital workforce / employees stay grouped — never explode into primary tabs.
   primarySource = primarySource.filter((item) => {
     const module = moduleById(modules, item.moduleId);
     if (!module) return true;
@@ -93,7 +101,11 @@ export function buildBusinessOSNavigation({
   const utilityItems = asArray(navigation.utilityItems).map((item) => ({
     id: item.id ?? `util_${item.label}`,
     label: item.label,
-    href: item.href ?? null,
+    href: item.href
+      ? (businessId && !String(item.href).startsWith("/b/")
+        ? `/b/${businessId}/${String(item.href).replace(/^\//, "")}`
+        : item.href)
+      : null,
   }));
 
   return deepFreeze({

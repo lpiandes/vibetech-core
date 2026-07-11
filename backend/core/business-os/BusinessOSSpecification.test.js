@@ -68,9 +68,11 @@ test("navigation overflows into More and keeps workforce grouped", () => {
     moduleType: index === 3 ? "workforce" : "records",
     primaryNavigationEligible: true,
     navigationPriority: index + 1,
+    href: `/b/test/mod_${index}`,
   }));
   modules[3].moduleId = "digital_workforce";
   modules[3].label = "Digital Workforce";
+  modules[3].href = "/b/test/team";
 
   const nav = buildBusinessOSNavigation({
     modules,

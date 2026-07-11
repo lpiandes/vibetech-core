@@ -7,6 +7,17 @@ export type BusinessScope = {
   role: string;
   permissions: string[];
   businessName: string;
+  installedNavigation?: {
+    modules?: Array<Record<string, unknown>>;
+    navigation?: Record<string, unknown>;
+    roles?: Array<Record<string, unknown>>;
+    roleDefinitions?: Array<Record<string, unknown>>;
+  } | null;
+  supportAccess?: {
+    active: boolean;
+    mode?: string | null;
+    reason?: string | null;
+  } | null;
 };
 
 const BusinessScopeContext = createContext<BusinessScope | null>(null);

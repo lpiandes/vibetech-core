@@ -19,7 +19,7 @@ import {
 
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { useWorkspaceNavigation } from "./WorkspaceNavigationContext";
-import { getSimplifiedNavSections } from "./simplifiedNavigation";
+import { getModuleDrivenNavSections } from "./moduleDrivenNavigation";
 import { getActiveModuleIdFromPathname } from "./workspaceShellDerivations";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 
@@ -57,11 +57,15 @@ function iconForName(iconName: string | null): ReactNode {
 export default function NavigationSidebar({ variant = "dark" }: { variant?: "light" | "dark" }) {
   const scope = useBusinessScope();
   const { displayPath, beginNavigation } = useWorkspaceNavigation();
-  const grouped = getSimplifiedNavSections(scope.businessId, scope.permissions);
+  const grouped = getModuleDrivenNavSections(scope.businessId, scope.permissions, {
+    role: scope.role,
+    installed: scope.installedNavigation ?? null,
+  });
   const activeModuleId = getActiveModuleIdFromPathname(displayPath);
   const businessName = scope.businessName || "VIBETech";
   const dark = variant === "dark";
   const sections = grouped.filter((section) => section.items.length > 0);
+  const supportAccess = scope.supportAccess;
 
   function onNavClick(href: string) {
     return (event: MouseEvent<HTMLAnchorElement>) => {
@@ -79,6 +83,20 @@ export default function NavigationSidebar({ variant = "dark" }: { variant?: "lig
         <div style={{ marginTop: 2, fontSize: typography.caption.fontSize, color: dark ? cockpitColors.sidebarTextMuted : cockpitColors.textMuted }}>
           {businessName}
         </div>
+        {supportAccess?.active ? (
+          <div
+            style={{
+              marginTop: spacing.sm,
+              padding: spacing.sm,
+              borderRadius: radius.medium,
+              backgroundColor: dark ? "rgba(250, 204, 21, 0.15)" : "rgba(250, 204, 21, 0.25)",
+              color: dark ? cockpitColors.sidebarText : cockpitColors.textPrimary,
+              fontSize: typography.caption.fontSize,
+            }}
+          >
+            Support access{supportAccess.mode ? ` (${supportAccess.mode})` : ""} — viewing as VIBETech admin
+          </div>
+        ) : null}
       </div>
 
       {sections.map((section, sectionIndex) => (
@@ -106,7 +124,46 @@ export default function NavigationSidebar({ variant = "dark" }: { variant?: "lig
           ) : null}
           <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {section.items.map((item) => {
-              const isActive = String(item.moduleId) === String(activeModuleId);
+              const isActive = String(item.moduleId) === String(activeModuleId)
+                || (item.moduleId === "work" && activeModuleId === "work_queue")
+                || (item.moduleId === "people" && activeModuleId === "engagement")
+                || (item.moduleId === "inbox" && activeModuleId === "communications")
+                || (item.moduleId === "performance" && activeModuleId === "analytics")
+                || (item.moduleId === "integrations" && activeModuleId === "connections")
+                || (item.moduleId === "settings" && activeModuleId === "setup")
+                || (item.moduleId === "digital_workforce" && activeModuleId === "digital_workforce");
+              if (item.moduleId === "more") {
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      padding: `${spacing.sm} ${spacing.sm}`,
+                      color: dark ? cockpitColors.sidebarTextMuted : cockpitColors.textMuted,
+                      fontSize: typography.body.fontSize,
+                    }}
+                  >
+                    More
+                    {(item.overflowItems ?? []).map((overflow) => (
+                      <Link
+                        key={overflow.id}
+                        href={overflow.href}
+                        prefetch={true}
+                        onClick={onNavClick(overflow.href)}
+                        style={{
+                          display: "block",
+                          marginTop: 4,
+                          paddingLeft: spacing.sm,
+                          color: dark ? cockpitColors.sidebarText : cockpitColors.textPrimary,
+                          textDecoration: "none",
+                          fontSize: typography.caption.fontSize,
+                        }}
+                      >
+                        {overflow.label}
+                      </Link>
+                    ))}
+                  </div>
+                );
+              }
               return (
                 <Link
                   key={item.id}
