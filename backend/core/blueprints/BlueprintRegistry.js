@@ -3,6 +3,10 @@ import { createBlueprintDefinition } from "./BlueprintDefinition.js";
 import { resolveBlueprintDependencies } from "./BlueprintDependencyResolver.js";
 import { validateBlueprintCompatibility } from "./BlueprintCompatibilityValidator.js";
 import { createPropertyManagementGoldBlueprint } from "./PropertyManagementGoldBlueprint.js";
+import {
+  BLUEPRINT_RESOLUTION_ORDER,
+  resolveReusePreference,
+} from "../platform/constitution/BlueprintResolutionOrder.js";
 
 /**
  * Multi-source Blueprint Registry.
@@ -70,6 +74,17 @@ export class BlueprintRegistry {
       if (gold) return gold;
     }
     return industryBlueprints[0] ?? null;
+  }
+
+  /**
+   * Constitution reuse preference — installed → templates → gold → industry → components → archetypes → gap.
+   */
+  resolveReusePreference(flags = {}) {
+    return resolveReusePreference(flags);
+  }
+
+  getResolutionOrder() {
+    return BLUEPRINT_RESOLUTION_ORDER;
   }
 
   resolveDependencies(blueprint) {
