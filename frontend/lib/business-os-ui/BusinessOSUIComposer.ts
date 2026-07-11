@@ -1,7 +1,7 @@
-import { isRegisteredModuleComponent } from "./ModuleComponentRegistry";
-import { isRegisteredDashboardCard } from "./DashboardCardRegistry";
-import { isRegisteredRecordView } from "./RecordViewRegistry";
-import { isRegisteredActionComponent } from "./ActionComponentRegistry";
+import { isRegisteredModuleComponent } from "./ModuleComponentRegistry.ts";
+import { isRegisteredDashboardCard } from "./DashboardCardRegistry.ts";
+import { isRegisteredRecordView } from "./RecordViewRegistry.ts";
+import { isRegisteredActionComponent } from "./ActionComponentRegistry.ts";
 
 export type ComposeInput = {
   navigation?: Array<{ moduleId: string; label: string }>;

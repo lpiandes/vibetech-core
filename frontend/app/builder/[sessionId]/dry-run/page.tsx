@@ -1,4 +1,4 @@
-import { BuilderDryRunClient } from "@/components/builder/BuilderProposalScreens";
+import { BuilderDryRunClient } from "@/components/builder/BuilderInstallFlow";
 
 export default async function BuilderDryRunPage({
   params,

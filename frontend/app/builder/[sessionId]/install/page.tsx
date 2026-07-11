@@ -1,4 +1,4 @@
-import { BuilderInstallClient } from "@/components/builder/BuilderProposalScreens";
+import { BuilderInstallClient } from "@/components/builder/BuilderInstallFlow";
 
 export default async function BuilderInstallPage({
   params,
