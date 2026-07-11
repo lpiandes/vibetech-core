@@ -11,8 +11,11 @@ import { CompanyHealthEngine } from "../../../backend/core/business-intelligence
 import { CompanyInsightEngine } from "../../../backend/core/business-intelligence/insights/CompanyInsightEngine.js";
 import { CompanyOpportunityEngine } from "../../../backend/core/business-intelligence/opportunities/CompanyOpportunityEngine.js";
 import { CompanyRecommendationEngine } from "../../../backend/core/business-intelligence/recommendations/CompanyRecommendationEngine.js";
+import { BusinessIntelligenceLayer } from "../../../backend/core/business-intelligence/layer/BusinessIntelligenceLayer.js";
+import { adaptBusinessIntelligenceWorkspace } from "../../../backend/core/business-intelligence/layer/views/BusinessIntelligenceViewAdapter.js";
 import { MissionControlGenerator } from "../../../backend/core/mission-control/MissionControlGenerator.js";
 import { MissionControlViewAdapter } from "../../../backend/core/mission-control/views/MissionControlViewAdapter.js";
+import { composeMissionControlExperience } from "../../../backend/core/mission-control/composeMissionControlExperience.js";
 import { composeBusinessCommandCenter } from "../../../backend/core/command-center/BusinessCommandCenterComposer.js";
 import { adaptBusinessCommandCenterView } from "../../../backend/core/command-center/views/BusinessCommandCenterViewAdapter.js";
 import { buildPackageNavigation } from "../../../backend/core/workspace/navigation/PackageNavigationBuilder.js";
@@ -434,6 +437,7 @@ export class WorkspaceService {
 
     const base = new MissionControlViewAdapter().translate(missionControl);
 
+
     const packageRegistry = getDefaultIndustryPackageRegistry();
     const industryPackage = this.connected.activation?.industryPackageId
       ? packageRegistry.getPackage(this.connected.activation.industryPackageId)
@@ -503,7 +507,7 @@ export class WorkspaceService {
       audiences,
     });
 
-    return attachProductContext(
+    const merged = attachProductContext(
       {
         ...base,
         commandCenter,
@@ -528,6 +532,32 @@ export class WorkspaceService {
       },
       this.connected,
     );
+
+    // Compose Business Intelligence + communications into Mission Control experience.
+    // Reuses existing engines/loaders only — no new backend engines.
+    let intelligenceView: Record<string, unknown> | null = null;
+    try {
+      intelligenceView = this.loadBusinessIntelligenceWorkspace() as Record<string, unknown>;
+    } catch {
+      intelligenceView = null;
+    }
+
+    let recentCommunications: unknown[] = [];
+    try {
+      const executiveHome = this.loadExecutiveWorkspaceHomeViewModel({});
+      recentCommunications = Array.isArray((executiveHome as any)?.recentCommunications)
+        ? (executiveHome as any).recentCommunications
+        : [];
+    } catch {
+      recentCommunications = [];
+    }
+
+    return (composeMissionControlExperience as any)({
+      missionControlViewModel: merged,
+      businessIntelligenceView: intelligenceView,
+      recentCommunications,
+      upcomingWork: commandCenter.workMovingNow ?? commandCenter.workInProgress ?? [],
+    });
   }
 
   loadAttentionViewModel() {
@@ -537,6 +567,53 @@ export class WorkspaceService {
       pageTitle: this.connected.pageLabels?.attention ?? "Needs decision",
       attentionItems: mission.needsYourAttention ?? [],
     };
+  }
+
+  /**
+   * Continuous Business Intelligence workspace — compose existing BI engines.
+   * Read-only. Recommendations never mutate the Business OS.
+   */
+  loadBusinessIntelligenceWorkspace() {
+    const installation = this.connected.installationResult ?? null;
+    const businessSummary = {
+      businessId: this.workspaceId,
+      industry: installation?.configuration?.industry
+        ?? installation?.industry
+        ?? this.connected.activation?.industryPackageId
+        ?? null,
+      terminology: installation?.configuration?.terminology ?? installation?.terminology ?? null,
+      roles: installation?.configuration?.digitalWorkforce ?? null,
+      customerTypes: installation?.configuration?.customerTypes ?? null,
+      services: installation?.configuration?.services ?? null,
+    };
+
+    const analyticsVm = (() => {
+      try {
+        return this.loadAnalyticsViewModel?.() ?? null;
+      } catch {
+        return null;
+      }
+    })();
+
+    const layer = new (BusinessIntelligenceLayer as any)({ nowISO: NOW_ISO });
+    const workspace = layer.observeAndRecommend({
+      companyRuntime: this.runtime,
+      installation,
+      analytics: analyticsVm,
+      workRuntime: this.workRuntime,
+      requestRuntime: this.requestRuntime,
+      businessSummary,
+      recentImprovements: [],
+    });
+
+    const view = (adaptBusinessIntelligenceWorkspace as any)(workspace, {
+      businessId: this.workspaceId,
+      businessName: this.connected.identityViewModel?.businessName
+        ?? this.connected.identityViewModel?.name
+        ?? null,
+    });
+
+    return attachProductContext(view as Record<string, unknown>, this.connected);
   }
 
   loadTeamViewModel() {

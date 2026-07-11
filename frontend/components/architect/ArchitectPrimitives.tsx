@@ -1,14 +1,16 @@
 import type { CSSProperties, ReactNode } from "react";
-import { architect } from "./architectTheme";
+import { architect, architectKeyframes } from "./architectTheme";
 
 export function ArchitectShell({
   children,
   light = false,
   maxWidth = 1280,
+  fullBleed = false,
 }: {
   children: ReactNode;
   light?: boolean;
   maxWidth?: number;
+  fullBleed?: boolean;
 }) {
   return (
     <div
@@ -20,22 +22,37 @@ export function ArchitectShell({
       }}
     >
       <style>{`
-        @keyframes architectFadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes architectPulse { 0%,100%{opacity:.4} 50%{opacity:1} }
-        @keyframes architectShimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-        @keyframes architectSpin { to { transform: rotate(360deg); } }
+        ${architectKeyframes}
         .architect-workspace-grid {
           display: grid;
-          grid-template-columns: minmax(300px, 1fr) minmax(420px, 1.4fr) minmax(240px, 0.85fr);
+          grid-template-columns: minmax(300px, 1fr) minmax(420px, 1.35fr) minmax(260px, 0.9fr);
           gap: 16px;
+          align-items: start;
+        }
+        .architect-preview-grid {
+          display: grid;
+          grid-template-columns: 220px 1fr;
+          min-height: 520px;
         }
         @media (max-width: 1100px) {
-          .architect-workspace-grid {
-            grid-template-columns: 1fr;
-          }
+          .architect-workspace-grid { grid-template-columns: 1fr; }
+          .architect-preview-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 720px) {
+          .architect-workspace-grid { gap: 12px; }
+          .architect-preview-grid { min-height: 360px; }
+        }
+        button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+          outline: 2px solid ${architect.accent};
+          outline-offset: 2px;
         }
       `}</style>
-      <div style={{ maxWidth, margin: "0 auto", padding: "32px 24px 64px", animation: "architectFadeUp .5s ease" }}>
+      <div style={{
+        maxWidth: fullBleed ? "100%" : maxWidth,
+        margin: "0 auto",
+        padding: fullBleed ? 0 : "32px 24px 64px",
+        animation: "architectFadeUp .5s ease",
+      }}>
         {children}
       </div>
     </div>
@@ -172,6 +189,24 @@ export function ThinkingDots({ label = "Architect is thinking" }: { label?: stri
         }}
       />
       <span style={{ animation: "architectPulse 1.4s ease infinite" }}>{label}</span>
+    </div>
+  );
+}
+
+export function ArchitectProgress({ percent, label }: { percent: number; label?: string }) {
+  const value = Math.max(0, Math.min(100, Number(percent) || 0));
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      {label ? <div style={{ fontSize: 13, color: architect.inkMuted }}>{label}</div> : null}
+      <div style={{ height: 8, borderRadius: 999, background: "rgba(148,163,184,.16)", overflow: "hidden" }}>
+        <div style={{
+          width: `${value}%`,
+          height: "100%",
+          borderRadius: 999,
+          background: `linear-gradient(90deg, ${architect.accent}, ${architect.accentSecondary})`,
+          transition: "width .35s ease",
+        }} />
+      </div>
     </div>
   );
 }

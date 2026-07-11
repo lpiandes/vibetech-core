@@ -2,12 +2,18 @@ import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceServic
 import { platformStore } from "../../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
 import EmptyBusinessHome from "@/components/home/EmptyBusinessHome";
 import SetupChecklistBanner from "@/components/home/SetupChecklistBanner";
+import FirstLoginBriefingBanner from "@/components/home/FirstLoginBriefingBanner";
 import ProspectInquiryForm from "@/components/home/ProspectInquiryForm";
 import PortalHome from "@/components/portal-renderer/PortalHome";
+import MissionControlRenderer from "@/components/mission-control/MissionControlRenderer";
 import { composePortalModel } from "@/lib/portal-renderer/composePortalModel.js";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
 
+/**
+ * Installed Business OS lands on Mission Control — the living-business supervisor.
+ * Pre-operating / checklist states keep the existing setup surfaces.
+ */
 export default async function BusinessHomePage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   return runTimedPage("home", async () => {
@@ -64,20 +70,37 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
     const executive = home.executive;
     const showFullChecklist = !executive.showOperatingDashboard;
     const showChecklistBanner = executive.showOperatingDashboard && executive.collapseChecklist;
-
-    // McBride without Business OS install keeps legacy executive layout via PortalHome fallback.
     const preferLegacyExecutive = !portalModel?.drivenByBusinessOS;
+    const showMissionControl = Boolean(portalModel?.drivenByBusinessOS && executive.showOperatingDashboard);
+    const showFirstLoginBriefing = showMissionControl;
+
+    let missionControlViewModel: unknown = null;
+    if (showMissionControl) {
+      missionControlViewModel = ctx.service.loadMissionControlViewModel();
+      markRequestTiming("MISSION_CONTROL", {
+        bytes: JSON.stringify(missionControlViewModel).length,
+      });
+    }
 
     return (
       <>
+        <FirstLoginBriefingBanner
+          businessId={businessId}
+          businessName={home.businessName}
+          show={showFirstLoginBriefing}
+        />
         {showFullChecklist ? <EmptyBusinessHome {...home} /> : null}
         {showChecklistBanner ? <SetupChecklistBanner businessName={home.businessName} checklist={home.checklist} /> : null}
-        <PortalHome
-          portalModel={portalModel}
-          executive={executive}
-          businessId={businessId}
-          preferLegacyExecutive={preferLegacyExecutive}
-        />
+        {showMissionControl && missionControlViewModel ? (
+          <MissionControlRenderer viewModel={missionControlViewModel as never} variant="mission_control" />
+        ) : (
+          <PortalHome
+            portalModel={portalModel}
+            executive={executive}
+            businessId={businessId}
+            preferLegacyExecutive={preferLegacyExecutive}
+          />
+        )}
         {home.showProspectInquiryForm ? (
           <div id="prospect-inquiry" style={{ maxWidth: 720, margin: "0 auto", padding: "0 24px 48px" }}>
             <ProspectInquiryForm

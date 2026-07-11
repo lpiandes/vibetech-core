@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import React, { createContext, useContext } from "react";
 
 export type InstalledBusinessOSScope = {
   drivenByBusinessOS: boolean;
@@ -46,4 +46,9 @@ export function useBusinessScope() {
   const ctx = useContext(BusinessScopeContext);
   if (!ctx) throw new Error("useBusinessScope requires BusinessScopeProvider");
   return ctx;
+}
+
+/** Safe for surfaces that can render outside a business shell (tests, workspace demo). */
+export function useOptionalBusinessScope() {
+  return useContext(BusinessScopeContext);
 }

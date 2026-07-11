@@ -65,7 +65,7 @@ type InstalledNavigationInput = {
 };
 
 const DEFAULT_MCBRIDE_MODULES: ModuleLike[] = [
-  { moduleId: "home", label: "Home", moduleType: "operations", navigationPriority: 1, iconName: "home", roleVisibility: [] },
+  { moduleId: "home", label: "Mission Control", moduleType: "operations", navigationPriority: 1, iconName: "home", roleVisibility: [] },
   { moduleId: "for_you", label: "For you", moduleType: "operations", navigationPriority: 2, iconName: "home", roleVisibility: ["work.view"] },
   { moduleId: "work", label: "Work", moduleType: "operations", navigationPriority: 3, iconName: "inbox", roleVisibility: ["work.view"] },
   { moduleId: "people", label: "People", moduleType: "records", navigationPriority: 4, iconName: "users", roleVisibility: ["people.view"] },
@@ -74,8 +74,9 @@ const DEFAULT_MCBRIDE_MODULES: ModuleLike[] = [
   { moduleId: "digital_workforce", label: "Team", moduleType: "workforce", navigationPriority: 7, iconName: "users", roleVisibility: ["team.manage"] },
   { moduleId: "knowledge", label: "Knowledge", moduleType: "knowledge", navigationPriority: 8, iconName: "book", roleVisibility: [] },
   { moduleId: "performance", label: "Performance", moduleType: "analytics", navigationPriority: 9, iconName: "chart", roleVisibility: ["performance.view"] },
-  { moduleId: "integrations", label: "Integrations", moduleType: "configuration", navigationPriority: 10, iconName: "link", roleVisibility: ["integrations.manage"] },
-  { moduleId: "settings", label: "Settings", moduleType: "configuration", navigationPriority: 11, iconName: "settings", roleVisibility: ["settings.manage"] },
+  { moduleId: "intelligence", label: "Intelligence", moduleType: "analytics", navigationPriority: 10, iconName: "chart", roleVisibility: ["performance.view"] },
+  { moduleId: "integrations", label: "Integrations", moduleType: "configuration", navigationPriority: 11, iconName: "link", roleVisibility: ["integrations.manage"] },
+  { moduleId: "settings", label: "Settings", moduleType: "configuration", navigationPriority: 12, iconName: "settings", roleVisibility: ["settings.manage"] },
 ];
 
 const ICON_BY_MODULE: Record<string, string> = {

@@ -13,17 +13,21 @@ import {
   ThinkingDots,
 } from "./ArchitectPrimitives";
 import {
-  ARCHITECT_COMPLETION_ACTIONS,
   ARCHITECT_INSTALL_STAGES,
+  HUMAN_COPY,
   architectRoutes,
+  humanInstallState,
   installStageProgress,
 } from "./architectSemantics";
+import ExecutiveBriefing from "./ExecutiveBriefing";
+import { presentProductError, type ProductErrorView } from "@/lib/platform/productErrors";
+import ProductErrorBanner from "@/components/product/ProductErrorBanner";
 
 export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const routes = architectRoutes(sessionId);
   const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ProductErrorView | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function run() {
@@ -36,10 +40,13 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
         body: JSON.stringify({ action: "dry_run" }),
       });
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error ?? data.reason ?? "Dry run failed.");
+      if (!response.ok || !data.ok) {
+        setError(data.productError ?? presentProductError(data.error ?? data.reason ?? "dry_run_failed"));
+        return;
+      }
       setResult(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Dry run failed.");
+      setError(presentProductError(err));
     } finally {
       setBusy(false);
     }
@@ -54,49 +61,53 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
   return (
     <ArchitectShell maxWidth={920}>
       <header style={{ display: "grid", gap: 10, marginBottom: 24 }}>
-        <ArchitectBadge tone="accent">Dry run</ArchitectBadge>
+        <ArchitectBadge tone="accent">{HUMAN_COPY.launchReadiness}</ArchitectBadge>
         <h1 style={{ margin: 0, fontFamily: architect.display, fontSize: "clamp(1.8rem, 3vw, 2.4rem)" }}>
-          Simulate installation
+          Everything ready for launch?
         </h1>
         <p style={{ margin: 0, color: architect.inkMuted, maxWidth: 640 }}>
-          Architect rehearses the install without changing your live business. Nothing is installed yet.
+          Architect checks the plan without changing your live business. Nothing is installed yet.
         </p>
       </header>
 
       <ArchitectPanel>
         {busy ? (
           <div style={{ display: "grid", gap: 12 }}>
-            <ThinkingDots label="Preparing your installation checklist" />
+            <ThinkingDots label="Preparing your launch checklist" />
             <ArchitectSkeleton height={56} />
             <ArchitectSkeleton height={56} />
             <ArchitectSkeleton height={56} />
           </div>
         ) : null}
-        {error ? <div style={{ color: architect.danger }} role="alert">{error}</div> : null}
+        {error ? <ProductErrorBanner error={error} onRetry={() => void run()} /> : null}
         {checklist ? (
           <div style={{ display: "grid", gap: 16 }}>
-            <h2 style={{ margin: 0, fontSize: 20 }}>{checklist.headline}</h2>
+            <h2 style={{ margin: 0, fontSize: 20 }}>{checklist.headline ?? "Launch checklist"}</h2>
             <div style={{ display: "grid", gap: 10 }}>
-              {(checklist.items ?? []).map((item: any) => (
-                <div key={item.id} style={rowCard}>
-                  <div style={{ fontWeight: 650 }}>{item.label}</div>
-                  <ArchitectBadge tone={item.status === "ready" || item.status === "ok" ? "success" : "warning"}>
-                    {item.statusLabel ?? String(item.status).replace(/_/g, " ")}
-                  </ArchitectBadge>
-                </div>
-              ))}
+              {(checklist.items ?? []).map((item: any) => {
+                const ready = item.status === "ready" || item.status === "ok";
+                return (
+                  <div key={item.id} style={rowCard}>
+                    <div style={{ fontWeight: 650 }}>{item.label}</div>
+                    <ArchitectBadge tone={ready ? "success" : "warning"}>
+                      {item.statusLabel
+                        ?? (ready ? "Ready" : "Needs attention")}
+                    </ArchitectBadge>
+                  </div>
+                );
+              })}
             </div>
             {(checklist.warnings ?? []).length ? (
               <div style={{ ...rowCard, borderColor: "rgba(251,191,36,.35)", background: "rgba(251,191,36,.08)" }}>
-                <strong>Warnings</strong>
+                <strong>Things to review</strong>
                 <ul style={{ marginBottom: 0 }}>{checklist.warnings.map((warning: string) => <li key={warning}>{warning}</li>)}</ul>
               </div>
             ) : null}
             <p style={{ color: architect.inkMuted, margin: 0 }}>No live records were changed.</p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <ArchitectButton onClick={() => router.push(routes.install)}>Review and approve install</ArchitectButton>
+              <ArchitectButton onClick={() => router.push(routes.install)}>Continue to launch</ArchitectButton>
               <ArchitectButton variant="secondary" onClick={() => router.push(routes.session)}>Back to Architect</ArchitectButton>
-              <ArchitectButton variant="ghost" disabled={busy} onClick={() => void run()}>Re-run dry run</ArchitectButton>
+              <ArchitectButton variant="ghost" disabled={busy} onClick={() => void run()}>Check again</ArchitectButton>
             </div>
           </div>
         ) : null}
@@ -111,7 +122,7 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
   const [workspace, setWorkspace] = useState<any>(null);
   const [status, setStatus] = useState<"awaiting_approval" | "installing" | "installed" | "failed">("awaiting_approval");
   const [activeStep, setActiveStep] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ProductErrorView | null>(null);
   const [openHref, setOpenHref] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [approved, setApproved] = useState(false);
@@ -134,10 +145,13 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
         body: JSON.stringify({ action: "approve" }),
       });
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error ?? data.reason ?? "Approval failed.");
+      if (!response.ok || !data.ok) {
+        setError(data.productError ?? presentProductError(data.error ?? data.reason ?? "stale_approval_specification"));
+        return;
+      }
       setApproved(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Approval failed.");
+      setError(presentProductError(err));
     } finally {
       setBusy(false);
     }
@@ -161,13 +175,17 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
         }),
       });
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error ?? data.reason ?? "Install failed.");
+      if (!response.ok || !data.ok) {
+        setStatus("failed");
+        setError(data.productError ?? presentProductError(data.error ?? data.reason ?? "install_failed"));
+        return;
+      }
       setStatus("installed");
       setActiveStep(ARCHITECT_INSTALL_STAGES.length - 1);
       setOpenHref(data.openHref);
     } catch (err) {
       setStatus("failed");
-      setError(err instanceof Error ? err.message : "Install failed.");
+      setError(presentProductError(err));
     } finally {
       clearInterval(timer);
       setBusy(false);
@@ -177,35 +195,24 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
   const proposal = workspace?.proposal;
   const session = workspace?.session;
   const stages = installStageProgress(activeStep, status);
-  const businessName = proposal?.businessName ?? session?.businessSummary?.businessName ?? "Your Business OS";
+  const businessName = proposal?.businessName ?? session?.businessSummary?.businessName ?? "Your business";
 
   if (status === "installed") {
     return (
-      <ArchitectShell maxWidth={820}>
-        <ArchitectPanel style={{ textAlign: "center", padding: "48px 32px", display: "grid", gap: 18, animation: "architectFadeUp .6s ease" }}>
-          <div style={{ fontSize: 48, lineHeight: 1 }}>✦</div>
-          <ArchitectBadge tone="success">Installation complete</ArchitectBadge>
-          <h1 style={{ margin: 0, fontFamily: architect.display, fontSize: "clamp(2rem, 4vw, 2.8rem)" }}>
-            Your Business OS is ready.
-          </h1>
-          <p style={{ margin: "0 auto", color: architect.inkMuted, maxWidth: 480, fontSize: 17 }}>
-            {businessName} is installed. Architect stays with you forever via Ask VIBETech — never restart discovery.
-          </p>
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 8 }}>
-            {ARCHITECT_COMPLETION_ACTIONS.map((action) => (
-              <ArchitectButton
-                key={action.id}
-                variant={action.id === "open_portal" ? "primary" : "secondary"}
-                onClick={() => {
-                  if (action.id === "open_portal" && openHref) router.push(openHref);
-                  else if (action.id === "invite" && openHref) router.push(`${openHref.replace(/\/home$/, "")}/settings`);
-                  else router.push(routes.session);
-                }}
-              >
-                {action.label}
-              </ArchitectButton>
-            ))}
-          </div>
+      <ArchitectShell maxWidth={900}>
+        <ArchitectPanel style={{ padding: "40px 32px" }}>
+          <ExecutiveBriefing
+            proposal={proposal}
+            openHref={openHref}
+            onOpenPortal={() => {
+              if (openHref) router.push(openHref);
+            }}
+            onInvite={() => {
+              if (openHref) router.push(`${openHref.replace(/\/home$/, "")}/settings`);
+              else router.push(routes.session);
+            }}
+            onImprove={() => router.push(routes.session)}
+          />
         </ArchitectPanel>
       </ArchitectShell>
     );
@@ -214,12 +221,12 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
   return (
     <ArchitectShell maxWidth={920}>
       <header style={{ display: "grid", gap: 10, marginBottom: 24 }}>
-        <ArchitectBadge tone="accent">Install</ArchitectBadge>
+        <ArchitectBadge tone="accent">Launch</ArchitectBadge>
         <h1 style={{ margin: 0, fontFamily: architect.display, fontSize: "clamp(1.8rem, 3vw, 2.4rem)" }}>
-          Final review & install
+          Create your operating system
         </h1>
         <p style={{ margin: 0, color: architect.inkMuted, maxWidth: 640 }}>
-          Approval is bound to this exact proposal. If anything changes, Architect will ask for a new dry run.
+          Approval is tied to this exact plan. If anything changes, Architect will ask you to review launch readiness again.
         </p>
       </header>
 
@@ -227,19 +234,24 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
         <h2 style={{ margin: 0 }}>{businessName}</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
           <SummaryTile label="Workspaces" value={proposal?.views?.navigation?.items?.length ?? "—"} />
-          <SummaryTile label="Employees" value={proposal?.views?.digitalWorkforce?.items?.length ?? "—"} />
-          <SummaryTile label="Roles" value={proposal?.views?.rolesAccess?.items?.length ?? "—"} />
-          <SummaryTile label="Integrations" value={proposal?.views?.integrations?.items?.length ?? "—"} />
+          <SummaryTile label="Your team" value={proposal?.views?.digitalWorkforce?.items?.length ?? "—"} />
+          <SummaryTile label="Who sees what" value={proposal?.views?.rolesAccess?.items?.length ?? "—"} />
+          <SummaryTile label="Connections" value={proposal?.views?.integrations?.items?.length ?? "—"} />
         </div>
 
         <div>
-          <h3 style={{ marginTop: 0 }}>Installation stages</h3>
+          <h3 style={{ marginTop: 0 }}>
+            {status === "installing" ? HUMAN_COPY.installing : "What will be created"}
+          </h3>
           <div style={{ display: "grid", gap: 10 }}>
             {stages.map((stage) => (
               <div key={stage.id} style={{
                 ...rowCard,
-                opacity: stage.state === "pending" ? 0.55 : 1,
+                opacity: stage.state === "pending" && status !== "awaiting_approval" ? 0.55 : 1,
                 borderColor: stage.state === "active" ? architect.accent : architect.border,
+                animation: stage.state === "active" || stage.state === "done"
+                  ? "architectAssembleIn .4s ease"
+                  : undefined,
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <StageGlyph state={stage.state} />
@@ -248,8 +260,13 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
                     {stage.state === "active" ? "…" : ""}
                   </span>
                 </div>
-                <ArchitectBadge tone={stage.state === "done" ? "success" : stage.state === "failed" ? "warning" : stage.state === "active" ? "accent" : "neutral"}>
-                  {stage.state}
+                <ArchitectBadge tone={
+                  stage.state === "done" ? "success"
+                    : stage.state === "failed" ? "warning"
+                      : stage.state === "active" ? "accent"
+                        : "neutral"
+                }>
+                  {humanInstallState(stage.state)}
                 </ArchitectBadge>
               </div>
             ))}
@@ -257,22 +274,15 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
         </div>
 
         {error ? (
-          <div style={{ color: architect.danger }} role="alert">
-            {error}
-            <div style={{ marginTop: 10 }}>
-              <ArchitectButton variant="secondary" disabled={busy} onClick={() => void install({ resume: true })}>
-                Retry / resume install
-              </ArchitectButton>
-            </div>
-          </div>
+          <ProductErrorBanner error={error} onRetry={() => void install({ resume: true })} />
         ) : null}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <ArchitectButton variant="secondary" disabled={busy || approved} onClick={() => void approveOnly()}>
-            {approved ? "Approved" : "Record approval"}
+            {approved ? HUMAN_COPY.approved : HUMAN_COPY.recordApproval}
           </ArchitectButton>
           <ArchitectButton disabled={busy} onClick={() => void install()}>
-            {busy ? "Installing…" : "Approve and install"}
+            {busy ? HUMAN_COPY.installing : HUMAN_COPY.approveLaunch}
           </ArchitectButton>
           <ArchitectButton variant="ghost" onClick={() => router.push(routes.session)}>
             Back to Architect

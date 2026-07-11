@@ -6,6 +6,7 @@ import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
  */
 export const BUSINESS_OS_SAFE_ROUTES = Object.freeze({
   home: "home",
+  mission_control: "mission-control",
   for_you: "for-you",
   work: "work",
   work_queue: "work",
@@ -21,6 +22,8 @@ export const BUSINESS_OS_SAFE_ROUTES = Object.freeze({
   performance: "performance",
   analytics: "performance",
   reports: "performance",
+  intelligence: "intelligence",
+  business_intelligence: "intelligence",
   integrations: "integrations",
   connections: "integrations",
   settings: "settings",

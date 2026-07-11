@@ -6,6 +6,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import MissionControlRenderer from "./MissionControlRenderer";
 import MissionControlLoading from "./MissionControlLoading";
 import MissionControlErrorBoundary from "./MissionControlErrorBoundary";
+import { BusinessScopeProvider } from "@/lib/platform/BusinessScopeContext";
+
+const scope = {
+  businessId: "biz_1",
+  role: "OWNER",
+  permissions: [],
+  businessName: "Harbor",
+};
 
 const makeVm = () =>
   ({
@@ -25,40 +33,21 @@ const makeVm = () =>
       secondaryActions: ["act_2"],
       metadata: {},
     },
-    sections: [
-      {
-        id: "section_recommendations",
-        title: "Recommendations",
-        subtitle: "No items",
-        status: "open",
-        priority: "later",
-        layout: "single",
-        cards: [],
-        actions: [],
-        emptyState: "Everything looks good. No immediate action is required.",
-        metadata: {},
-      },
-    ],
+    commandCenter: { needsYourAttention: [] },
+    sections: [],
     cards: [],
-    actions: [
-      {
-        id: "act_1",
-        label: "Review Work Queue",
-        type: "review_work_queue",
-        target: "work_queue",
-        style: "primary",
-        priority: "immediate",
-        disabled: false,
-        metadata: {},
-      },
-    ],
+    actions: [],
     alerts: [],
     metadata: {},
   }) as any;
 
 test("Empty state copy renders when nothing needs attention", () => {
   const vm = { ...makeVm(), commandCenter: { needsYourAttention: [] } };
-  const html = renderToStaticMarkup(<MissionControlRenderer viewModel={vm} />);
+  const html = renderToStaticMarkup(
+    <BusinessScopeProvider value={scope as any}>
+      <MissionControlRenderer viewModel={vm} variant="for_you" />
+    </BusinessScopeProvider>,
+  );
   assert.ok(html.includes("You're all caught up"));
 });
 
@@ -82,4 +71,3 @@ test("Error boundary shows fallback when child throws", () => {
 
   assert.ok(html.includes("Something went wrong"));
 });
-

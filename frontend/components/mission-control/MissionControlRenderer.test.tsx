@@ -4,6 +4,14 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import MissionControlRenderer from "./MissionControlRenderer";
+import { BusinessScopeProvider } from "@/lib/platform/BusinessScopeContext";
+
+const scope = {
+  businessId: "biz_1",
+  role: "OWNER",
+  permissions: ["business.manage"],
+  businessName: "Harbor",
+};
 
 const makeViewModel = () =>
   ({
@@ -19,86 +27,76 @@ const makeViewModel = () =>
       subtitle: "Your business is healthy",
       status: "success",
       score: 72,
+      businessName: "Harbor",
+      headline: "Harbor is operating",
+      summary: "Steady morning",
       primaryAction: "Review decisions",
       secondaryActions: ["act_2"],
       metadata: {},
     },
-    sections: [
-      {
-        id: "s_health",
-        title: "Company Health",
-        subtitle: "Overall status",
-        status: "open",
-        priority: "later",
-        layout: "single",
-        cards: ["card_health"],
-        actions: ["act_1"],
-        emptyState: "No items available.",
-        metadata: {},
+    commandCenter: { needsYourAttention: [] },
+    needsYourAttention: [],
+    experience: {
+      contract: "MissionControlExperience/v1",
+      fabricatedMetricsForbidden: true,
+      executiveBriefing: {
+        headline: "Harbor is operating",
+        summary: "Steady morning with evidence-backed supervision.",
+        whatChanged: [],
+        whatNeedsAttention: [],
+        topRecommendation: null,
+        nextHumanStep: "Review Waiting On You first.",
       },
-    ],
-    cards: [
-      {
-        id: "card_health",
-        title: "Company Health",
-        subtitle: "Good",
-        body: "Knowledge is a strength.",
-        status: "open",
-        priority: "later",
-        metric: 72,
-        trend: "UP",
-        badge: "success",
-        icon: "health",
-        actions: ["act_1"],
-        source: "company_health",
-        metadata: {},
+      businessIntelligence: { honesty: "Evidence required.", observationCounts: { findings: 0 } },
+      businessHealth: {
+        overallScore: 72,
+        overallStatus: "healthy",
+        overallTrend: "stable",
+        overallConfidence: "medium",
+        explanation: "Derived from operating signals",
+        strengths: [],
+        risks: [],
       },
-    ],
-    actions: [
-      {
-        id: "act_1",
-        label: "Review Work Queue",
-        type: "review_work_queue",
-        target: "work_queue",
-        style: "primary",
-        priority: "immediate",
-        disabled: false,
-        metadata: {},
-      },
-      {
-        id: "act_2",
-        label: "Review Operational Readiness",
-        type: "review_operational_readiness",
-        target: "operational_readiness",
-        style: "secondary",
-        priority: "soon",
-        disabled: false,
-        metadata: {},
-      },
-    ],
+      aiWorkforceActivity: { digitalEmployees: [], handledByVibeTech: [] },
+      activeBusinessEpisodes: [],
+      waitingOnYou: [],
+      aiOpportunities: [],
+      businessTimeline: [],
+      capacity: [],
+      risks: [],
+      recommendations: [],
+      recentlyImproved: [],
+      upcomingWork: [],
+      recentCommunications: [],
+      criticalMetrics: [{ id: "open_work", label: "Open work", value: 3, trend: "stable" }],
+      operatingStates: [],
+      businessControlStatus: { label: "Under control", reason: "No blockers", tone: "success" },
+    },
+    sections: [],
+    cards: [],
+    actions: [],
     alerts: [],
     metadata: {},
   }) as any;
 
-test("Renderer: renders hero, sections, cards, and action labels", () => {
+function render(node: React.ReactElement) {
+  return renderToStaticMarkup(
+    <BusinessScopeProvider value={scope as any}>{node}</BusinessScopeProvider>,
+  );
+}
+
+test("Mission Control experience renders living-business briefing and metrics", () => {
   const vm = makeViewModel();
-  const html = renderToStaticMarkup(<MissionControlRenderer viewModel={vm} />);
-  assert.ok(html.includes(vm.hero.title));
-  assert.ok(html.includes(vm.sections[0].title));
-  assert.ok(html.includes(vm.cards[0].title));
-  assert.ok(html.includes(vm.actions[0].label));
+  const html = render(<MissionControlRenderer viewModel={vm} variant="mission_control" />);
+  assert.ok(html.includes("Mission Control"));
+  assert.ok(html.includes("Harbor is operating"));
+  assert.ok(html.includes("Open work"));
+  assert.ok(html.includes("Evidence only"));
+  assert.ok(html.includes("Waiting On You"));
 });
 
-test("Renderer: empty state appears when section has no cards", () => {
+test("For You variant stays attention-focused", () => {
   const vm = makeViewModel();
-  vm.sections = [
-    {
-      ...vm.sections[0],
-      cards: [],
-      emptyState: "Nothing queued.",
-    },
-  ];
-  const html = renderToStaticMarkup(<MissionControlRenderer viewModel={vm} />);
-  assert.ok(html.includes("Nothing queued."));
+  const html = render(<MissionControlRenderer viewModel={vm} variant="for_you" />);
+  assert.ok(html.includes("You're all caught up") || html.includes("For you"));
 });
-
