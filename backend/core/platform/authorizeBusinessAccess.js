@@ -1,6 +1,9 @@
 import { platformStore } from "./persistence/PostgresPlatformStore.js";
 import { businessRecordToActivation, isPlatformAdmin } from "./persistence/platformMappers.js";
 import { permissionsForRole, hasPermission } from "./permissions/rolePermissions.js";
+import {
+  getDefaultSupportAccessService,
+} from "./support/SupportAccessService.js";
 
 export class AuthorizationError extends Error {
   constructor(code, message) {
@@ -12,9 +15,16 @@ export class AuthorizationError extends Error {
 
 /**
  * Central authorization for business workspace access.
- * @param {{ userId: string, businessId: string, platformRole?: string | null, requiredPermission?: string | null }} input
+ * Platform admins require explicit support access with reason — never silent ownership.
+ * @param {{ userId: string, businessId: string, platformRole?: string | null, requiredPermission?: string | null, supportAccessService?: object | null }} input
  */
-export async function authorizeBusinessAccess({ userId, businessId, platformRole = null, requiredPermission = null }) {
+export async function authorizeBusinessAccess({
+  userId,
+  businessId,
+  platformRole = null,
+  requiredPermission = null,
+  supportAccessService = null,
+}) {
   if (!userId) {
     throw new AuthorizationError("UNAUTHENTICATED", "Sign in required.");
   }
@@ -25,12 +35,31 @@ export async function authorizeBusinessAccess({ userId, businessId, platformRole
   }
 
   if (isPlatformAdmin({ platformRole })) {
+    const support = supportAccessService ?? getDefaultSupportAccessService();
+    const resolved = support.resolveAuthorization({
+      adminUserId: userId,
+      platformRole,
+      businessId,
+    });
+    if (!resolved.ok) {
+      throw new AuthorizationError(
+        "SUPPORT_ACCESS_REQUIRED",
+        "VIBETech support access with a reason is required before entering a client business.",
+      );
+    }
+
     await platformStore.recordAuditEvent({
       actorUserId: userId,
       businessId,
       action: "platform_admin.enter_business",
       targetType: "business",
       targetId: businessId,
+      metadata: {
+        supportSessionId: resolved.session.sessionId,
+        mode: resolved.session.mode,
+        reason: resolved.session.reason,
+        permanentMembership: false,
+      },
     });
 
     return {
@@ -38,9 +67,11 @@ export async function authorizeBusinessAccess({ userId, businessId, platformRole
       business,
       membership: null,
       role: "PLATFORM_ADMIN",
-      permissions: permissionsForRole("OWNER"),
+      permissions: resolved.permissions,
       activation: businessRecordToActivation(business),
       isPlatformAdmin: true,
+      supportAccess: resolved.supportAccess,
+      actorUserId: userId,
     };
   }
 
@@ -62,6 +93,8 @@ export async function authorizeBusinessAccess({ userId, businessId, platformRole
     permissions,
     activation: businessRecordToActivation(business),
     isPlatformAdmin: false,
+    supportAccess: null,
+    actorUserId: userId,
   };
 }
 

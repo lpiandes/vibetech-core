@@ -263,12 +263,35 @@ test("cross-business access is denied for members and unauthenticated users", as
   assert.equal(allowed.role, MEMBERSHIP_ROLES.OWNER);
   assert.ok(allowed.permissions.has(PERMISSIONS.TEAM_INVITE));
 
+  await assert.rejects(
+    () => authorizeBusinessAccess({
+      userId: admin.id,
+      businessId: businessB.id,
+      platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
+    }),
+    (err) => err instanceof AuthorizationError && err.code === "SUPPORT_ACCESS_REQUIRED",
+  );
+
+  const { getDefaultSupportAccessService, resetDefaultSupportAccessServiceForTests } = await import("./support/SupportAccessService.js");
+  resetDefaultSupportAccessServiceForTests();
+  const support = getDefaultSupportAccessService();
+  const entered = support.enter({
+    adminUserId: admin.id,
+    platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
+    businessId: businessB.id,
+    reason: "Platform auth test support entry",
+    mode: "elevated",
+  });
+  assert.equal(entered.ok, true);
+
   const adminEntry = await authorizeBusinessAccess({
     userId: admin.id,
     businessId: businessB.id,
     platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
   });
   assert.equal(adminEntry.isPlatformAdmin, true);
+  assert.equal(adminEntry.supportAccess.active, true);
+  assert.equal(adminEntry.actorUserId, admin.id);
 
   const audits = await withClient((client) =>
     client.query(

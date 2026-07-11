@@ -83,12 +83,37 @@ try {
 }
 if (!denied) throw new Error("Expected cross-business denial");
 
+let supportRequired = false;
+try {
+  await authorizeBusinessAccess({
+    userId: admin.user.id,
+    businessId: business.id,
+    platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
+  });
+} catch (err) {
+  supportRequired = err instanceof AuthorizationError && err.code === "SUPPORT_ACCESS_REQUIRED";
+}
+if (!supportRequired) throw new Error("Expected support access requirement for platform admin");
+
+const { getDefaultSupportAccessService, resetDefaultSupportAccessServiceForTests } = await import("../backend/core/platform/support/SupportAccessService.js");
+resetDefaultSupportAccessServiceForTests();
+const support = getDefaultSupportAccessService();
+const entered = support.enter({
+  adminUserId: admin.user.id,
+  platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
+  businessId: business.id,
+  reason: "Journey smoke support entry",
+  mode: "elevated",
+});
+if (!entered.ok) throw new Error("Expected support access entry to succeed");
+
 const adminAccess = await authorizeBusinessAccess({
   userId: admin.user.id,
   businessId: business.id,
   platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
 });
 if (!adminAccess.isPlatformAdmin) throw new Error("Expected platform admin access");
+if (!adminAccess.supportAccess?.active) throw new Error("Expected active support access indicator");
 
 console.log("Journey smoke test passed.");
 console.log(`  business: ${business.name} (${business.id})`);
