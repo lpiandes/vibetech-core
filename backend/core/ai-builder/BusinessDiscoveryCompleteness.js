@@ -1,5 +1,6 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { DISCOVERY_QUESTION_BANK } from "./BusinessDiscoveryQuestionPlanner.js";
+import { discoveryStageProgress } from "./BuilderUxPresentation.js";
 
 /**
  * Completeness scoring — never pretends unknown answers are resolved.
@@ -23,8 +24,7 @@ export class BusinessDiscoveryCompleteness {
     const readyForProposal = requiredAnswered.length >= 5 && hasIdentity && hasIndustry;
 
     const percent = Math.round((requiredAnswered.length / Math.max(1, required.length)) * 100);
-
-    return deepFreeze({
+    const base = {
       percent,
       label: readyForProposal
         ? "Ready for a first proposal"
@@ -32,12 +32,24 @@ export class BusinessDiscoveryCompleteness {
           ? "A few important questions remain"
           : "Keep going",
       readyForProposal,
+    };
+    const journey = discoveryStageProgress({
+      answers,
+      questions: DISCOVERY_QUESTION_BANK,
+      progress: base,
+      businessSummary,
+    });
+
+    return deepFreeze({
+      ...base,
       requiredTotal: required.length,
       requiredAnswered: requiredAnswered.length,
       requiredMissing: requiredMissing.map((question) => question.questionId),
       unknownQuestionIds: unknownIds,
       skippedQuestionIds: skippedIds,
       unresolvedCount: requiredMissing.length + unknownIds.length,
+      journey,
+      activeStageLabel: journey.activeStageLabel,
     });
   }
 }

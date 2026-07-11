@@ -28,6 +28,14 @@ import {
   createBuilderConversationMessage,
   appendConversation,
 } from "./BuilderConversation.js";
+import {
+  clientSafeProposalView,
+  discoveryStageProgress,
+  quickRepliesForQuestion,
+  sessionListCard,
+} from "./BuilderUxPresentation.js";
+import { buildDryRunChecklist } from "./BuilderDryRunChecklist.js";
+import { buildBuilderPortalPreview } from "./BuilderPortalPreview.js";
 
 /**
  * End-to-end AI Builder façade used by API routes.
@@ -77,6 +85,53 @@ export class AiBuilderService {
     return this.sessionService.answer(input);
   }
 
+  async listSessions({ businessId = null } = {}) {
+    const sessions = businessId
+      ? await this.sessionService.listForBusiness(businessId)
+      : await this.sessionService.listAll();
+    const sorted = [...sessions].sort((left, right) => (
+      String(right.updatedAt ?? "").localeCompare(String(left.updatedAt ?? ""))
+    ));
+    return deepFreeze({
+      ok: true,
+      sessions: sorted.map(sessionListCard),
+    });
+  }
+
+  async getWorkspace(sessionId) {
+    const session = await this.requireSession(sessionId);
+    const stored = await this.loadProposalState(session);
+    const proposal = stored?.specification
+      ? clientSafeProposalView(this.buildPreview(session, stored))
+      : null;
+    const nextQuestion = session.questions?.[0] ?? null;
+    const journey = discoveryStageProgress({
+      answers: session.answers,
+      questions: session.questions,
+      progress: session.progress,
+      businessSummary: session.businessSummary,
+    });
+    return deepFreeze({
+      ok: true,
+      session,
+      proposal,
+      stored: stored
+        ? {
+            hasSpecification: Boolean(stored.specification),
+            hasPlan: Boolean(stored.plan),
+            hasDryRun: Boolean(stored.dryRunResult),
+            hasApproval: Boolean(stored.approval),
+            changePending: Boolean(stored.change),
+          }
+        : null,
+      journey,
+      nextQuestion,
+      quickReplies: quickRepliesForQuestion(nextQuestion),
+      researchFindings: latestResearchFindings(session),
+      uploads: latestUploads(session),
+    });
+  }
+
   async research({ sessionId, websiteUrl = null, manualFallbackText = null }) {
     const session = await this.requireSession(sessionId);
     const result = await this.researchService.research({
@@ -104,7 +159,81 @@ export class AiBuilderService {
       businessSummary,
     });
     await this.repository.save(updated);
-    return deepFreeze({ ok: true, session: updated, report: result.report });
+    return deepFreeze({ ok: true, session: updated, report: result.report, requiresConfirmation: true });
+  }
+
+  async confirmResearch({ sessionId, accepted = true, edits = {} }) {
+    const session = await this.requireSession(sessionId);
+    const findings = latestResearchFindings(session);
+    if (!findings) {
+      return deepFreeze({ ok: false, reason: "research_required", message: "Research a website first." });
+    }
+    const confirmed = {
+      ...findings,
+      ...edits,
+      confirmationStatus: accepted ? "confirmed" : "rejected",
+      confirmedAt: this.nowISO(),
+    };
+    const evidence = session.evidence.map((entry) => {
+      if (entry.kind !== "website" && entry.kind !== "website_research" && entry.source !== "fixture" && entry.source !== "manual_fallback") {
+        return entry;
+      }
+      return {
+        ...entry,
+        payload: {
+          ...(entry.payload ?? {}),
+          confirmationStatus: confirmed.confirmationStatus,
+          confirmedFindings: accepted ? confirmed : null,
+        },
+      };
+    });
+    let businessSummary = session.businessSummary;
+    if (accepted) {
+      businessSummary = {
+        ...businessSummary,
+        businessName: edits.companyIdentity ?? confirmed.companyIdentity ?? businessSummary.businessName,
+        services: unique([...(businessSummary.services ?? []), ...(confirmed.services ?? [])]),
+        customerTypes: unique([...(businessSummary.customerTypes ?? []), ...(confirmed.customerTypes ?? [])]),
+        locations: unique([...(businessSummary.locations ?? []), ...(confirmed.locations ?? [])]),
+      };
+    }
+    const updated = withBuilderSessionPatch(session, {
+      evidence,
+      businessSummary,
+      metadata: {
+        ...session.metadata,
+        researchConfirmation: confirmed.confirmationStatus,
+      },
+    });
+    await this.repository.save(updated);
+    return deepFreeze({ ok: true, session: updated, confirmation: confirmed });
+  }
+
+  async updateAppearance({ sessionId, accentColor = null, logoUrl = null, businessName = null, navigationOverrides = null }) {
+    const session = await this.requireSession(sessionId);
+    const appearance = {
+      ...session.appearance,
+      ...(accentColor ? { accentColor } : {}),
+      ...(logoUrl != null ? { logoUrl } : {}),
+      ...(businessName ? { businessName } : {}),
+      ...(navigationOverrides ? { navigationOverrides } : {}),
+    };
+    const updated = withBuilderSessionPatch(session, { appearance });
+    await this.repository.save(updated);
+    return deepFreeze({ ok: true, session: updated, appearance });
+  }
+
+  async portalPreview({ sessionId, membershipRole = "OWNER" }) {
+    const session = await this.requireSession(sessionId);
+    const stored = await this.loadProposalState(session);
+    if (!stored?.specification) return deepFreeze({ ok: false, reason: "proposal_required" });
+    return buildBuilderPortalPreview({
+      specification: stored.specification,
+      businessId: session.businessId ?? "preview",
+      membershipRole,
+      appearance: session.appearance,
+      navigationOverrides: session.appearance?.navigationOverrides ?? null,
+    });
   }
 
   async upload({ sessionId, filename, mimeType = "", notes = "", textPreview = "" }) {
@@ -171,7 +300,7 @@ export class AiBuilderService {
       session: updated,
       specification: assembled.specification,
       assemblyPlan,
-      proposal: this.buildPreview(updated, proposalState),
+      proposal: clientSafeProposalView(this.buildPreview(updated, proposalState)),
     });
   }
 
@@ -230,14 +359,18 @@ export class AiBuilderService {
     return deepFreeze({
       ok: true,
       session: updated,
-      proposal: this.buildPreview(updated, proposalState),
+      proposal: clientSafeProposalView(this.buildPreview(updated, proposalState)),
       specification: planned.nextSpecification,
       changeImpact: {
         kind: interpreted.kind,
+        label: interpreted.kind.replace(/_/g, " "),
         requiresDryRun: true,
         requiresApproval: true,
         previousHash: planned.previousHash,
         nextHash: planned.nextSpecification.contentHash,
+        explanation: `This would ${interpreted.kind.replace(/_/g, " ")}. Nothing is installed until you dry run and approve.`,
+        risk: "medium",
+        affectedAreas: ["proposal", "navigation", "permissions", "workforce"].filter(Boolean),
       },
     });
   }
@@ -278,6 +411,11 @@ export class AiBuilderService {
       session: updated,
       plan: compiled.plan,
       dryRunResult: dry,
+      checklist: buildDryRunChecklist({
+        plan: compiled.plan,
+        dryRunResult: dry,
+        specification: stored.specification,
+      }),
       progressSteps: [
         "Creating your workspaces",
         "Configuring roles",
@@ -285,6 +423,7 @@ export class AiBuilderService {
         "Preparing dashboards",
         "Checking integrations",
       ],
+      approvalInvalidated: false,
     });
   }
 
@@ -504,4 +643,44 @@ export class AiBuilderService {
 
 function unique(items) {
   return [...new Set(items.map((entry) => String(entry)).filter(Boolean))];
+}
+
+function latestResearchFindings(session) {
+  const evidence = [...(session?.evidence ?? [])].reverse().find((entry) => (
+    entry.kind === "website"
+    || entry.kind === "website_research"
+    || entry.source === "website"
+    || entry.source === "fixture"
+    || entry.source === "manual_fallback"
+    || entry.payload?.findings
+  ));
+  if (!evidence) return null;
+  const report = evidence.payload?.report ?? evidence.payload ?? {};
+  const findings = report.findings ?? evidence.payload?.findings ?? {};
+  return {
+    companyIdentity: findings.companyIdentity ?? null,
+    services: findings.services ?? [],
+    locations: findings.locations ?? [],
+    terminology: findings.terminology ?? [],
+    teamMembers: findings.teamMembers ?? [],
+    contactMethods: findings.contactMethods ?? [],
+    customerTypes: findings.customerTypes ?? [],
+    confidence: findings.confidence ?? report.confidence ?? "medium",
+    sourceUrl: report.sourceUrl ?? evidence.sourceUrl ?? null,
+    confirmationStatus: evidence.payload?.confirmationStatus ?? "pending",
+  };
+}
+
+function latestUploads(session) {
+  return (session?.evidence ?? [])
+    .filter((entry) => entry.kind === "upload" || entry.source === "upload")
+    .map((entry) => ({
+      artifactId: entry.payload?.extracted?.artifactId ?? entry.evidenceId,
+      filename: entry.label,
+      classification: entry.payload?.extracted?.classification ?? "unknown",
+      plannedUse: entry.payload?.mapping?.action ?? entry.payload?.mapping?.destination ?? "review",
+      destination: entry.payload?.mapping?.destination ?? "review",
+      confirmed: Boolean(entry.payload?.mapping?.confirmed),
+      mutatesCanonicalData: entry.mutatesCanonicalData === true,
+    }));
 }

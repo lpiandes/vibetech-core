@@ -1,4 +1,4 @@
-import { BuilderDiscoveryClient } from "@/components/builder/BuilderScreens";
+import { redirect } from "next/navigation";
 
 export default async function BuilderDiscoveryPage({
   params,
@@ -6,5 +6,5 @@ export default async function BuilderDiscoveryPage({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  return <BuilderDiscoveryClient sessionId={sessionId} />;
+  redirect(`/builder/${sessionId}`);
 }
