@@ -896,6 +896,342 @@ export class PostgresPlatformStore {
     );
     return Number(rows[0]?.count ?? 0);
   }
+
+  async upsertBusinessOSSpecification({
+    id,
+    businessId = null,
+    specificationId,
+    specificationVersion,
+    schemaVersion = 1,
+    status,
+    contentHash,
+    specification,
+    createdByUserId = null,
+    updatedByUserId = null,
+  }) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `INSERT INTO business_os_specifications (
+           id, business_id, specification_id, specification_version, schema_version,
+           status, content_hash, specification, created_by_user_id, updated_by_user_id
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)
+         ON CONFLICT (business_id, specification_id, specification_version)
+         DO UPDATE SET
+           status = EXCLUDED.status,
+           content_hash = EXCLUDED.content_hash,
+           specification = EXCLUDED.specification,
+           updated_by_user_id = EXCLUDED.updated_by_user_id,
+           updated_at = NOW()
+         RETURNING *`,
+        [
+          String(id),
+          businessId ? String(businessId) : null,
+          String(specificationId),
+          Number(specificationVersion),
+          Number(schemaVersion),
+          String(status),
+          String(contentHash),
+          JSON.stringify(specification),
+          createdByUserId ? String(createdByUserId) : null,
+          updatedByUserId ? String(updatedByUserId) : null,
+        ],
+      ),
+    );
+    return mapBusinessOSSpecificationRow(rows[0] ?? null);
+  }
+
+  async getBusinessOSSpecification({ businessId, specificationId, specificationVersion = null }) {
+    const params = [String(businessId), String(specificationId)];
+    let sql = `SELECT * FROM business_os_specifications WHERE business_id = $1 AND specification_id = $2`;
+    if (specificationVersion != null) {
+      sql += ` AND specification_version = $3`;
+      params.push(Number(specificationVersion));
+    } else {
+      sql += ` ORDER BY specification_version DESC`;
+    }
+    sql += ` LIMIT 1`;
+    const { rows } = await withClient((client) => client.query(sql, params));
+    return mapBusinessOSSpecificationRow(rows[0] ?? null);
+  }
+
+  async listBusinessOSSpecifications(businessId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM business_os_specifications WHERE business_id = $1 ORDER BY updated_at DESC`,
+        [String(businessId)],
+      ),
+    );
+    return rows.map(mapBusinessOSSpecificationRow);
+  }
+
+  async upsertBusinessOSInstallation({
+    id,
+    businessId,
+    specificationRowId = null,
+    specificationId,
+    specificationVersion,
+    specificationContentHash,
+    planId,
+    status = "installed",
+    plan = {},
+    actionCheckpoints = [],
+    configuration = {},
+    history = [],
+    actorUserId = null,
+    installedAt = null,
+  }) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `INSERT INTO business_os_installations (
+           id, business_id, specification_row_id, specification_id, specification_version,
+           specification_content_hash, plan_id, status, plan, action_checkpoints,
+           configuration, history, actor_user_id, installed_at
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14)
+         ON CONFLICT (business_id)
+         DO UPDATE SET
+           specification_row_id = EXCLUDED.specification_row_id,
+           specification_id = EXCLUDED.specification_id,
+           specification_version = EXCLUDED.specification_version,
+           specification_content_hash = EXCLUDED.specification_content_hash,
+           plan_id = EXCLUDED.plan_id,
+           status = EXCLUDED.status,
+           plan = EXCLUDED.plan,
+           action_checkpoints = EXCLUDED.action_checkpoints,
+           configuration = EXCLUDED.configuration,
+           history = EXCLUDED.history,
+           actor_user_id = EXCLUDED.actor_user_id,
+           installed_at = EXCLUDED.installed_at,
+           updated_at = NOW()
+         RETURNING *`,
+        [
+          String(id),
+          String(businessId),
+          specificationRowId ? String(specificationRowId) : null,
+          String(specificationId),
+          Number(specificationVersion),
+          String(specificationContentHash),
+          String(planId),
+          String(status),
+          JSON.stringify(plan),
+          JSON.stringify(actionCheckpoints),
+          JSON.stringify(configuration),
+          JSON.stringify(history),
+          actorUserId ? String(actorUserId) : null,
+          installedAt,
+        ],
+      ),
+    );
+    return mapBusinessOSInstallationRow(rows[0] ?? null);
+  }
+
+  async getBusinessOSInstallation(businessId) {
+    const { rows } = await withClient((client) =>
+      client.query(`SELECT * FROM business_os_installations WHERE business_id = $1`, [String(businessId)]),
+    );
+    return mapBusinessOSInstallationRow(rows[0] ?? null);
+  }
+
+  async upsertBusinessBuilderSession({
+    id,
+    businessId = null,
+    status = "discovery",
+    mode = "operator",
+    discovery = {},
+    evidence = [],
+    specificationRowId = null,
+    createdByUserId = null,
+    updatedByUserId = null,
+  }) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `INSERT INTO business_builder_sessions (
+           id, business_id, status, mode, discovery, evidence, specification_row_id,
+           created_by_user_id, updated_by_user_id
+         ) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9)
+         ON CONFLICT (id)
+         DO UPDATE SET
+           status = EXCLUDED.status,
+           mode = EXCLUDED.mode,
+           discovery = EXCLUDED.discovery,
+           evidence = EXCLUDED.evidence,
+           specification_row_id = EXCLUDED.specification_row_id,
+           updated_by_user_id = EXCLUDED.updated_by_user_id,
+           updated_at = NOW()
+         RETURNING *`,
+        [
+          String(id),
+          businessId ? String(businessId) : null,
+          String(status),
+          String(mode),
+          JSON.stringify(discovery),
+          JSON.stringify(evidence),
+          specificationRowId ? String(specificationRowId) : null,
+          createdByUserId ? String(createdByUserId) : null,
+          updatedByUserId ? String(updatedByUserId) : null,
+        ],
+      ),
+    );
+    return mapBusinessBuilderSessionRow(rows[0] ?? null);
+  }
+
+  async getBusinessBuilderSession(sessionId, businessId = null) {
+    const params = [String(sessionId)];
+    let sql = `SELECT * FROM business_builder_sessions WHERE id = $1`;
+    if (businessId) {
+      sql += ` AND business_id = $2`;
+      params.push(String(businessId));
+    }
+    const { rows } = await withClient((client) => client.query(sql, params));
+    return mapBusinessBuilderSessionRow(rows[0] ?? null);
+  }
+
+  async upsertBusinessCapabilityProposal({
+    id,
+    businessId = null,
+    proposalId,
+    requestedOutcome,
+    evidence = [],
+    affectedBusinesses = [],
+    proposedUniversalCapability = {},
+    proposedPackageExtension = {},
+    whyInsufficient = null,
+    safetyRequirements = [],
+    estimatedDependencies = [],
+    status = "proposed",
+    createdByUserId = null,
+  }) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `INSERT INTO business_capability_proposals (
+           id, business_id, proposal_id, requested_outcome, evidence, affected_businesses,
+           proposed_universal_capability, proposed_package_extension, why_insufficient,
+           safety_requirements, estimated_dependencies, status, created_by_user_id
+         ) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10::jsonb,$11::jsonb,$12,$13)
+         ON CONFLICT (business_id, proposal_id)
+         DO UPDATE SET
+           requested_outcome = EXCLUDED.requested_outcome,
+           evidence = EXCLUDED.evidence,
+           affected_businesses = EXCLUDED.affected_businesses,
+           proposed_universal_capability = EXCLUDED.proposed_universal_capability,
+           proposed_package_extension = EXCLUDED.proposed_package_extension,
+           why_insufficient = EXCLUDED.why_insufficient,
+           safety_requirements = EXCLUDED.safety_requirements,
+           estimated_dependencies = EXCLUDED.estimated_dependencies,
+           status = EXCLUDED.status,
+           updated_at = NOW()
+         RETURNING *`,
+        [
+          String(id),
+          businessId ? String(businessId) : null,
+          String(proposalId),
+          String(requestedOutcome),
+          JSON.stringify(evidence),
+          JSON.stringify(affectedBusinesses),
+          JSON.stringify(proposedUniversalCapability),
+          JSON.stringify(proposedPackageExtension),
+          whyInsufficient,
+          JSON.stringify(safetyRequirements),
+          JSON.stringify(estimatedDependencies),
+          String(status),
+          createdByUserId ? String(createdByUserId) : null,
+        ],
+      ),
+    );
+    return mapBusinessCapabilityProposalRow(rows[0] ?? null);
+  }
+
+  async listBusinessCapabilityProposals(businessId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM business_capability_proposals WHERE business_id = $1 ORDER BY updated_at DESC`,
+        [String(businessId)],
+      ),
+    );
+    return rows.map(mapBusinessCapabilityProposalRow);
+  }
+
+  async getBusinessCapabilityProposal(proposalId, businessId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM business_capability_proposals WHERE proposal_id = $1 AND business_id = $2`,
+        [String(proposalId), String(businessId)],
+      ),
+    );
+    return mapBusinessCapabilityProposalRow(rows[0] ?? null);
+  }
 }
 
 export const platformStore = new PostgresPlatformStore();
+
+function mapBusinessOSSpecificationRow(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    businessId: row.business_id ? String(row.business_id) : null,
+    specificationId: String(row.specification_id),
+    specificationVersion: Number(row.specification_version),
+    schemaVersion: Number(row.schema_version),
+    status: String(row.status),
+    contentHash: String(row.content_hash),
+    specification: row.specification,
+    createdAt: row.created_at?.toISOString?.() ?? row.created_at,
+    updatedAt: row.updated_at?.toISOString?.() ?? row.updated_at,
+  };
+}
+
+function mapBusinessOSInstallationRow(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    businessId: String(row.business_id),
+    specificationRowId: row.specification_row_id ? String(row.specification_row_id) : null,
+    specificationId: String(row.specification_id),
+    specificationVersion: Number(row.specification_version),
+    specificationContentHash: String(row.specification_content_hash),
+    planId: String(row.plan_id),
+    status: String(row.status),
+    plan: row.plan,
+    actionCheckpoints: row.action_checkpoints,
+    configuration: row.configuration,
+    history: row.history,
+    actorUserId: row.actor_user_id ? String(row.actor_user_id) : null,
+    installedAt: row.installed_at?.toISOString?.() ?? row.installed_at,
+    createdAt: row.created_at?.toISOString?.() ?? row.created_at,
+    updatedAt: row.updated_at?.toISOString?.() ?? row.updated_at,
+  };
+}
+
+function mapBusinessBuilderSessionRow(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    businessId: row.business_id ? String(row.business_id) : null,
+    status: String(row.status),
+    mode: String(row.mode),
+    discovery: row.discovery,
+    evidence: row.evidence,
+    specificationRowId: row.specification_row_id ? String(row.specification_row_id) : null,
+    createdAt: row.created_at?.toISOString?.() ?? row.created_at,
+    updatedAt: row.updated_at?.toISOString?.() ?? row.updated_at,
+  };
+}
+
+function mapBusinessCapabilityProposalRow(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    businessId: row.business_id ? String(row.business_id) : null,
+    proposalId: String(row.proposal_id),
+    requestedOutcome: String(row.requested_outcome),
+    evidence: row.evidence,
+    affectedBusinesses: row.affected_businesses,
+    proposedUniversalCapability: row.proposed_universal_capability,
+    proposedPackageExtension: row.proposed_package_extension,
+    whyInsufficient: row.why_insufficient,
+    safetyRequirements: row.safety_requirements,
+    estimatedDependencies: row.estimated_dependencies,
+    status: String(row.status),
+    createdAt: row.created_at?.toISOString?.() ?? row.created_at,
+    updatedAt: row.updated_at?.toISOString?.() ?? row.updated_at,
+  };
+}
