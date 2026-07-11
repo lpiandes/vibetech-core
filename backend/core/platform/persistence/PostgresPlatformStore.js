@@ -1159,6 +1159,111 @@ export class PostgresPlatformStore {
     );
     return mapBusinessCapabilityProposalRow(rows[0] ?? null);
   }
+
+  async upsertAiBuilderSession(session) {
+    const sessionId = String(session.sessionId);
+    const { rows } = await withClient((client) =>
+      client.query(
+        `INSERT INTO ai_builder_sessions (
+           id, session_id, business_id, actor_user_id, mode, current_stage,
+           business_summary, website_urls, uploaded_artifact_ids, questions, answers,
+           evidence, assumptions, unresolved_questions, recommendations,
+           selected_blueprints, selected_components, capability_gaps, conversation,
+           specification_id, specification_content_hash, installation_plan_id,
+           installation_plan_hash, progress, appearance, metadata, created_at, updated_at
+         ) VALUES (
+           $1,$2,$3,$4,$5,$6,
+           $7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,
+           $12::jsonb,$13::jsonb,$14::jsonb,$15::jsonb,
+           $16::jsonb,$17::jsonb,$18::jsonb,$19::jsonb,
+           $20,$21,$22,$23,$24::jsonb,$25::jsonb,$26::jsonb,
+           COALESCE($27::timestamptz, NOW()), NOW()
+         )
+         ON CONFLICT (session_id)
+         DO UPDATE SET
+           business_id = EXCLUDED.business_id,
+           actor_user_id = EXCLUDED.actor_user_id,
+           mode = EXCLUDED.mode,
+           current_stage = EXCLUDED.current_stage,
+           business_summary = EXCLUDED.business_summary,
+           website_urls = EXCLUDED.website_urls,
+           uploaded_artifact_ids = EXCLUDED.uploaded_artifact_ids,
+           questions = EXCLUDED.questions,
+           answers = EXCLUDED.answers,
+           evidence = EXCLUDED.evidence,
+           assumptions = EXCLUDED.assumptions,
+           unresolved_questions = EXCLUDED.unresolved_questions,
+           recommendations = EXCLUDED.recommendations,
+           selected_blueprints = EXCLUDED.selected_blueprints,
+           selected_components = EXCLUDED.selected_components,
+           capability_gaps = EXCLUDED.capability_gaps,
+           conversation = EXCLUDED.conversation,
+           specification_id = EXCLUDED.specification_id,
+           specification_content_hash = EXCLUDED.specification_content_hash,
+           installation_plan_id = EXCLUDED.installation_plan_id,
+           installation_plan_hash = EXCLUDED.installation_plan_hash,
+           progress = EXCLUDED.progress,
+           appearance = EXCLUDED.appearance,
+           metadata = EXCLUDED.metadata,
+           updated_at = NOW()
+         RETURNING *`,
+        [
+          sessionId,
+          sessionId,
+          session.businessId ? String(session.businessId) : null,
+          session.actorId ? String(session.actorId) : null,
+          String(session.mode),
+          String(session.currentStage),
+          JSON.stringify(session.businessSummary ?? {}),
+          JSON.stringify(session.websiteUrls ?? []),
+          JSON.stringify(session.uploadedArtifactIds ?? []),
+          JSON.stringify(session.questions ?? []),
+          JSON.stringify(session.answers ?? []),
+          JSON.stringify(session.evidence ?? []),
+          JSON.stringify(session.assumptions ?? []),
+          JSON.stringify(session.unresolvedQuestions ?? []),
+          JSON.stringify(session.recommendations ?? []),
+          JSON.stringify(session.selectedBlueprints ?? []),
+          JSON.stringify(session.selectedComponents ?? []),
+          JSON.stringify(session.capabilityGaps ?? []),
+          JSON.stringify(session.conversation ?? []),
+          session.specificationId ? String(session.specificationId) : null,
+          session.specificationContentHash ? String(session.specificationContentHash) : null,
+          session.installationPlanId ? String(session.installationPlanId) : null,
+          session.installationPlanHash ? String(session.installationPlanHash) : null,
+          JSON.stringify(session.progress ?? {}),
+          JSON.stringify(session.appearance ?? {}),
+          JSON.stringify(session.metadata ?? {}),
+          session.createdAt ?? null,
+        ],
+      ),
+    );
+    return mapAiBuilderSessionRow(rows[0] ?? null);
+  }
+
+  async getAiBuilderSession(sessionId) {
+    const { rows } = await withClient((client) =>
+      client.query(`SELECT * FROM ai_builder_sessions WHERE session_id = $1`, [String(sessionId)]),
+    );
+    return mapAiBuilderSessionRow(rows[0] ?? null);
+  }
+
+  async listAiBuilderSessionsForBusiness(businessId) {
+    const { rows } = await withClient((client) =>
+      client.query(
+        `SELECT * FROM ai_builder_sessions WHERE business_id = $1 ORDER BY updated_at DESC`,
+        [String(businessId)],
+      ),
+    );
+    return rows.map(mapAiBuilderSessionRow);
+  }
+
+  async listAiBuilderSessions() {
+    const { rows } = await withClient((client) =>
+      client.query(`SELECT * FROM ai_builder_sessions ORDER BY updated_at DESC LIMIT 500`),
+    );
+    return rows.map(mapAiBuilderSessionRow);
+  }
 }
 
 export const platformStore = new PostgresPlatformStore();
@@ -1231,6 +1336,41 @@ function mapBusinessCapabilityProposalRow(row) {
     safetyRequirements: row.safety_requirements,
     estimatedDependencies: row.estimated_dependencies,
     status: String(row.status),
+    createdAt: row.created_at?.toISOString?.() ?? row.created_at,
+    updatedAt: row.updated_at?.toISOString?.() ?? row.updated_at,
+  };
+}
+
+function mapAiBuilderSessionRow(row) {
+  if (!row) return null;
+  return {
+    sessionId: String(row.session_id),
+    businessId: row.business_id ? String(row.business_id) : null,
+    actorId: row.actor_user_id ? String(row.actor_user_id) : null,
+    mode: String(row.mode),
+    currentStage: String(row.current_stage),
+    businessSummary: row.business_summary ?? {},
+    websiteUrls: row.website_urls ?? [],
+    uploadedArtifactIds: row.uploaded_artifact_ids ?? [],
+    questions: row.questions ?? [],
+    answers: row.answers ?? [],
+    evidence: row.evidence ?? [],
+    assumptions: row.assumptions ?? [],
+    unresolvedQuestions: row.unresolved_questions ?? [],
+    recommendations: row.recommendations ?? [],
+    selectedBlueprints: row.selected_blueprints ?? [],
+    selectedComponents: row.selected_components ?? [],
+    capabilityGaps: row.capability_gaps ?? [],
+    conversation: row.conversation ?? [],
+    specificationId: row.specification_id ? String(row.specification_id) : null,
+    specificationContentHash: row.specification_content_hash
+      ? String(row.specification_content_hash)
+      : null,
+    installationPlanId: row.installation_plan_id ? String(row.installation_plan_id) : null,
+    installationPlanHash: row.installation_plan_hash ? String(row.installation_plan_hash) : null,
+    progress: row.progress ?? {},
+    appearance: row.appearance ?? {},
+    metadata: row.metadata ?? {},
     createdAt: row.created_at?.toISOString?.() ?? row.created_at,
     updatedAt: row.updated_at?.toISOString?.() ?? row.updated_at,
   };

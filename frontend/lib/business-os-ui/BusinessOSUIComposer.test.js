@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { composeBusinessOSUI } from "./BusinessOSUIComposer.ts";
+import { composeBusinessOSUI } from "./BusinessOSUIComposer.js";
 
 test("UI composer rejects unregistered dashboard and action types", () => {
   const composed = composeBusinessOSUI({

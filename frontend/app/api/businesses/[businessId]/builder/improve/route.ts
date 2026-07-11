@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAiBuilderService } from "@/lib/builder/getAiBuilderService";
-import { ContinuousBusinessBuilderService } from "../../../../backend/core/ai-builder/ContinuousBusinessBuilderService.js";
-import { platformStore } from "../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
+import { ContinuousBusinessBuilderService } from "../../../../../../../backend/core/ai-builder/ContinuousBusinessBuilderService.js";
+import { platformStore } from "../../../../../../../backend/core/platform/persistence/PostgresPlatformStore.js";
 import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceService";
 
 type Params = { params: Promise<{ businessId: string }> };
@@ -20,7 +20,6 @@ export async function POST(request: Request, { params }: Params) {
           ? await platformStore.getBusinessOSSpecification({
               businessId,
               specificationId: installation.specificationId,
-              specificationVersion: installation.specificationVersion,
             })
           : null;
         installedSpecification = specRow?.specification ?? null;

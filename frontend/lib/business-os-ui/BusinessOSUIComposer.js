@@ -1,19 +1,12 @@
-import { isRegisteredModuleComponent } from "./ModuleComponentRegistry.ts";
-import { isRegisteredDashboardCard } from "./DashboardCardRegistry.ts";
-import { isRegisteredRecordView } from "./RecordViewRegistry.ts";
-import { isRegisteredActionComponent } from "./ActionComponentRegistry.ts";
-
-export type ComposeInput = {
-  navigation?: Array<{ moduleId: string; label: string }>;
-  dashboardCards?: Array<{ id: string; componentType: string; title: string; emptyState?: string }>;
-  modules?: Array<{ moduleId: string; label: string; viewType?: string }>;
-  actions?: Array<{ id: string; componentType: string; label: string }>;
-};
+import { isRegisteredModuleComponent } from "./ModuleComponentRegistry.js";
+import { isRegisteredDashboardCard } from "./DashboardCardRegistry.js";
+import { isRegisteredRecordView } from "./RecordViewRegistry.js";
+import { isRegisteredActionComponent } from "./ActionComponentRegistry.js";
 
 /**
  * Safe UI composer — only registered component types may render.
  */
-export function composeBusinessOSUI(input: ComposeInput) {
+export function composeBusinessOSUI(input = {}) {
   const dashboardCards = (input.dashboardCards ?? []).filter((card) =>
     isRegisteredDashboardCard(card.componentType),
   );
