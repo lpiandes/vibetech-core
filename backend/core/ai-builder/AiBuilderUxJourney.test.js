@@ -321,3 +321,13 @@ test("dry run checklist is client readable", () => {
   assert.ok(checklist.items.some((item) => /workspaces/i.test(item.label)));
   assert.ok(!JSON.stringify(checklist).includes("CONFIGURE_MODULE"));
 });
+
+test("employee without manage permission cannot use continuous Builder entry", () => {
+  function canUseBuilderImprove({ permissions = [], role = "EMPLOYEE" } = {}) {
+    return permissions.includes("business.manage") || role === "OWNER" || role === "PLATFORM_ADMIN";
+  }
+  assert.equal(canUseBuilderImprove({ permissions: ["business.manage"], role: "OWNER" }), true);
+  assert.equal(canUseBuilderImprove({ permissions: [], role: "PLATFORM_ADMIN" }), true);
+  assert.equal(canUseBuilderImprove({ permissions: [], role: "EMPLOYEE" }), false);
+  assert.equal(canUseBuilderImprove({ permissions: ["work.view"], role: "MANAGER" }), false);
+});
