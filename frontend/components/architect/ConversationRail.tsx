@@ -123,6 +123,11 @@ export default function ConversationRail({
             <ArchitectButton variant="secondary" disabled={busy} onClick={onUnknown}>I&apos;m not sure</ArchitectButton>
           ) : null}
         </div>
+        {mode === "discovery" && (onSkip || onUnknown) ? (
+          <p style={{ margin: 0, color: architect.inkMuted, fontSize: 12, lineHeight: 1.45 }}>
+            Skip for now asks later. I&apos;m not sure lets Architect continue without guessing.
+          </p>
+        ) : null}
       </form>
 
       {mode === "discovery" && suggestQuestion && nextQuestion ? (

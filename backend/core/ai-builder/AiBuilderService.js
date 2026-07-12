@@ -668,7 +668,7 @@ export class AiBuilderService {
             requiresDryRun: true,
             requiresApproval: true,
             explanation: proposed.impact?.explanation
-              ?? `This would ${String(kind).replace(/_/g, " ")}. Nothing is installed until you dry run and approve.`,
+              ?? `This would ${String(kind).replace(/_/g, " ")}. Nothing is installed until you review launch readiness and approve.`,
             risk: proposed.impact?.risk ?? "medium",
             affectedAreas: proposed.impact?.affectedAreas ?? ["proposal"],
             warnings: proposed.warnings ?? [],
@@ -746,9 +746,9 @@ export class AiBuilderService {
       progressSteps: [
         "Creating your workspaces",
         "Configuring roles",
-        "Installing digital employees",
-        "Preparing dashboards",
-        "Checking integrations",
+        "Preparing AI teammates",
+        "Preparing home screens",
+        "Checking connections",
       ],
       approvalInvalidated: false,
     });

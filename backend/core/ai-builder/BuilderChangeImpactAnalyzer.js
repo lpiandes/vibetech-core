@@ -22,7 +22,7 @@ export class BuilderChangeImpactAnalyzer {
         ...(change?.kind === "add_office" ? ["locations", "profile"] : []),
         ...(change?.kind === "disconnect_integration" ? ["integrations"] : []),
       ],
-      explanation: "This change updates your Business OS proposal. It will not install until you dry-run and approve.",
+      explanation: "This change updates your Business OS proposal. It will not install until you review launch readiness and approve.",
       risk: ["permission_change", "disconnect_integration"].includes(String(change?.kind)) ? "medium" : "low",
       specificationDiff: diff,
       requiresDryRun: true,

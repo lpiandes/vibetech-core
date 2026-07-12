@@ -56,21 +56,21 @@ export function buildDryRunChecklist({ plan = null, dryRunResult = null, specifi
   }
 
   const items = [
-    checklistItem("workspaces", `Creating ${counts.workspaces} workspaces`, counts.workspaces, "ready"),
-    checklistItem("roles", `Configuring ${counts.roles} roles`, counts.roles, "ready"),
-    checklistItem("employees", `Installing ${counts.employees} digital employees`, counts.employees, "ready"),
-    checklistItem("dashboards", `Preparing ${counts.dashboards} dashboards`, counts.dashboards, "ready"),
-    checklistItem("workflows", `Registering ${counts.workflows} workflows`, counts.workflows, "ready"),
-    checklistItem("knowledge", `Adding ${counts.knowledge} Knowledge requirements`, counts.knowledge, "ready"),
-    checklistItem("integrations", `Requiring ${counts.integrations} integrations`, counts.integrations, counts.integrations ? "needs_setup" : "ready"),
-    checklistItem("campaigns", `Preparing ${counts.campaigns} campaigns`, counts.campaigns, "requires_approval"),
+    checklistItem("workspaces", `Set up ${counts.workspaces} workspaces`, counts.workspaces, "ready"),
+    checklistItem("roles", `Configure ${counts.roles} roles`, counts.roles, "ready"),
+    checklistItem("employees", `Prepare ${counts.employees} AI teammates`, counts.employees, "ready"),
+    checklistItem("dashboards", `Prepare ${counts.dashboards} home screens`, counts.dashboards, "ready"),
+    checklistItem("workflows", `Plan ${counts.workflows} workflows`, counts.workflows, "ready"),
+    checklistItem("knowledge", `Note ${counts.knowledge} knowledge needs`, counts.knowledge, "ready"),
+    checklistItem("integrations", `${counts.integrations} connections to set up later`, counts.integrations, counts.integrations ? "needs_setup" : "ready"),
+    checklistItem("campaigns", `Prepare ${counts.campaigns} campaigns`, counts.campaigns, "requires_approval"),
     checklistItem("setup", `${counts.setup} items need setup before go-live`, counts.setup, "needs_setup"),
-    checklistItem("deferred", `Deferring ${counts.deferred} items for later`, counts.deferred, "deferred"),
+    checklistItem("deferred", `Defer ${counts.deferred} items for later`, counts.deferred, "deferred"),
     checklistItem("gaps", `${counts.gaps} capabilities are not available yet`, counts.gaps, "unsupported"),
   ].filter((item) => item.count > 0 || ["workspaces", "roles", "employees"].includes(item.id));
 
   return deepFreeze({
-    headline: "Here is what installation would do",
+    headline: "What Architect will set up",
     mutated: dryRunResult?.mutated === true,
     ready: dryRunResult?.ok !== false,
     items,

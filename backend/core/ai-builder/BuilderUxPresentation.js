@@ -108,13 +108,13 @@ export function nextActionForSession(session) {
     case "awaiting_review":
       return "Review your proposed operating system";
     case "dry_run_ready":
-      return "Review the dry run, then approve install";
+      return "Review launch readiness, then launch";
     case "awaiting_approval":
-      return "Approve installation";
+      return "Approve and launch your operating system";
     case "installing":
-      return "Installation in progress — you can resume if interrupted";
+      return "Launch in progress — you can resume if interrupted";
     case "installed":
-      return "Open your Business OS or ask VIBETech to improve it";
+      return "Open your business or ask VIBETech to improve it";
     case "blocked":
     case "failed":
       return "Resolve the issue and retry";

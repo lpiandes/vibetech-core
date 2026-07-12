@@ -25,8 +25,8 @@ export class BusinessDiscoveryEngine {
 
   initialPrompt() {
     return deepFreeze({
-      text: "Tell us about your business.",
-      why: "A short description is enough to start. We will ask only what still matters.",
+      text: "In a few sentences, what does your business do?",
+      why: "A short description is enough to start. Architect will ask only what still matters.",
     });
   }
 

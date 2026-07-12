@@ -125,7 +125,6 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState<ProductErrorView | null>(null);
   const [openHref, setOpenHref] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [approved, setApproved] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -134,28 +133,6 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
       if (data.ok) setWorkspace(data);
     })();
   }, [sessionId]);
-
-  async function approveOnly() {
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/builder/sessions/${encodeURIComponent(sessionId)}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "approve" }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        setError(data.productError ?? presentProductError(data.error ?? data.reason ?? "stale_approval_specification"));
-        return;
-      }
-      setApproved(true);
-    } catch (err) {
-      setError(presentProductError(err));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function install({ resume = false } = {}) {
     setBusy(true);
@@ -208,7 +185,7 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
               if (openHref) router.push(openHref);
             }}
             onInvite={() => {
-              if (openHref) router.push(`${openHref.replace(/\/home$/, "")}/settings`);
+              if (openHref) router.push(`${openHref.replace(/\/home$/, "")}/team`);
               else router.push(routes.session);
             }}
             onImprove={() => {
@@ -285,9 +262,6 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
         ) : null}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <ArchitectButton variant="secondary" disabled={busy || approved} onClick={() => void approveOnly()}>
-            {approved ? HUMAN_COPY.approved : HUMAN_COPY.recordApproval}
-          </ArchitectButton>
           <ArchitectButton disabled={busy} onClick={() => void install()}>
             {busy ? HUMAN_COPY.installing : HUMAN_COPY.approveLaunch}
           </ArchitectButton>

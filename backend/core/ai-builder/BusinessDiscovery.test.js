@@ -48,7 +48,17 @@ test("discovery engine progresses conversationally", async () => {
   assert.equal(applied.businessSummary.industry, "property_management");
   assert.ok(applied.nextQuestions.length >= 1);
   assert.ok(DISCOVERY_QUESTION_BANK.length >= 15);
-  assert.match(engine.initialPrompt().text, /Tell us about your business/);
+  assert.match(engine.initialPrompt().text, /what does your business do/i);
+  const requiredIds = DISCOVERY_QUESTION_BANK.filter((q) => q.required).map((q) => q.questionId);
+  assert.deepEqual(requiredIds, [
+    "q_tell_us",
+    "q_company_name",
+    "q_industry",
+    "q_services",
+    "q_customers",
+    "q_repetitive_work",
+    "q_pain_points",
+  ]);
 });
 
 test("free-form text extracts structured answers and skips inferred questions", async () => {

@@ -152,7 +152,7 @@ export function buildVisualBusinessOSProposal({
     assumptions: session?.assumptions ?? specification.assumptions ?? [],
     unresolvedQuestions: session?.unresolvedQuestions ?? [],
     nextAction: session?.progress?.readyForProposal
-      ? "Review the proposal, then run a dry run before install."
+      ? "Review the proposal, then check launch readiness before you go live."
       : "Answer the remaining questions to unlock a proposal.",
   });
 }

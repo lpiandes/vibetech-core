@@ -78,7 +78,7 @@ export default function OperatingHomeExperience() {
   if (!experience) {
     return (
       <EmptyState
-        title="Assembling your operating view"
+        title="Getting your Home ready"
         description="VIBETech is gathering live signals for this business. Refresh in a moment, or Ask VIBETech what to do next."
         action={scope?.businessId ? <GlobalAskVibeTechEntry /> : null}
       />

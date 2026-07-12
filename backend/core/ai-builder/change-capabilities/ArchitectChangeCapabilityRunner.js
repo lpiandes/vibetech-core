@@ -188,7 +188,7 @@ export class ArchitectChangeCapabilityRunner {
       requestedChange: text,
       affectedAreas: capability.affectedCanonicalAreas,
       explanation: plan.summary
-        ?? `This would apply ${capability.title}. Nothing is installed until you dry run and approve.`,
+        ?? `This would apply ${capability.title}. Nothing is installed until you review launch readiness and approve.`,
       risk: capability.affectedCanonicalAreas.includes("permissions") ? "medium" : "low",
       warnings,
       specificationDiff: null,

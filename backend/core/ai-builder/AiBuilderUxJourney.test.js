@@ -319,7 +319,9 @@ test("dry run checklist is client readable", () => {
   });
   assert.equal(checklist.mutated, false);
   assert.ok(checklist.items.some((item) => /workspaces/i.test(item.label)));
+  assert.match(checklist.headline, /Architect will set up/i);
   assert.ok(!JSON.stringify(checklist).includes("CONFIGURE_MODULE"));
+  assert.ok(!/Installing|Registering/i.test(JSON.stringify(checklist.items)));
 });
 
 test("employee without manage permission cannot use continuous Builder entry", () => {

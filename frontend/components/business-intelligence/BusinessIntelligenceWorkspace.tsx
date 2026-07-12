@@ -264,7 +264,7 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
         <div style={{ display: "grid", gap: 12 }}>
           {candidates.length === 0 ? (
             <div style={{ ...panelStyle, color: cockpitColors.textSecondary }}>
-              No intelligence candidates yet. Refresh to evaluate canonical evidence.
+              Nothing needs your decision yet. As work and people activity come in, items will appear here.
             </div>
           ) : (
             candidates.map((candidate) => (

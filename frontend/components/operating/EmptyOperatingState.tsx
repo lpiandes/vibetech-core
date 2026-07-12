@@ -6,7 +6,7 @@ import GlobalAskVibeTechEntry from "@/components/shell/GlobalAskVibeTechEntry";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
 
 /**
- * Empty / pre-operating home — guide into AI Builder, not blank modules.
+ * Empty / pre-operating home — guide into Architect, not blank modules.
  */
 export default function EmptyOperatingState({
   businessId,
@@ -23,11 +23,11 @@ export default function EmptyOperatingState({
     return (
       <EmptyState
         title={`${businessName} is not operating yet`}
-        description="Start with AI Builder to discover how the business works, review the live specification, and install your operating system."
+        description="Open Architect to describe how the business works, review the proposed operating system, and launch when you are ready."
         action={
           <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap", justifyContent: "center" }}>
             <ActionButton href="/architect">
-              Open AI Builder
+              Open Architect
             </ActionButton>
           </div>
         }
