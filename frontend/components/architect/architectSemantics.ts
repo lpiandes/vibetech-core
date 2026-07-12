@@ -37,13 +37,14 @@ export const ARCHITECT_RESEARCH_CARD_KEYS = [
 ] as const;
 
 export const ARCHITECT_INSTALL_STAGES = [
-  { id: "business", label: "Creating your business" },
-  { id: "modules", label: "Setting up workspaces" },
-  { id: "workforce", label: "Preparing your team" },
-  { id: "permissions", label: "Configuring access" },
-  { id: "dashboards", label: "Building home screens" },
-  { id: "knowledge", label: "Preparing knowledge" },
-  { id: "finalizing", label: "Finishing touches" },
+  { id: "business", label: "Creating business" },
+  { id: "core", label: "Installing core" },
+  { id: "blueprint", label: "Installing industry blueprint" },
+  { id: "capabilities", label: "Configuring capabilities" },
+  { id: "employees", label: "Preparing AI employees" },
+  { id: "knowledge", label: "Initializing knowledge" },
+  { id: "integrations", label: "Preparing integrations" },
+  { id: "finalizing", label: "Finalizing portal" },
 ] as const;
 
 export const ARCHITECT_ASSEMBLY_STAGES = [

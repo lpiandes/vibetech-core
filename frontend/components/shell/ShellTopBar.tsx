@@ -1,18 +1,20 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Bell, ChevronDown, Plus, Search } from "lucide-react";
+import { ChevronDown, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
+import BusinessSwitcher from "@/components/shell/BusinessSwitcher";
+import GlobalAskVibeTechEntry from "@/components/shell/GlobalAskVibeTechEntry";
+import NeedsAttentionIndicator from "@/components/shell/NeedsAttentionIndicator";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 
 type SearchResult = { id: string; label: string; sublabel?: string; href: string };
 
 export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: number }) {
   const scope = useBusinessScope();
-  const businessName = scope.businessName || "Workspace";
   const base = `/b/${scope.businessId}`;
 
   const router = useRouter();
@@ -63,12 +65,12 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
       return fromOs.slice(0, 4).map((action) => ({ label: action.label, href: action.href }));
     }
     const subjects = scope.installedBusinessOS?.subjectTypes ?? [];
-    const subjectLabel = subjects.includes("property") || subjects.length === 0
-      ? "Add property"
-      : `Add ${String(subjects[0]).replace(/_/g, " ")}`;
-    const subjectHref = subjects.includes("property") || subjects.length === 0
-      ? `${base}/properties?add=1`
-      : `${base}/people`;
+    const subjectLabel =
+      subjects.includes("property") || subjects.length === 0
+        ? "Add property"
+        : `Add ${String(subjects[0]).replace(/_/g, " ")}`;
+    const subjectHref =
+      subjects.includes("property") || subjects.length === 0 ? `${base}/properties?add=1` : `${base}/people`;
     return [
       { label: subjectLabel, href: subjectHref },
       { label: "Add knowledge", href: `${base}/knowledge?add=1` },
@@ -80,14 +82,15 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
     const terminology = scope.installedBusinessOS?.terminology as any;
     const entities = terminology?.entityLabels ?? terminology?.presentation?.entityLabels ?? {};
     const people = entities.people ?? entities.person ?? "people";
-    const subjects = entities.property ?? entities.subject ?? (scope.installedBusinessOS?.subjectTypes?.[0] ?? "records");
+    const subjects =
+      entities.property ?? entities.subject ?? (scope.installedBusinessOS?.subjectTypes?.[0] ?? "records");
     return `Search ${people}, ${String(subjects).replace(/_/g, " ")}, work…`;
   })();
 
   return (
-    <div
+    <header
+      className="vt-desktop-only"
       style={{
-        display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         borderBottom: `1px solid ${cockpitColors.panelBorder}`,
@@ -100,27 +103,22 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: spacing.sm, minWidth: 0 }}>
-        <Link href="/" style={{ textDecoration: "none", color: cockpitColors.textMuted, fontSize: 12, flexShrink: 0 }}>
+        <Link
+          href="/"
+          style={{ textDecoration: "none", color: cockpitColors.textMuted, fontSize: 12, flexShrink: 0 }}
+        >
           Businesses
         </Link>
-        <span style={{ color: cockpitColors.textMuted, flexShrink: 0 }}>/</span>
-        <div
-          style={{
-            fontWeight: 600,
-            fontSize: typography.sectionTitle.fontSize,
-            color: cockpitColors.textPrimary,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {businessName}
-        </div>
+        <span style={{ color: cockpitColors.textMuted, flexShrink: 0 }} aria-hidden>
+          /
+        </span>
+        <BusinessSwitcher />
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: spacing.md, flex: 1, justifyContent: "flex-end" }}>
         <div style={{ position: "relative", maxWidth: 300, width: "100%" }}>
           <Search
+            aria-hidden
             style={{
               position: "absolute",
               left: spacing.sm,
@@ -153,6 +151,7 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
           />
           {open && results.length > 0 ? (
             <div
+              role="listbox"
               style={{
                 position: "absolute",
                 top: "100%",
@@ -172,6 +171,7 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
                 <button
                   key={r.id}
                   type="button"
+                  role="option"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
                     setQuery("");
@@ -189,9 +189,13 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
                     cursor: "pointer",
                   }}
                 >
-                  <div style={{ fontSize: typography.body.fontSize, fontWeight: 500, color: cockpitColors.textPrimary }}>{r.label}</div>
+                  <div style={{ fontSize: typography.body.fontSize, fontWeight: 500, color: cockpitColors.textPrimary }}>
+                    {r.label}
+                  </div>
                   {r.sublabel ? (
-                    <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>{r.sublabel}</div>
+                    <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>
+                      {r.sublabel}
+                    </div>
                   ) : null}
                 </button>
               ))}
@@ -202,14 +206,16 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
         <div ref={newMenuRef} style={{ position: "relative" }}>
           <button
             type="button"
+            aria-haspopup="menu"
+            aria-expanded={newMenuOpen}
             onClick={() => setNewMenuOpen((prev) => !prev)}
             style={{
               height: 34,
               padding: `0 ${spacing.md}`,
               borderRadius: radius.medium,
               border: `1px solid ${cockpitColors.panelBorder}`,
-              backgroundColor: cockpitColors.accent,
-              color: "#fff",
+              backgroundColor: cockpitColors.panelElevated,
+              color: cockpitColors.textPrimary,
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
@@ -218,12 +224,13 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
               cursor: "pointer",
             }}
           >
-            <Plus size={14} />
+            <Plus size={14} aria-hidden />
             New
-            <ChevronDown size={12} />
+            <ChevronDown size={12} aria-hidden />
           </button>
           {newMenuOpen ? (
             <div
+              role="menu"
               style={{
                 position: "absolute",
                 top: "100%",
@@ -241,6 +248,7 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
               {newActions.map((action) => (
                 <Link
                   key={action.href}
+                  role="menuitem"
                   href={action.href}
                   onClick={() => setNewMenuOpen(false)}
                   style={{
@@ -259,48 +267,9 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
           ) : null}
         </div>
 
-        <Link
-          href={`${base}/for-you`}
-          aria-label="Notifications"
-          style={{
-            position: "relative",
-            width: 34,
-            height: 34,
-            borderRadius: radius.medium,
-            border: `1px solid ${cockpitColors.panelBorder}`,
-            background: "transparent",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: cockpitColors.textMuted,
-            textDecoration: "none",
-          }}
-        >
-          <Bell size={16} />
-          {attentionCount > 0 ? (
-            <span
-              style={{
-                position: "absolute",
-                top: -4,
-                right: -4,
-                minWidth: 16,
-                height: 16,
-                borderRadius: 999,
-                backgroundColor: cockpitColors.warning,
-                color: "#fff",
-                fontSize: 10,
-                fontWeight: 700,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0 4px",
-              }}
-            >
-              {attentionCount > 9 ? "9+" : attentionCount}
-            </span>
-          ) : null}
-        </Link>
+        <NeedsAttentionIndicator count={attentionCount} />
+        <GlobalAskVibeTechEntry compact />
       </div>
-    </div>
+    </header>
   );
 }

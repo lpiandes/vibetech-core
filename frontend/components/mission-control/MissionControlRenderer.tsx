@@ -3,11 +3,11 @@
 import type { MissionControlViewModel } from "./MissionControlContext";
 import MissionControlContextProvider from "./MissionControlContext";
 import ForYouExecutiveLayout from "./ForYouExecutiveLayout";
-import MissionControlExperience from "./MissionControlExperience";
+import OperatingHomeExperience from "@/components/operating/OperatingHomeExperience";
 
 /**
- * Mission Control is the living-business supervisor for installed Business OS.
- * For You remains the attention-only surface.
+ * Mission Control / Operating Home renderer for installed Business OS.
+ * For You remains an attention-only surface (redirected to Needs Attention in nav).
  */
 export default function MissionControlRenderer({
   viewModel,
@@ -18,7 +18,7 @@ export default function MissionControlRenderer({
 }) {
   return (
     <MissionControlContextProvider viewModel={viewModel}>
-      {variant === "for_you" ? <ForYouExecutiveLayout /> : <MissionControlExperience />}
+      {variant === "for_you" ? <ForYouExecutiveLayout /> : <OperatingHomeExperience />}
     </MissionControlContextProvider>
   );
 }

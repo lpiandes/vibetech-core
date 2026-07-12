@@ -347,7 +347,7 @@ export default function WorkExecutiveLayout() {
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>
       <PageHeader
         title="Work"
-        description="Work VIBETech is tracking across your business."
+        description="Why each item exists, who owns it, what’s next, and the outcome when it’s done."
       />
 
       <ShellMetricStrip metrics={metricStrip} />

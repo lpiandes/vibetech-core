@@ -16,11 +16,11 @@ import EntityAvatar from "@/components/shell/EntityAvatar";
 import ShellMetricStrip from "@/components/shell/ShellMetricStrip";
 import ShellPanel from "@/components/shell/ShellPanel";
 import OrganizationWorkspace from "@/components/workforce/OrganizationWorkspace";
+import EmployeeWorkerCard from "@/components/team/EmployeeWorkerCard";
 import { copyInviteLink } from "@/lib/platform/inviteLinks";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 import {
   deriveTeamCounts,
-  employeeStatusTone,
   monitoringSummary,
   primaryEmployeeAction,
   type TeamDigitalEmployee,
@@ -78,106 +78,30 @@ function DigitalEmployeeCard({ employee, businessId }: { employee: TeamDigitalEm
   const monitoring = monitoringSummary(employee);
   const blockers = safeArray<string>(employee.blockerItems);
   const statusLabel = String(employee.statusLabel ?? "Unknown");
-  const tone = employeeStatusTone(employee);
+  const askHref = `/b/${encodeURIComponent(businessId)}/architect?employeeId=${encodeURIComponent(String(employee.id ?? employee.employeeId ?? ""))}`;
 
   return (
-    <div
-      style={{
-        padding: spacing.md,
-        borderBottom: `1px solid ${cockpitColors.panelBorder}`,
-        display: "flex",
-        flexDirection: "column",
-        gap: spacing.sm,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: spacing.md }}>
-        <EntityAvatar name={String(employee.name ?? "Digital employee")} kind="employee" />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" }}>
-            <div style={{ fontWeight: 650, color: cockpitColors.textPrimary }}>{employee.name}</div>
-            <StatusBadge label={statusLabel} tone={tone} />
-          </div>
-          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, marginTop: 2 }}>
-            {employee.responsibility ?? employee.role}
-          </div>
-          {employee.description ? (
-            <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 6, lineHeight: 1.45 }}>
-              {employee.description}
-            </div>
-          ) : null}
-        </div>
-        {action ? (
-          <Link
-            href={action.href}
-            style={{
-              textDecoration: "none",
-              padding: "6px 12px",
-              borderRadius: radius.medium,
-              backgroundColor: cockpitColors.accent,
-              color: "#fff",
-              fontSize: typography.caption.fontSize,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-            }}
-          >
+    <div>
+      <EmployeeWorkerCard
+        name={String(employee.name ?? "AI Employee")}
+        role={String(employee.responsibility ?? employee.role ?? "")}
+        status={statusLabel}
+        responsibilities={employee.description ? [String(employee.description)] : undefined}
+        currentWork={employee.currentHandling ? String(employee.currentHandling) : null}
+        recentOutcome={
+          monitoring.length
+            ? monitoring.map((m) => `${m.label}: ${m.count}`).join(" · ")
+            : null
+        }
+        needsApproval={false}
+        blockers={blockers}
+        askHref={askHref}
+      />
+      {action?.href ? (
+        <div style={{ padding: `0 ${spacing.md} ${spacing.md}` }}>
+          <Link href={action.href} style={{ color: cockpitColors.accent, fontWeight: 600, fontSize: typography.caption.fontSize }}>
             {action.label}
           </Link>
-        ) : null}
-      </div>
-
-      {employee.currentHandling ? (
-        <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary }}>
-          Currently handling: <span style={{ color: cockpitColors.textPrimary }}>{employee.currentHandling}</span>
-        </div>
-      ) : null}
-
-      {monitoring.length > 0 ? (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: spacing.xs }}>
-          {monitoring.map((item) => (
-            <span
-              key={item.label}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "2px 8px",
-                borderRadius: radius.pill,
-                backgroundColor: cockpitColors.panelElevated,
-                border: `1px solid ${cockpitColors.panelBorder}`,
-                fontSize: "0.7rem",
-                color: cockpitColors.textSecondary,
-              }}
-            >
-              {item.label}
-              <strong style={{ color: cockpitColors.textPrimary }}>{item.count}</strong>
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      {blockers.length > 0 ? (
-        <div
-          style={{
-            padding: spacing.sm,
-            borderRadius: radius.medium,
-            backgroundColor: "rgba(234,179,8,0.08)",
-            border: "1px solid rgba(234,179,8,0.2)",
-          }}
-        >
-          <div style={{ fontSize: "0.7rem", fontWeight: 700, color: cockpitColors.textSecondary, marginBottom: 4 }}>
-            Setup needed
-          </div>
-          <ul style={{ margin: 0, paddingLeft: spacing.md, color: cockpitColors.textSecondary, fontSize: typography.caption.fontSize }}>
-            {blockers.map((blocker) => (
-              <li key={blocker}>{blocker}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {!action && businessId && monitoring.length === 0 && blockers.length === 0 ? (
-        <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>
-          Monitoring your business and ready when work arrives.
         </div>
       ) : null}
     </div>

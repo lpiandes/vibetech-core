@@ -13,9 +13,20 @@ import {
 import { presentProductError, type ProductErrorView } from "@/lib/platform/productErrors";
 import ProductErrorBanner from "@/components/product/ProductErrorBanner";
 
+const CONTEXT_KEYS = [
+  "intelligenceCandidateId",
+  "workId",
+  "personId",
+  "partyId",
+  "subjectId",
+  "integrationId",
+  "proposalId",
+  "employeeId",
+] as const;
+
 /**
  * Permanent Ask VIBETech surface under /b/[businessId]/architect.
- * Starts or resumes a continuous-improvement session bound to the business.
+ * Context query params follow the user from Home, Needs Attention, Work, Team, etc.
  */
 export default function InBusinessArchitect({ businessId }: { businessId: string }) {
   const router = useRouter();
@@ -32,12 +43,30 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
     let cancelled = false;
     void (async () => {
       try {
+        const context: Record<string, string> = {};
+        for (const key of CONTEXT_KEYS) {
+          const value = searchParams.get(key);
+          if (value) context[key] = value;
+        }
+        const prompt =
+          context.intelligenceCandidateId
+            ? "Explain this Needs Attention item and recommend the next governed step."
+            : context.workId
+              ? "Help me complete this Work item with a clear outcome."
+              : context.personId || context.partyId
+                ? "What should I know about this person, and what is the next action?"
+                : context.subjectId
+                  ? "What needs attention on this subject or property?"
+                  : context.employeeId
+                    ? "What is this team member or AI employee working on?"
+                    : "Improve this business";
+
         const response = await fetch(
           `/api/businesses/${encodeURIComponent(businessId)}/builder/improve`,
           {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ prompt: "Improve this business" }),
+            body: JSON.stringify({ prompt, ...context }),
           },
         );
         const data = await response.json();
@@ -50,7 +79,9 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
         if (!nextId) throw new Error("No Architect session returned.");
         if (cancelled) return;
         setSessionId(nextId);
-        router.replace(`/b/${encodeURIComponent(businessId)}/architect?sessionId=${encodeURIComponent(nextId)}`);
+        const params = new URLSearchParams({ sessionId: nextId });
+        for (const [key, value] of Object.entries(context)) params.set(key, value);
+        router.replace(`/b/${encodeURIComponent(businessId)}/architect?${params.toString()}`);
       } catch (err) {
         if (!cancelled) {
           setError((err as any)?.productError ?? presentProductError(err));
@@ -60,7 +91,7 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
     return () => {
       cancelled = true;
     };
-  }, [businessId, sessionFromQuery, router]);
+  }, [businessId, sessionFromQuery, router, searchParams]);
 
   if (error) {
     return (
@@ -76,7 +107,9 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
     return (
       <ArchitectShell maxWidth={1100}>
         <ArchitectPanel style={{ display: "grid", gap: 14 }}>
-          <ThinkingDots label="Opening Ask VIBETech" />
+          <div role="status" aria-live="polite">
+            <ThinkingDots label="Opening Ask VIBETech" />
+          </div>
           <ArchitectSkeleton height={28} width="40%" />
           <ArchitectSkeleton height={160} />
         </ArchitectPanel>

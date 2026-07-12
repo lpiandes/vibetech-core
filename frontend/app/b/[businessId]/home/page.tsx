@@ -1,6 +1,7 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
 import { platformStore } from "@/lib/server/compose";
 import EmptyBusinessHome from "@/components/home/EmptyBusinessHome";
+import EmptyOperatingState from "@/components/operating/EmptyOperatingState";
 import SetupChecklistBanner from "@/components/home/SetupChecklistBanner";
 import FirstLoginBriefingBanner from "@/components/home/FirstLoginBriefingBanner";
 import ProspectInquiryForm from "@/components/home/ProspectInquiryForm";
@@ -73,6 +74,8 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
     const preferLegacyExecutive = !portalModel?.drivenByBusinessOS;
     const showMissionControl = Boolean(portalModel?.drivenByBusinessOS && executive.showOperatingDashboard);
     const showFirstLoginBriefing = showMissionControl;
+    const showEmptyOperatingGuide = showFullChecklist && !portalModel?.drivenByBusinessOS;
+    const showEmptyChecklistHome = showFullChecklist && Boolean(portalModel?.drivenByBusinessOS);
 
     let missionControlViewModel: unknown = null;
     if (showMissionControl) {
@@ -89,11 +92,18 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
           businessName={home.businessName}
           show={showFirstLoginBriefing}
         />
-        {showFullChecklist ? <EmptyBusinessHome {...home} businessId={businessId} /> : null}
+        {showEmptyChecklistHome ? <EmptyBusinessHome {...home} businessId={businessId} /> : null}
+        {showEmptyOperatingGuide ? (
+          <EmptyOperatingState
+            businessId={businessId}
+            businessName={home.businessName}
+            hasInstalledOs={Boolean(portalModel)}
+          />
+        ) : null}
         {showChecklistBanner ? <SetupChecklistBanner businessName={home.businessName} checklist={home.checklist} /> : null}
         {showMissionControl && missionControlViewModel ? (
           <MissionControlRenderer viewModel={missionControlViewModel as never} variant="mission_control" />
-        ) : (
+        ) : showEmptyOperatingGuide ? null : (
           <PortalHome
             portalModel={portalModel}
             executive={executive}

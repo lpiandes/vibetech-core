@@ -1,17 +1,26 @@
 /**
- * Executive-grade typography hierarchy (foundation tokens).
- * Units are `rem` so the system remains deterministic across customers.
+ * Executive-grade typography hierarchy.
+ * Display / Title / Body / Meta aliases map to the operating-surface system.
  */
 export const typography = {
   display: {
     fontSize: "2.5rem",
     lineHeight: "3rem",
     fontWeight: 700,
+    letterSpacing: "-0.02em",
+  },
+  /** Alias: Title */
+  title: {
+    fontSize: "1.875rem",
+    lineHeight: "2.25rem",
+    fontWeight: 650,
+    letterSpacing: "-0.015em",
   },
   pageTitle: {
     fontSize: "1.875rem",
     lineHeight: "2.25rem",
     fontWeight: 650,
+    letterSpacing: "-0.015em",
   },
   sectionTitle: {
     fontSize: "1.25rem",
@@ -25,12 +34,18 @@ export const typography = {
   },
   body: {
     fontSize: "0.9375rem",
-    lineHeight: "1.375rem",
+    lineHeight: "1.5rem",
+    fontWeight: 500,
+  },
+  /** Alias: Meta / supporting */
+  meta: {
+    fontSize: "0.8125rem",
+    lineHeight: "1.25rem",
     fontWeight: 500,
   },
   caption: {
     fontSize: "0.8125rem",
-    lineHeight: "1.125rem",
+    lineHeight: "1.25rem",
     fontWeight: 500,
   },
   metric: {
@@ -51,4 +66,3 @@ export const typography = {
 } as const;
 
 export type TypographyKey = keyof typeof typography;
-

@@ -72,7 +72,26 @@ export default function SettingsScreen({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>
-      <PageHeader title="Settings" description="Business access, setup, and configuration." />
+      <PageHeader title="Settings" description="Clear controls where safe — Ask VIBETech for complex configuration." />
+
+      <ShellPanel title="Ask VIBETech to change this">
+        <div style={{ padding: spacing.md }}>
+          <p style={{ margin: `0 0 ${spacing.sm}`, color: cockpitColors.textSecondary, fontSize: typography.body.fontSize }}>
+            Prefer governed changes for roles, workflows, and operating behavior.
+          </p>
+          <Link
+            href={`/b/${encodeURIComponent(businessId)}/architect`}
+            style={{
+              color: cockpitColors.accent,
+              fontWeight: 600,
+              fontSize: typography.button.fontSize,
+              textDecoration: "none",
+            }}
+          >
+            Ask VIBETech
+          </Link>
+        </div>
+      </ShellPanel>
 
       <ShellMetricStrip metrics={metricStrip} />
 

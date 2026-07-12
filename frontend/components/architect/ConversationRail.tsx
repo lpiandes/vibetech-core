@@ -68,9 +68,15 @@ export default function ConversationRail({
     onSubmit();
   }
 
+  const liveStatus = thinking ? HUMAN_COPY.rethink : "";
+
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <div style={{ display: "grid", gap: 12, maxHeight: 420, overflowY: "auto", paddingRight: 4 }}>
+      {/* Status-only live region — avoid re-announcing the full chat history */}
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {liveStatus}
+      </div>
+      <div role="log" aria-label="Conversation" style={{ display: "grid", gap: 12, maxHeight: 420, overflowY: "auto", paddingRight: 4 }}>
         {(conversation ?? []).map((entry, index) => {
           const mine = entry.role === "user";
           return (

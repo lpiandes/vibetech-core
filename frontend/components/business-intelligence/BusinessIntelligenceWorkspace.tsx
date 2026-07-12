@@ -4,6 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
+import EvidencePanel from "@/components/operating/EvidencePanel";
+import OperatingStatusBadge from "@/components/operating/OperatingStatusBadge";
+import { PageHeader } from "@/components/operating/PageHeader";
+import { ActionButton } from "@/components/operating/Surface";
+import GlobalAskVibeTechEntry from "@/components/shell/GlobalAskVibeTechEntry";
 
 type GovernedRecommendation = {
   recommendationId: string;
@@ -212,26 +217,22 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
 
   return (
     <div style={{ display: "grid", gap: spacing.md, padding: spacing.md }}>
-      <header style={{ display: "grid", gap: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: cockpitColors.accent }}>
-          Business Intelligence
-        </div>
-        <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, color: cockpitColors.textPrimary }}>
-          {view.businessName ?? "Your business"} — continuous understanding
-        </h1>
-        <p style={{ margin: 0, color: cockpitColors.textSecondary, maxWidth: 720, lineHeight: 1.5 }}>
-          {view.honesty?.message
-            ?? "Observe → Analyze → Recommend → Explain → Preview → Dry run → Approve → Install. Nothing changes silently."}
-        </p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          {view.pipeline?.length ? view.pipeline.map((step) => (
-            <span key={step} style={chipStyle}>{humanize(step)}</span>
-          )) : null}
-          <button type="button" onClick={() => void refreshIntelligence()} style={chipStyle} disabled={busyId === "refresh"}>
-            {busyId === "refresh" ? "Evaluating…" : "Refresh intelligence"}
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Needs Attention"
+        title="What needs your decision"
+        description={
+          view.honesty?.message
+          ?? "Evidence-backed candidates. Create Work, propose a change, or Ask VIBETech — nothing changes silently."
+        }
+        actions={
+          <>
+            <GlobalAskVibeTechEntry compact />
+            <ActionButton variant="secondary" disabled={busyId === "refresh"} onClick={() => void refreshIntelligence()}>
+              {busyId === "refresh" ? "Evaluating…" : "Refresh"}
+            </ActionButton>
+          </>
+        }
+      />
 
       <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {SECTIONS.map((entry) => (
@@ -347,41 +348,67 @@ function IntelligenceCandidateCardView({
   onDismiss: () => void;
   onAskArchitect: () => void;
 }) {
+  const [showTechnical, setShowTechnical] = useState(false);
+  const ownerLabel = candidate.ownerRef?.kind
+    ? humanize(String(candidate.ownerRef.kind))
+    : "Unassigned";
+  const nextStep =
+    candidate.recommendedActions?.[0]?.label
+    ?? "Review evidence and choose Create Work or Propose Change";
+
   return (
-    <article style={panelStyle}>
-      <button type="button" onClick={onToggle} style={{ all: "unset", cursor: "pointer", display: "grid", gap: 6, width: "100%" }}>
+    <article style={panelStyle} aria-labelledby={`candidate-${candidate.id}`}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        style={{ all: "unset", cursor: "pointer", display: "grid", gap: 8, width: "100%" }}
+      >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-          <strong style={{ color: cockpitColors.textPrimary }}>{candidate.title}</strong>
-          <span style={chipStyle}>{candidate.severity ?? "medium"} · {candidate.status ?? "open"}</span>
+          <strong id={`candidate-${candidate.id}`} style={{ color: cockpitColors.textPrimary }}>
+            {candidate.title}
+          </strong>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <OperatingStatusBadge status={candidate.severity} />
+            <OperatingStatusBadge status={candidate.status === "open" ? "waiting" : candidate.status} label={humanize(candidate.status ?? "open")} />
+          </div>
         </div>
-        <div style={{ color: cockpitColors.textSecondary }}>{candidate.whatHappened ?? candidate.summary}</div>
+        <div style={{ color: cockpitColors.textSecondary }}>
+          {candidate.whatHappened ?? candidate.summary}
+        </div>
+        <div style={{ fontSize: typography.meta.fontSize, color: cockpitColors.textMuted }}>
+          Owner: {ownerLabel} · Next: {nextStep}
+        </div>
       </button>
       {expanded ? (
-        <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
-          <div><strong>Why it matters</strong><div style={{ color: cockpitColors.textSecondary }}>{candidate.whyItMatters ?? candidate.explanation}</div></div>
-          <div><strong>Confidence</strong><div style={{ color: cockpitColors.textSecondary }}>{candidate.confidenceReason}</div></div>
-          <div><strong>Owner</strong><div style={{ color: cockpitColors.textSecondary }}>{candidate.ownerRef?.id ?? "unassigned"}</div></div>
+        <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
           <div>
-            <strong>Evidence</strong>
-            <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-              {(candidate.evidence ?? []).map((entry) => (
-                <li key={`${entry.objectType}:${entry.objectId}`}>{entry.objectType}:{entry.objectId} — {entry.explanation}</li>
-              ))}
-            </ul>
-            {(candidate.missingEvidence ?? []).length ? (
-              <div style={{ color: "#B45309", marginTop: 6 }}>Missing: {(candidate.missingEvidence ?? []).join(", ")}</div>
-            ) : null}
+            <strong>Why it matters</strong>
+            <div style={{ color: cockpitColors.textSecondary }}>{candidate.whyItMatters ?? candidate.explanation}</div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button type="button" disabled={busy} onClick={onCreateWork} style={chipStyle}>Create Work</button>
-            <button type="button" disabled={busy} onClick={onProposeChange} style={chipStyle}>Propose Change</button>
-            <button type="button" disabled={busy} onClick={onAskArchitect} style={chipStyle}>Ask Architect</button>
-            <button type="button" disabled={busy} onClick={onDismiss} style={chipStyle}>Dismiss</button>
-            {(candidate.relatedObjectRefs ?? []).slice(0, 3).map((ref) => (
-              <a key={`${ref.objectType}:${ref.objectId}`} href={`/${ref.objectType}/${ref.objectId}`} style={chipStyle}>
-                Open {ref.objectType}
-              </a>
-            ))}
+          <div>
+            <strong>Confidence</strong>
+            <div style={{ color: cockpitColors.textSecondary }}>{candidate.confidenceReason}</div>
+          </div>
+          <EvidencePanel items={candidate.evidence ?? []} showTechnical={showTechnical} />
+          {(candidate.missingEvidence ?? []).length ? (
+            <div style={{ color: cockpitColors.warning }}>
+              Missing information: {(candidate.missingEvidence ?? []).map(humanize).join(", ")}
+            </div>
+          ) : null}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <ActionButton disabled={busy} onClick={onCreateWork}>Create Work</ActionButton>
+            <ActionButton variant="secondary" disabled={busy} onClick={onProposeChange}>Propose Change</ActionButton>
+            <ActionButton variant="secondary" disabled={busy} onClick={onAskArchitect}>Ask VIBETech</ActionButton>
+            <ActionButton variant="ghost" disabled={busy} onClick={onDismiss}>Dismiss</ActionButton>
+            <button
+              type="button"
+              onClick={() => setShowTechnical((v) => !v)}
+              style={{ ...chipStyle, marginLeft: "auto" }}
+              aria-pressed={showTechnical}
+            >
+              {showTechnical ? "Hide technical refs" : "Technical details"}
+            </button>
           </div>
         </div>
       ) : null}

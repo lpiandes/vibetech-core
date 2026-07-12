@@ -28,22 +28,43 @@ export const semanticColors = {
 
 export type SemanticColorKey = keyof typeof semanticColors;
 
-/** Operating cockpit — dense product surfaces (desktop demo) */
+/**
+ * Operating cockpit surfaces — supervision UI (not CRM dashboard chrome).
+ * Calm canvas, clear hierarchy, restrained accent.
+ */
 export const cockpitColors = {
-  background: "#eef1f5",
+  background: "#f3f1ec",
   panel: "#ffffff",
-  panelElevated: "#f8fafc",
-  panelBorder: "rgba(15, 23, 42, 0.08)",
-  sidebar: "#0f1419",
-  sidebarBorder: "rgba(255,255,255,0.06)",
-  sidebarText: "rgba(255,255,255,0.92)",
-  sidebarTextMuted: "rgba(255,255,255,0.5)",
-  sidebarActive: "rgba(255,255,255,0.08)",
-  textPrimary: "#0f172a",
-  textSecondary: "#475569",
-  textMuted: "#64748b",
-  accent: "#3b82f6",
-  accentMuted: "rgba(59, 130, 246, 0.12)",
-  warning: "#d97706",
+  panelElevated: "#faf9f7",
+  panelBorder: "rgba(28, 25, 23, 0.08)",
+  inset: "#ebe8e2",
+  overlay: "rgba(15, 18, 22, 0.45)",
+  sidebar: "#14181d",
+  sidebarBorder: "rgba(255,255,255,0.07)",
+  sidebarText: "rgba(255,255,255,0.94)",
+  sidebarTextMuted: "rgba(255,255,255,0.52)",
+  sidebarActive: "rgba(255,255,255,0.1)",
+  textPrimary: "#1c1917",
+  textSecondary: "#44403c",
+  textMuted: "#78716c",
+  accent: "#0f766e",
+  accentMuted: "rgba(15, 118, 110, 0.12)",
+  warning: "#b45309",
+  critical: "#b91c1c",
+  handled: "#047857",
+  waiting: "#a16207",
 } as const;
 
+/** Semantic operational status — always pair with text/icon, not color alone. */
+export const statusSemantics = {
+  critical: { label: "Critical", color: cockpitColors.critical, bg: "rgba(185,28,28,0.1)", icon: "!" },
+  high: { label: "High", color: "#c2410c", bg: "rgba(194,65,12,0.1)", icon: "▲" },
+  medium: { label: "Medium", color: cockpitColors.warning, bg: "rgba(180,83,9,0.1)", icon: "●" },
+  low: { label: "Low", color: cockpitColors.textMuted, bg: "rgba(120,113,108,0.12)", icon: "○" },
+  handled: { label: "Handled", color: cockpitColors.handled, bg: "rgba(4,120,87,0.1)", icon: "✓" },
+  resolved: { label: "Resolved", color: cockpitColors.handled, bg: "rgba(4,120,87,0.1)", icon: "✓" },
+  waiting: { label: "Waiting", color: cockpitColors.waiting, bg: "rgba(161,98,7,0.1)", icon: "…" },
+  informational: { label: "Info", color: cockpitColors.accent, bg: cockpitColors.accentMuted, icon: "i" },
+} as const;
+
+export type StatusSemanticKey = keyof typeof statusSemantics;
