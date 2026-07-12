@@ -104,7 +104,7 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
     >
       <div style={{ display: "flex", alignItems: "center", gap: spacing.sm, minWidth: 0 }}>
         <Link
-          href="/"
+          href="/businesses"
           style={{ textDecoration: "none", color: cockpitColors.textMuted, fontSize: 12, flexShrink: 0 }}
         >
           Businesses

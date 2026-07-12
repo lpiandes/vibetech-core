@@ -83,6 +83,10 @@ export default function LoginForm() {
             {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
+        <p style={{ margin: `${spacing.lg} 0 0`, color: cockpitColors.textMuted, fontSize: typography.caption.fontSize, lineHeight: 1.5 }}>
+          Have an invitation? Open the invite link from your email. Need a new business?{" "}
+          <a href="/architect" style={{ color: cockpitColors.accent, fontWeight: 600 }}>Start with Ask VIBETech</a>.
+        </p>
       </div>
     </div>
   );

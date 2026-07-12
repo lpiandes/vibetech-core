@@ -1,4 +1,5 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
+import { composeOperatingHomeSupervision } from "../operating-home/composeOperatingHomeSupervision.js";
 
 /**
  * Compose Mission Control experience from existing view models.
@@ -9,6 +10,9 @@ export function composeMissionControlExperience({
   businessIntelligenceView = null,
   recentCommunications = [],
   upcomingWork = null,
+  ownerFirstName = null,
+  setupChecklist = [],
+  businessId = null,
 } = {}) {
   if (!missionControlViewModel || typeof missionControlViewModel !== "object") {
     throw new Error("composeMissionControlExperience: missionControlViewModel required.");
@@ -143,9 +147,23 @@ export function composeMissionControlExperience({
     futureRoadmap: Object.freeze(asArray(bi?.futureRoadmap)),
   });
 
+  const supervision = composeOperatingHomeSupervision({
+    experience,
+    ownerFirstName,
+    setupChecklist,
+    businessId: businessId
+      ?? missionControlViewModel.businessId
+      ?? missionControlViewModel.hero?.businessId
+      ?? null,
+  });
+
   return {
     ...missionControlViewModel,
-    experience,
+    experience: deepFreeze({
+      ...experience,
+      supervision,
+    }),
+    supervision,
     // Prefer BI health over empty command-center health array when present.
     businessHealth: Array.isArray(missionControlViewModel.businessHealth)
       && missionControlViewModel.businessHealth.length === 0

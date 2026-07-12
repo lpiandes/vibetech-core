@@ -35,7 +35,7 @@ const CANONICAL_ORDER: Array<{
   { id: "work", label: "Work", path: "work", iconName: "inbox", permission: "work.view" },
   {
     id: "subjects",
-    label: "Subjects",
+    label: "Properties",
     path: "properties",
     iconName: "home",
     permission: "people.view",
@@ -80,7 +80,7 @@ export function getCanonicalBusinessNav(
   return CANONICAL_ORDER.filter((item) => hasPermission(permissions ?? [], item.permission, options?.role)).map(
     (item) => ({
       id: item.id,
-      label: item.id === "subjects" ? options?.subjectLabel ?? "Subjects / Properties" : item.label,
+      label: item.id === "subjects" ? options?.subjectLabel ?? "Properties" : item.label,
       href: `${base}/${item.path}`,
       iconName: item.iconName,
       permission: item.permission,

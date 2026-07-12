@@ -34,7 +34,7 @@ export default function ModuleRenderer({
     return (
       <EmptyStateRenderer
         title={String(module?.label ?? moduleId)}
-        description={empty?.description ?? "This workspace is not available in the installed Business OS."}
+        description={empty?.description ?? "This area is not set up for this business yet. Ask VIBETech what to enable next."}
       />
     );
   }

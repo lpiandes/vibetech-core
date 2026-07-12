@@ -179,8 +179,8 @@ test("conversational editing requires approval and never silent mutates", () => 
 
 test("install experience uses humanized staged progress", () => {
   assert.ok(ARCHITECT_INSTALL_STAGES.length >= 6);
-  assert.equal(ARCHITECT_INSTALL_STAGES[0].label, "Creating business");
-  assert.equal(ARCHITECT_INSTALL_STAGES.at(-1)?.label, "Finalizing portal");
+  assert.equal(ARCHITECT_INSTALL_STAGES[0].label, "Creating your business");
+  assert.equal(ARCHITECT_INSTALL_STAGES.at(-1)?.label, "Opening your business");
   const stages = installStageProgress(2, "installing");
   assert.equal(stages[2].state, "active");
   assert.equal(stages[2].stateLabel, "In progress");

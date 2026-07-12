@@ -16,6 +16,9 @@ export type TeamDigitalEmployee = {
   openAssignmentCount?: number;
   monitoring?: Array<{ label: string; count: number }>;
   currentHandling?: string | null;
+  needsFromOwner?: string | null;
+  partyName?: string | null;
+  primaryParty?: { displayName?: string | null } | null;
 };
 
 export type PlatformMember = {

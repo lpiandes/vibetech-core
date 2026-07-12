@@ -14,52 +14,59 @@ type ChecklistItem = {
 export default function SetupChecklistBanner({
   businessName,
   checklist,
+  compact = false,
 }: {
   businessName: string;
   checklist: ChecklistItem[];
+  compact?: boolean;
 }) {
+  const incomplete = checklist.filter((item) => !item.complete);
+  if (incomplete.length === 0) return null;
+
   const completeCount = checklist.filter((item) => item.complete).length;
   const total = checklist.length;
   const progress = total > 0 ? Math.round((completeCount / total) * 100) : 0;
-  const nextItem = checklist.find((item) => !item.complete);
+  const nextItem = incomplete[0];
 
   return (
     <div
       style={{
         marginBottom: spacing.md,
-        padding: spacing.md,
+        padding: compact ? `${spacing.sm} ${spacing.md}` : spacing.md,
         borderRadius: radius.large,
         border: `1px solid ${cockpitColors.panelBorder}`,
         backgroundColor: cockpitColors.panel,
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: spacing.md, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontWeight: 650, fontSize: typography.body.fontSize, color: cockpitColors.textPrimary }}>
-            Finish setup for {businessName}
+            {compact ? "Finish required setup" : `Finish setup for ${businessName}`}
           </div>
           <div style={{ marginTop: 4, fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary }}>
-            {completeCount} of {total} complete · Your operating dashboard is live below.
+            {incomplete.map((item) => item.title).join(" · ")}
           </div>
-          <div
-            style={{
-              marginTop: spacing.sm,
-              height: 4,
-              borderRadius: radius.pill,
-              backgroundColor: cockpitColors.panelElevated,
-              overflow: "hidden",
-              maxWidth: 320,
-            }}
-          >
+          {!compact ? (
             <div
               style={{
-                height: "100%",
-                width: `${progress}%`,
+                marginTop: spacing.sm,
+                height: 4,
                 borderRadius: radius.pill,
-                backgroundColor: cockpitColors.accent,
+                backgroundColor: cockpitColors.panelElevated,
+                overflow: "hidden",
+                maxWidth: 320,
               }}
-            />
-          </div>
+            >
+              <div
+                style={{
+                  height: "100%",
+                  width: `${progress}%`,
+                  borderRadius: radius.pill,
+                  backgroundColor: cockpitColors.accent,
+                }}
+              />
+            </div>
+          ) : null}
         </div>
         {nextItem ? (
           <Link

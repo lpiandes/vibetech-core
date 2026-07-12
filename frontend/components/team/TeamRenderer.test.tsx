@@ -69,14 +69,12 @@ test("Renderer: team page uses executive shell sections and metrics", () => {
   const html = renderToStaticMarkup(<TeamRenderer viewModel={makeVm()} platformTeam={makePlatformTeam()} />);
 
   assert.ok(html.includes("Team"));
-  assert.ok(html.includes("People and Digital Employees working in this business."));
-  assert.ok(html.includes("Human team"));
+  assert.ok(html.includes("People and AI teammates accountable for work in this business."));
+  assert.ok(html.includes("People"));
   assert.ok(html.includes("Pending invitations"));
-  assert.ok(html.includes("Digital workforce"));
-  assert.ok(html.includes("Human team"));
-  assert.ok(html.includes("Digital employees"));
-  assert.ok(html.includes("Needs setup"));
-  assert.ok(html.includes("Ready"));
+  assert.ok(html.includes("AI teammates"));
+  assert.ok(html.includes("Getting ready") || html.includes("Needs setup"));
+  assert.ok(html.includes("Ready") || html.includes("Working"));
 });
 
 test("Renderer: human team rows render role labels and contact details", () => {

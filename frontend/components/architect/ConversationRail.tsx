@@ -76,7 +76,7 @@ export default function ConversationRail({
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {liveStatus}
       </div>
-      <div role="log" aria-label="Conversation" style={{ display: "grid", gap: 12, maxHeight: 420, overflowY: "auto", paddingRight: 4 }}>
+      <div role="log" aria-label="Conversation" style={{ display: "grid", gap: 14, maxHeight: mode === "chat" ? 560 : 420, overflowY: "auto", paddingRight: 4 }}>
         {(conversation ?? []).map((entry, index) => {
           const mine = entry.role === "user";
           return (
@@ -84,18 +84,18 @@ export default function ConversationRail({
               key={entry.messageId ?? `${entry.role}-${index}`}
               style={{
                 justifySelf: mine ? "end" : "start",
-                maxWidth: "92%",
+                maxWidth: "88%",
                 borderRadius: 18,
-                padding: "12px 14px",
+                padding: "14px 16px",
                 background: mine ? architect.accentSoft : "rgba(15,23,42,.55)",
                 border: `1px solid ${mine ? "rgba(20,184,166,.28)" : architect.border}`,
                 color: architect.ink,
-                lineHeight: 1.5,
+                lineHeight: 1.55,
                 animation: "architectFadeUp .35s ease",
               }}
             >
               <div style={{ fontSize: 11, color: architect.inkMuted, marginBottom: 4, fontWeight: 650 }}>
-                {mine ? "You" : "Architect"}
+                {mine ? "You" : "VIBETech"}
               </div>
               {entry.text}
             </div>
@@ -108,8 +108,8 @@ export default function ConversationRail({
         <textarea
           value={message}
           onChange={(event) => setMessage(event.target.value)}
-          placeholder={mode === "chat" ? "Ask Architect to refine the plan…" : "Tell Architect about your business…"}
-          rows={3}
+          placeholder={mode === "chat" ? "Message VIBETech…" : "Tell VIBETech about your business…"}
+          rows={mode === "chat" ? 4 : 3}
           style={inputStyle}
         />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

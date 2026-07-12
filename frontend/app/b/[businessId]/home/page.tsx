@@ -5,15 +5,14 @@ import EmptyOperatingState from "@/components/operating/EmptyOperatingState";
 import SetupChecklistBanner from "@/components/home/SetupChecklistBanner";
 import FirstLoginBriefingBanner from "@/components/home/FirstLoginBriefingBanner";
 import ProspectInquiryForm from "@/components/home/ProspectInquiryForm";
-import PortalHome from "@/components/portal-renderer/PortalHome";
 import MissionControlRenderer from "@/components/mission-control/MissionControlRenderer";
 import { composePortalModel } from "@/lib/portal-renderer/composePortalModel.js";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
 
 /**
- * Installed Business OS lands on Mission Control — the living-business supervisor.
- * Pre-operating / checklist states keep the existing setup surfaces.
+ * Canonical Home: OperatingHomeExperience via Mission Control when the business is operating.
+ * Pre-operating states keep EmptyBusinessHome / EmptyOperatingState only.
  */
 export default async function BusinessHomePage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
@@ -71,19 +70,29 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
     const executive = home.executive;
     const showFullChecklist = !executive.showOperatingDashboard;
     const showChecklistBanner = executive.showOperatingDashboard && executive.collapseChecklist;
-    const preferLegacyExecutive = !portalModel?.drivenByBusinessOS;
-    const showMissionControl = Boolean(portalModel?.drivenByBusinessOS && executive.showOperatingDashboard);
+    // Canonical operating Home — do not gate on drivenByBusinessOS (legacy alternate layouts removed).
+    const showMissionControl = Boolean(executive.showOperatingDashboard);
     const showFirstLoginBriefing = showMissionControl;
     const showEmptyOperatingGuide = showFullChecklist && !portalModel?.drivenByBusinessOS;
     const showEmptyChecklistHome = showFullChecklist && Boolean(portalModel?.drivenByBusinessOS);
 
     let missionControlViewModel: unknown = null;
     if (showMissionControl) {
-      missionControlViewModel = ctx.service.loadMissionControlViewModel();
+      const ownerFirstName = String((ctx.user as { name?: string | null } | undefined)?.name ?? "")
+        .trim()
+        .split(/\s+/)[0] || null;
+      missionControlViewModel = ctx.service.loadMissionControlViewModel({
+        ownerFirstName,
+        setupChecklist: Array.isArray(home.checklist) ? home.checklist : [],
+      });
       markRequestTiming("MISSION_CONTROL", {
         bytes: JSON.stringify(missionControlViewModel).length,
       });
     }
+
+    const supervisionSetup = (missionControlViewModel as { supervision?: { setup?: { visible?: boolean } } } | null)
+      ?.supervision?.setup;
+    const showCompactSetupBanner = Boolean(showMissionControl && supervisionSetup?.visible);
 
     return (
       <>
@@ -100,17 +109,16 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
             hasInstalledOs={Boolean(portalModel)}
           />
         ) : null}
-        {showChecklistBanner ? <SetupChecklistBanner businessName={home.businessName} checklist={home.checklist} /> : null}
+        {showCompactSetupBanner || showChecklistBanner ? (
+          <SetupChecklistBanner
+            businessName={home.businessName}
+            checklist={home.checklist}
+            compact={showCompactSetupBanner}
+          />
+        ) : null}
         {showMissionControl && missionControlViewModel ? (
           <MissionControlRenderer viewModel={missionControlViewModel as never} variant="mission_control" />
-        ) : showEmptyOperatingGuide ? null : (
-          <PortalHome
-            portalModel={portalModel}
-            executive={executive}
-            businessId={businessId}
-            preferLegacyExecutive={preferLegacyExecutive}
-          />
-        )}
+        ) : null}
         {home.showProspectInquiryForm ? (
           <div id="prospect-inquiry" style={{ maxWidth: 720, margin: "0 auto", padding: "0 24px 48px" }}>
             <ProspectInquiryForm

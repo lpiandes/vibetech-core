@@ -295,7 +295,7 @@ export default function ArchitectWorkspace({
       <header style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
         <div>
           <ArchitectBadge tone="accent">
-            {continuous ? (continuity?.entryLabel ?? "Ask VIBETech") : "Ask VIBETech · Architect"}
+            {continuous ? (continuity?.entryLabel ?? "Ask VIBETech") : "Ask VIBETech"}
           </ArchitectBadge>
           <h1 style={{
             margin: "10px 0 6px",
@@ -303,25 +303,27 @@ export default function ArchitectWorkspace({
             fontSize: "clamp(1.6rem, 3vw, 2.2rem)",
             letterSpacing: "-0.02em",
           }}>
-            {proposal?.businessName ?? session?.businessSummary?.businessName ?? "Understanding your business"}
+            {continuous
+              ? "Ask VIBETech"
+              : (proposal?.businessName ?? session?.businessSummary?.businessName ?? "Understanding your business")}
           </h1>
           <p style={{ margin: 0, color: architect.inkMuted }}>
             {continuous
-              ? "Describe what to add or change. Nothing goes live until you approve."
+              ? "Talk about your business like you would with an executive partner. Nothing goes live until you approve."
               : "One thoughtful conversation. Nothing goes live until you approve."}
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <ArchitectBadge tone={confidence.tone}>{confidence.label}</ArchitectBadge>
           {(continuous
-            ? (["proposal", "portal"] as CenterMode[])
+            ? (proposal ? (["proposal", "portal"] as CenterMode[]) : [])
             : (["discovery", "assembly", "proposal", "portal"] as CenterMode[])
           ).map((mode) => {
             const disabled = (mode === "proposal" || mode === "portal") && !proposal;
             const label =
               mode === "discovery" ? "Conversation"
-                : mode === "assembly" ? "Assembly"
-                  : mode === "proposal" ? "Plan"
+                : mode === "assembly" ? "Building plan"
+                  : mode === "proposal" ? (continuous ? "Proposed change" : "Plan")
                     : "Preview";
             return (
               <button
@@ -453,6 +455,19 @@ export default function ArchitectWorkspace({
             />
           ) : null}
 
+          {continuous && !proposal && centerMode === "proposal" ? (
+            <div style={{
+              borderRadius: architect.radius,
+              border: `1px solid ${architect.border}`,
+              background: "rgba(15,23,42,.4)",
+              padding: 24,
+              color: architect.inkMuted,
+              lineHeight: 1.55,
+            }}>
+              Describe what you want VIBETech to change. When a plan is ready, it will appear here for your review — nothing goes live until you approve.
+            </div>
+          ) : null}
+
           {centerMode === "portal" ? (
             <PortalPreviewImmersive
               portalPreview={portalPreview}
@@ -461,6 +476,7 @@ export default function ArchitectWorkspace({
               onRoleChange={(role) => void loadPortal(role)}
               accentColor={accent}
               busy={busy}
+              onPrepareLaunch={() => router.push(routes.dryRun)}
             />
           ) : null}
         </ArchitectPanel>

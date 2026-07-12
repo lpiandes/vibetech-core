@@ -129,7 +129,7 @@ export function buildKnowledgeExecutiveContext(connected: ConnectedKnowledgeSour
     employeesWithKnowledgeRequirements: employeeImpacts.length,
     fallbackExplanation:
       knowledgePresentation.fallbackExplanation ??
-      "Uploaded documents are used to satisfy business knowledge setup for Digital Employees.",
+      "Uploaded documents help VIBETech follow your policies and procedures.",
     presentation: knowledgePresentation,
   };
 }

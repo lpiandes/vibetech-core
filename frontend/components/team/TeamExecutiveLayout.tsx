@@ -83,17 +83,28 @@ function DigitalEmployeeCard({ employee, businessId }: { employee: TeamDigitalEm
   return (
     <div>
       <EmployeeWorkerCard
-        name={String(employee.name ?? "AI Employee")}
+        name={String(employee.name ?? "Teammate")}
         role={String(employee.responsibility ?? employee.role ?? "")}
         status={statusLabel}
         responsibilities={employee.description ? [String(employee.description)] : undefined}
         currentWork={employee.currentHandling ? String(employee.currentHandling) : null}
+        currentCustomer={
+          employee.primaryParty?.displayName
+          ?? employee.partyName
+          ?? null
+        }
+        waitingFor={
+          employee.needsFromOwner && !/^nothing$/i.test(String(employee.needsFromOwner))
+            ? String(employee.needsFromOwner)
+            : null
+        }
+        nextAction={action?.label ?? null}
         recentOutcome={
           monitoring.length
             ? monitoring.map((m) => `${m.label}: ${m.count}`).join(" · ")
             : null
         }
-        needsApproval={false}
+        needsApproval={/approv/i.test(statusLabel)}
         blockers={blockers}
         askHref={askHref}
       />
@@ -117,7 +128,7 @@ export default function TeamExecutiveLayout({
 }) {
   const viewModel = useContext<TeamViewModel | null>(TeamViewModelContext);
   const [showInvite, setShowInvite] = useState(false);
-  const [workspace, setWorkspace] = useState<"organization" | "team">("organization");
+  const [workspace, setWorkspace] = useState<"organization" | "team">("team");
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
@@ -138,10 +149,10 @@ export default function TeamExecutiveLayout({
 
   const metricStrip = useMemo(
     () => [
-      { id: "human", label: "Human team", value: String(counts.humanTeam) },
-      { id: "digital", label: "Digital employees", value: String(counts.digitalEmployees) },
-      { id: "ready", label: "Ready", value: String(counts.ready) },
-      { id: "setup", label: "Needs setup", value: String(counts.needsSetup) },
+      { id: "human", label: "People", value: String(counts.humanTeam) },
+      { id: "digital", label: "AI teammates", value: String(counts.digitalEmployees) },
+      { id: "ready", label: "Working", value: String(counts.ready) },
+      { id: "setup", label: "Getting ready", value: String(counts.needsSetup) },
     ],
     [counts],
   );
@@ -230,27 +241,12 @@ export default function TeamExecutiveLayout({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>
       <PageHeader
-        title="Organization"
-        description="Departments, teams, humans, AI employees, responsibilities, and reporting lines."
+        title="Team"
+        description="People and AI teammates accountable for work in this business."
         action={inviteAction}
       />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          onClick={() => setWorkspace("organization")}
-          style={{
-            borderRadius: 999,
-            border: `1px solid ${cockpitColors.panelBorder}`,
-            background: workspace === "organization" ? cockpitColors.accent : cockpitColors.panel,
-            color: workspace === "organization" ? "#fff" : cockpitColors.textPrimary,
-            padding: "8px 14px",
-            fontWeight: 650,
-            cursor: "pointer",
-          }}
-        >
-          Organization
-        </button>
         <button
           type="button"
           onClick={() => setWorkspace("team")}
@@ -265,6 +261,21 @@ export default function TeamExecutiveLayout({
           }}
         >
           Team roster
+        </button>
+        <button
+          type="button"
+          onClick={() => setWorkspace("organization")}
+          style={{
+            borderRadius: 999,
+            border: `1px solid ${cockpitColors.panelBorder}`,
+            background: workspace === "organization" ? cockpitColors.accent : cockpitColors.panel,
+            color: workspace === "organization" ? "#fff" : cockpitColors.textPrimary,
+            padding: "8px 14px",
+            fontWeight: 650,
+            cursor: "pointer",
+          }}
+        >
+          Organization
         </button>
       </div>
 
@@ -310,12 +321,12 @@ export default function TeamExecutiveLayout({
       <ShellMetricStrip metrics={metricStrip} />
 
       <ShellPanel
-        title="Human team"
+        title="People"
         subtitle={`${counts.humanTeam} member${counts.humanTeam === 1 ? "" : "s"}`}
         action={platformMembers.length === 0 ? inviteAction : undefined}
       >
         {platformMembers.length === 0 ? (
-          <PanelEmpty description="Invite employees so they can access VIBETech and work with your digital employees." />
+          <PanelEmpty description="Invite teammates so they can access VIBETech and work alongside AI teammates." />
         ) : (
           <div>
             {platformMembers.map((member) => (
@@ -372,11 +383,11 @@ export default function TeamExecutiveLayout({
       ) : null}
 
       <ShellPanel
-        title="Digital workforce"
-        subtitle={`${counts.digitalEmployees} digital employee${counts.digitalEmployees === 1 ? "" : "s"}`}
+        title="AI teammates"
+        subtitle={`${counts.digitalEmployees} teammate${counts.digitalEmployees === 1 ? "" : "s"}`}
       >
         {digitalEmployees.length === 0 ? (
-          <PanelEmpty description="Your digital employees will appear here once your business package is active." />
+          <PanelEmpty description="Your AI teammates will appear here once the business is set up." />
         ) : (
           <div>
             {digitalEmployees.map((employee) => (

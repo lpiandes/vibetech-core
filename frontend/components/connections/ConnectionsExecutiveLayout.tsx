@@ -183,7 +183,7 @@ export default function ConnectionsExecutiveLayout() {
 
       <ShellPanel title="Required connections" subtitle={`${sections.required.length} required`}>
         {sections.required.length === 0 ? (
-          <PanelEmpty description={emptyRequired ?? "Required connections will appear here for your business package."} />
+          <PanelEmpty description={emptyRequired ?? "Required connections will appear here once VIBETech knows what this business needs."} />
         ) : (
           <div>
             {sections.required.map(({ conn, display }) => (

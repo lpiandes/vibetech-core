@@ -114,7 +114,7 @@ function BusinessCard({ id, name }: { id: string; name: string }) {
       }}
     >
       {name}
-      <div style={{ marginTop: 4, fontSize: 13, color: "#64748B", fontWeight: 500 }}>Open Mission Control</div>
+      <div style={{ marginTop: 4, fontSize: 13, color: "#64748B", fontWeight: 500 }}>Open home</div>
     </Link>
   );
 }

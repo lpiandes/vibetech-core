@@ -21,7 +21,8 @@ export function Surface({
     <Tag
       style={{
         backgroundColor: inset ? cockpitColors.inset : cockpitColors.panel,
-        border: `1px solid ${cockpitColors.panelBorder}`,
+        border: "1px solid transparent",
+        boxShadow: "0 1px 2px rgba(28, 25, 23, 0.04)",
         borderRadius: radius.large,
         padding: spacing.lg,
         ...style,

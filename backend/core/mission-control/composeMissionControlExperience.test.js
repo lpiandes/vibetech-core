@@ -72,6 +72,10 @@ test("Mission Control experience composes BI without fabricating metrics", () =>
   assert.equal(composed.experience.recentCommunications[0].label, "Owner update");
   assert.equal(composed.experience.aiWorkforceActivity.digitalEmployees.length, 1);
   assert.equal(composed.executiveBriefing.headline, "Your business is being watched");
+  assert.equal(composed.supervision.contract, "OperatingHomeSupervision/v1");
+  assert.ok(composed.supervision.sectionOrder.indexOf("needsDecision")
+    < composed.supervision.sectionOrder.indexOf("businessOverview"));
+  assert.equal(composed.supervision.needsDecision.items.length, 1);
 });
 
 test("experience falls back calmly when BI is absent", () => {

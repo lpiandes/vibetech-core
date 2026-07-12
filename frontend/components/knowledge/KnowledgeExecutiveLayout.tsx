@@ -151,7 +151,7 @@ export default function KnowledgeExecutiveLayout({
   const presentation = (knowledgeContext?.presentation ?? {}) as KnowledgePresentation;
   const emptyCopy =
     presentation.emptyStates?.documents ??
-    "Upload policies, procedures, and guides so VIBETech can support your Digital Employees.";
+    "Upload policies, procedures, and guides so VIBETech can follow how your business works.";
 
   const counts = useMemo(
     () => deriveKnowledgeCounts(documents, knowledgeContext),
@@ -254,7 +254,7 @@ export default function KnowledgeExecutiveLayout({
             ))}
           </div>
         ) : (
-          <PanelEmpty description={knowledgeContext?.fallbackExplanation ?? "Uploaded documents support business knowledge setup for Digital Employees."} />
+          <PanelEmpty description={knowledgeContext?.fallbackExplanation ?? "Uploaded documents help VIBETech follow your policies and procedures."} />
         )}
       </ShellPanel>
 

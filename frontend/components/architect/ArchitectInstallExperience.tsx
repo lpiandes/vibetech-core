@@ -84,7 +84,15 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
           <div style={{ display: "grid", gap: 16 }}>
             <h2 style={{ margin: 0, fontSize: 20 }}>{checklist.headline ?? "Launch checklist"}</h2>
             <div style={{ display: "grid", gap: 10 }}>
-              {(checklist.items ?? []).map((item: any) => {
+              {(checklist.items ?? [])
+                .filter((item: any) => {
+                  const count = Number(item.count ?? item.value ?? NaN);
+                  if (Number.isFinite(count) && count === 0 && (item.status === "ready" || item.status === "ok")) {
+                    return false;
+                  }
+                  return true;
+                })
+                .map((item: any) => {
                 const ready = item.status === "ready" || item.status === "ok";
                 return (
                   <div key={item.id} style={rowCard}>
@@ -97,6 +105,14 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
                 );
               })}
             </div>
+            {(checklist.blocking ?? []).length ? (
+              <div style={{ ...rowCard, borderColor: "rgba(220,38,38,.35)", background: "rgba(220,38,38,.06)" }} role="alert">
+                <strong>Must resolve before launch</strong>
+                <ul style={{ marginBottom: 0 }}>
+                  {(checklist.blocking as string[]).map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+            ) : null}
             {(checklist.warnings ?? []).length ? (
               <div style={{ ...rowCard, borderColor: "rgba(251,191,36,.35)", background: "rgba(251,191,36,.08)" }}>
                 <strong>Things to review</strong>
@@ -105,8 +121,13 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
             ) : null}
             <p style={{ color: architect.inkMuted, margin: 0 }}>No live records were changed.</p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <ArchitectButton onClick={() => router.push(routes.install)}>Continue to launch</ArchitectButton>
-              <ArchitectButton variant="secondary" onClick={() => router.push(routes.session)}>Back to Architect</ArchitectButton>
+              <ArchitectButton
+                disabled={(checklist.blocking ?? []).length > 0}
+                onClick={() => router.push(routes.install)}
+              >
+                Continue to launch
+              </ArchitectButton>
+              <ArchitectButton variant="secondary" onClick={() => router.push(routes.session)}>Back to Ask VIBETech</ArchitectButton>
               <ArchitectButton variant="ghost" disabled={busy} onClick={() => void run()}>Check again</ArchitectButton>
             </div>
           </div>

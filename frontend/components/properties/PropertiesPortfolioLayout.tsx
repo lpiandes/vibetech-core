@@ -74,7 +74,7 @@ export default function PropertiesPortfolioLayout({
   const pageTitle = portfolioIndex.pageTitle ?? "Properties";
   const pageDescription =
     portfolioIndex.pageDescription ??
-    "Portfolio intelligence across your listings and properties.";
+    "Properties VIBETech is supervising for this business.";
   const addLabel = portfolioIndex.addProperty ?? "Add property";
   const addFirstLabel = portfolioIndex.addFirstProperty ?? "Add your first property";
   const dialogTitle = portfolioIndex.createDialogTitle ?? "Add property";
@@ -119,8 +119,8 @@ export default function PropertiesPortfolioLayout({
           }}
         >
           {formatUnattributedCallout(presentation.unattributedCallout, portfolio.totals.unattributedInquiries)}{" "}
-          <Link href={`/b/${businessId}/inbox`} style={{ color: cockpitColors.accent, fontWeight: 600, textDecoration: "none" }}>
-            Open inbox
+          <Link href={`/b/${businessId}/work`} style={{ color: cockpitColors.accent, fontWeight: 600, textDecoration: "none" }}>
+            Open Work
           </Link>
         </div>
       ) : null}

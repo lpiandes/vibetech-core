@@ -89,16 +89,20 @@ type IntelligenceCandidateCard = {
 };
 
 const SECTIONS = [
-  { id: "attention", label: "Needs Attention" },
-  { id: "executive", label: "Executive Briefing" },
+  { id: "attention", label: "Waiting on you" },
+  { id: "more", label: "More insights" },
+] as const;
+
+const INSIGHT_SECTIONS = [
+  { id: "executive", label: "What changed" },
   { id: "recommendations", label: "Recommendations" },
   { id: "opportunities", label: "Opportunities" },
-  { id: "health", label: "Business Health" },
+  { id: "health", label: "Business health" },
   { id: "risks", label: "Risks" },
   { id: "capacity", label: "Capacity" },
-  { id: "ai", label: "AI Suggestions" },
-  { id: "improvements", label: "Recent Improvements" },
-  { id: "roadmap", label: "Future Roadmap" },
+  { id: "ai", label: "Suggestions" },
+  { id: "improvements", label: "Recent improvements" },
+  { id: "roadmap", label: "What's next" },
 ] as const;
 
 /**
@@ -107,6 +111,7 @@ const SECTIONS = [
  */
 export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }) {
   const [section, setSection] = useState<(typeof SECTIONS)[number]["id"]>("attention");
+  const [insightSection, setInsightSection] = useState<(typeof INSIGHT_SECTIONS)[number]["id"]>("executive");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -198,7 +203,14 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
       });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error ?? data.message ?? "Could not open Architect.");
-      router.push(data.openHref ?? `/architect/${data.session.sessionId}`);
+      router.push(
+        data.openHref
+        ?? (businessId && data.session?.sessionId
+          ? `/b/${encodeURIComponent(businessId)}/architect?sessionId=${encodeURIComponent(data.session.sessionId)}`
+          : data.session?.sessionId
+            ? `/architect/${data.session.sessionId}`
+            : `/b/${encodeURIComponent(businessId)}/architect`),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open Architect.");
     } finally {
@@ -207,45 +219,53 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
   }
 
   const listForSection = (): GovernedRecommendation[] => {
-    if (section === "recommendations") return view.recommendations ?? [];
-    if (section === "opportunities") return view.opportunities ?? [];
-    if (section === "risks") return view.risks ?? [];
-    if (section === "capacity") return view.capacity ?? [];
-    if (section === "ai") return view.aiSuggestions ?? [];
+    if (insightSection === "recommendations") return view.recommendations ?? [];
+    if (insightSection === "opportunities") return view.opportunities ?? [];
+    if (insightSection === "risks") return view.risks ?? [];
+    if (insightSection === "capacity") return view.capacity ?? [];
+    if (insightSection === "ai") return view.aiSuggestions ?? [];
     return [];
   };
 
   return (
-    <div style={{ display: "grid", gap: spacing.md, padding: spacing.md }}>
+    <div style={{ display: "grid", gap: spacing.xl, padding: `${spacing.lg} ${spacing.md}`, maxWidth: 880, margin: "0 auto" }}>
       <PageHeader
         eyebrow="Needs Attention"
-        title="What needs your decision"
+        title={
+          candidates.length === 0
+            ? "Nothing needs your decision"
+            : candidates.length === 1
+              ? "One decision is waiting"
+              : `${candidates.length} decisions are waiting`
+        }
         description={
-          view.honesty?.message
-          ?? "Evidence-backed candidates. Create Work, propose a change, or Ask VIBETech — nothing changes silently."
+          candidates.length === 0
+            ? "VIBETech will notify you when a decision is required. Recommendations always include why and what happens next."
+            : "Review each item, understand the impact, then approve Work or a change. Nothing changes silently."
         }
         actions={
           <>
             <GlobalAskVibeTechEntry compact />
             <ActionButton variant="secondary" disabled={busyId === "refresh"} onClick={() => void refreshIntelligence()}>
-              {busyId === "refresh" ? "Evaluating…" : "Refresh"}
+              {busyId === "refresh" ? "Checking…" : "Check again"}
             </ActionButton>
           </>
         }
       />
 
-      <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }} aria-label="Needs Attention sections">
         {SECTIONS.map((entry) => (
           <button
             key={entry.id}
             type="button"
             onClick={() => setSection(entry.id)}
             style={{
-              borderRadius: 999,
-              border: `1px solid ${section === entry.id ? cockpitColors.accent : cockpitColors.panelBorder}`,
-              background: section === entry.id ? "rgba(15,118,110,.08)" : cockpitColors.panel,
-              color: cockpitColors.textPrimary,
-              padding: "8px 12px",
+              borderRadius: 8,
+              border: "none",
+              borderBottom: `2px solid ${section === entry.id ? cockpitColors.accent : "transparent"}`,
+              background: "transparent",
+              color: section === entry.id ? cockpitColors.textPrimary : cockpitColors.textMuted,
+              padding: "8px 10px",
               cursor: "pointer",
               fontWeight: section === entry.id ? 700 : 500,
               fontSize: typography.caption.fontSize,
@@ -264,7 +284,7 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
         <div style={{ display: "grid", gap: 12 }}>
           {candidates.length === 0 ? (
             <div style={{ ...panelStyle, color: cockpitColors.textSecondary }}>
-              Nothing needs your decision yet. As work and people activity come in, items will appear here.
+              Nothing needs your judgment right now. VIBETech will surface the next decision when it matters.
             </div>
           ) : (
             candidates.map((candidate) => (
@@ -284,45 +304,71 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
         </div>
       ) : null}
 
-      {section === "executive" ? (
-        <ExecutiveBriefingPanel briefing={view.executiveBriefing} health={view.businessHealth} counts={view.observationCounts} />
-      ) : null}
+      {section === "more" ? (
+        <div style={{ display: "grid", gap: 16 }}>
+          <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }} aria-label="More insights">
+            {INSIGHT_SECTIONS.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => setInsightSection(entry.id)}
+                style={{
+                  borderRadius: 8,
+                  border: "none",
+                  background: insightSection === entry.id ? "rgba(15,118,110,.08)" : "transparent",
+                  color: insightSection === entry.id ? cockpitColors.textPrimary : cockpitColors.textMuted,
+                  padding: "6px 10px",
+                  cursor: "pointer",
+                  fontWeight: insightSection === entry.id ? 650 : 500,
+                  fontSize: typography.meta.fontSize,
+                }}
+              >
+                {entry.label}
+              </button>
+            ))}
+          </nav>
 
-      {section === "health" ? (
-        <HealthPanel health={view.businessHealth} />
-      ) : null}
+          {insightSection === "executive" ? (
+            <ExecutiveBriefingPanel briefing={view.executiveBriefing} health={view.businessHealth} counts={view.observationCounts} />
+          ) : null}
 
-      {section === "improvements" ? (
-        <SimpleList
-          title="Recent Improvements"
-          empty="Improvements you approve and install will appear here."
-          items={(view.recentImprovements ?? []).map((item) => ({ id: item.id, label: item.label, detail: item.at }))}
-        />
-      ) : null}
+          {insightSection === "health" ? (
+            <HealthPanel health={view.businessHealth} />
+          ) : null}
 
-      {section === "roadmap" ? (
-        <RoadmapPanel roadmap={view.futureRoadmap ?? []} />
-      ) : null}
+          {insightSection === "improvements" ? (
+            <SimpleList
+              title="Recent improvements"
+              empty="Improvements you approve and install will appear here."
+              items={(view.recentImprovements ?? []).map((item) => ({ id: item.id, label: item.label, detail: item.at }))}
+            />
+          ) : null}
 
-      {["recommendations", "opportunities", "risks", "capacity", "ai"].includes(section) ? (
-        <div style={{ display: "grid", gap: 12 }}>
-          {listForSection().length === 0 ? (
-            <div style={{ ...panelStyle, color: cockpitColors.textSecondary }}>
-              Nothing in this section right now — evidence is still forming.
+          {insightSection === "roadmap" ? (
+            <RoadmapPanel roadmap={view.futureRoadmap ?? []} />
+          ) : null}
+
+          {["recommendations", "opportunities", "risks", "capacity", "ai"].includes(insightSection) ? (
+            <div style={{ display: "grid", gap: 12 }}>
+              {listForSection().length === 0 ? (
+                <div style={{ ...panelStyle, color: cockpitColors.textSecondary }}>
+                  Nothing in this section right now — evidence is still forming.
+                </div>
+              ) : (
+                listForSection().map((recommendation) => (
+                  <RecommendationCard
+                    key={recommendation.recommendationId}
+                    recommendation={recommendation}
+                    expanded={expandedId === recommendation.recommendationId}
+                    busy={busyId === recommendation.recommendationId}
+                    onToggle={() => setExpandedId((current) =>
+                      current === recommendation.recommendationId ? null : recommendation.recommendationId)}
+                    onImprove={() => void startImprove(recommendation)}
+                  />
+                ))
+              )}
             </div>
-          ) : (
-            listForSection().map((recommendation) => (
-              <RecommendationCard
-                key={recommendation.recommendationId}
-                recommendation={recommendation}
-                expanded={expandedId === recommendation.recommendationId}
-                busy={busyId === recommendation.recommendationId}
-                onToggle={() => setExpandedId((current) =>
-                  current === recommendation.recommendationId ? null : recommendation.recommendationId)}
-                onImprove={() => void startImprove(recommendation)}
-              />
-            ))
-          )}
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -349,56 +395,65 @@ function IntelligenceCandidateCardView({
   onAskArchitect: () => void;
 }) {
   const [showTechnical, setShowTechnical] = useState(false);
-  const ownerLabel = candidate.ownerRef?.kind
-    ? humanize(String(candidate.ownerRef.kind))
-    : "Unassigned";
-  const nextStep =
+  const recommended =
     candidate.recommendedActions?.[0]?.label
-    ?? "Review evidence and choose Create Work or Propose Change";
+    ?? "Review and choose Work or a change";
+  const why = candidate.whyItMatters ?? candidate.explanation ?? candidate.summary ?? "";
+  const impact = candidate.whatHappened ?? candidate.summary ?? null;
 
   return (
-    <article style={panelStyle} aria-labelledby={`candidate-${candidate.id}`}>
+    <article
+      style={{
+        ...panelStyle,
+        border: "1px solid transparent",
+        boxShadow: "0 1px 2px rgba(28, 25, 23, 0.04)",
+      }}
+      aria-labelledby={`candidate-${candidate.id}`}
+    >
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        style={{ all: "unset", cursor: "pointer", display: "grid", gap: 8, width: "100%" }}
+        style={{ all: "unset", cursor: "pointer", display: "grid", gap: 10, width: "100%" }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-          <strong id={`candidate-${candidate.id}`} style={{ color: cockpitColors.textPrimary }}>
+          <strong id={`candidate-${candidate.id}`} style={{ color: cockpitColors.textPrimary, fontSize: "1.05rem" }}>
             {candidate.title}
           </strong>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <OperatingStatusBadge status={candidate.severity} />
-            <OperatingStatusBadge status={candidate.status === "open" ? "waiting" : candidate.status} label={humanize(candidate.status ?? "open")} />
+          <OperatingStatusBadge status={candidate.severity} />
+        </div>
+        {why ? (
+          <div style={{ color: cockpitColors.textSecondary, lineHeight: 1.55 }}>
+            <strong style={{ color: cockpitColors.textPrimary }}>Why: </strong>
+            {why}
           </div>
-        </div>
-        <div style={{ color: cockpitColors.textSecondary }}>
-          {candidate.whatHappened ?? candidate.summary}
-        </div>
-        <div style={{ fontSize: typography.meta.fontSize, color: cockpitColors.textMuted }}>
-          Owner: {ownerLabel} · Next: {nextStep}
+        ) : null}
+        {impact ? (
+          <div style={{ fontSize: typography.meta.fontSize, color: cockpitColors.textMuted }}>
+            Impact: {impact}
+          </div>
+        ) : null}
+        <div style={{ fontSize: typography.meta.fontSize, color: cockpitColors.textSecondary }}>
+          Recommended: {recommended}
         </div>
       </button>
       {expanded ? (
         <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
-          <div>
-            <strong>Why it matters</strong>
-            <div style={{ color: cockpitColors.textSecondary }}>{candidate.whyItMatters ?? candidate.explanation}</div>
-          </div>
-          <div>
-            <strong>Confidence</strong>
-            <div style={{ color: cockpitColors.textSecondary }}>{candidate.confidenceReason}</div>
-          </div>
+          {candidate.confidenceReason ? (
+            <div>
+              <strong>Confidence</strong>
+              <div style={{ color: cockpitColors.textSecondary }}>{candidate.confidenceReason}</div>
+            </div>
+          ) : null}
           <EvidencePanel items={candidate.evidence ?? []} showTechnical={showTechnical} />
           {(candidate.missingEvidence ?? []).length ? (
             <div style={{ color: cockpitColors.warning }}>
-              Missing information: {(candidate.missingEvidence ?? []).map(humanize).join(", ")}
+              Still needed: {(candidate.missingEvidence ?? []).map(humanize).join(", ")}
             </div>
           ) : null}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <ActionButton disabled={busy} onClick={onCreateWork}>Create Work</ActionButton>
-            <ActionButton variant="secondary" disabled={busy} onClick={onProposeChange}>Propose Change</ActionButton>
+            <ActionButton variant="secondary" disabled={busy} onClick={onProposeChange}>Propose change</ActionButton>
             <ActionButton variant="secondary" disabled={busy} onClick={onAskArchitect}>Ask VIBETech</ActionButton>
             <ActionButton variant="ghost" disabled={busy} onClick={onDismiss}>Dismiss</ActionButton>
             <button
@@ -523,13 +578,9 @@ function RecommendationCard({
     <article style={panelStyle}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-            <span style={chipStyle}>{humanize(recommendation.priority ?? "soon")}</span>
-            <span style={chipStyle}>Risk: {recommendation.risk}</span>
-            <span style={chipStyle}>Confidence: {recommendation.confidence}</span>
-            {recommendation.reuse?.strategy ? (
-              <span style={chipStyle}>Reuse: {humanize(recommendation.reuse.strategy)}</span>
-            ) : null}
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6, fontSize: 12, color: cockpitColors.textMuted }}>
+            <span>{humanize(recommendation.priority ?? "soon")}</span>
+            <span>Confidence: {recommendation.confidence}</span>
           </div>
           <h3 style={{ margin: 0, fontSize: "1.05rem" }}>{recommendation.title}</h3>
           <p style={{ margin: "8px 0 0", color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
@@ -538,10 +589,10 @@ function RecommendationCard({
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
           <button type="button" onClick={onToggle} style={ghostButton}>
-            {expanded ? "Hide evidence" : "Explain"}
+            {expanded ? "Hide details" : "Why this"}
           </button>
           <button type="button" onClick={onImprove} disabled={busy} style={primaryButton}>
-            {busy ? "Opening…" : "Preview in Architect"}
+            {busy ? "Opening…" : "Ask VIBETech"}
           </button>
         </div>
       </div>
@@ -673,18 +724,19 @@ function humanize(value: string) {
 
 const panelStyle = {
   borderRadius: radius.large,
-  border: `1px solid ${cockpitColors.panelBorder}`,
+  border: "1px solid transparent",
+  boxShadow: "0 1px 2px rgba(28, 25, 23, 0.04)",
   background: cockpitColors.panel,
-  padding: spacing.md,
+  padding: spacing.lg,
 } as const;
 
 const chipStyle = {
-  borderRadius: 999,
-  border: `1px solid ${cockpitColors.panelBorder}`,
-  padding: "4px 10px",
+  borderRadius: 8,
+  border: "none",
+  padding: "4px 8px",
   fontSize: 12,
-  color: cockpitColors.textSecondary,
-  background: cockpitColors.panelElevated ?? cockpitColors.panel,
+  color: cockpitColors.textMuted,
+  background: "transparent",
 } as const;
 
 const ghostButton = {

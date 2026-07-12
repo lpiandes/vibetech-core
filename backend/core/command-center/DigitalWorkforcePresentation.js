@@ -11,26 +11,27 @@ function roleDisplayLabel(presentation, roleKey) {
 function resolveOperatingLabel({ emp, presentation, waitingOnOwner, assignedWork, assignedRuns }) {
   const workforceLabels = presentation?.workforceLabels ?? {};
   const statusLabels = {
-    ACTIVE: workforceLabels.ready ?? "READY",
-    READY: workforceLabels.ready ?? "READY",
-    DEGRADED: presentation?.team?.statusLabels?.DEGRADED ?? "DEGRADED",
-    CONFIGURING: presentation?.team?.statusLabels?.CONFIGURING ?? "CONFIGURING",
-    UNAVAILABLE: presentation?.team?.statusLabels?.UNAVAILABLE ?? workforceLabels.blocked ?? "BLOCKED",
-    BLOCKED: workforceLabels.blocked ?? "BLOCKED",
-    NEEDS_CONFIGURATION: presentation?.team?.statusLabels?.CONFIGURING ?? "CONFIGURING",
+    ACTIVE: workforceLabels.working ?? "Working",
+    READY: workforceLabels.idle ?? "Idle",
+    WAITING: workforceLabels.waiting ?? "Waiting",
+    DEGRADED: presentation?.team?.statusLabels?.DEGRADED ?? "Blocked",
+    CONFIGURING: presentation?.team?.statusLabels?.CONFIGURING ?? "Needs setup",
+    UNAVAILABLE: presentation?.team?.statusLabels?.UNAVAILABLE ?? workforceLabels.blocked ?? "Blocked",
+    BLOCKED: workforceLabels.blocked ?? "Blocked",
+    NEEDS_CONFIGURATION: presentation?.team?.statusLabels?.CONFIGURING ?? "Needs setup",
     ...(presentation?.team?.statusLabels ?? {}),
   };
 
-  if (waitingOnOwner) return workforceLabels.waitingOnYou ?? "WAITING ON YOU";
+  if (waitingOnOwner) return workforceLabels.waitingOnYou ?? "Needs approval";
 
   const status = String(emp.status ?? "").toUpperCase();
   if (["DEGRADED", "CONFIGURING", "UNAVAILABLE", "BLOCKED", "NEEDS_CONFIGURATION"].includes(status)) {
     return statusLabels[status] ?? status;
   }
 
-  if (assignedWork.length || assignedRuns.length) return workforceLabels.handling ?? "HANDLING";
+  if (assignedWork.length || assignedRuns.length) return workforceLabels.handling ?? "Working";
   if (statusLabels[status]) return String(statusLabels[status]);
-  return workforceLabels.ready ?? "READY";
+  return workforceLabels.idle ?? "Idle";
 }
 
 /**

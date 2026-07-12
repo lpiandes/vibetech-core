@@ -416,7 +416,10 @@ export class WorkspaceService {
     };
   }
 
-  loadMissionControlViewModel() {
+  loadMissionControlViewModel(options: {
+    ownerFirstName?: string | null;
+    setupChecklist?: Array<{ id: string; title: string; actionLabel: string; href: string; complete: boolean }>;
+  } = {}) {
     const brief = new CompanyBriefEngine({ nowISO: NOW_ISO }).generate({ companyRuntime: this.runtime });
     const health = new CompanyHealthEngine({ nowISO: NOW_ISO }).generate({ companyRuntime: this.runtime, companyBrief: brief });
     const insights = new CompanyInsightEngine({ nowISO: NOW_ISO }).generate({
@@ -566,6 +569,9 @@ export class WorkspaceService {
       businessIntelligenceView: intelligenceView,
       recentCommunications,
       upcomingWork: commandCenter.workMovingNow ?? commandCenter.workInProgress ?? [],
+      ownerFirstName: options.ownerFirstName ?? null,
+      setupChecklist: Array.isArray(options.setupChecklist) ? options.setupChecklist : [],
+      businessId: this.workspaceId,
     });
   }
 

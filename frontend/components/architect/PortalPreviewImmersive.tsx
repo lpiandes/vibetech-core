@@ -14,6 +14,7 @@ export default function PortalPreviewImmersive({
   onRoleChange,
   accentColor,
   busy,
+  onPrepareLaunch,
 }: {
   portalPreview: any;
   proposal?: any;
@@ -21,6 +22,7 @@ export default function PortalPreviewImmersive({
   onRoleChange: (role: PreviewRole) => void;
   accentColor: string;
   busy?: boolean;
+  onPrepareLaunch?: () => void;
 }) {
   const personas = useMemo(
     () => aiEmployeePersonas({
@@ -44,7 +46,7 @@ export default function PortalPreviewImmersive({
     <div style={{ display: "grid", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
         <div>
-          <ArchitectBadge tone="accent">Portal preview</ArchitectBadge>
+          <ArchitectBadge tone="accent">Home preview</ArchitectBadge>
           <h2 style={{ margin: "8px 0 0", fontFamily: architect.display, fontSize: 28 }}>
             See it as your team will
           </h2>
@@ -166,6 +168,14 @@ export default function PortalPreviewImmersive({
       {personas.length ? (
         <div style={{ color: architect.inkMuted, fontSize: 13 }}>
           Tip: choose an AI teammate above to preview what they watch and when they need you.
+        </div>
+      ) : null}
+
+      {onPrepareLaunch ? (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
+          <ArchitectButton onClick={onPrepareLaunch}>
+            Looks good — prepare to launch
+          </ArchitectButton>
         </div>
       ) : null}
     </div>

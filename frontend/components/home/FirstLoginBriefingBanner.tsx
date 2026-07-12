@@ -63,11 +63,11 @@ export default function FirstLoginBriefingBanner({
             Welcome to {businessName}
           </div>
           <div style={{ marginTop: 4, fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
-            Architect installed your operating system. Walk the home screen, invite your team, and keep refining with Ask VIBETech.
+            Your business is ready to supervise. Walk Home, invite your team, and keep refining with Ask VIBETech.
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: spacing.sm }}>
             <Link
-              href={`/b/${businessId}/settings`}
+              href={`/b/${businessId}/team`}
               style={{
                 color: cockpitColors.accent,
                 fontWeight: 650,

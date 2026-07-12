@@ -91,11 +91,10 @@ export default function IntegrationSetupDialog({
           {isBusinessEmail ? (
             <>
               <div style={{ fontWeight: 600, fontSize: typography.caption.fontSize, color: cockpitColors.textPrimary }}>
-                Development email connection
+                Business email
               </div>
               <p style={{ ...typography.caption, color: cockpitColors.textSecondary, margin: `${spacing.xs} 0 0`, lineHeight: 1.5 }}>
-                Connects a development email provider so your Digital Employees can send prospect acknowledgments and
-                follow-up messages. Production Gmail setup uses the same connection architecture.
+                Connect email so AI teammates can send prospect acknowledgments and follow-up messages on your behalf.
               </p>
               {error ? (
                 <p style={{ color: "#b91c1c", margin: `${spacing.sm} 0 0`, fontSize: typography.caption.fontSize }}>{error}</p>

@@ -40,7 +40,7 @@ function subjectLabelFromScope(scope: ReturnType<typeof useBusinessScope>): stri
   const terminology = scope.installedBusinessOS?.terminology as any;
   const entities = terminology?.entityLabels ?? terminology?.presentation?.entityLabels ?? {};
   const subject =
-    entities.property ?? entities.subject ?? scope.installedBusinessOS?.subjectTypes?.[0] ?? "Subjects";
+    entities.property ?? entities.subject ?? scope.installedBusinessOS?.subjectTypes?.[0] ?? "Properties";
   const label = String(subject).replace(/_/g, " ");
   return label.charAt(0).toUpperCase() + label.slice(1);
 }

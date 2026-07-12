@@ -72,12 +72,12 @@ export default function AccountMenu({ variant = "light" }: { variant?: "light" |
               color: cockpitColors.textMuted,
             }}
           >
-            {scope.role}
+            {humanizeRole(scope.role)}
           </div>
           <Link role="menuitem" href={settingsHref} onClick={() => setOpen(false)} style={menuItemStyle}>
             Settings
           </Link>
-          <Link role="menuitem" href="/" onClick={() => setOpen(false)} style={menuItemStyle}>
+          <Link role="menuitem" href="/businesses" onClick={() => setOpen(false)} style={menuItemStyle}>
             Switch business
           </Link>
           <button
@@ -117,3 +117,17 @@ const menuItemStyle: CSSProperties = {
   fontSize: typography.caption.fontSize,
   borderTop: `1px solid ${cockpitColors.panelBorder}`,
 };
+
+function humanizeRole(role: string | null | undefined) {
+  const raw = String(role ?? "").trim();
+  if (!raw) return "Member";
+  if (raw === "OWNER") return "Owner";
+  if (raw === "MANAGER") return "Manager";
+  if (raw === "EMPLOYEE") return "Team member";
+  if (raw === "PLATFORM_ADMIN") return "Platform admin";
+  return raw
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}

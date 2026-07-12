@@ -73,7 +73,7 @@ export default function KnowledgeAddDialog({
       }
     >
       <p style={{ ...typography.caption, color: cockpitColors.textSecondary, margin: `0 0 ${spacing.md}`, lineHeight: 1.45 }}>
-        Upload policies, procedures, guides, or reference documents. VIBETech uses these to satisfy business knowledge setup for Digital Employees.
+        Upload policies, procedures, guides, or reference documents. VIBETech uses these to follow how your business works.
       </p>
       <div
         style={{

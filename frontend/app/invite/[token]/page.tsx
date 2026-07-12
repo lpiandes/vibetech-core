@@ -226,7 +226,7 @@ export default function InviteAcceptPage() {
         <p style={{ color: cockpitColors.accent, fontWeight: 700, margin: 0 }}>VIBETech</p>
         <h1 style={{ ...typography.pageTitle, margin: `${spacing.sm} 0` }}>Taking you to {state.businessName}…</h1>
         <p style={{ color: cockpitColors.textMuted, margin: 0 }}>
-          Your account is ready. Next you&apos;ll meet Architect to design the business, or open the portal if it is already running.
+          Your account is ready. Next you&apos;ll design how the business runs, or open Home if it is already live.
         </p>
       </InviteShell>
     );
@@ -243,8 +243,8 @@ export default function InviteAcceptPage() {
       <p style={{ color: cockpitColors.textSecondary, margin: `0 0 ${spacing.md}` }}>
         You&apos;ve been invited to join {state.businessName} on VIBETech.
         {state.roleLabel && /owner/i.test(state.roleLabel)
-          ? " After you join, Architect will help you design and launch the business operating system."
-          : " After you join, you can open the business portal and start supervising work."}
+          ? " After you join, VIBETech will help you design how the business runs and launch when you are ready."
+          : " After you join, you can open the business and start supervising work."}
       </p>
       <div
         style={{
