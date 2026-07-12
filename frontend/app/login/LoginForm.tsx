@@ -4,12 +4,12 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 
-import PrimaryButton from "@/components/product/PrimaryButton";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
+import { sanitizeCallbackUrl } from "@/lib/platform/routeProtection";
 
 export default function LoginForm() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  const callbackUrl = sanitizeCallbackUrl(searchParams.get("callbackUrl"), "/");
   const routeError = searchParams.get("error");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

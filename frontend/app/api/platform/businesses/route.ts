@@ -4,7 +4,7 @@ import { createBusinessWithOwnerInvite } from "@/lib/server/compose";
 import { platformStore } from "@/lib/server/compose";
 import { isLikelyAutomatedTestBusiness } from "../../../../../backend/core/platform/platformTestData.js";
 import { MEMBERSHIP_ROLES } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
-import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
+import { requirePlatformAdminApi } from "@/lib/platform/requirePlatformAdmin";
 import { authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 
 async function ownerInviteEmail(businessId: string) {
@@ -15,7 +15,7 @@ async function ownerInviteEmail(businessId: string) {
 
 export async function GET() {
   try {
-    await requirePlatformAdmin();
+    await requirePlatformAdminApi();
     const businesses = await platformStore.listBusinesses();
     const rows = await Promise.all(
       businesses.map(async (b: { id: string; name: string; kind: string }) => {
@@ -44,7 +44,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const admin = await requirePlatformAdmin();
+    const admin = await requirePlatformAdminApi();
     const body = await request.json().catch(() => ({}));
     const name = String(body?.name ?? "").trim();
     const ownerEmail = String(body?.ownerEmail ?? "").trim().toLowerCase();

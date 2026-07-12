@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { generateDevelopmentInvitationLink } from "@/lib/server/compose";
-import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
+import { requirePlatformAdminApi } from "@/lib/platform/requirePlatformAdmin";
 import { authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 
 export async function POST(
@@ -13,7 +13,7 @@ export async function POST(
   }
 
   try {
-    const admin = await requirePlatformAdmin();
+    const admin = await requirePlatformAdminApi();
     const { invitationId } = await params;
     const result = await generateDevelopmentInvitationLink({
       invitationId,

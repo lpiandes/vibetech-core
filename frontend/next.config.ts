@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
   distDir,
   outputFileTracingRoot: repoRoot,
   serverExternalPackages: ["pg", "bcryptjs"],
+  experimental: {
+    // Enables next/navigation forbidden() + unauthorized() for clean 403/401 UX.
+    authInterrupts: true,
+  },
   eslint: {
     // This foundation sprint focuses on architecture/shell. Keep builds
     // deterministic even if lint plugins/config drift (e.g. during init).

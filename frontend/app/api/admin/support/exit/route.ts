@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
+import { requirePlatformAdminApi } from "@/lib/platform/requirePlatformAdmin";
 import { getAdminSupportService } from "@/lib/admin/getAdminServices";
 import { authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 
 export async function POST(request: Request) {
   try {
-    const user = await requirePlatformAdmin();
+    const user = await requirePlatformAdminApi();
     const body = await request.json();
     const result = await getAdminSupportService().exit({
       adminUserId: user.id,

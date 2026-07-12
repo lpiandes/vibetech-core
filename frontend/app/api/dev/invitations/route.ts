@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { listDevelopmentInvitations } from "@/lib/server/compose";
-import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
+import { requirePlatformAdminApi } from "@/lib/platform/requirePlatformAdmin";
 import { authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 
 export async function GET() {
@@ -10,7 +10,7 @@ export async function GET() {
   }
 
   try {
-    await requirePlatformAdmin();
+    await requirePlatformAdminApi();
     const invitations = await listDevelopmentInvitations();
     return NextResponse.json({ devMode: true, invitations });
   } catch (err) {

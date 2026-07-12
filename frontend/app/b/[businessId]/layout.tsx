@@ -1,11 +1,14 @@
 import type { ReactNode } from "react";
+import { forbidden, notFound, redirect, unauthorized } from "next/navigation";
+import { headers } from "next/headers";
 
 import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceService";
 import { BusinessScopeProvider } from "@/lib/platform/BusinessScopeContext";
 import WorkspaceRenderer from "@/components/workspace/WorkspaceRenderer";
 import RememberBusinessCookie from "@/components/platform/RememberBusinessCookie";
-import { platformStore } from "@/lib/server/compose";
+import { AuthorizationError, platformStore } from "@/lib/server/compose";
 import { composePortalModel } from "@/lib/portal-renderer/composePortalModel.js";
+import { sanitizeCallbackUrl } from "@/lib/platform/routeProtection";
 
 export default async function BusinessScopedLayout({
   children,
@@ -15,7 +18,31 @@ export default async function BusinessScopedLayout({
   params: Promise<{ businessId: string }>;
 }) {
   const { businessId } = await params;
-  const ctx = await getAuthorizedBusinessScope(businessId);
+
+  let ctx: Awaited<ReturnType<typeof getAuthorizedBusinessScope>>;
+  try {
+    ctx = await getAuthorizedBusinessScope(businessId);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      if (err.code === "UNAUTHENTICATED") {
+        const headerStore = await headers();
+        const pathname = headerStore.get("x-pathname") ?? `/b/${businessId}/home`;
+        const search = headerStore.get("x-search") ?? "";
+        const callbackUrl = sanitizeCallbackUrl(`${pathname}${search}`, `/b/${encodeURIComponent(businessId)}/home`);
+        redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+      }
+      // Do not disclose business existence for non-members vs missing ids.
+      if (err.code === "NOT_FOUND" || err.code === "FORBIDDEN") {
+        notFound();
+      }
+      if (err.code === "SUPPORT_ACCESS_REQUIRED") {
+        forbidden();
+      }
+      forbidden();
+    }
+    throw err;
+  }
+
   const permissions = Array.from(ctx.permissions).map(String);
   const businessName = ctx.authz.business.name;
 
