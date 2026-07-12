@@ -25,10 +25,12 @@ const CHECKLIST_META: Record<string, { description: string; icon: ReactNode }> =
 export default function EmptyBusinessHome({
   businessName,
   checklist,
+  businessId = null,
 }: {
   businessName: string;
   isDemo: boolean;
   checklist: ChecklistItem[];
+  businessId?: string | null;
 }) {
   const completeCount = checklist.filter((item) => item.complete).length;
   const total = checklist.length;
@@ -43,9 +45,22 @@ export default function EmptyBusinessHome({
         description={
           allComplete
             ? "Your setup checklist is complete. Explore your workspace or invite more team members."
-            : "Complete these steps to get your business running on VIBETech."
+            : "Complete these steps to get your business running on VIBETech — or ask Architect to install your operating system."
         }
       />
+
+      {businessId ? (
+        <div style={{ marginBottom: spacing.md }}>
+          <ActionRow
+            icon={<Building2 size={18} />}
+            title="Build with Architect"
+            description="Describe your business once. Architect proposes a governed operating system."
+            actionLabel="Open Architect"
+            href={`/architect?businessId=${encodeURIComponent(businessId)}`}
+            isLast
+          />
+        </div>
+      ) : null}
 
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: spacing.xs }}>

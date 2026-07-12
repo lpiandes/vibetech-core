@@ -92,6 +92,15 @@ import {
   RUNTIME_SNAPSHOT_KINDS,
   PROSPECT_LOOP_SNAPSHOT_KINDS,
 } from "../../../backend/core/persistence/RuntimeSnapshotKinds.js";
+import { BusinessIntelligenceEvaluationService } from "../../../backend/core/business-intelligence/evaluation/BusinessIntelligenceEvaluationService.js";
+import { projectIntelligenceCandidates } from "../../../backend/core/business-intelligence/candidates/IntelligenceCandidateProjection.js";
+import { IntelligenceCandidateLifecycle } from "../../../backend/core/business-intelligence/candidates/IntelligenceCandidateLifecycle.js";
+import { IntelligenceToWorkConversionService } from "../../../backend/core/business-intelligence/conversion/IntelligenceToWorkConversionService.js";
+import { IntelligenceToArchitectChangeService } from "../../../backend/core/business-intelligence/conversion/IntelligenceToArchitectChangeService.js";
+import { buildBusinessMemoryTimeline } from "../../../backend/core/business-intelligence/memory/BusinessMemoryTimeline.js";
+import { getDefaultBusinessIntelligenceDefinitionRegistry } from "../../../backend/core/business-intelligence/definitions/BusinessIntelligenceDefinitionRegistry.js";
+import { registerPropertyManagementIntelligenceDefinitions } from "../../../industries/property-management/config/propertyManagementIntelligenceDefinitions.js";
+import { ContinuousBusinessBuilderService } from "../../../backend/core/ai-builder/ContinuousBusinessBuilderService.js";
 import {
   getDigitalEmployeeReadinessEntry,
   isDigitalEmployeeOperationalReady,
@@ -570,11 +579,12 @@ export class WorkspaceService {
   }
 
   /**
-   * Continuous Business Intelligence workspace — compose existing BI engines.
-   * Read-only. Recommendations never mutate the Business OS.
+   * Continuous Business Intelligence workspace — compose existing BI engines + intelligence candidates.
+   * Candidate existence never mutates Work by itself.
    */
   loadBusinessIntelligenceWorkspace() {
     const installation = this.connected.installationResult ?? null;
+    const stack = this.connected.operatingStack ?? this.connected.ctx;
     const businessSummary = {
       businessId: this.workspaceId,
       industry: installation?.configuration?.industry
@@ -595,6 +605,29 @@ export class WorkspaceService {
       }
     })();
 
+    const intelligence = (projectIntelligenceCandidates as any)({
+      intelligenceCandidateRuntime: stack?.intelligenceCandidateRuntime,
+      businessId: this.workspaceId,
+    });
+    const memory = (buildBusinessMemoryTimeline as any)({
+      intelligenceCandidateRuntime: stack?.intelligenceCandidateRuntime,
+      workRuntime: stack?.workRuntime ?? this.workRuntime,
+      interactionRuntime: stack?.interactionRuntime ?? this.connected.ctx.interactionRuntime,
+      approvalRuntime: stack?.approvalRuntime ?? this.connected.ctx.approvalRuntime,
+    });
+    const recentImprovements = (memory.events ?? [])
+      .filter((entry: { kind?: string }) => (
+        entry.kind === "intelligence_candidate_resolved"
+        || entry.kind === "intelligence_converted_to_work"
+        || entry.kind === "work_state"
+      ))
+      .slice(0, 12)
+      .map((entry: { relatedId?: string; label?: string; at?: string | null }) => ({
+        id: String(entry.relatedId ?? entry.label),
+        label: entry.label,
+        at: entry.at ?? null,
+      }));
+
     const layer = new (BusinessIntelligenceLayer as any)({ nowISO: NOW_ISO });
     const workspace = layer.observeAndRecommend({
       companyRuntime: this.runtime,
@@ -603,7 +636,7 @@ export class WorkspaceService {
       workRuntime: this.workRuntime,
       requestRuntime: this.requestRuntime,
       businessSummary,
-      recentImprovements: [],
+      recentImprovements,
     });
 
     const view = (adaptBusinessIntelligenceWorkspace as any)(workspace, {
@@ -613,7 +646,124 @@ export class WorkspaceService {
         ?? null,
     });
 
-    return attachProductContext(view as Record<string, unknown>, this.connected);
+    return attachProductContext({
+      ...view,
+      intelligenceCandidates: intelligence.candidates,
+      intelligenceHistory: intelligence.history,
+      recentImprovements,
+      businessMemory: memory,
+    } as Record<string, unknown>, this.connected);
+  }
+
+  ensureBusinessIntelligenceDefinitionsRegistered() {
+    const registry = getDefaultBusinessIntelligenceDefinitionRegistry();
+    const packageId = this.connected.activation?.industryPackageId;
+    if (packageId === "pkg_property_management") {
+      registerPropertyManagementIntelligenceDefinitions(registry);
+    }
+    return registry;
+  }
+
+  async evaluateIntelligenceCandidates(nowISO?: string) {
+    const stack = this.connected.operatingStack ?? this.connected.ctx;
+    if (!stack?.intelligenceCandidateRuntime) {
+      throw new Error("Intelligence candidate runtime is not available for this workspace.");
+    }
+    this.ensureBusinessIntelligenceDefinitionsRegistered();
+    const service = new BusinessIntelligenceEvaluationService();
+    const result = await service.evaluate({
+      stack,
+      businessId: this.workspaceId,
+      nowISO: nowISO ?? NOW_ISO,
+      industryPackageId: this.connected.activation?.industryPackageId ?? null,
+      platformStore,
+      actorUserId: null,
+    } as any);
+    if (result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
+  }
+
+  loadIntelligenceCandidates() {
+    const stack = this.connected.operatingStack ?? this.connected.ctx;
+    return (projectIntelligenceCandidates as any)({
+      intelligenceCandidateRuntime: stack?.intelligenceCandidateRuntime,
+      businessId: this.workspaceId,
+    });
+  }
+
+  async dismissIntelligenceCandidate(candidateId: string, reason: string, nowISO?: string) {
+    const stack = this.connected.operatingStack ?? this.connected.ctx;
+    const result = new IntelligenceCandidateLifecycle().dismiss({
+      stack,
+      candidateId,
+      reason,
+      nowISO: nowISO ?? NOW_ISO,
+      platformStore,
+    } as any);
+    if (result.ok && result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
+  }
+
+  async convertIntelligenceCandidateToWork(candidateId: string, nowISO?: string) {
+    const stack = this.connected.operatingStack ?? this.connected.ctx;
+    if (!stack) throw new Error("Intelligence work conversion is not available for this workspace.");
+    const result = await new IntelligenceToWorkConversionService().execute({
+      stack,
+      candidateId,
+      nowISO: nowISO ?? NOW_ISO,
+      platformStore,
+    } as any);
+    if (result.ok && result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
+  }
+
+  async convertIntelligenceCandidateToArchitectChange(
+    candidateId: string,
+    installedSpecification: Record<string, unknown>,
+    nowISO?: string,
+  ) {
+    const stack = this.connected.operatingStack ?? this.connected.ctx;
+    if (!stack) throw new Error("Intelligence Architect conversion is not available for this workspace.");
+    const result = await new IntelligenceToArchitectChangeService({
+      continuousBuilder: new ContinuousBusinessBuilderService(),
+    }).execute({
+      stack,
+      candidateId,
+      businessId: this.workspaceId,
+      installedSpecification,
+      nowISO: nowISO ?? NOW_ISO,
+      platformStore,
+    } as any);
+    if (result.ok && result.snapshotKinds?.length) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: result.snapshotKinds,
+      });
+    }
+    return result;
   }
 
   loadTeamViewModel() {

@@ -41,3 +41,31 @@ test("reconciler versions upgrades against installed specification", () => {
   assert.equal(reconciled.nextVersion, 2);
   assert.ok(reconciled.diff.addedModules.includes("referrals"));
 });
+
+test("assembler selects Gold/fixture only via blueprint recommendation id", () => {
+  const assembler = new BuilderSpecificationAssembler();
+  const pm = createBuilderSession({
+    businessSummary: { businessName: "PM Co", industry: "property_management" },
+  });
+  const pmPlan = new BuilderAssemblyPlanner().plan({ session: pm });
+  const pmAssembled = assembler.assemble({ session: pm, assemblyPlan: pmPlan });
+  assert.equal(pmAssembled.source, "rec_bp_pm_gold");
+
+  const sportsWithoutBlueprint = createBuilderSession({
+    businessSummary: { businessName: "Club", industry: "sports" },
+  });
+  const forcedUniversal = assembler.assemble({
+    session: sportsWithoutBlueprint,
+    assemblyPlan: { selectedBlueprints: [], selectedEmployees: [], capabilityGaps: [], assumptions: [] },
+  });
+  assert.equal(forcedUniversal.source, "universal_assembly");
+  assert.ok(!forcedUniversal.specification.modules.some((m) => m.moduleId === "tournaments"));
+
+  const dental = createBuilderSession({
+    businessSummary: { businessName: "Dental", industry: "dental" },
+  });
+  const dentalPlan = new BuilderAssemblyPlanner().plan({ session: dental });
+  const dentalAssembled = assembler.assemble({ session: dental, assemblyPlan: dentalPlan });
+  assert.equal(dentalAssembled.source, "rec_bp_dental_universal");
+  assert.ok(dentalAssembled.specification.modules.some((m) => m.label === "Patients"));
+});

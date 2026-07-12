@@ -7,15 +7,17 @@ import { createBusinessModuleDefinition } from "../business-os/BusinessModuleDef
 /**
  * Assembles a universal BusinessOSSpecification from Builder session + assembly plan.
  * Never creates vertical runtimes.
+ * Blueprint package id (recommendationId) selects Gold/fixture exporters — not industry strings.
  */
 export class BuilderSpecificationAssembler {
   assemble({ session, assemblyPlan, nowISO = new Date().toISOString() } = {}) {
     if (!session) throw new Error("BuilderSpecificationAssembler: session required.");
     const industry = String(session.businessSummary?.industry ?? "");
     const businessId = session.businessId;
-    const selectedBlueprintId = assemblyPlan?.selectedBlueprints?.[0]?.recommendationId ?? null;
+    const selectedBlueprint = assemblyPlan?.selectedBlueprints?.[0] ?? null;
+    const selectedBlueprintId = selectedBlueprint?.recommendationId ?? null;
 
-    if (industry === "property_management" || selectedBlueprintId === "rec_bp_pm_gold") {
+    if (selectedBlueprintId === "rec_bp_pm_gold") {
       const spec = exportMcBrideBusinessOSSpecification({
         businessId,
         generatedAt: nowISO,
@@ -37,14 +39,14 @@ export class BuilderSpecificationAssembler {
               text: entry.text,
             })),
           ],
-          source: { kind: "ai_builder", sessionId: session.sessionId, blueprint: "mcbride_gold" },
+          source: { kind: "ai_builder", sessionId: session.sessionId, blueprint: selectedBlueprintId },
           status: "proposed",
         }),
-        source: "mcbride_gold",
+        source: selectedBlueprintId,
       });
     }
 
-    if (industry === "sports" || selectedBlueprintId === "rec_bp_hockey_fixture") {
+    if (selectedBlueprintId === "rec_bp_hockey_fixture") {
       const spec = createHockeyTravelClubSpecification({ businessId, generatedAt: nowISO });
       return deepFreeze({
         ok: true,
@@ -56,16 +58,17 @@ export class BuilderSpecificationAssembler {
             businessName: session.businessSummary?.businessName ?? spec.businessProfile.businessName,
           },
           capabilityGaps: assemblyPlan?.capabilityGaps ?? [],
-          source: { kind: "ai_builder", sessionId: session.sessionId, blueprint: "hockey_fixture" },
+          source: { kind: "ai_builder", sessionId: session.sessionId, blueprint: selectedBlueprintId },
           status: "proposed",
         }),
-        source: "hockey_fixture",
+        source: selectedBlueprintId,
       });
     }
 
-    // Dental / generic universal assembly
+    // Universal / dental_universal / unknown — assemble from blueprint package metadata, not industry hard-codes.
     const name = session.businessSummary?.businessName ?? "Your business";
-    const isDental = industry === "dental";
+    const usesPatientTerminology = selectedBlueprintId === "rec_bp_dental_universal"
+      || (selectedBlueprint?.evidence ?? []).includes("industry:dental");
     const modules = [
       createBusinessModuleDefinition({ moduleId: "home", label: "Home", moduleType: "operations", navigationPriority: 1 }),
       createBusinessModuleDefinition({
@@ -77,19 +80,19 @@ export class BuilderSpecificationAssembler {
       }),
       createBusinessModuleDefinition({
         moduleId: "people",
-        label: isDental ? "Patients" : "People",
+        label: usesPatientTerminology ? "Patients" : "People",
         moduleType: "records",
         navigationPriority: 3,
         roleVisibility: ["people.view"],
       }),
       createBusinessModuleDefinition({
-        moduleId: isDental ? "appointments" : "schedule",
-        label: isDental ? "Appointments" : "Schedule",
+        moduleId: usesPatientTerminology ? "appointments" : "schedule",
+        label: usesPatientTerminology ? "Appointments" : "Schedule",
         moduleType: "planning",
         navigationPriority: 4,
         capabilityIds: ["scheduling"],
       }),
-      ...(isDental ? [
+      ...(usesPatientTerminology ? [
         createBusinessModuleDefinition({
           moduleId: "treatment_plans",
           label: "Treatment Plans",
@@ -126,20 +129,6 @@ export class BuilderSpecificationAssembler {
       }),
     ];
 
-    const employees = (assemblyPlan?.selectedEmployees ?? []).map((entry, index) => ({
-      employeeId: `emp_${index}_${entry.recommendationId}`.slice(0, 64),
-      label: entry.label,
-      archetypeId: String(entry.evidence?.find?.((item) => String(item).startsWith("archetype:")) ?? "coordinator")
-        .replace("archetype:", "") || "coordinator",
-      purpose: entry.why,
-      applicableModules: ["work", "digital_workforce", "people"],
-      communicationPermissions: { customerFacingRequiresApproval: true },
-      approvalRequirements: ["human_approval"],
-      prohibitedActions: ["autonomous_customer_send"],
-      readinessState: "needs_knowledge",
-    }));
-
-    // Fix archetype extraction
     const normalizedEmployees = (assemblyPlan?.selectedEmployees ?? []).map((entry, index) => {
       const archetypeEvidence = (entry.evidence ?? []).find((item) => String(item).startsWith("archetype:"));
       return {
@@ -171,8 +160,8 @@ export class BuilderSpecificationAssembler {
       terminology: {
         operatingSystemTitle: `${name} Operating System`,
         presentation: {
-          BusinessSubject: isDental ? "Patient record" : "Business record",
-          Party: isDental ? "Patient" : "Person",
+          BusinessSubject: usesPatientTerminology ? "Patient record" : "Business record",
+          Party: usesPatientTerminology ? "Patient" : "Person",
           Work: "Work",
         },
       },
@@ -184,7 +173,7 @@ export class BuilderSpecificationAssembler {
         maximumPrimaryItems: 7,
         overflowBehavior: "more",
       },
-      subjectDefinitions: isDental
+      subjectDefinitions: usesPatientTerminology
         ? [
           { subjectType: "patient_chart", label: "Patient chart", keyAttributes: ["displayName"] },
           { subjectType: "treatment_plan", label: "Treatment plan", keyAttributes: ["status"] },
@@ -194,18 +183,7 @@ export class BuilderSpecificationAssembler {
         { workType: "intake_review", label: "Intake review" },
         { workType: "follow_up", label: "Follow-up" },
       ],
-      employeeDefinitions: normalizedEmployees.length ? normalizedEmployees : employees,
-      dashboardDefinitions: [
-        {
-          dashboardId: "home_overview",
-          label: "Home overview",
-          widgets: [
-            { id: "w_attention", componentType: "attention_queue", dataSource: "attention", label: "Needs attention" },
-            { id: "w_work", componentType: "work_queue", dataSource: "work", label: "Open work" },
-            { id: "w_workforce", componentType: "digital_workforce", dataSource: "workforce", label: "Digital workforce" },
-          ],
-        },
-      ],
+      employeeDefinitions: normalizedEmployees,
       roleDefinitions: [
         {
           roleId: "owner",
@@ -227,7 +205,18 @@ export class BuilderSpecificationAssembler {
           membershipRole: "EMPLOYEE",
           moduleVisibility: ["home", "work", "people", "knowledge"],
           permissions: ["work.view", "people.view"],
-          deniedModules: isDental ? ["billing", "settings"] : ["settings"],
+          deniedModules: usesPatientTerminology ? ["billing", "settings"] : ["settings"],
+        },
+      ],
+      dashboardDefinitions: [
+        {
+          dashboardId: "home_overview",
+          label: "Home overview",
+          widgets: [
+            { id: "w_attention", componentType: "attention_queue", dataSource: "attention", label: "Needs attention" },
+            { id: "w_work", componentType: "work_queue", dataSource: "work", label: "Open work" },
+            { id: "w_workforce", componentType: "digital_workforce", dataSource: "workforce", label: "Digital workforce" },
+          ],
         },
       ],
       accessRequestPolicies: [
@@ -250,7 +239,7 @@ export class BuilderSpecificationAssembler {
         { capabilityId: "digital_workforce" },
         { capabilityId: "approved_knowledge" },
         { capabilityId: "readiness_checklist" },
-        ...(isDental ? [{ capabilityId: "scheduling" }] : []),
+        ...(usesPatientTerminology ? [{ capabilityId: "scheduling" }] : []),
       ],
       capabilityGaps: assemblyPlan?.capabilityGaps ?? [],
       assumptions: (assemblyPlan?.assumptions ?? []).map((entry) => ({
@@ -264,10 +253,22 @@ export class BuilderSpecificationAssembler {
       governancePolicies: [
         { policyId: "human_approval_customer_comms", label: "Customer-facing messages require approval", enforced: true },
       ],
-      source: { kind: "ai_builder", sessionId: session.sessionId, blueprint: "universal_assembly" },
-      provenance: { assembler: "BuilderSpecificationAssembler", industry },
+      source: {
+        kind: "ai_builder",
+        sessionId: session.sessionId,
+        blueprint: selectedBlueprintId ?? "universal_assembly",
+      },
+      provenance: {
+        assembler: "BuilderSpecificationAssembler",
+        blueprintId: selectedBlueprintId,
+        industry,
+      },
     });
 
-    return deepFreeze({ ok: true, specification: spec, source: "universal_assembly" });
+    return deepFreeze({
+      ok: true,
+      specification: spec,
+      source: selectedBlueprintId ?? "universal_assembly",
+    });
   }
 }

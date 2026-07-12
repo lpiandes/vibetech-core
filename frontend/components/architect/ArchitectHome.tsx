@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { architect } from "./architectTheme";
 import {
@@ -24,6 +24,7 @@ type SessionCard = {
   nextAction: string;
   updatedAt?: string;
   isInstalled?: boolean;
+  businessId?: string | null;
 };
 
 const EXAMPLES = [
@@ -37,6 +38,8 @@ const EXAMPLES = [
  */
 export default function ArchitectHome() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const businessIdParam = searchParams.get("businessId");
   const [sessions, setSessions] = useState<SessionCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -48,12 +51,24 @@ export default function ArchitectHome() {
       try {
         const response = await fetch("/api/builder/sessions");
         const data = await response.json();
-        if (data.ok) setSessions(data.sessions ?? []);
+        if (data.ok) {
+          const list = data.sessions ?? [];
+          setSessions(list);
+          if (businessIdParam) {
+            const match = list.find((row: SessionCard) =>
+              String(row.businessId ?? "") === String(businessIdParam) && !row.isInstalled,
+            );
+            if (match?.sessionId) {
+              router.replace(`/architect/${match.sessionId}`);
+              return;
+            }
+          }
+        }
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [businessIdParam, router]);
 
   async function start(seed?: string) {
     setBusy(true);
@@ -63,7 +78,8 @@ export default function ArchitectHome() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          mode: "new_business",
+          mode: businessIdParam ? "configure_existing_business" : "new_business",
+          businessId: businessIdParam || undefined,
           description: seed || description || null,
         }),
       });

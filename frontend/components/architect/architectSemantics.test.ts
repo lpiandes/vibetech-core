@@ -229,7 +229,7 @@ test("Ask VIBETech continuity never restarts discovery", () => {
   assert.equal(continuity.entryLabel, "Ask VIBETech");
   assert.ok(continuity.knows.businessDna);
   assert.ok(continuity.knows.installedBusinessOs);
-  assert.match(continuity.openPath, /builder\/improve/);
+  assert.match(continuity.openPath, /\/b\/biz_1\/architect/);
 });
 
 test("architect routes replace builder landing and keep legacy redirects", () => {

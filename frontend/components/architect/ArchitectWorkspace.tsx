@@ -15,6 +15,7 @@ import {
 import {
   HUMAN_COPY,
   architectRoutes,
+  askVibetechContinuity,
   confidenceLabel,
 } from "./architectSemantics";
 import ConversationRail from "./ConversationRail";
@@ -33,8 +34,17 @@ type CenterMode = "discovery" | "assembly" | "proposal" | "portal";
 /**
  * Consultant shell — conversation left, stage canvas center, understanding right.
  * Reuses /api/builder/sessions actions only.
+ * continuous: in-business Ask VIBETech (skip greenfield discovery framing).
  */
-export default function ArchitectWorkspace({ sessionId }: { sessionId: string }) {
+export default function ArchitectWorkspace({
+  sessionId,
+  continuous = false,
+  businessId = null,
+}: {
+  sessionId: string;
+  continuous?: boolean;
+  businessId?: string | null;
+}) {
   const router = useRouter();
   const routes = architectRoutes(sessionId);
   const [session, setSession] = useState<any>(null);
@@ -46,7 +56,7 @@ export default function ArchitectWorkspace({ sessionId }: { sessionId: string })
   const [changeImpact, setChangeImpact] = useState<any>(null);
   const [portalPreview, setPortalPreview] = useState<any>(null);
   const [previewRole, setPreviewRole] = useState<PreviewRole>("OWNER");
-  const [centerMode, setCenterMode] = useState<CenterMode>("discovery");
+  const [centerMode, setCenterMode] = useState<CenterMode>(continuous ? "proposal" : "discovery");
   const [message, setMessage] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [researchBusy, setResearchBusy] = useState(false);
@@ -86,7 +96,7 @@ export default function ArchitectWorkspace({ sessionId }: { sessionId: string })
       try {
         setThinking(true);
         const data = await refresh();
-        if (data.proposal) setCenterMode("proposal");
+        if (data.proposal || continuous) setCenterMode("proposal");
         else if (data.journey?.readyForProposal) setCenterMode("assembly");
       } catch (err) {
         setError((err as any)?.productError ?? presentProductError(err));
@@ -94,8 +104,16 @@ export default function ArchitectWorkspace({ sessionId }: { sessionId: string })
         setThinking(false);
       }
     })();
-  }, [sessionId]);
+  }, [sessionId, continuous]);
 
+  const continuity = continuous
+    ? askVibetechContinuity({
+      businessId: businessId ?? session?.businessId,
+      hasDna: Boolean(session?.businessSummary?.businessName),
+      hasInstalledOs: true,
+      hasHistory: Boolean(session?.conversation?.length),
+    })
+    : null;
   const accent = proposal?.accentColor ?? accentColor;
   const conversation = session?.conversation ?? [];
   const nextQuestionRaw = session?.questions?.[0] ?? null;
@@ -111,13 +129,14 @@ export default function ArchitectWorkspace({ sessionId }: { sessionId: string })
   );
   const readyForProposal = Boolean(journey?.readyForProposal) || Boolean(proposal);
 
-  async function send(override?: string, opts: { unknown?: boolean; skipped?: boolean } = {}) {
+  async function send(override?: string, opts: { unknown?: boolean; skipped?: boolean; forceQuestion?: boolean } = {}) {
     const text = (override ?? message).trim();
     setBusy(true);
     setThinking(true);
     setError(null);
     try {
-      const questionId = editingAnswerId ?? nextQuestionRaw?.questionId;
+      const questionId = editingAnswerId ?? (opts.forceQuestion ? nextQuestionRaw?.questionId : null);
+      // Free-form consultant chat during discovery; bind to a question only when explicitly answering one.
       if (questionId && !proposal) {
         await refresh("answer", {
           questionId,
@@ -129,6 +148,10 @@ export default function ArchitectWorkspace({ sessionId }: { sessionId: string })
         const workspace = await refresh();
         setQuickReplies(workspace.quickReplies ?? []);
         if (workspace.journey?.readyForProposal && !workspace.proposal) setCenterMode("assembly");
+      } else if (!proposal) {
+        const data = await refresh("chat", { text: text || "I don't know" });
+        setQuickReplies(data.nextQuestions?.map((q: any) => q.prompt).filter(Boolean).slice(0, 4) ?? []);
+        if (data.journey?.readyForProposal) setCenterMode("assembly");
       } else {
         const data = await refresh("chat", { text });
         setChangeImpact(data.changeImpact ?? null);
@@ -271,7 +294,9 @@ export default function ArchitectWorkspace({ sessionId }: { sessionId: string })
     <ArchitectShell maxWidth={1480}>
       <header style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
         <div>
-          <ArchitectBadge tone="accent">Ask VIBETech · Architect</ArchitectBadge>
+          <ArchitectBadge tone="accent">
+            {continuous ? (continuity?.entryLabel ?? "Ask VIBETech") : "Ask VIBETech · Architect"}
+          </ArchitectBadge>
           <h1 style={{
             margin: "10px 0 6px",
             fontFamily: architect.display,
@@ -281,12 +306,17 @@ export default function ArchitectWorkspace({ sessionId }: { sessionId: string })
             {proposal?.businessName ?? session?.businessSummary?.businessName ?? "Understanding your business"}
           </h1>
           <p style={{ margin: 0, color: architect.inkMuted }}>
-            One thoughtful conversation. Nothing goes live until you approve.
+            {continuous
+              ? "Describe what to add or change. Nothing goes live until you approve."
+              : "One thoughtful conversation. Nothing goes live until you approve."}
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <ArchitectBadge tone={confidence.tone}>{confidence.label}</ArchitectBadge>
-          {(["discovery", "assembly", "proposal", "portal"] as CenterMode[]).map((mode) => {
+          {(continuous
+            ? (["proposal", "portal"] as CenterMode[])
+            : (["discovery", "assembly", "proposal", "portal"] as CenterMode[])
+          ).map((mode) => {
             const disabled = (mode === "proposal" || mode === "portal") && !proposal;
             const label =
               mode === "discovery" ? "Conversation"
@@ -337,7 +367,8 @@ export default function ArchitectWorkspace({ sessionId }: { sessionId: string })
             setMessage={setMessage}
             thinking={thinking}
             busy={busy}
-            mode={proposal ? "chat" : "discovery"}
+            mode={proposal || continuous ? "chat" : "discovery"}
+            suggestQuestion={!continuous}
             onSubmit={() => void send()}
             onQuickReply={(value) => void send(value, {
               unknown: /don.?t know|not sure/i.test(value),
@@ -361,7 +392,7 @@ export default function ArchitectWorkspace({ sessionId }: { sessionId: string })
         </ArchitectPanel>
 
         <ArchitectPanel style={{ display: "grid", gap: 16, alignContent: "start", minHeight: 680 }}>
-          {centerMode === "discovery" ? (
+          {centerMode === "discovery" && !continuous ? (
             <div style={{ display: "grid", gap: 16 }}>
               <div>
                 <ArchitectBadge tone="accent">Discovery</ArchitectBadge>

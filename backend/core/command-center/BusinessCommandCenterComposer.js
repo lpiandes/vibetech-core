@@ -294,6 +294,9 @@ export function composeBusinessCommandCenter(input = {}) {
     integrationPlatform,
     presentation,
     nowISO,
+    intelligenceCandidateRuntime: ctx?.intelligenceCandidateRuntime
+      ?? input.operatingStack?.intelligenceCandidateRuntime
+      ?? null,
   });
 
   const episodes = projectBusinessEpisodes({ ctx, presentation, nowISO });

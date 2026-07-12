@@ -8,6 +8,7 @@ export const RUNTIME_SNAPSHOT_KINDS = Object.freeze({
   COMMUNICATION: "communication",
   COMMUNICATION_PREFERENCE: "communicationPreference",
   ANALYTICS: "analytics",
+  INTELLIGENCE_CANDIDATE: "intelligenceCandidate",
 });
 
 export const PROSPECT_LOOP_SNAPSHOT_KINDS = Object.freeze([

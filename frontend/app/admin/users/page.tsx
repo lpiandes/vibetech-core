@@ -20,7 +20,7 @@ export default async function AdminUsersPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr>
-                {["Name", "Email", "Platform role", "Status"].map((label) => (
+                {["Name", "Email", "Platform role", "Created"].map((label) => (
                   <th key={label} style={{ textAlign: "left", padding: 8, borderBottom: `1px solid ${cockpitColors.panelBorder}` }}>{label}</th>
                 ))}
               </tr>
@@ -35,7 +35,9 @@ export default async function AdminUsersPage() {
                       ? <StatusBadge label={String(entry.platformRole)} tone="neutral" />
                       : "—"}
                   </td>
-                  <td style={{ padding: 8 }}>{entry.status}</td>
+                  <td style={{ padding: 8, color: cockpitColors.textMuted }}>
+                    {entry.createdAt ? String(entry.createdAt).slice(0, 10) : "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>

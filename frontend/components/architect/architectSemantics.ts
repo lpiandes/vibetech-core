@@ -258,7 +258,7 @@ export function askVibetechContinuity(context: {
     },
     entryLabel: "Ask VIBETech",
     openPath: context.businessId
-      ? `/api/businesses/${context.businessId}/builder/improve`
+      ? `/b/${context.businessId}/architect`
       : "/architect",
   };
 }

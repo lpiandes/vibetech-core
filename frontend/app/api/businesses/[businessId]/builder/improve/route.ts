@@ -7,26 +7,41 @@ import { presentProductError } from "@/lib/platform/productErrors";
 
 type Params = { params: Promise<{ businessId: string }> };
 
+/**
+ * Ask VIBETech / continuous improve.
+ * Requires a canonical installed Business OS in Postgres (written at Architect install).
+ */
 export async function POST(request: Request, { params }: Params) {
   try {
     const { businessId } = await params;
     const scope = await getAuthorizedBusinessScope(businessId, "business.manage");
     const body = await request.json().catch(() => ({}));
 
-    let installedSpecification = body.specification ?? null;
+    const installation = await platformStore.getBusinessOSInstallation(businessId);
+    if (!installation || installation.status !== "installed") {
+      const productError = presentProductError("installed_specification_required");
+      return NextResponse.json({
+        ok: false,
+        reason: "installed_specification_required",
+        error: productError.message,
+        productError,
+      }, { status: 400 });
+    }
+
+    const specRow = await (platformStore as any).getBusinessOSSpecification({
+      businessId,
+      specificationId: installation.specificationId,
+      specificationVersion: installation.specificationVersion,
+    });
+    const installedSpecification = specRow?.specification ?? null;
     if (!installedSpecification) {
-      try {
-        const installation = await platformStore.getBusinessOSInstallation(businessId);
-        const specRow = installation
-          ? await platformStore.getBusinessOSSpecification({
-              businessId,
-              specificationId: installation.specificationId,
-            })
-          : null;
-        installedSpecification = specRow?.specification ?? null;
-      } catch {
-        installedSpecification = null;
-      }
+      const productError = presentProductError("installed_specification_required");
+      return NextResponse.json({
+        ok: false,
+        reason: "installed_specification_required",
+        error: productError.message,
+        productError,
+      }, { status: 400 });
     }
 
     const continuous = new ContinuousBusinessBuilderService({
@@ -37,6 +52,14 @@ export async function POST(request: Request, { params }: Params) {
       actorId: scope.user.id,
       installedSpecification,
       prompt: body.prompt ?? "Improve this business",
+      intelligenceCandidateId: body.intelligenceCandidateId ?? null,
+      extraMetadata: body.intelligenceCandidateId
+        ? {
+            intelligenceCandidateId: body.intelligenceCandidateId,
+            proposeOnly: true,
+            neverInstallAutomatically: true,
+          }
+        : {},
     });
 
     if (!result.ok) {
@@ -47,6 +70,21 @@ export async function POST(request: Request, { params }: Params) {
         productError,
       }, { status: 400 });
     }
+
+    if (platformStore.recordAuditEvent) {
+      await platformStore.recordAuditEvent({
+        actorUserId: scope.user.id,
+        businessId,
+        action: "architect.improved",
+        targetType: "business_os_installation",
+        targetId: installation.id,
+        metadata: {
+          sessionId: result.session?.sessionId ?? null,
+          prompt: body.prompt ?? "Improve this business",
+        },
+      }).catch(() => null);
+    }
+
     return NextResponse.json(result);
   } catch (error) {
     const productError = presentProductError(error);

@@ -14,6 +14,8 @@ export class ContinuousBusinessBuilderService {
     actorId = null,
     installedSpecification,
     prompt = "Improve this business",
+    intelligenceCandidateId = null,
+    extraMetadata = {},
   }) {
     if (!businessId) throw new Error("ContinuousBusinessBuilderService: businessId required.");
     if (!installedSpecification) {
@@ -38,6 +40,12 @@ export class ContinuousBusinessBuilderService {
       extraMetadata: {
         continuousImprovement: true,
         baselineSpecificationVersion: installedSpecification.version,
+        ...(intelligenceCandidateId ? { intelligenceCandidateId } : {}),
+        ...extraMetadata,
+        proposeOnly: extraMetadata.proposeOnly === true ? true : extraMetadata.proposeOnly,
+        neverInstallAutomatically: extraMetadata.neverInstallAutomatically !== false
+          ? Boolean(extraMetadata.neverInstallAutomatically ?? intelligenceCandidateId)
+          : false,
       },
     });
 
@@ -51,7 +59,9 @@ export class ContinuousBusinessBuilderService {
       ok: true,
       session: durable,
       message: "Describe what to add or change. We will propose a next version — not a unrelated new install.",
-      openHref: `/architect/${durable.sessionId}`,
+      openHref: intelligenceCandidateId
+        ? `/b/${businessId}/architect?sessionId=${encodeURIComponent(durable.sessionId)}&intelligenceCandidateId=${encodeURIComponent(intelligenceCandidateId)}`
+        : `/b/${businessId}/architect?sessionId=${encodeURIComponent(durable.sessionId)}`,
     });
   }
 }

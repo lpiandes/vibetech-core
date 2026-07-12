@@ -7,7 +7,8 @@ import { LAST_BUSINESS_COOKIE } from "@/lib/platform/businessCookies";
 import { PLATFORM_ROLES } from "../../backend/core/platform/permissions/rolePermissions.js";
 
 /**
- * Intelligent product entry — one VIBETech, role-aware.
+ * Intelligent product entry — Architect is the primary product surface.
+ * Users with a business resume Mission Control; users without one enter Architect.
  */
 export default async function RootPage() {
   const session = await auth();

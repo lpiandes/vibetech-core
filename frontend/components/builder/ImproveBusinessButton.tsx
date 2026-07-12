@@ -8,6 +8,7 @@ import { formatProductErrorMessage } from "@/lib/platform/productErrors";
 
 /**
  * Owner entry point: Improve this business / Ask VIBETech.
+ * Permanent surface: /b/[businessId]/architect
  */
 export default function ImproveBusinessButton({
   compact = false,
@@ -18,15 +19,15 @@ export default function ImproveBusinessButton({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [openMenu, setOpenMenu] = useState(false);
 
   const canImprove = scope.permissions.includes("business.manage") || scope.role === "OWNER" || scope.role === "PLATFORM_ADMIN";
   if (!canImprove) return null;
 
+  const architectHref = `/b/${encodeURIComponent(scope.businessId)}/architect`;
+
   async function start(prompt: string) {
     setBusy(true);
     setError(null);
-    setOpenMenu(false);
     try {
       const response = await fetch(`/api/businesses/${encodeURIComponent(scope.businessId)}/builder/improve`, {
         method: "POST",
@@ -37,7 +38,13 @@ export default function ImproveBusinessButton({
       if (!response.ok || !data.ok) {
         throw new Error(data.productError?.message ?? data.error ?? data.message ?? "Could not start.");
       }
-      router.push(data.openHref ?? `/architect/${data.session.sessionId}`);
+      const sessionId = data.session?.sessionId as string | undefined;
+      router.push(
+        data.openHref
+          ?? (sessionId
+            ? `${architectHref}?sessionId=${encodeURIComponent(sessionId)}`
+            : architectHref),
+      );
     } catch (err) {
       setError(formatProductErrorMessage(err));
     } finally {
@@ -45,21 +52,11 @@ export default function ImproveBusinessButton({
     }
   }
 
-  const prompts = [
-    "Improve this business",
-    "Request a new capability",
-    "Add a workflow",
-    "Add an employee",
-    "Change access",
-    "Add a report",
-    "Add a recurring operation",
-  ];
-
   return (
     <div style={{ position: "relative" }}>
       <button
         type="button"
-        onClick={() => (compact ? setOpenMenu((value) => !value) : void start("Improve this business"))}
+        onClick={() => (compact ? router.push(architectHref) : void start("Improve this business"))}
         disabled={busy}
         style={{
           background: compact ? "transparent" : "#0F766E",
@@ -74,37 +71,6 @@ export default function ImproveBusinessButton({
       >
         {busy ? "Opening…" : compact ? "Ask VIBETech" : "Improve this business"}
       </button>
-      {compact && openMenu ? (
-        <div style={{
-          marginTop: 8,
-          background: "#111827",
-          border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: radius.medium,
-          padding: 8,
-          display: "grid",
-          gap: 4,
-        }}>
-          {prompts.map((prompt) => (
-            <button
-              key={prompt}
-              type="button"
-              disabled={busy}
-              onClick={() => void start(prompt)}
-              style={{
-                background: "transparent",
-                color: "#E5E7EB",
-                border: "none",
-                textAlign: "left",
-                padding: "8px 10px",
-                borderRadius: 8,
-                cursor: "pointer",
-              }}
-            >
-              {prompt}
-            </button>
-          ))}
-        </div>
-      ) : null}
       {error ? <div style={{ color: cockpitColors.warning, marginTop: 6, fontSize: 12 }}>{error}</div> : null}
     </div>
   );

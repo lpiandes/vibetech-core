@@ -31,3 +31,6 @@ yarn-error.log*
 
 # Local development artifacts
 .dev/
+.vercel
+.env*.local
+.cursor-tmp/

@@ -63,9 +63,28 @@ type BIView = {
   futureRoadmap?: Array<{ id: string; label: string; items: Array<{ recommendationId: string; title: string; reuseStrategy?: string | null; risk?: string }> }>;
   pipeline?: string[];
   observationCounts?: Record<string, number>;
+  intelligenceCandidates?: IntelligenceCandidateCard[];
+};
+
+type IntelligenceCandidateCard = {
+  id: string;
+  title: string;
+  summary?: string;
+  explanation?: string;
+  whatHappened?: string;
+  whyItMatters?: string;
+  severity?: string;
+  confidenceReason?: string;
+  status?: string;
+  ownerRef?: { id?: string; kind?: string } | null;
+  evidence?: Array<{ objectType: string; objectId: string; explanation: string }>;
+  missingEvidence?: string[];
+  recommendedActions?: Array<{ actionId: string; kind: string; label: string }>;
+  relatedObjectRefs?: Array<{ objectType: string; objectId: string }>;
 };
 
 const SECTIONS = [
+  { id: "attention", label: "Needs Attention" },
   { id: "executive", label: "Executive Briefing" },
   { id: "recommendations", label: "Recommendations" },
   { id: "opportunities", label: "Opportunities" },
@@ -82,13 +101,84 @@ const SECTIONS = [
  * Presentation only. Improve actions open Architect governed flow.
  */
 export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }) {
-  const [section, setSection] = useState<(typeof SECTIONS)[number]["id"]>("executive");
+  const [section, setSection] = useState<(typeof SECTIONS)[number]["id"]>("attention");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState(view.intelligenceCandidates ?? []);
   const scope = useBusinessScope();
   const router = useRouter();
   const businessId = view.businessId ?? scope.businessId;
+
+  async function refreshIntelligence() {
+    setBusyId("refresh");
+    setError(null);
+    try {
+      const response = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/intelligence/candidates`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error ?? "Could not evaluate intelligence.");
+      setCandidates(data.candidates ?? []);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not evaluate intelligence.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function candidateAction(
+    candidateId: string,
+    action: "create-work" | "dismiss" | "propose-change",
+    body: Record<string, unknown> = {},
+  ) {
+    setBusyId(candidateId + action);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/businesses/${encodeURIComponent(businessId)}/intelligence/candidates/${encodeURIComponent(candidateId)}/${action}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error ?? data.message ?? "Action failed.");
+      if (action === "propose-change" && data.openHref) {
+        router.push(data.openHref);
+        return;
+      }
+      await refreshIntelligence();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Action failed.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function askArchitect(candidate: IntelligenceCandidateCard) {
+    setBusyId(candidate.id);
+    setError(null);
+    try {
+      const response = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/builder/improve`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          prompt: `What needs attention about: ${candidate.title}? Explain evidence only.`,
+          intelligenceCandidateId: candidate.id,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error ?? data.message ?? "Could not open Architect.");
+      router.push(data.openHref ?? `/b/${businessId}/architect?intelligenceCandidateId=${encodeURIComponent(candidate.id)}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open Architect.");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function startImprove(recommendation: GovernedRecommendation) {
     setBusyId(recommendation.recommendationId);
@@ -133,13 +223,14 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
           {view.honesty?.message
             ?? "Observe → Analyze → Recommend → Explain → Preview → Dry run → Approve → Install. Nothing changes silently."}
         </p>
-        {view.pipeline?.length ? (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
-            {view.pipeline.map((step) => (
-              <span key={step} style={chipStyle}>{humanize(step)}</span>
-            ))}
-          </div>
-        ) : null}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {view.pipeline?.length ? view.pipeline.map((step) => (
+            <span key={step} style={chipStyle}>{humanize(step)}</span>
+          )) : null}
+          <button type="button" onClick={() => void refreshIntelligence()} style={chipStyle} disabled={busyId === "refresh"}>
+            {busyId === "refresh" ? "Evaluating…" : "Refresh intelligence"}
+          </button>
+        </div>
       </header>
 
       <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -166,6 +257,30 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
 
       {error ? (
         <div style={{ ...panelStyle, color: "#B91C1C" }} role="alert">{error}</div>
+      ) : null}
+
+      {section === "attention" ? (
+        <div style={{ display: "grid", gap: 12 }}>
+          {candidates.length === 0 ? (
+            <div style={{ ...panelStyle, color: cockpitColors.textSecondary }}>
+              No intelligence candidates yet. Refresh to evaluate canonical evidence.
+            </div>
+          ) : (
+            candidates.map((candidate) => (
+              <IntelligenceCandidateCardView
+                key={candidate.id}
+                candidate={candidate}
+                expanded={expandedId === candidate.id}
+                busy={Boolean(busyId?.startsWith(candidate.id))}
+                onToggle={() => setExpandedId((current) => (current === candidate.id ? null : candidate.id))}
+                onCreateWork={() => void candidateAction(candidate.id, "create-work")}
+                onProposeChange={() => void candidateAction(candidate.id, "propose-change")}
+                onDismiss={() => void candidateAction(candidate.id, "dismiss", { reason: "Dismissed from Needs Attention" })}
+                onAskArchitect={() => void askArchitect(candidate)}
+              />
+            ))
+          )}
+        </div>
       ) : null}
 
       {section === "executive" ? (
@@ -210,6 +325,67 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
         </div>
       ) : null}
     </div>
+  );
+}
+
+function IntelligenceCandidateCardView({
+  candidate,
+  expanded,
+  busy,
+  onToggle,
+  onCreateWork,
+  onProposeChange,
+  onDismiss,
+  onAskArchitect,
+}: {
+  candidate: IntelligenceCandidateCard;
+  expanded: boolean;
+  busy: boolean;
+  onToggle: () => void;
+  onCreateWork: () => void;
+  onProposeChange: () => void;
+  onDismiss: () => void;
+  onAskArchitect: () => void;
+}) {
+  return (
+    <article style={panelStyle}>
+      <button type="button" onClick={onToggle} style={{ all: "unset", cursor: "pointer", display: "grid", gap: 6, width: "100%" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+          <strong style={{ color: cockpitColors.textPrimary }}>{candidate.title}</strong>
+          <span style={chipStyle}>{candidate.severity ?? "medium"} · {candidate.status ?? "open"}</span>
+        </div>
+        <div style={{ color: cockpitColors.textSecondary }}>{candidate.whatHappened ?? candidate.summary}</div>
+      </button>
+      {expanded ? (
+        <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+          <div><strong>Why it matters</strong><div style={{ color: cockpitColors.textSecondary }}>{candidate.whyItMatters ?? candidate.explanation}</div></div>
+          <div><strong>Confidence</strong><div style={{ color: cockpitColors.textSecondary }}>{candidate.confidenceReason}</div></div>
+          <div><strong>Owner</strong><div style={{ color: cockpitColors.textSecondary }}>{candidate.ownerRef?.id ?? "unassigned"}</div></div>
+          <div>
+            <strong>Evidence</strong>
+            <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+              {(candidate.evidence ?? []).map((entry) => (
+                <li key={`${entry.objectType}:${entry.objectId}`}>{entry.objectType}:{entry.objectId} — {entry.explanation}</li>
+              ))}
+            </ul>
+            {(candidate.missingEvidence ?? []).length ? (
+              <div style={{ color: "#B45309", marginTop: 6 }}>Missing: {(candidate.missingEvidence ?? []).join(", ")}</div>
+            ) : null}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" disabled={busy} onClick={onCreateWork} style={chipStyle}>Create Work</button>
+            <button type="button" disabled={busy} onClick={onProposeChange} style={chipStyle}>Propose Change</button>
+            <button type="button" disabled={busy} onClick={onAskArchitect} style={chipStyle}>Ask Architect</button>
+            <button type="button" disabled={busy} onClick={onDismiss} style={chipStyle}>Dismiss</button>
+            {(candidate.relatedObjectRefs ?? []).slice(0, 3).map((ref) => (
+              <a key={`${ref.objectType}:${ref.objectId}`} href={`/${ref.objectType}/${ref.objectId}`} style={chipStyle}>
+                Open {ref.objectType}
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </article>
   );
 }
 

@@ -7,6 +7,7 @@ export function createBuilderChangeRequest({
   businessId = null,
   text,
   interpreted = null,
+  capabilityId = null,
   createdAt = new Date().toISOString(),
 } = {}) {
   if (!sessionId) throw new Error("BuilderChangeRequest: sessionId required.");
@@ -16,6 +17,9 @@ export function createBuilderChangeRequest({
     sessionId: String(sessionId),
     businessId: businessId == null ? null : String(businessId),
     text: String(text),
+    capabilityId: capabilityId
+      ?? interpreted?.capabilityId
+      ?? null,
     interpreted: interpreted == null ? null : deepFreeze(interpreted),
     createdAt: String(createdAt),
   });

@@ -218,3 +218,77 @@ test("post-install improvement session survives restart", async () => {
   assert.equal(changed.ok, true);
   assert.equal(changed.changeImpact.requiresDryRun, true);
 });
+
+test("successful install upserts canonical Business OS rows when platformStore is present", async () => {
+  const repository = new BuilderSessionRepository();
+  const installationRepository = new BusinessOSInstallationRepository();
+  /** @type {any[]} */
+  const specs = [];
+  /** @type {any[]} */
+  const installs = [];
+  /** @type {any[]} */
+  const audits = [];
+  const platformStore = {
+    async createBusiness({ id, name }) {
+      return { id: id ?? "biz_canonical_os", name };
+    },
+    async getBusinessById(id) {
+      return id ? { id, name: "Canonical Co" } : null;
+    },
+    async upsertBusinessOSSpecification(row) {
+      specs.push(row);
+      return { ...row, id: row.id };
+    },
+    async upsertBusinessOSInstallation(row) {
+      installs.push(row);
+      return { ...row, id: row.id };
+    },
+    async recordAuditEvent(event) {
+      audits.push(event);
+      return event;
+    },
+  };
+
+  const service = new AiBuilderService({
+    repository,
+    installationRepository,
+    installer: new BusinessOSInstaller({ repository: installationRepository }),
+    platformStore,
+    nowISO: NOW,
+  });
+
+  const started = await service.startSession({
+    mode: "new_business",
+    businessId: "biz_canonical_os",
+    businessName: "Canonical Co",
+    description: "Dental practice needing patient workspaces.",
+  });
+  for (const [questionId, answer] of [
+    ["q_company_name", "Canonical Co"],
+    ["q_industry", "dental"],
+    ["q_services", "exams"],
+    ["q_customers", "patients"],
+    ["q_roles", "owner"],
+    ["q_repetitive_work", "reminders"],
+    ["q_approvals", "messages"],
+    ["q_pain_points", "manual work"],
+    ["q_desired_outcomes", "automation"],
+  ]) {
+    await service.answer({ sessionId: started.session.sessionId, questionId, answer });
+  }
+  await service.propose({ sessionId: started.session.sessionId });
+  await service.dryRun({ sessionId: started.session.sessionId });
+  const installed = await service.install({
+    sessionId: started.session.sessionId,
+    approved: true,
+    actorId: "owner_canonical",
+  });
+  assert.equal(installed.ok, true);
+  assert.equal(specs.length, 1);
+  assert.equal(specs[0].status, "installed");
+  assert.equal(specs[0].businessId, "biz_canonical_os");
+  assert.equal(installs.length, 1);
+  assert.equal(installs[0].status, "installed");
+  assert.equal(installs[0].businessId, "biz_canonical_os");
+  assert.ok(audits.some((entry) => entry.action === "architect.installed"));
+});

@@ -1294,7 +1294,7 @@ export class PostgresPlatformStore {
   async listUsers() {
     const { rows } = await this.withClient((client) =>
       client.query(
-        `SELECT id, email, name, platform_role, status, created_at
+        `SELECT id, email, name, platform_role, created_at
          FROM users
          ORDER BY created_at DESC
          LIMIT 500`,
@@ -1305,7 +1305,6 @@ export class PostgresPlatformStore {
       email: String(row.email),
       name: row.name ? String(row.name) : null,
       platformRole: row.platform_role ? String(row.platform_role) : null,
-      status: row.status ? String(row.status) : "active",
       createdAt: row.created_at?.toISOString?.() ?? row.created_at,
     }));
   }

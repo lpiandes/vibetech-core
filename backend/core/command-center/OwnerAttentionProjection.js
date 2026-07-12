@@ -53,8 +53,50 @@ export function projectOwnerAttention({
   integrationPlatform,
   presentation,
   nowISO,
+  intelligenceCandidateRuntime = null,
 } = {}) {
   const items = [];
+
+  for (const candidate of safeArray(intelligenceCandidateRuntime?.getOpenCandidates?.())) {
+    items.push({
+      id: `attention_intelligence_${candidate.id}`,
+      title: candidate.title,
+      summary: candidate.summary,
+      reason: candidate.confidenceReason,
+      businessImpact: candidate.explanation,
+      priority: candidate.severity === "critical" ? "critical"
+        : candidate.severity === "high" ? "high"
+          : "medium",
+      dueAt: null,
+      waitingDuration: null,
+      sourceType: "intelligence_candidate",
+      sourceId: String(candidate.id),
+      intelligenceCandidateId: candidate.id,
+      partyId: candidate.relatedObjectRefs?.find((ref) => ref.objectType === "party")?.objectId ?? null,
+      partyName: partyName(
+        businessGraphRuntime,
+        candidate.relatedObjectRefs?.find((ref) => ref.objectType === "party")?.objectId,
+      ),
+      subjectName: subjectName(
+        businessSubjectRuntime,
+        candidate.relatedObjectRefs?.find((ref) => ref.objectType === "business_subject")?.objectId,
+      ),
+      recommendedAction: candidate.recommendedActions?.[0]?.label ?? "Review evidence and decide.",
+      availableActions: [
+        { id: "create_work", label: "Create Work", kind: "create_work" },
+        { id: "propose_change", label: "Propose Change", kind: "create_architect_change_proposal" },
+        { id: "ask_architect", label: "Ask Architect", href: "/architect" },
+        { id: "dismiss", label: "Dismiss", kind: "dismiss" },
+      ],
+      relatedObjects: safeArray(candidate.relatedObjectRefs).map((ref) => (
+        createEntityRef({ entityType: ref.objectType, entityId: String(ref.objectId) })
+      )),
+      evidence: candidate.evidence,
+      confidenceReason: candidate.confidenceReason,
+      explanation: candidate.explanation,
+      status: candidate.status,
+    });
+  }
 
   for (const approval of safeArray(approvalRuntime?.getRequests?.()).filter((a) => a.status === "PENDING")) {
     const relatedWork = safeArray(workRuntime?.getWorkItems?.()).find(

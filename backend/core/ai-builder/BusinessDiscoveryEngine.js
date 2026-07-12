@@ -114,4 +114,72 @@ export class BusinessDiscoveryEngine {
       nextQuestions: this.planner.plan({ answers, evidence: session.evidence, limit: 3 }),
     });
   }
+
+  /**
+   * Free-form consultant turn: extract signals, mark inferred questions answered,
+   * keep only non-inferable questions in the backlog.
+   */
+  async applyFreeText(session, { text, nowISO = new Date().toISOString() } = {}) {
+    const extracted = this.interpreter.extractFromFreeText(text);
+    const businessSummary = {
+      ...session.businessSummary,
+      ...extracted.fields,
+    };
+
+    const answers = [...session.answers];
+    for (const questionId of extracted.answeredQuestionIds) {
+      const record = createBuilderAnswer({
+        questionId,
+        answer: extracted.fields.businessName
+          && questionId === "q_company_name"
+          ? extracted.fields.businessName
+          : text,
+        skipped: false,
+        unknown: false,
+        confidence: 0.7,
+        answeredAt: nowISO,
+        evidenceSource: "free_text_extraction",
+      });
+      const idx = answers.findIndex((entry) => entry.questionId === questionId);
+      if (idx >= 0) answers[idx] = record;
+      else answers.push(record);
+    }
+
+    const progress = this.completeness.evaluate({ answers, businessSummary });
+    const summary = buildBusinessDiscoverySummary({
+      businessSummary,
+      completeness: progress,
+      assumptions: session.assumptions,
+    });
+
+    let conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+      messageId: `msg_user_free_${Date.parse(nowISO)}`,
+      role: "user",
+      text: String(text),
+      at: nowISO,
+    }));
+    const nextQuestions = this.planner.plan({ answers, evidence: session.evidence, limit: 3 });
+    conversation = appendConversation(conversation, createBuilderConversationMessage({
+      messageId: `msg_assistant_free_${Date.parse(nowISO)}`,
+      role: "assistant",
+      text: extracted.note
+        ?? (nextQuestions[0]?.prompt
+          ? `Got it. ${nextQuestions[0].prompt}`
+          : "I have enough to propose an operating system when you’re ready."),
+      at: nowISO,
+      relatedQuestionId: nextQuestions[0]?.questionId ?? null,
+    }));
+
+    return deepFreeze({
+      answers,
+      businessSummary,
+      assumptions: session.assumptions,
+      unresolvedQuestions: session.unresolvedQuestions,
+      progress,
+      summary,
+      conversation,
+      nextQuestions,
+      extracted,
+    });
+  }
 }

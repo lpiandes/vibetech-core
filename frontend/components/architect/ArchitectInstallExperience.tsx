@@ -211,7 +211,14 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
               if (openHref) router.push(`${openHref.replace(/\/home$/, "")}/settings`);
               else router.push(routes.session);
             }}
-            onImprove={() => router.push(routes.session)}
+            onImprove={() => {
+              const bizId = session?.businessId;
+              if (bizId && !String(bizId).startsWith("draft_")) {
+                router.push(`/b/${encodeURIComponent(bizId)}/architect`);
+              } else {
+                router.push(routes.session);
+              }
+            }}
           />
         </ArchitectPanel>
       </ArchitectShell>

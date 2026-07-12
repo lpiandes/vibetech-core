@@ -55,13 +55,13 @@ test("hockey and McBride assembly reuse fixtures", () => {
   });
   const hockeyPlan = planner.plan({ session: hockey });
   const hockeySpec = assembler.assemble({ session: hockey, assemblyPlan: hockeyPlan });
-  assert.equal(hockeySpec.source, "hockey_fixture");
+  assert.equal(hockeySpec.source, "rec_bp_hockey_fixture");
   assert.ok(hockeySpec.specification.modules.some((module) => module.moduleId === "teams"));
 
   const pm = createBuilderSession({
     businessSummary: { businessName: "McBride", industry: "property_management" },
   });
   const pmSpec = assembler.assemble({ session: pm, assemblyPlan: planner.plan({ session: pm }) });
-  assert.equal(pmSpec.source, "mcbride_gold");
+  assert.equal(pmSpec.source, "rec_bp_pm_gold");
   assert.ok(pmSpec.specification.modules.some((module) => module.moduleId === "properties"));
 });

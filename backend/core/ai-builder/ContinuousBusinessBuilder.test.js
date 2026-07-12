@@ -30,4 +30,5 @@ test("continuous builder requires installed specification and keeps same busines
   assert.equal(started.session.businessId, "biz_1");
   assert.equal(started.session.mode, "expand_existing_business");
   assert.equal(started.session.metadata.continuousImprovement, true);
+  assert.match(started.openHref, /^\/b\/biz_1\/architect\?sessionId=/);
 });

@@ -79,3 +79,43 @@ test("session modes and stages are validated", () => {
     /unsupported stage/,
   );
 });
+
+test("archiveStaleSessions archives old terminal sessions only", async () => {
+  const repository = new BuilderSessionRepository();
+  const service = new BuilderSessionService({
+    repository,
+    nowISO: () => "2026-07-11T12:00:00.000Z",
+  });
+  const stale = createBuilderSession({
+    sessionId: "abs_stale",
+    businessId: "biz_a",
+    currentStage: "installed",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const fresh = createBuilderSession({
+    sessionId: "abs_fresh",
+    businessId: "biz_a",
+    currentStage: "installed",
+    updatedAt: "2026-07-10T00:00:00.000Z",
+  });
+  const active = createBuilderSession({
+    sessionId: "abs_active",
+    businessId: "biz_a",
+    currentStage: "interviewing",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  });
+  await repository.save(stale);
+  await repository.save(fresh);
+  await repository.save(active);
+
+  const archived = await service.archiveStaleSessions({
+    businessId: "biz_a",
+    olderThanDays: 30,
+    nowISO: "2026-07-11T12:00:00.000Z",
+  });
+  assert.equal(archived.length, 1);
+  assert.equal(archived[0].sessionId, "abs_stale");
+  assert.equal((await repository.get("abs_stale")).currentStage, "archived");
+  assert.equal((await repository.get("abs_fresh")).currentStage, "installed");
+  assert.equal((await repository.get("abs_active")).currentStage, "interviewing");
+});

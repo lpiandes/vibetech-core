@@ -279,7 +279,7 @@ export class AdminPlatformService {
         email: user.email,
         name: user.name,
         platformRole: user.platformRole ?? null,
-        status: user.status ?? "active",
+        createdAt: user.createdAt ?? null,
       })),
     });
   }

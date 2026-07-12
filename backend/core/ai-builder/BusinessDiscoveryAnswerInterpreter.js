@@ -83,6 +83,21 @@ export class BusinessDiscoveryAnswerInterpreter {
       case "q_owner_oversight":
         fields.ownerOversight = text;
         break;
+      case "q_departments":
+        fields.departments = splitList(text);
+        break;
+      case "q_lead_sources":
+        fields.leadSources = splitList(text);
+        break;
+      case "q_request_sources":
+        fields.requestSources = splitList(text);
+        break;
+      case "q_automation_comfort":
+        fields.automationComfort = text;
+        break;
+      case "q_expansion_plans":
+        fields.expansionPlans = splitList(text);
+        break;
       case "q_tell_us":
         fields.description = text;
         Object.assign(fields, inferFromDescription(text));
@@ -97,6 +112,88 @@ export class BusinessDiscoveryAnswerInterpreter {
       unknown: false,
       fields,
       unresolved: [],
+    });
+  }
+
+  /**
+   * Extract structured discovery signals from free-form consultant chat.
+   * Returns inferred field patches plus questionIds that can be marked answered.
+   */
+  extractFromFreeText(text) {
+    const raw = String(text ?? "").trim();
+    if (!raw) {
+      return deepFreeze({ ok: true, fields: {}, answeredQuestionIds: [], note: null });
+    }
+
+    const fields = { ...inferFromDescription(raw) };
+    const answeredQuestionIds = [];
+    const lower = raw.toLowerCase();
+
+    if (fields.industry) answeredQuestionIds.push("q_industry");
+    if (fields.services?.length) answeredQuestionIds.push("q_services");
+    if (fields.customerTypes?.length) answeredQuestionIds.push("q_customers");
+
+    const nameMatch = raw.match(/(?:we are|we're|company(?: name)? is|called)\s+([A-Z][\w\s&.'-]{1,60})/i);
+    if (nameMatch?.[1]) {
+      fields.businessName = nameMatch[1]
+        .trim()
+        .replace(/\s+in\s+.+$/i, "")
+        .replace(/[.,].*$/, "")
+        .trim();
+      answeredQuestionIds.push("q_company_name");
+    }
+
+    if (/\b(office|location|city|region|online)\b/i.test(raw)) {
+      fields.locations = fields.locations ?? splitList(raw.match(/in ([^.]+)/i)?.[1] ?? raw);
+      answeredQuestionIds.push("q_locations");
+    }
+    if (/\b(hire|hiring|team|staff|employee|agent|hygienist|coach)\b/i.test(lower)) {
+      fields.roles = fields.roles ?? splitList(raw);
+      answeredQuestionIds.push("q_roles");
+    }
+    if (/\b(appfolio|gmail|outlook|quickbooks|salesforce|crm|calendar)\b/i.test(lower)) {
+      fields.currentSystems = fields.currentSystems ?? splitList(raw);
+      answeredQuestionIds.push("q_software", "q_integrations");
+    }
+    if (/\b(approv|sign[- ]off|must review)\b/i.test(lower)) {
+      fields.approvalNeeds = fields.approvalNeeds ?? splitList(raw);
+      answeredQuestionIds.push("q_approvals");
+    }
+    if (/\b(pain|stuck|slow|manual|overwhelm)\b/i.test(lower)) {
+      fields.painPoints = fields.painPoints ?? splitList(raw);
+      answeredQuestionIds.push("q_pain_points");
+    }
+    if (/\b(department|leasing team|maintenance team|front desk)\b/i.test(lower)) {
+      fields.departments = fields.departments ?? splitList(raw);
+      answeredQuestionIds.push("q_departments");
+    }
+    if (/\b(lead|referral|website|zillow|ads)\b/i.test(lower)) {
+      fields.leadSources = fields.leadSources ?? splitList(raw);
+      answeredQuestionIds.push("q_lead_sources");
+    }
+    if (/\b(email|phone|portal|walk[- ]?in|chat)\b/i.test(lower) && /\b(request|ticket|inquiry)\b/i.test(lower)) {
+      fields.requestSources = fields.requestSources ?? splitList(raw);
+      answeredQuestionIds.push("q_request_sources");
+    }
+    if (/\b(automat|ai handle|digital employee|comfort)\b/i.test(lower)) {
+      fields.automationComfort = fields.automationComfort ?? raw;
+      answeredQuestionIds.push("q_automation_comfort");
+    }
+    if (/\b(expand|another office|new location|grow|hiring more)\b/i.test(lower)) {
+      fields.expansionPlans = fields.expansionPlans ?? splitList(raw);
+      answeredQuestionIds.push("q_expansion_plans");
+    }
+
+    fields.description = fields.description ?? raw;
+    answeredQuestionIds.push("q_tell_us");
+
+    return deepFreeze({
+      ok: true,
+      fields,
+      answeredQuestionIds: [...new Set(answeredQuestionIds)],
+      note: answeredQuestionIds.length > 1
+        ? "I captured what I could from that. I’ll only ask what’s still unclear."
+        : "Thanks — I’ll keep asking only what I still need.",
     });
   }
 }

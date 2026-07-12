@@ -14,6 +14,8 @@ type Props = {
   thinking?: boolean;
   busy?: boolean;
   mode: "discovery" | "chat";
+  /** When false, hide the optional “next question” suggestion card. */
+  suggestQuestion?: boolean;
   onSubmit: () => void;
   onQuickReply: (value: string) => void;
   onSkip?: () => void;
@@ -41,6 +43,7 @@ export default function ConversationRail({
   thinking,
   busy,
   mode,
+  suggestQuestion = true,
   onSubmit,
   onQuickReply,
   onSkip,
@@ -95,30 +98,11 @@ export default function ConversationRail({
         {thinking ? <ThinkingDots label={HUMAN_COPY.rethink} /> : null}
       </div>
 
-      {mode === "discovery" && nextQuestion ? (
-        <div style={{
-          borderRadius: architect.radiusSm,
-          border: `1px solid ${architect.border}`,
-          background: "rgba(15,23,42,.45)",
-          padding: 16,
-          display: "grid",
-          gap: 8,
-        }}>
-          <ArchitectBadge tone="accent">Next</ArchitectBadge>
-          <div style={{ fontSize: 17, fontWeight: 650, lineHeight: 1.4 }}>
-            {nextQuestion.text ?? (nextQuestion as { prompt?: string }).prompt}
-          </div>
-          {nextQuestion.why ? (
-            <div style={{ color: architect.inkMuted, fontSize: 13, lineHeight: 1.5 }}>{nextQuestion.why}</div>
-          ) : null}
-        </div>
-      ) : null}
-
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 10 }}>
         <textarea
           value={message}
           onChange={(event) => setMessage(event.target.value)}
-          placeholder={mode === "chat" ? "Ask Architect to refine the plan…" : "Answer in plain language…"}
+          placeholder={mode === "chat" ? "Ask Architect to refine the plan…" : "Tell Architect about your business…"}
           rows={3}
           style={inputStyle}
         />
@@ -134,6 +118,33 @@ export default function ConversationRail({
           ) : null}
         </div>
       </form>
+
+      {mode === "discovery" && suggestQuestion && nextQuestion ? (
+        <div style={{
+          borderRadius: architect.radiusSm,
+          border: `1px dashed ${architect.border}`,
+          background: "transparent",
+          padding: 14,
+          display: "grid",
+          gap: 6,
+          opacity: 0.9,
+        }}>
+          <ArchitectBadge>Suggested</ArchitectBadge>
+          <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4, color: architect.inkMuted }}>
+            {nextQuestion.text ?? (nextQuestion as { prompt?: string }).prompt}
+          </div>
+          {nextQuestion.why ? (
+            <div style={{ color: architect.inkMuted, fontSize: 12, lineHeight: 1.5 }}>{nextQuestion.why}</div>
+          ) : null}
+          <ArchitectButton
+            variant="ghost"
+            disabled={busy}
+            onClick={() => onQuickReply(String(nextQuestion.text ?? (nextQuestion as { prompt?: string }).prompt ?? ""))}
+          >
+            Answer this
+          </ArchitectButton>
+        </div>
+      ) : null}
 
       {quickReplies.length ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

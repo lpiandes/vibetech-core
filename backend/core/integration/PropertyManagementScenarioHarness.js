@@ -50,6 +50,7 @@ import { IndustryPackageInstallationRuntime } from "../industries/IndustryPackag
 import { PROPERTY_MANAGEMENT_PACKAGE } from "../../../industries/property-management/PropertyManagementPackage.js";
 import { buildEmptyTeamSeed } from "../team/TeamBuilder.js";
 import { RUNTIME_SNAPSHOT_KINDS } from "../persistence/RuntimeSnapshotKinds.js";
+import { IntelligenceCandidateRuntime } from "../business-intelligence/candidates/IntelligenceCandidateRuntime.js";
 
 const ANALYTICS_EVENTS = [
   "REQUEST_RECEIVED",
@@ -120,6 +121,11 @@ export function buildPropertyManagementWorkspaceStack({
   const segmentDefinitionRuntime = new SegmentDefinitionRuntime();
   const interactionRuntime = new InteractionRuntime({
     seed: snap(RUNTIME_SNAPSHOT_KINDS.INTERACTION) ? () => snap(RUNTIME_SNAPSHOT_KINDS.INTERACTION) : undefined,
+  });
+  const intelligenceCandidateRuntime = new IntelligenceCandidateRuntime({
+    seed: snap(RUNTIME_SNAPSHOT_KINDS.INTELLIGENCE_CANDIDATE)
+      ? () => snap(RUNTIME_SNAPSHOT_KINDS.INTELLIGENCE_CANDIDATE)
+      : undefined,
   });
   const automationRuntime = new AutomationRuntime({ nowISO });
   const automationRuleEngine = new AutomationRuleEngine();
@@ -279,6 +285,7 @@ export function buildPropertyManagementWorkspaceStack({
     communicationPreferenceRuntime,
     segmentDefinitionRuntime,
     interactionRuntime,
+    intelligenceCandidateRuntime,
     automationRuntime,
     approvalRuntime,
     installationRuntime,

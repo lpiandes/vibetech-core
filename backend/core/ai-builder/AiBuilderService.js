@@ -24,10 +24,16 @@ import {
 } from "../business-os/BusinessOSInstallationApproval.js";
 import { DeterministicBuilderIntelligenceProvider } from "./BuilderIntelligenceProvider.js";
 import { BuilderSpecificationChangePlanner } from "./BuilderSpecificationChangePlanner.js";
+import { BuilderChangeProposalService } from "./BuilderChangeProposalService.js";
 import {
   createBuilderConversationMessage,
   appendConversation,
 } from "./BuilderConversation.js";
+import {
+  buildIntelligenceCandidateArchitectBrief,
+  formatArchitectCandidateReply,
+} from "../business-intelligence/conversion/IntelligenceArchitectExplanation.js";
+import { explainCandidateMemory } from "../business-intelligence/memory/BusinessMemoryTimeline.js";
 import {
   clientSafeProposalView,
   discoveryStageProgress,
@@ -56,6 +62,7 @@ export class AiBuilderService {
     installer = null,
     intelligence = new DeterministicBuilderIntelligenceProvider(),
     changePlanner = new BuilderSpecificationChangePlanner(),
+    changeProposalService = null,
     platformStore = null,
     nowISO = () => new Date().toISOString(),
   } = {}) {
@@ -69,6 +76,8 @@ export class AiBuilderService {
     this.installer = installer ?? new BusinessOSInstaller({ repository: installationRepository });
     this.intelligence = intelligence;
     this.changePlanner = changePlanner;
+    this.changeProposalService = changeProposalService
+      ?? new BuilderChangeProposalService({ changePlanner });
     this.platformStore = platformStore ?? repository?.platformStore ?? null;
     this.nowISO = nowISO;
     /** @type {Map<string, object>} rebuildable cache only */
@@ -105,6 +114,11 @@ export class AiBuilderService {
       ok: true,
       sessions: sorted.map(sessionListCard),
     });
+  }
+
+  async archiveStaleSessions(input = {}) {
+    const archived = await this.sessionService.archiveStaleSessions(input);
+    return deepFreeze({ ok: true, archivedCount: archived.length, sessions: archived });
   }
 
   async getWorkspace(sessionId) {
@@ -350,75 +364,342 @@ export class AiBuilderService {
     });
   }
 
-  async chat({ sessionId, text }) {
+  async chat({ sessionId, text, stack = null }) {
     const session = await this.requireSession(sessionId);
-    const interpreted = await this.intelligence.interpretChangeRequest({ text });
     const stored = await this.loadProposalState(session);
-    if (!stored?.specification) {
+
+    const candidateSnapshot = session.metadata?.candidateSnapshot
+      ?? stored?.metadata?.candidateSnapshot
+      ?? null;
+    const intelligenceCandidateId = session.metadata?.intelligenceCandidateId
+      ?? candidateSnapshot?.id
+      ?? null;
+    if (intelligenceCandidateId && isIntelligenceAttentionQuestion(text)) {
+      const candidate = candidateSnapshot
+        ?? stack?.intelligenceCandidateRuntime?.getCandidate?.(intelligenceCandidateId)
+        ?? null;
+      const memory = explainCandidateMemory({
+        candidate,
+        workRuntime: stack?.workRuntime ?? null,
+      });
+      const brief = buildIntelligenceCandidateArchitectBrief({ candidate, stack, memory });
+      const reply = formatArchitectCandidateReply(brief);
+      const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+        messageId: `msg_user_intel_${Date.now()}`,
+        role: "user",
+        text,
+      }));
+      const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+        messageId: `msg_assistant_intel_${Date.now()}`,
+        role: "assistant",
+        text: reply,
+      }));
+      const updated = withBuilderSessionPatch(session, { conversation: withAssistant });
+      await this.repository.save(updated);
       return deepFreeze({
-        ok: false,
-        reason: "proposal_required",
-        message: "Propose an operating system before requesting changes.",
+        ok: true,
+        session: updated,
+        intelligenceExplanation: true,
+        brief,
+        message: reply,
+        inventedFacts: false,
       });
     }
 
-    const planned = this.changePlanner.apply({
-      specification: stored.specification,
-      change: { ...interpreted, text },
-    });
+    // Pre-proposal: free-form discovery extraction (consultant mode).
+    if (!stored?.specification) {
+      const now = this.nowISO();
+      const applied = await this.sessionService.discoveryEngine.applyFreeText(session, {
+        text,
+        nowISO: now,
+      });
+      const updated = withBuilderSessionPatch(session, {
+        answers: applied.answers,
+        businessSummary: applied.businessSummary,
+        assumptions: applied.assumptions,
+        unresolvedQuestions: applied.unresolvedQuestions,
+        progress: applied.progress,
+        conversation: applied.conversation,
+        questions: applied.nextQuestions,
+        currentStage: applied.progress?.readyForProposal ? "assembling" : "interviewing",
+      }, { updatedAt: now });
+      await this.repository.save(updated);
+      return deepFreeze({
+        ok: true,
+        session: updated,
+        discovery: true,
+        extracted: applied.extracted,
+        nextQuestions: applied.nextQuestions,
+        journey: applied.progress,
+        message: applied.extracted?.note ?? null,
+      });
+    }
 
-    const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
-      messageId: `msg_user_change_${Date.now()}`,
-      role: "user",
-      text,
-    }));
-    const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
-      messageId: `msg_assistant_change_${Date.now()}`,
-      role: "assistant",
-      text: `Proposed change: ${interpreted.kind.replace(/_/g, " ")}. Dry run and approval are required before install.`,
-    }));
+    // Post-proposal: registry-driven change capabilities.
+    const changeService = this.changeProposalService;
+    if (changeService?.propose) {
+      const pending = session.metadata?.pendingChange ?? null;
+      const proposed = await changeService.propose({
+        session,
+        specification: stored.specification,
+        text,
+        priorValues: pending?.values ?? null,
+        selectCapabilityId: pending?.capabilityId && pending?.status === "needs_information"
+          ? pending.capabilityId
+          : null,
+        actorPermissions: ["business.manage"],
+      });
 
-    const proposalState = createBuilderProposalState({
-      ...stored,
-      specification: planned.nextSpecification,
-      plan: null,
-      dryRunResult: null,
-      approval: null,
-      change: planned,
-      updatedAt: this.nowISO(),
-    });
+      await this.recordArchitectAudit(session, "architect.change_interpreted", {
+        status: proposed.status ?? (proposed.ok ? "matched" : "failed"),
+        capabilityId: proposed.capabilityId ?? null,
+      });
 
-    const updated = await this.persistProposalState(session, proposalState, {
-      conversation: withAssistant,
-      currentStage: "awaiting_review",
-      specificationId: planned.nextSpecification.specificationId,
-      specificationContentHash: planned.nextSpecification.contentHash,
-      installationPlanId: null,
-      installationPlanHash: null,
-    });
+      if (proposed.status === "needs_information") {
+        await this.recordArchitectAudit(session, "architect.change_needs_information", {
+          capabilityId: proposed.capabilityId,
+          missing: (proposed.missing ?? []).map((field) => field.id),
+        });
+        const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+          messageId: `msg_user_change_${Date.now()}`,
+          role: "user",
+          text,
+        }));
+        const question = proposed.questions?.[0]
+          ?? proposed.missing?.[0]?.prompt
+          ?? "I need one more detail before I can propose that change.";
+        const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+          messageId: `msg_assistant_need_${Date.now()}`,
+          role: "assistant",
+          text: question,
+        }));
+        const updated = withBuilderSessionPatch(session, {
+          conversation: withAssistant,
+          metadata: {
+            ...session.metadata,
+            pendingChange: {
+              status: "needs_information",
+              capabilityId: proposed.capabilityId,
+              values: proposed.values ?? {},
+              missing: proposed.missing ?? [],
+              summary: proposed.summary,
+            },
+          },
+        }, { updatedAt: this.nowISO() });
+        await this.repository.save(updated);
+        return deepFreeze({
+          ok: true,
+          status: "needs_information",
+          session: updated,
+          missing: proposed.missing,
+          questions: proposed.questions,
+          changeImpact: {
+            kind: proposed.legacyKind ?? proposed.capabilityId,
+            label: "Need a bit more detail",
+            requiresDryRun: false,
+            requiresApproval: false,
+            explanation: question,
+            risk: "low",
+            affectedAreas: [],
+          },
+        });
+      }
 
-    this.installationRepository.saveSpecification({
-      ...planned.nextSpecification,
-      businessId: session.businessId ?? planned.nextSpecification.businessId,
-    });
+      if (proposed.status === "ambiguous") {
+        await this.recordArchitectAudit(session, "architect.change_ambiguous", {
+          candidates: (proposed.candidates ?? []).map((entry) => entry.capabilityId),
+        });
+        const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+          messageId: `msg_user_change_${Date.now()}`,
+          role: "user",
+          text,
+        }));
+        const options = (proposed.candidates ?? [])
+          .map((entry, index) => `${index + 1}. ${entry.title}`)
+          .join("\n");
+        const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+          messageId: `msg_assistant_amb_${Date.now()}`,
+          role: "assistant",
+          text: `${proposed.message ?? "I found more than one possible change."}\n${options}`,
+        }));
+        const updated = withBuilderSessionPatch(session, {
+          conversation: withAssistant,
+          metadata: {
+            ...session.metadata,
+            pendingChange: {
+              status: "ambiguous",
+              candidates: proposed.candidates ?? [],
+              summary: proposed.summary,
+            },
+          },
+        }, { updatedAt: this.nowISO() });
+        await this.repository.save(updated);
+        return deepFreeze({
+          ok: true,
+          status: "ambiguous",
+          session: updated,
+          candidates: proposed.candidates,
+          changeImpact: {
+            kind: "ambiguous",
+            label: "Clarify the change",
+            requiresDryRun: false,
+            requiresApproval: false,
+            explanation: proposed.message,
+            risk: "low",
+            affectedAreas: [],
+          },
+        });
+      }
+
+      if (proposed.status === "unsupported" || proposed.ok === false && proposed.status === "unsupported") {
+        await this.recordArchitectAudit(session, "architect.change_unsupported", {
+          reason: proposed.reason ?? null,
+        });
+        if (proposed.gapHint && this.platformStore?.upsertBusinessCapabilityProposal && session.businessId) {
+          await this.platformStore.upsertBusinessCapabilityProposal({
+            id: `gap_${session.sessionId}_${Date.now()}`,
+            businessId: session.businessId,
+            proposalId: `arch_gap_${Date.now()}`,
+            requestedOutcome: proposed.gapHint.requestedOutcome ?? text,
+            evidence: [{ source: "architect_chat", text }],
+            whyInsufficient: proposed.reason ?? "unsupported_architect_capability",
+            status: "proposed",
+            createdByUserId: session.actorId,
+          }).catch(() => null);
+        }
+        const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+          messageId: `msg_user_change_${Date.now()}`,
+          role: "user",
+          text,
+        }));
+        const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+          messageId: `msg_assistant_unsup_${Date.now()}`,
+          role: "assistant",
+          text: `I understood: ${proposed.summary ?? text}. ${proposed.recommendation ?? "That change is not supported yet."} Nothing was changed.`,
+        }));
+        const updated = withBuilderSessionPatch(session, {
+          conversation: withAssistant,
+          metadata: {
+            ...session.metadata,
+            pendingChange: null,
+            lastUnsupportedChange: {
+              summary: proposed.summary,
+              reason: proposed.reason,
+            },
+          },
+        }, { updatedAt: this.nowISO() });
+        await this.repository.save(updated);
+        return deepFreeze({
+          ok: true,
+          status: "unsupported",
+          session: updated,
+          unsupported: true,
+          changeImpact: {
+            kind: "unsupported",
+            label: "Not supported yet",
+            requiresDryRun: false,
+            requiresApproval: false,
+            explanation: proposed.recommendation ?? "Unsupported change — nothing was modified.",
+            risk: "low",
+            affectedAreas: [],
+          },
+        });
+      }
+
+      if (proposed?.ok) {
+        const kind = proposed.request?.interpreted?.kind
+          ?? proposed.impact?.kind
+          ?? proposed.capabilityId
+          ?? "generic_change";
+        const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+          messageId: `msg_user_change_${Date.now()}`,
+          role: "user",
+          text,
+        }));
+        const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+          messageId: `msg_assistant_change_${Date.now()}`,
+          role: "assistant",
+          text: proposed.impact?.explanation
+            ?? `Proposed change: ${String(kind).replace(/_/g, " ")}. Dry run and approval are required before install.`,
+        }));
+        const nextSpec = proposed.nextSpecification ?? stored.specification;
+        const proposalState = createBuilderProposalState({
+          ...stored,
+          specification: nextSpec,
+          plan: null,
+          dryRunResult: null,
+          approval: null,
+          change: proposed,
+          updatedAt: this.nowISO(),
+        });
+        const updated = await this.persistProposalState(session, proposalState, {
+          conversation: withAssistant,
+          currentStage: "awaiting_review",
+          specificationId: nextSpec.specificationId,
+          specificationContentHash: nextSpec.contentHash,
+          installationPlanId: null,
+          installationPlanHash: null,
+          metadata: {
+            ...session.metadata,
+            pendingChange: null,
+            lastChangeRequest: proposed.request ?? proposed,
+            lastMutationPlan: proposed.mutationPlan ?? null,
+            lastChangeSideEffects: proposed.sideEffects ?? [],
+          },
+        });
+        this.installationRepository.saveSpecification({
+          ...nextSpec,
+          businessId: session.businessId ?? nextSpec.businessId,
+        });
+        await this.recordArchitectAudit(session, "architect.change_proposed", {
+          kind,
+          capabilityId: proposed.capabilityId ?? null,
+          mutationPlanId: proposed.mutationPlan?.planId ?? null,
+        });
+        return deepFreeze({
+          ok: true,
+          status: "matched",
+          session: updated,
+          proposal: clientSafeProposalView(this.buildPreview(updated, proposalState)),
+          specification: nextSpec,
+          changeImpact: {
+            kind,
+            label: String(kind).replace(/_/g, " "),
+            requiresDryRun: true,
+            requiresApproval: true,
+            explanation: proposed.impact?.explanation
+              ?? `This would ${String(kind).replace(/_/g, " ")}. Nothing is installed until you dry run and approve.`,
+            risk: proposed.impact?.risk ?? "medium",
+            affectedAreas: proposed.impact?.affectedAreas ?? ["proposal"],
+            warnings: proposed.warnings ?? [],
+            capabilityId: proposed.capabilityId ?? null,
+          },
+        });
+      }
+    }
 
     return deepFreeze({
-      ok: true,
-      session: updated,
-      proposal: clientSafeProposalView(this.buildPreview(updated, proposalState)),
-      specification: planned.nextSpecification,
-      changeImpact: {
-        kind: interpreted.kind,
-        label: interpreted.kind.replace(/_/g, " "),
-        requiresDryRun: true,
-        requiresApproval: true,
-        previousHash: planned.previousHash,
-        nextHash: planned.nextSpecification.contentHash,
-        explanation: `This would ${interpreted.kind.replace(/_/g, " ")}. Nothing is installed until you dry run and approve.`,
-        risk: "medium",
-        affectedAreas: ["proposal", "navigation", "permissions", "workforce"].filter(Boolean),
-      },
+      ok: false,
+      reason: "change_proposal_unavailable",
+      message: "Architect could not build a governed change proposal.",
     });
+  }
+
+  async recordArchitectAudit(session, action, metadata = {}) {
+    if (!this.platformStore?.recordAuditEvent) return null;
+    const safe = { ...metadata };
+    delete safe.password;
+    delete safe.token;
+    delete safe.secret;
+    delete safe.documentBody;
+    return this.platformStore.recordAuditEvent({
+      actorUserId: session.actorId,
+      businessId: session.businessId,
+      action,
+      targetType: "builder_session",
+      targetId: session.sessionId,
+      metadata: safe,
+    }).catch(() => null);
   }
 
   async dryRun({ sessionId }) {
@@ -505,6 +786,14 @@ export class AiBuilderService {
       businessId,
     });
 
+    await this.recordArchitectAudit(updated, "architect.change_approved", {
+      specificationContentHash: stored.specification.contentHash,
+      planHash: stored.plan.planHash,
+      capabilityId: session.metadata?.lastChangeRequest?.capabilityId
+        ?? session.metadata?.lastChangeRequest?.interpreted?.capabilityId
+        ?? null,
+    });
+
     return deepFreeze({ ok: true, session: updated, approval });
   }
 
@@ -532,6 +821,10 @@ export class AiBuilderService {
 
     const installing = withBuilderSessionPatch(session, { currentStage: "installing" });
     await this.repository.save(installing);
+    await this.recordArchitectAudit(installing, "architect.change_execution_started", {
+      businessId,
+      planId: stored.plan?.planId ?? null,
+    });
 
     const installed = this.installer.install({
       specification: { ...stored.specification, businessId },
@@ -554,6 +847,31 @@ export class AiBuilderService {
       currentStage: installed.ok ? "installed" : "failed",
       businessId,
     });
+
+    if (installed.ok) {
+      await this.persistCanonicalBusinessOS({
+        businessId,
+        specification: { ...stored.specification, businessId },
+        plan: stored.plan,
+        installation: installed.installation ?? proposalState.installation,
+        actorUserId: actorId ?? session.actorId,
+      });
+      await this.executeChangeSideEffects({
+        session: updated,
+        sideEffects: session.metadata?.lastChangeSideEffects ?? [],
+        actorId: actorId ?? session.actorId,
+        businessId,
+      });
+      await this.recordArchitectAudit(updated, "architect.change_executed", {
+        businessId,
+        installationId: installed.installation?.installationId ?? null,
+      });
+    } else {
+      await this.recordArchitectAudit(updated, "architect.change_failed", {
+        businessId,
+        reason: installed.reason ?? "install_failed",
+      });
+    }
 
     return deepFreeze({
       ok: installed.ok,
@@ -708,6 +1026,139 @@ export class AiBuilderService {
     return existingId ?? `draft_${session.sessionId}`;
   }
 
+  /**
+   * Post-approval side effects from mutation plans (governed invites / knowledge only).
+   * Never sends customer communications. Invites use existing invitation delivery.
+   */
+  async executeChangeSideEffects({
+    session,
+    sideEffects = [],
+    actorId = null,
+    businessId,
+  }) {
+    if (!Array.isArray(sideEffects) || !sideEffects.length) return [];
+    const results = [];
+    for (const op of sideEffects) {
+      if (op.operationType === "inviteMembership") {
+        if (op.allowsExternalCommunication !== true) {
+          results.push({ operationId: op.operationId, ok: false, reason: "external_communication_prohibited" });
+          continue;
+        }
+        if (!this.platformStore || !businessId || String(businessId).startsWith("draft_")) {
+          results.push({ operationId: op.operationId, ok: false, reason: "platform_invite_unavailable" });
+          continue;
+        }
+        try {
+          // Prefer existing store invitation helpers if present; otherwise record readiness only.
+          if (typeof this.platformStore.createInvitation === "function") {
+            await this.platformStore.createInvitation({
+              businessId,
+              email: op.payload?.email,
+              role: String(op.payload?.role ?? "EMPLOYEE").toUpperCase(),
+              invitedByUserId: actorId,
+            });
+          }
+          results.push({ operationId: op.operationId, ok: true, kind: "inviteMembership" });
+        } catch (err) {
+          results.push({
+            operationId: op.operationId,
+            ok: false,
+            reason: err instanceof Error ? err.message : "invite_failed",
+          });
+        }
+        continue;
+      }
+      if (String(op.operationType).includes("Knowledge")) {
+        // Knowledge body is never auto-published externally; readiness hint already on spec.
+        results.push({
+          operationId: op.operationId,
+          ok: true,
+          kind: op.operationType,
+          allowsExternalCommunication: false,
+        });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Write installed OS into canonical Postgres tables so Ask VIBETech / improve
+   * can load truth after process restart without session metadata alone.
+   */
+  async persistCanonicalBusinessOS({
+    businessId,
+    specification,
+    plan,
+    installation,
+    actorUserId = null,
+  }) {
+    if (!this.platformStore?.upsertBusinessOSSpecification || !this.platformStore?.upsertBusinessOSInstallation) {
+      return null;
+    }
+    if (!businessId || String(businessId).startsWith("draft_")) {
+      return null;
+    }
+
+    const specificationId = String(specification.specificationId);
+    const specificationVersion = Number(
+      specification.version ?? specification.specificationVersion ?? 1,
+    );
+    const contentHash = String(specification.contentHash);
+    const specRowId = `bos_spec_${businessId}_${specificationId}_v${specificationVersion}`;
+    const installId = String(
+      installation?.installationId
+        ?? `install_${businessId}_${specificationId}`,
+    );
+    const nowISO = this.nowISO();
+
+    const specRow = await this.platformStore.upsertBusinessOSSpecification({
+      id: specRowId,
+      businessId,
+      specificationId,
+      specificationVersion,
+      schemaVersion: Number(specification.schemaVersion ?? 1),
+      status: "installed",
+      contentHash,
+      specification: { ...specification, businessId },
+      createdByUserId: actorUserId,
+      updatedByUserId: actorUserId,
+    });
+
+    const installRow = await this.platformStore.upsertBusinessOSInstallation({
+      id: installId,
+      businessId,
+      specificationRowId: specRow?.id ?? specRowId,
+      specificationId,
+      specificationVersion,
+      specificationContentHash: contentHash,
+      planId: String(plan?.planId ?? installation?.planId ?? `plan_${businessId}`),
+      status: String(installation?.status ?? "installed"),
+      plan: plan ?? installation?.plan ?? {},
+      actionCheckpoints: installation?.actionCheckpoints ?? [],
+      configuration: installation?.configuration ?? {},
+      history: installation?.history ?? [],
+      actorUserId,
+      installedAt: installation?.installedAt ?? nowISO,
+    });
+
+    if (this.platformStore.recordAuditEvent) {
+      await this.platformStore.recordAuditEvent({
+        actorUserId,
+        businessId,
+        action: "architect.installed",
+        targetType: "business_os_installation",
+        targetId: installRow?.id ?? installId,
+        metadata: {
+          specificationId,
+          specificationVersion,
+          contentHash,
+        },
+      });
+    }
+
+    return { specification: specRow, installation: installRow };
+  }
+
   async requireSession(sessionId) {
     const session = await this.repository.get(sessionId);
     if (!session) throw new Error("Builder session not found.");
@@ -757,4 +1208,11 @@ function latestUploads(session) {
       confirmed: Boolean(entry.payload?.mapping?.confirmed),
       mutatesCanonicalData: entry.mutatesCanonicalData === true,
     }));
+}
+
+function isIntelligenceAttentionQuestion(text) {
+  const normalized = String(text ?? "").toLowerCase();
+  if (!normalized.trim()) return true;
+  return /(what needs attention|why does this matter|what evidence|who owns|already being handled|what changed|what should we do|did we try|tried before|explain this|why|evidence|owner|next)/i
+    .test(normalized);
 }

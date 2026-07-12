@@ -19,6 +19,7 @@ export const DISCOVERY_TOPIC_ORDER = Object.freeze([
   "pain_points",
   "permissions",
   "outcomes",
+  "expansion",
 ]);
 
 export const DISCOVERY_QUESTION_BANK = Object.freeze([
@@ -170,6 +171,41 @@ export const DISCOVERY_QUESTION_BANK = Object.freeze([
     why: "Owner oversight shapes approval queues and manager permissions.",
     required: false,
     topic: "permissions",
+  }),
+  createBuilderQuestion({
+    questionId: "q_departments",
+    prompt: "Do you organize people into departments or teams?",
+    why: "Departments shape role templates and Work queue ownership.",
+    required: false,
+    topic: "team",
+  }),
+  createBuilderQuestion({
+    questionId: "q_lead_sources",
+    prompt: "Where do new leads or opportunities usually come from?",
+    why: "Lead sources become intake Work and campaign follow-ups.",
+    required: false,
+    topic: "operations",
+  }),
+  createBuilderQuestion({
+    questionId: "q_request_sources",
+    prompt: "How do customers submit requests (portal, email, phone, walk-in)?",
+    why: "Request sources become Request types and Inbox routing.",
+    required: false,
+    topic: "operations",
+  }),
+  createBuilderQuestion({
+    questionId: "q_automation_comfort",
+    prompt: "How comfortable are you letting AI handle routine work with human approval?",
+    why: "Automation comfort sets digital-employee defaults and approval strictness.",
+    required: false,
+    topic: "permissions",
+  }),
+  createBuilderQuestion({
+    questionId: "q_expansion_plans",
+    prompt: "Are you planning new locations, services, or team growth soon?",
+    why: "Expansion plans keep the operating system ready for scale without rewrites.",
+    required: false,
+    topic: "expansion",
   }),
 ]);
 

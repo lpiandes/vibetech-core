@@ -36,6 +36,7 @@ import { SegmentDefinitionRuntime } from "../../segments/SegmentDefinitionRuntim
 import { AutomationRuntime } from "../../automations/AutomationRuntime.js";
 import { ApprovalRuntime } from "../../approvals/ApprovalRuntime.js";
 import { PlatformEventStore } from "../../events/PlatformEventStore.js";
+import { IntelligenceCandidateRuntime } from "../../business-intelligence/candidates/IntelligenceCandidateRuntime.js";
 
 export const PROPERTY_MANAGEMENT_PACKAGE_ID = "pkg_property_management";
 export const HORIZON_PROPERTIES_DEMO_ID = "horizon_properties";
@@ -69,6 +70,7 @@ function buildGenericWorkspaceStack({ nowISO, workspaceId, activation }) {
     communicationPreferenceRuntime: new CommunicationPreferenceRuntime(),
     segmentDefinitionRuntime: new SegmentDefinitionRuntime(),
     interactionRuntime: new InteractionRuntime(),
+    intelligenceCandidateRuntime: new IntelligenceCandidateRuntime(),
     automationRuntime: new AutomationRuntime({ nowISO: effectiveNowISO }),
     approvalRuntime: new ApprovalRuntime({ nowISO: effectiveNowISO }),
     platformEventStore: new PlatformEventStore({ nowISO: effectiveNowISO }),
@@ -204,6 +206,7 @@ function activateIndustryWorkspace({ workspaceId, activation, nowISO, runtimeSna
     capabilityRuntime: stack.capabilityRuntime,
     communicationRuntime: stack.communicationRuntime,
     interactionRuntime: stack.interactionRuntime,
+    intelligenceCandidateRuntime: stack.intelligenceCandidateRuntime,
     automationRuntime: stack.automationRuntime,
     approvalRuntime: stack.approvalRuntime,
     platformEventStore: stack.store,
@@ -256,6 +259,7 @@ function activateGenericWorkspace({ workspaceId, activation, nowISO }) {
       capabilityRuntime: stack.capabilityRuntime,
       communicationRuntime: stack.communicationRuntime,
       interactionRuntime: stack.interactionRuntime,
+      intelligenceCandidateRuntime: stack.intelligenceCandidateRuntime,
       automationRuntime: stack.automationRuntime,
       approvalRuntime: stack.approvalRuntime,
       platformEventStore: stack.platformEventStore,
@@ -275,6 +279,7 @@ function activateGenericWorkspace({ workspaceId, activation, nowISO }) {
     integrationPlatform: null,
     connectionDependencyProjection: null,
     operationalBoundary: null,
+    operatingStack: stack,
   };
 }
 

@@ -20,6 +20,8 @@ function exportKind({ kind, stack, integrationPlatform }) {
       return stack?.communicationPreferenceRuntime?.exportState?.() ?? null;
     case RUNTIME_SNAPSHOT_KINDS.ANALYTICS:
       return stack?.analyticsRuntime?.exportState?.() ?? null;
+    case RUNTIME_SNAPSHOT_KINDS.INTELLIGENCE_CANDIDATE:
+      return stack?.intelligenceCandidateRuntime?.exportState?.() ?? null;
     default:
       return null;
   }
