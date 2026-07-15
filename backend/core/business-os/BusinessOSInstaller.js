@@ -299,5 +299,6 @@ function buildInstalledConfiguration({ specification, plan, actionResults }) {
     governancePolicies: specification.governancePolicies,
     roleDefinitions: specification.roleDefinitions,
     permissionPolicies: specification.permissionPolicies,
+    metadata: specification.metadata ?? {},
   });
 }

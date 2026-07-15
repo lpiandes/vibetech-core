@@ -32,8 +32,6 @@ export default function ExecutiveBriefing({
           {briefing.headline}
         </h1>
         <p style={{ margin: 0, color: architect.inkMuted, fontSize: 17, lineHeight: 1.55, maxWidth: 640 }}>
-          <strong style={{ color: architect.ink }}>{briefing.businessName}</strong>
-          {" — "}
           {briefing.summary}
         </p>
       </div>

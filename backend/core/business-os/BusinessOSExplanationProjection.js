@@ -1,4 +1,8 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
+import {
+  resolveBusinessDisplayName,
+  resolveIndustryLabel,
+} from "../ai-builder/businessIdentity.js";
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -18,7 +22,12 @@ export function explainBusinessOSSpecification(specification) {
   }
 
   const profile = specification.businessProfile ?? {};
-  const businessName = profile.businessName ?? profile.name ?? "This business";
+  const businessName = resolveBusinessDisplayName(
+    profile.businessName,
+    profile.name,
+    "This business",
+  );
+  const industry = resolveIndustryLabel(profile.industry, "general").replace(/_/g, " ");
   const modules = asArray(specification.modules);
   const employees = asArray(specification.employeeDefinitions);
   const roles = asArray(specification.roleDefinitions);
@@ -30,8 +39,8 @@ export function explainBusinessOSSpecification(specification) {
     {
       id: "profile",
       title: "Business profile",
-      body: `${businessName} operates as a ${profile.industry ?? "general"} business`
-        + (profile.subIndustry ? ` (${profile.subIndustry.replace(/_/g, " ")})` : "")
+      body: `${businessName} operates as a ${industry} business`
+        + (profile.subIndustry ? ` (${String(profile.subIndustry).replace(/_/g, " ")})` : "")
         + ".",
     },
     {
@@ -48,10 +57,12 @@ export function explainBusinessOSSpecification(specification) {
     },
     {
       id: "workforce",
-      title: "Digital workforce",
+      title: "Digital Workforce",
       body: employees.length
-        ? `${employees.length} digital employee${employees.length === 1 ? "" : "s"} stay grouped under Digital Workforce — they are not top-level tabs.`
-        : "No digital employees defined.",
+        ? `${employees.length} digital employee${employees.length === 1 ? "" : "s"}: ${
+          employees.map((employee) => employee.label).filter(Boolean).join(", ")
+        }.`
+        : "No digital employees defined yet.",
       items: employees.map((employee) => ({
         id: employee.employeeId,
         label: employee.label,

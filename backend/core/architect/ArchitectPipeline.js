@@ -1,7 +1,13 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 
 /**
- * Architect Intelligence Engine stages — Business Systems Architect, not chatbot.
+ * Architect Intelligence Engine stages — internal reasoning only.
+ *
+ * These are NOT product lifecycle stages and MUST NOT be used as BuilderSession
+ * state or owner-facing progress. Product lifecycle lives in AiArchitectLifecycle;
+ * persisted session stages live in BuilderSession (mapped via BuilderSessionLifecycle).
+ *
+ * @see docs/product/VIBETECH_PRODUCT_CONSTITUTION.md
  */
 export const ARCHITECT_PIPELINE_STAGES = Object.freeze([
   "business_discovery",

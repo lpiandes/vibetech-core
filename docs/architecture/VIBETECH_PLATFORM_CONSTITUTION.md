@@ -2,7 +2,8 @@
 
 **Status:** Authoritative architecture document  
 **Scope:** Permanent platform contracts  
-**Rule:** Do not revisit this architecture unless absolutely necessary.
+**Rule:** Do not revisit this architecture unless absolutely necessary.  
+**Companion:** [Product Constitution](../product/VIBETECH_PRODUCT_CONSTITUTION.md) (what we sell / how it must feel to the owner)
 
 ---
 

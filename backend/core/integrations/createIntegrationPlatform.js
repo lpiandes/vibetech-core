@@ -1,6 +1,8 @@
 import { IntegrationProviderRegistry } from "./providers/IntegrationProviderRegistry.js";
 import { ConnectionRuntime } from "./connections/ConnectionRuntime.js";
 import { createMockCredentialResolver } from "./credentials/MockCredentialResolver.js";
+import { createVaultCredentialResolver } from "./credentials/createVaultCredentialResolver.js";
+import { getSharedCredentialVault } from "./credentials/CredentialVault.js";
 import { MockEmailIntegrationProvider } from "./fixtures/MockEmailIntegrationProvider.js";
 import { MockSmsIntegrationProvider } from "./fixtures/MockSmsIntegrationProvider.js";
 import { MockExternalSystemIntegrationProvider } from "./fixtures/MockExternalSystemIntegrationProvider.js";
@@ -13,12 +15,12 @@ import { CommunicationActionService } from "./use-cases/CommunicationActionServi
 import { WebhookIngressService } from "./inbound/WebhookIngressService.js";
 import { IntegrationPlatformEventPublisher } from "./events/IntegrationPlatformEventPublisher.js";
 import { CommunicationPlatformEventPublisher } from "../communications/events/CommunicationPlatformEventPublisher.js";
-import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 
 /**
  * Default mock providers for workspace activation.
  * Gmail (googleapis) must be injected by the composition root when needed —
  * never imported here so Next.js does not pull googleapis into the server graph.
+ * Pass live adapters via extraProviders (from createLiveIntegrationProviders in server compose / activateWorkspace).
  */
 export function createDefaultIntegrationProviderRegistry({ nowISO, extraProviders = [] } = {}) {
   const registry = new IntegrationProviderRegistry();
@@ -27,7 +29,11 @@ export function createDefaultIntegrationProviderRegistry({ nowISO, extraProvider
   registry.register(new MockExternalSystemIntegrationProvider({ nowISO }));
   registry.register(new MockFormSubmissionProvider({ nowISO }));
   registry.register(new MockVoiceProvider({ nowISO }));
-  registry.register(new GmailIntegrationAdapterStub({ nowISO }));
+
+  const extraIds = new Set(extraProviders.map((p) => String(p?.id ?? "")));
+  if (!extraIds.has("gmail")) {
+    registry.register(new GmailIntegrationAdapterStub({ nowISO }));
+  }
   for (const provider of extraProviders) {
     registry.register(provider);
   }
@@ -45,16 +51,21 @@ export function createIntegrationPlatform({
   platformEventBus = null,
   platformEventStore = null,
   extraProviders = [],
+  credentialVault = null,
+  credentialResolver = null,
 } = {}) {
   const effectiveWorkspaceId = String(workspaceId ?? "default");
   const connectionRuntime = connectionRuntimeSeed
     ? new ConnectionRuntime({ seed: () => connectionRuntimeSeed })
     : new ConnectionRuntime();
   const providerRegistry = createDefaultIntegrationProviderRegistry({ nowISO, extraProviders });
-  const credentialResolver = createMockCredentialResolver();
+  const vault = credentialVault ?? getSharedCredentialVault();
+  const resolvedCredentialResolver =
+    credentialResolver
+    ?? createVaultCredentialResolver({ vault, fallback: createMockCredentialResolver() });
   const integrationPlatformEventPublisher =
-    platformEventPublisher ??
-    (platformEventBus || platformEventStore
+    platformEventPublisher
+    ?? (platformEventBus || platformEventStore
       ? new IntegrationPlatformEventPublisher({
           platformEventBus: platformEventBus ?? null,
           platformEventStore: platformEventStore ?? null,
@@ -89,7 +100,7 @@ export function createIntegrationPlatform({
   const actionOrchestrator = new ExternalActionOrchestrationService({
     connectionRuntime,
     providerRegistry,
-    credentialResolver,
+    credentialResolver: resolvedCredentialResolver,
     communicationRuntime,
     preferenceRuntime: communicationPreferenceRuntime,
     integrationPlatformEventPublisher,
@@ -108,7 +119,8 @@ export function createIntegrationPlatform({
   return {
     connectionRuntime,
     providerRegistry,
-    credentialResolver,
+    credentialResolver: resolvedCredentialResolver,
+    credentialVault: vault,
     connectionService,
     actionOrchestrator,
     communicationActionService,

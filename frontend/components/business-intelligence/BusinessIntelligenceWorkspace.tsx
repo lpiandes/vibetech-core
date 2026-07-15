@@ -8,7 +8,6 @@ import EvidencePanel from "@/components/operating/EvidencePanel";
 import OperatingStatusBadge from "@/components/operating/OperatingStatusBadge";
 import { PageHeader } from "@/components/operating/PageHeader";
 import { ActionButton } from "@/components/operating/Surface";
-import GlobalAskVibeTechEntry from "@/components/shell/GlobalAskVibeTechEntry";
 
 type GovernedRecommendation = {
   recommendationId: string;
@@ -205,11 +204,9 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
       if (!response.ok || !data.ok) throw new Error(data.error ?? data.message ?? "Could not open Architect.");
       router.push(
         data.openHref
-        ?? (businessId && data.session?.sessionId
+        ?? (data.session?.sessionId
           ? `/b/${encodeURIComponent(businessId)}/architect?sessionId=${encodeURIComponent(data.session.sessionId)}`
-          : data.session?.sessionId
-            ? `/architect/${data.session.sessionId}`
-            : `/b/${encodeURIComponent(businessId)}/architect`),
+          : `/b/${encodeURIComponent(businessId)}/architect`),
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open Architect.");
@@ -245,7 +242,6 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
         }
         actions={
           <>
-            <GlobalAskVibeTechEntry compact />
             <ActionButton variant="secondary" disabled={busyId === "refresh"} onClick={() => void refreshIntelligence()}>
               {busyId === "refresh" ? "Checking…" : "Check again"}
             </ActionButton>

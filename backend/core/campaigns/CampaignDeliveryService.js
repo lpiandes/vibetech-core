@@ -234,7 +234,15 @@ export class CampaignDeliveryService {
               direction: "outbound",
               channel: "email",
               status: "draft",
-              sender: { id: "vibetech", type: "system" },
+              sender: {
+                id: "vibetech",
+                type: "system",
+                metadata: {
+                  email: providerResolution.connection?.credentialReference?.metadata?.senderEmail
+                    || providerResolution.provider?.senderEmail
+                    || null,
+                },
+              },
               recipients: [{
                 id: partyId,
                 type: "party",

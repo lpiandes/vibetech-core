@@ -60,14 +60,22 @@ test("Home supervision prioritizes decisions and active operations above analyti
   assert.match(supervision.operatingSummary.headline, /needs? your decision/i);
   assert.equal(supervision.needsDecision.items.length, 1);
   assert.equal(supervision.needsDecision.items[0].id, "intel_1");
+  assert.match(String(supervision.needsDecision.items[0].actions[0]?.href ?? ""), /\/b\/biz_1\/intelligence/);
   assert.equal(supervision.workingNow.length, 1);
   assert.equal(supervision.workingNow[0].completedSteps[0].label, "Request identified");
   assert.equal(supervision.recentOutcomes[0].result, "Completed");
   assert.equal(supervision.conversations[0].direction, "Drafted — not sent");
+  assert.match(supervision.conversations[0].href, /\/b\/biz_1\/inbox$/);
   assert.equal(supervision.setup.visible, true);
+  assert.match(supervision.digitalWorkforce[0].askHref, /employeeId=emp_1/);
+  assert.match(supervision.digitalWorkforce[0].askHref, /prompt=/);
+  assert.equal(supervision.workingNow[0].openWorkHref, "/b/biz_1/work");
+  assert.match(supervision.recentOutcomes[0].href, /\/b\/biz_1\/work$/);
   assert.deepEqual(supervision.sectionOrder, DEFAULT_SECTION_ORDER);
+  assert.ok(supervision.sectionOrder.indexOf("approvalsInbox") < supervision.sectionOrder.indexOf("needsDecision"));
   assert.ok(supervision.sectionOrder.indexOf("needsDecision") < supervision.sectionOrder.indexOf("businessOverview"));
   assert.ok(supervision.sectionOrder.indexOf("workingNow") < supervision.sectionOrder.indexOf("businessOverview"));
+  assert.equal(supervision.approvalsInbox.items.length, 0);
   const rendered = JSON.stringify(supervision);
   assert.ok(!/canonical evidence/i.test(rendered));
   assert.ok(!/IN_PROGRESS/.test(supervision.workingNow[0].currentState));
@@ -136,6 +144,45 @@ test("AI employee status derives from assignment and readiness evidence", () => 
   }).label, "Needs your approval");
 });
 
+test("teammates needing approval get Ask VIBETech destinations with purpose", () => {
+  const supervision = composeOperatingHomeSupervision({
+    experience: {
+      waitingOnYou: [],
+      activeBusinessEpisodes: [],
+      aiWorkforceActivity: {
+        digitalEmployees: [{
+          id: "emp_approve",
+          name: "Maintenance Coordinator",
+          status: "READY",
+          needsFromOwner: "Approve draft reply",
+          responsibility: "Maintenance",
+        }, {
+          id: "emp_idle",
+          name: "Resident Coordinator",
+          status: "READY",
+          responsibility: "Residents",
+        }],
+        handledByVibeTech: [],
+      },
+      businessTimeline: [],
+      recentlyImproved: [],
+      recentCommunications: [],
+      criticalMetrics: [],
+    },
+    businessId: "biz_1",
+  });
+  const approval = supervision.digitalWorkforce.find((emp) => emp.id === "emp_approve");
+  const idle = supervision.digitalWorkforce.find((emp) => emp.id === "emp_idle");
+  assert.equal(approval.status, "needs_approval");
+  assert.match(approval.askHref, /employeeId=emp_approve/);
+  assert.match(decodeURIComponent(approval.askHref.replace(/\+/g, " ")), /needs approved/i);
+  assert.equal(approval.nextAction, "Approve draft reply");
+  assert.equal(idle.status, "idle");
+  assert.match(idle.askHref, /employeeId=emp_idle/);
+  assert.match(decodeURIComponent(idle.askHref.replace(/\+/g, " ")), /take on next/i);
+  assert.equal(idle.nextAction, null);
+});
+
 test("setup banner hides when no required readiness blockers remain", () => {
   const supervision = composeOperatingHomeSupervision({
     experience: {
@@ -154,4 +201,32 @@ test("setup banner hides when no required readiness blockers remain", () => {
   });
   assert.equal(supervision.setup.visible, false);
   assert.equal(supervision.setup.incomplete.length, 0);
+});
+
+test("connection attention links resolve into the business integrations route", () => {
+  const supervision = composeOperatingHomeSupervision({
+    experience: {
+      waitingOnYou: [{
+        id: "attention_conn_1",
+        title: "Connect Business Email for production",
+        reason: "Real business provider is not yet connected.",
+        priority: "medium",
+        priorityBadge: "neutral",
+        recommendedAction: "Complete production provider setup in Connections.",
+        availableActions: [{ id: "connect_system", label: "Open connections", href: "/connections" }],
+        sourceType: "connection",
+      }],
+      activeBusinessEpisodes: [],
+      aiWorkforceActivity: { digitalEmployees: [], handledByVibeTech: [] },
+      businessTimeline: [],
+      recentlyImproved: [],
+      recentCommunications: [],
+      criticalMetrics: [],
+    },
+    businessId: "biz_mm",
+  });
+  const item = supervision.needsDecision.items[0];
+  assert.equal(item.priority, "medium");
+  assert.equal(item.actions[0].href, "/b/biz_mm/integrations");
+  assert.match(item.actions[0].label, /connections|Connect/i);
 });

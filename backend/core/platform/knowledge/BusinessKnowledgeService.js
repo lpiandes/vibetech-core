@@ -2,6 +2,10 @@ import crypto from "node:crypto";
 import path from "node:path";
 
 import { KNOWLEDGE_SOURCE_TYPES, toPublicKnowledgeDocument } from "./BusinessKnowledgeDocument.js";
+import {
+  normalizeKnowledgeCategoryIds,
+  UNIVERSAL_KNOWLEDGE_CATEGORIES,
+} from "./universalKnowledgeCategories.js";
 
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_OPERATIONAL_CONTENT_BYTES = 32 * 1024;
@@ -87,15 +91,10 @@ function defaultTitle(titleOverride, fallbackTitle) {
   return custom || fallbackTitle;
 }
 
-function supportsOperationalText(sourceType) {
-  const type = String(sourceType ?? "").toUpperCase();
-  return type === KNOWLEDGE_SOURCE_TYPES.TXT || type === KNOWLEDGE_SOURCE_TYPES.MARKDOWN;
-}
-
-function boundedText(buffer, maxChars = DEFAULT_OPERATIONAL_CONTENT_CHARS) {
-  const text = Buffer.isBuffer(buffer) ? buffer.toString("utf8") : String(buffer ?? "");
-  return text.replace(/\s+/g, " ").trim().slice(0, Number(maxChars ?? DEFAULT_OPERATIONAL_CONTENT_CHARS));
-}
+import {
+  extractOperationalKnowledgeText,
+  supportsOperationalTextExtraction,
+} from "./extractOperationalKnowledgeText.js";
 
 export class BusinessKnowledgeService {
   constructor({ storage, store } = {}) {
@@ -110,6 +109,60 @@ export class BusinessKnowledgeService {
     return rows.map((doc) => toPublicKnowledgeDocument(doc));
   }
 
+  listUniversalCategories() {
+    return UNIVERSAL_KNOWLEDGE_CATEGORIES;
+  }
+
+  /**
+   * Owner search over titles, filenames, and category tags (no free invent).
+   */
+  async searchDocuments(businessId, query, { categoryId = null } = {}) {
+    const q = String(query ?? "").trim().toLowerCase();
+    const cat = categoryId ? String(categoryId).trim().toUpperCase() : null;
+    const docs = await this.listDocuments(businessId);
+    return docs.filter((doc) => {
+      if (cat && !(doc.categoryIds ?? []).includes(cat)) return false;
+      if (!q) return true;
+      const hay = [
+        doc.title,
+        doc.originalFilename,
+        ...(doc.categoryIds ?? []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  /**
+   * Documents that power AI specialty / teammate consult (tagged + extractable).
+   */
+  async listPowersAiPanel(businessId) {
+    const docs = await this.listDocuments(businessId);
+    const categories = UNIVERSAL_KNOWLEDGE_CATEGORIES;
+    const byCategory = categories.map((cat) => {
+      const matching = docs.filter((d) => (d.categoryIds ?? []).includes(cat.id));
+      return {
+        categoryId: cat.id,
+        label: cat.label,
+        description: cat.description,
+        documentCount: matching.length,
+        documentIds: matching.map((d) => d.id),
+      };
+    });
+    const untagged = docs.filter((d) => !(d.categoryIds ?? []).length);
+    return {
+      contract: "KnowledgePowersAiPanel/v1",
+      totalDocuments: docs.length,
+      taggedDocuments: docs.filter((d) => (d.categoryIds ?? []).length > 0).length,
+      untaggedDocuments: untagged.length,
+      categories: byCategory,
+      winClaim:
+        "Every AI output shows what it read. If Knowledge is empty, we show a gap — we don’t fake expertise.",
+    };
+  }
+
   async listOperationalDocuments(
     businessId,
     {
@@ -122,11 +175,16 @@ export class BusinessKnowledgeService {
     const documents = [];
     for (const doc of rows) {
       let contentText = "";
-      if (supportsOperationalText(doc.sourceType) && storage?.getObject) {
+      if (supportsOperationalTextExtraction(doc.sourceType) && storage?.getObject) {
         try {
           const buffer = await storage.getObject({ businessId, storageKey: doc.storageKey });
-          const bounded = buffer.length > Number(maxBytes) ? buffer.subarray(0, Number(maxBytes)) : buffer;
-          contentText = boundedText(bounded, maxContentChars);
+          contentText = await extractOperationalKnowledgeText({
+            buffer,
+            sourceType: doc.sourceType,
+            filename: doc.originalFilename,
+            maxBytes,
+            maxContentChars,
+          });
         } catch {
           contentText = "";
         }
@@ -153,7 +211,16 @@ export class BusinessKnowledgeService {
     return toPublicKnowledgeDocument(doc);
   }
 
-  async uploadDocument({ businessId, userId, buffer, filename, mimeType, title, storage = this.storage }) {
+  async uploadDocument({
+    businessId,
+    userId,
+    buffer,
+    filename,
+    mimeType,
+    title,
+    categoryIds,
+    storage = this.storage,
+  }) {
     const validation = validateKnowledgeUpload({ buffer, filename, mimeType });
     if (!validation.ok) {
       const err = new Error(validation.error);
@@ -161,6 +228,7 @@ export class BusinessKnowledgeService {
       throw err;
     }
 
+    const cats = normalizeKnowledgeCategoryIds(categoryIds);
     const storageKey = crypto.randomUUID();
     const displayTitle = defaultTitle(title, validation.title);
 
@@ -181,6 +249,7 @@ export class BusinessKnowledgeService {
         sizeBytes: validation.sizeBytes,
         sourceType: validation.sourceType,
         uploadedByUserId: userId,
+        categoryIds: cats,
       });
 
       void this.store
@@ -195,6 +264,7 @@ export class BusinessKnowledgeService {
             mimeType: doc.mimeType,
             sizeBytes: doc.sizeBytes,
             sourceType: doc.sourceType,
+            categoryIds: cats,
           },
         })
         .catch((err) => console.error("[knowledge-upload] audit failed", err));
@@ -208,6 +278,36 @@ export class BusinessKnowledgeService {
       }
       throw err;
     }
+  }
+
+  async updateDocumentCategories({ businessId, documentId, userId, categoryIds }) {
+    const cats = normalizeKnowledgeCategoryIds(categoryIds);
+    if (typeof this.store.updateKnowledgeDocumentCategories !== "function") {
+      const err = new Error("Knowledge category updates are not available.");
+      err.code = "NOT_SUPPORTED";
+      throw err;
+    }
+    const updated = await this.store.updateKnowledgeDocumentCategories({
+      documentId,
+      businessId,
+      categoryIds: cats,
+    });
+    if (!updated) {
+      const err = new Error("Knowledge document not found.");
+      err.code = "NOT_FOUND";
+      throw err;
+    }
+    void this.store
+      .recordAuditEvent({
+        actorUserId: userId,
+        businessId,
+        action: "knowledge.document_categories_updated",
+        targetType: "knowledge_document",
+        targetId: documentId,
+        metadata: { categoryIds: cats },
+      })
+      .catch((err) => console.error("[knowledge-categories] audit failed", err));
+    return toPublicKnowledgeDocument(updated);
   }
 
   async deleteDocument({ businessId, documentId, userId, storage = this.storage }) {

@@ -8,6 +8,8 @@ import { composeOrganizationView } from "@/lib/workforce/composeOrganizationView
 import { WorkforceEngine } from "../../../../../backend/core/workforce/WorkforceEngine.js";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
+import { mergeBosEmployeesForTeam } from "@/lib/team/mergeBosEmployeesForTeam.js";
+import { ensureSpecialtyDigitalEmployees } from "@/lib/team/ensureSpecialtyDigitalEmployees.js";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -20,14 +22,50 @@ export default async function TeamPage({ params }: { params: Promise<{ businessI
       redirect(`/b/${businessId}/home`);
     }
 
-    const [knowledgeDocumentCount, members, pending] = await Promise.all([
+    const [knowledgeDocumentCount, members, pending, installation] = await Promise.all([
       platformStore.countActiveKnowledgeDocuments(businessId),
       platformStore.listMembershipsForBusiness(businessId),
       platformStore.listPendingInvitationsForBusiness(businessId),
+      platformStore.getBusinessOSInstallation(businessId).catch(() => null),
     ]);
     markRequestTiming("TEAM_DB");
-    ctx.service.refreshOperationalState(knowledgeDocumentCount);
-    const viewModel = ctx.service.loadTeamViewModel();
+
+    let specification = null as any;
+    if (installation?.specificationId) {
+      try {
+        const specRow = await platformStore.getBusinessOSSpecification({
+          businessId,
+          specificationId: installation.specificationId,
+          specificationVersion: installation.specificationVersion ?? null,
+        });
+        specification = specRow?.specification ?? null;
+      } catch {
+        specification = null;
+      }
+    }
+
+    const bosEmployees = mergeBosEmployeesForTeam({
+      configuration: installation?.configuration ?? null,
+      specification,
+    });
+
+    ctx.service.refreshOperationalState(knowledgeDocumentCount, {
+      bosEmployeeDefinitions: bosEmployees.length ? bosEmployees : null,
+    });
+    const loaded = ctx.service.loadTeamViewModel() as Record<string, unknown>;
+    const digitalEmployees = ensureSpecialtyDigitalEmployees({
+      digitalEmployees: Array.isArray(loaded.digitalEmployees) ? loaded.digitalEmployees : [],
+      bosEmployees,
+      businessId,
+    });
+    // Prefer specialty / owner-added teammates at the top of the roster.
+    digitalEmployees.sort((a: { ownerAdded?: boolean; customAiWork?: boolean; name?: string }, b: { ownerAdded?: boolean; customAiWork?: boolean; name?: string }) => {
+      const aScore = a.ownerAdded || a.customAiWork ? 0 : 1;
+      const bScore = b.ownerAdded || b.customAiWork ? 0 : 1;
+      if (aScore !== bScore) return aScore - bScore;
+      return String(a.name ?? "").localeCompare(String(b.name ?? ""));
+    });
+    const viewModel = { ...loaded, digitalEmployees };
     markRequestTiming("VIEW_MODEL", { bytes: JSON.stringify(viewModel).length });
 
     const memberEmails = new Set(members.map((m: { email: string }) => String(m.email).toLowerCase()));
@@ -40,11 +78,11 @@ export default async function TeamPage({ params }: { params: Promise<{ businessI
       roleLabel: MEMBERSHIP_ROLE_LABELS[m.role as keyof typeof MEMBERSHIP_ROLE_LABELS] ?? m.role,
     }));
 
-    let configuration = null;
+    let configuration = installation?.configuration
+      ? { ...installation.configuration, employees: bosEmployees }
+      : { employees: bosEmployees };
     let workforceOrganization = null;
     try {
-      const installation = await platformStore.getBusinessOSInstallation(businessId);
-      configuration = installation?.configuration ?? null;
       if (!configuration?.employees?.length) {
         const industry = (ctx as any).authz?.business?.industry
           ?? (ctx as any).service?.businessProfile?.industry
@@ -58,7 +96,7 @@ export default async function TeamPage({ params }: { params: Promise<{ businessI
         }
       }
     } catch {
-      configuration = null;
+      configuration = configuration ?? null;
       workforceOrganization = null;
     }
 

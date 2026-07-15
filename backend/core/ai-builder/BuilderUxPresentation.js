@@ -1,4 +1,5 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
+import { scrubOwnerFacingPurpose } from "./businessIdentity.js";
 
 export const BUILDER_JOURNEY_STAGES = Object.freeze([
   {
@@ -36,7 +37,8 @@ export const BUILDER_JOURNEY_STAGES = Object.freeze([
 const TECHNICAL_FIELD_PATTERN = /(Runtime|schemaVersion|contentHash|planHash|operationType|capabilityId|moduleId|roleId|employeeId|specificationId|__)/i;
 
 /**
- * Plain-language Builder UX helpers — never expose raw schema to clients.
+ * Plain-language Architect UX helpers — never expose raw schema to clients.
+ * Owner language: conversation → recommendation → approve → live (not Builder/Launch).
  */
 export function discoveryStageProgress({ answers = [], questions = [], progress = {}, businessSummary = {} } = {}) {
   const answeredTopics = new Set();
@@ -85,6 +87,24 @@ export function sessionListCard(session) {
     ?? "Untitled business";
   const stage = String(session.currentStage ?? "created").replace(/_/g, " ");
   const nextAction = nextActionForSession(session);
+  const conversation = Array.isArray(session.conversation) ? session.conversation : [];
+  const firstUser = conversation.find((entry) => entry?.role === "user" && String(entry.text ?? "").trim());
+  const lastMessage = [...conversation].reverse().find((entry) => String(entry?.text ?? "").trim());
+  const continuousImprovement = Boolean(
+    session.metadata?.continuousImprovement
+    || /improve|continuous|expand_existing/i.test(String(session.mode ?? "")),
+  );
+  const askTitle = String(
+    session.metadata?.askTitle
+    ?? firstUser?.text
+    ?? (continuousImprovement ? "New conversation" : name),
+  ).trim().slice(0, 80);
+  const messageCount = conversation.filter((entry) => String(entry?.text ?? "").trim()).length;
+  const hasUserMessage = Boolean(firstUser);
+  const emptyAsk = continuousImprovement && !hasUserMessage;
+  const preview = emptyAsk
+    ? ""
+    : String(lastMessage?.text ?? "").trim().slice(0, 120);
   return deepFreeze({
     sessionId: session.sessionId,
     businessId: session.businessId,
@@ -99,6 +119,12 @@ export function sessionListCard(session) {
     nextAction,
     canContinue: !["archived", "failed"].includes(String(session.currentStage)),
     isInstalled: session.currentStage === "installed",
+    continuousImprovement,
+    title: askTitle || "New conversation",
+    preview,
+    messageCount,
+    hasUserMessage,
+    emptyAsk,
   });
 }
 
@@ -106,13 +132,13 @@ export function nextActionForSession(session) {
   switch (session.currentStage) {
     case "proposal_ready":
     case "awaiting_review":
-      return "Review your proposed operating system";
+      return "Review how VIBETech recommends running your business";
     case "dry_run_ready":
-      return "Review launch readiness, then launch";
+      return "Review readiness, then approve to go live";
     case "awaiting_approval":
-      return "Approve and launch your operating system";
+      return "Approve and go live";
     case "installing":
-      return "Launch in progress — you can resume if interrupted";
+      return "Going live — you can resume if interrupted";
     case "installed":
       return "Open your business or ask VIBETech to improve it";
     case "blocked":
@@ -164,11 +190,14 @@ export function clientSafeProposalView(proposal) {
 
 function clientSafeItem(item) {
   if (item == null || typeof item !== "object") return item;
+  const label = item.label ?? item.title;
   return {
     id: item.id,
-    label: item.label ?? item.title,
+    label,
     title: item.title ?? item.label,
-    purpose: item.purpose,
+    purpose: item.purpose == null
+      ? item.purpose
+      : scrubOwnerFacingPurpose(item.purpose, { roleLabel: label }),
     emptyState: item.emptyState,
     status: humanizeStatus(item.status),
     kind: humanizeStatus(item.kind),
@@ -181,6 +210,7 @@ function clientSafeItem(item) {
     knowledgeNeeded: item.knowledgeNeeded,
     integrationsNeeded: item.integrationsNeeded,
     escalation: item.escalation,
+    ownerAdded: Boolean(item.ownerAdded),
   };
 }
 
@@ -191,19 +221,9 @@ export function humanizeStatus(value) {
 
 export function quickRepliesForQuestion(question) {
   if (!question) return [];
+  // Choice questions only — never surface the next discovery prompts as reply chips.
   if (Array.isArray(question.options) && question.options.length) {
     return question.options.map((option) => humanizeStatus(option));
   }
-  switch (question.topic) {
-    case "approvals":
-      return ["Customer messages", "Refunds", "I don't know"];
-    case "team":
-      return ["Owner and managers", "Small team", "I don't know"];
-    case "software":
-      return ["Email and spreadsheets", "A CRM", "Nothing yet"];
-    case "pain_points":
-      return ["Too much follow-up", "Hard to stay organized", "I don't know"];
-    default:
-      return ["Skip for now", "I don't know"];
-  }
+  return [];
 }

@@ -69,6 +69,18 @@ export async function POST(request: Request, { params }: Params) {
         logoUrl: body.logoUrl,
         businessName: body.businessName,
         navigationOverrides: body.navigationOverrides,
+        employeeOverrides: body.employeeOverrides,
+        roleOverrides: body.roleOverrides,
+        sectionOverrides: body.sectionOverrides,
+        planAdditions: body.planAdditions,
+      }));
+    }
+    if (action === "apply_plan_changes") {
+      return NextResponse.json(await service.applyPlanChanges({
+        sessionId,
+        removeModuleIds: body.removeModuleIds ?? [],
+        removeEmployeeIds: body.removeEmployeeIds ?? [],
+        addRequest: body.addRequest ?? "",
       }));
     }
     if (action === "portal_preview") {
@@ -104,6 +116,9 @@ export async function POST(request: Request, { params }: Params) {
     }
     if (action === "get_proposal") {
       return NextResponse.json(await service.getProposal(sessionId));
+    }
+    if (action === "archive" || action === "remove") {
+      return NextResponse.json(await service.archiveSession({ sessionId }));
     }
     return NextResponse.json({
       ok: false,

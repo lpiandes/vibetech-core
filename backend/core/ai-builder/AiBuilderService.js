@@ -5,6 +5,9 @@ import { BuilderAssemblyPlanner } from "./BuilderAssemblyPlanner.js";
 import { BuilderSpecificationAssembler } from "./BuilderSpecificationAssembler.js";
 import { buildVisualBusinessOSProposal } from "./VisualBusinessOSProposal.js";
 import { BusinessWebsiteResearchService } from "./BusinessWebsiteResearchService.js";
+import { mergePlanAdditions, parseOwnerPlanAdditions } from "./parseOwnerPlanAdditions.js";
+import { applyPlanAdditionsToSpecification } from "./applyPlanAdditionsToSpecification.js";
+import { normalizeWebsiteUrl } from "./WebsiteFetchPolicy.js";
 import {
   extractBuilderArtifactEvidence,
   createBuilderArtifactMappingProposal,
@@ -25,6 +28,8 @@ import {
 import { DeterministicBuilderIntelligenceProvider } from "./BuilderIntelligenceProvider.js";
 import { BuilderSpecificationChangePlanner } from "./BuilderSpecificationChangePlanner.js";
 import { BuilderChangeProposalService } from "./BuilderChangeProposalService.js";
+import { isUsableBusinessName, resolveBusinessDisplayName } from "./businessIdentity.js";
+import { withAutoAskTitle } from "./askConversationTitle.js";
 import {
   createBuilderConversationMessage,
   appendConversation,
@@ -121,6 +126,58 @@ export class AiBuilderService {
     return deepFreeze({ ok: true, archivedCount: archived.length, sessions: archived });
   }
 
+  /** Owner removes a past Ask conversation from history. */
+  async archiveSession({ sessionId }) {
+    const session = await this.repository.get(sessionId);
+    if (!session) {
+      return deepFreeze({ ok: true, alreadyGone: true, sessionId: String(sessionId) });
+    }
+    if (String(session.currentStage) === "archived") {
+      return deepFreeze({ ok: true, session });
+    }
+    try {
+      const updated = withBuilderSessionPatch(session, {
+        currentStage: "archived",
+        metadata: {
+          ...(session.metadata ?? {}),
+          archivedAt: this.nowISO(),
+          archivedReason: "owner_removed",
+        },
+      }, { updatedAt: this.nowISO() });
+      await this.repository.save(updated);
+      this.proposals.delete(String(sessionId));
+      return deepFreeze({ ok: true, session: updated });
+    } catch (error) {
+      // Never fail the owner delete path over lifecycle edge cases — force-archive via repository.
+      const forced = {
+        ...session,
+        currentStage: "archived",
+        metadata: {
+          ...(session.metadata ?? {}),
+          archivedAt: this.nowISO(),
+          archivedReason: "owner_removed_forced",
+          archiveError: error instanceof Error ? error.message : String(error),
+        },
+        updatedAt: this.nowISO(),
+      };
+      await this.repository.save(forced);
+      this.proposals.delete(String(sessionId));
+      return deepFreeze({ ok: true, session: forced, forced: true });
+    }
+  }
+
+  async persistChatSession(session) {
+    const titled = (() => {
+      const next = withAutoAskTitle(session);
+      if (next === session) return session;
+      return withBuilderSessionPatch(session, {
+        metadata: next.metadata,
+      }, { updatedAt: this.nowISO() });
+    })();
+    await this.repository.save(titled);
+    return titled;
+  }
+
   async getWorkspace(sessionId) {
     const session = await this.requireSession(sessionId);
     const stored = await this.loadProposalState(session);
@@ -157,9 +214,15 @@ export class AiBuilderService {
 
   async research({ sessionId, websiteUrl = null, manualFallbackText = null }) {
     const session = await this.requireSession(sessionId);
+    const incoming = websiteUrl ?? session.websiteUrls[0];
+    const normalized = normalizeWebsiteUrl(incoming) || incoming;
     const result = await this.researchService.research({
-      websiteUrl: websiteUrl ?? session.websiteUrls[0],
-      approvedUrls: session.websiteUrls.length ? session.websiteUrls : (websiteUrl ? [websiteUrl] : []),
+      websiteUrl: normalized,
+      approvedUrls: [
+        ...session.websiteUrls,
+        ...(normalized ? [normalized] : []),
+        ...(incoming ? [incoming] : []),
+      ].filter(Boolean),
       manualFallbackText,
       nowISO: this.nowISO(),
     });
@@ -232,18 +295,135 @@ export class AiBuilderService {
     return deepFreeze({ ok: true, session: updated, confirmation: confirmed });
   }
 
-  async updateAppearance({ sessionId, accentColor = null, logoUrl = null, businessName = null, navigationOverrides = null }) {
+  async updateAppearance({
+    sessionId,
+    accentColor = null,
+    logoUrl = null,
+    businessName = null,
+    navigationOverrides = null,
+    employeeOverrides = null,
+    roleOverrides = null,
+    sectionOverrides = null,
+    planAdditions = null,
+  }) {
     const session = await this.requireSession(sessionId);
     const appearance = {
       ...session.appearance,
       ...(accentColor ? { accentColor } : {}),
       ...(logoUrl != null ? { logoUrl } : {}),
       ...(businessName ? { businessName } : {}),
-      ...(navigationOverrides ? { navigationOverrides } : {}),
+      ...(planAdditions ? {
+        planAdditions: {
+          modules: Array.isArray(planAdditions.modules) ? planAdditions.modules : (session.appearance?.planAdditions?.modules ?? []),
+          employees: Array.isArray(planAdditions.employees) ? planAdditions.employees : (session.appearance?.planAdditions?.employees ?? []),
+        },
+      } : {}),
+      ...(navigationOverrides ? {
+        navigationOverrides: {
+          ...(session.appearance?.navigationOverrides ?? {}),
+          ...navigationOverrides,
+          labels: {
+            ...(session.appearance?.navigationOverrides?.labels ?? {}),
+            ...(navigationOverrides.labels ?? {}),
+          },
+          hidden: {
+            ...(session.appearance?.navigationOverrides?.hidden ?? {}),
+            ...(navigationOverrides.hidden ?? {}),
+          },
+        },
+      } : {}),
+      ...(employeeOverrides ? {
+        employeeOverrides: {
+          ...(session.appearance?.employeeOverrides ?? {}),
+          ...employeeOverrides,
+          labels: {
+            ...(session.appearance?.employeeOverrides?.labels ?? {}),
+            ...(employeeOverrides.labels ?? {}),
+          },
+          purposes: {
+            ...(session.appearance?.employeeOverrides?.purposes ?? {}),
+            ...(employeeOverrides.purposes ?? {}),
+          },
+          hidden: {
+            ...(session.appearance?.employeeOverrides?.hidden ?? {}),
+            ...(employeeOverrides.hidden ?? {}),
+          },
+        },
+      } : {}),
+      ...(roleOverrides ? {
+        roleOverrides: {
+          ...(session.appearance?.roleOverrides ?? {}),
+          ...roleOverrides,
+          labels: {
+            ...(session.appearance?.roleOverrides?.labels ?? {}),
+            ...(roleOverrides.labels ?? {}),
+          },
+        },
+      } : {}),
+      ...(sectionOverrides ? {
+        sectionOverrides: {
+          ...(session.appearance?.sectionOverrides ?? {}),
+          ...sectionOverrides,
+        },
+      } : {}),
     };
     const updated = withBuilderSessionPatch(session, { appearance });
     await this.repository.save(updated);
-    return deepFreeze({ ok: true, session: updated, appearance });
+    const stored = await this.loadProposalState(updated);
+    return deepFreeze({
+      ok: true,
+      session: updated,
+      appearance,
+      proposal: stored?.specification
+        ? clientSafeProposalView(this.buildPreview(updated, stored))
+        : null,
+    });
+  }
+
+  /**
+   * Owner "tell us what to change" — parse free-text adds + hide removals on the server
+   * so the plan list updates even when the client can't import backend parsers.
+   */
+  async applyPlanChanges({
+    sessionId,
+    removeModuleIds = [],
+    removeEmployeeIds = [],
+    addRequest = "",
+  }) {
+    const session = await this.requireSession(sessionId);
+    const removeModules = Array.isArray(removeModuleIds)
+      ? removeModuleIds.map((id) => String(id)).filter(Boolean)
+      : [];
+    const removeEmployees = Array.isArray(removeEmployeeIds)
+      ? removeEmployeeIds.map((id) => String(id)).filter(Boolean)
+      : [];
+    const parsed = parseOwnerPlanAdditions(addRequest);
+    const existing = session.appearance?.planAdditions ?? { modules: [], employees: [] };
+    let nextAdditions = mergePlanAdditions(existing, parsed);
+    nextAdditions = {
+      modules: nextAdditions.modules.filter((entry) => !removeModules.includes(String(entry?.id))),
+      employees: nextAdditions.employees.filter((entry) => !removeEmployees.includes(String(entry?.id))),
+    };
+
+    const existingNav = session.appearance?.navigationOverrides ?? {};
+    const existingEmp = session.appearance?.employeeOverrides ?? {};
+    const hiddenModules = { ...(existingNav.hidden ?? {}) };
+    for (const id of removeModules) hiddenModules[id] = true;
+    const hiddenEmployees = { ...(existingEmp.hidden ?? {}) };
+    for (const id of removeEmployees) hiddenEmployees[id] = true;
+
+    return this.updateAppearance({
+      sessionId,
+      navigationOverrides: {
+        ...existingNav,
+        hidden: hiddenModules,
+      },
+      employeeOverrides: {
+        ...existingEmp,
+        hidden: hiddenEmployees,
+      },
+      planAdditions: nextAdditions,
+    });
   }
 
   async portalPreview({ sessionId, membershipRole = "OWNER" }) {
@@ -325,6 +505,19 @@ export class AiBuilderService {
 
   async propose({ sessionId }) {
     const session = await this.requireSession(sessionId);
+    const progress = this.sessionService.discoveryEngine.completeness.evaluate({
+      answers: session.answers,
+      businessSummary: session.businessSummary,
+    });
+    if (!progress.readyForProposal) {
+      return deepFreeze({
+        ok: false,
+        reason: "discovery_incomplete",
+        progress,
+        message: "A few more questions are needed before a recommendation.",
+        nextQuestions: this.sessionService.discoveryEngine.nextQuestions(session, { limit: 3 }),
+      });
+    }
     const assemblyPlan = this.assemblyPlanner.plan({ session });
     const assembled = this.assembler.assemble({
       session,
@@ -395,10 +588,10 @@ export class AiBuilderService {
         text: reply,
       }));
       const updated = withBuilderSessionPatch(session, { conversation: withAssistant });
-      await this.repository.save(updated);
+      const saved = await this.persistChatSession(updated);
       return deepFreeze({
         ok: true,
-        session: updated,
+        session: saved,
         intelligenceExplanation: true,
         brief,
         message: reply,
@@ -423,10 +616,10 @@ export class AiBuilderService {
         questions: applied.nextQuestions,
         currentStage: applied.progress?.readyForProposal ? "assembling" : "interviewing",
       }, { updatedAt: now });
-      await this.repository.save(updated);
+      const saved = await this.persistChatSession(updated);
       return deepFreeze({
         ok: true,
-        session: updated,
+        session: saved,
         discovery: true,
         extracted: applied.extracted,
         nextQuestions: applied.nextQuestions,
@@ -486,11 +679,11 @@ export class AiBuilderService {
             },
           },
         }, { updatedAt: this.nowISO() });
-        await this.repository.save(updated);
+        const saved = await this.persistChatSession(updated);
         return deepFreeze({
           ok: true,
           status: "needs_information",
-          session: updated,
+          session: saved,
           missing: proposed.missing,
           questions: proposed.questions,
           changeImpact: {
@@ -533,11 +726,11 @@ export class AiBuilderService {
             },
           },
         }, { updatedAt: this.nowISO() });
-        await this.repository.save(updated);
+        const saved = await this.persistChatSession(updated);
         return deepFreeze({
           ok: true,
           status: "ambiguous",
-          session: updated,
+          session: saved,
           candidates: proposed.candidates,
           changeImpact: {
             kind: "ambiguous",
@@ -588,11 +781,11 @@ export class AiBuilderService {
             },
           },
         }, { updatedAt: this.nowISO() });
-        await this.repository.save(updated);
+        const saved = await this.persistChatSession(updated);
         return deepFreeze({
           ok: true,
           status: "unsupported",
-          session: updated,
+          session: saved,
           unsupported: true,
           changeImpact: {
             kind: "unsupported",
@@ -632,13 +825,9 @@ export class AiBuilderService {
           change: proposed,
           updatedAt: this.nowISO(),
         });
-        const updated = await this.persistProposalState(session, proposalState, {
+        const titledMeta = withAutoAskTitle({
+          ...session,
           conversation: withAssistant,
-          currentStage: "awaiting_review",
-          specificationId: nextSpec.specificationId,
-          specificationContentHash: nextSpec.contentHash,
-          installationPlanId: null,
-          installationPlanHash: null,
           metadata: {
             ...session.metadata,
             pendingChange: null,
@@ -646,6 +835,15 @@ export class AiBuilderService {
             lastMutationPlan: proposed.mutationPlan ?? null,
             lastChangeSideEffects: proposed.sideEffects ?? [],
           },
+        }).metadata;
+        const updated = await this.persistProposalState(session, proposalState, {
+          conversation: withAssistant,
+          currentStage: "awaiting_review",
+          specificationId: nextSpec.specificationId,
+          specificationContentHash: nextSpec.contentHash,
+          installationPlanId: null,
+          installationPlanHash: null,
+          metadata: titledMeta,
         });
         this.installationRepository.saveSpecification({
           ...nextSpec,
@@ -707,22 +905,65 @@ export class AiBuilderService {
     const stored = await this.loadProposalState(session);
     if (!stored?.specification) return deepFreeze({ ok: false, reason: "proposal_required" });
 
-    const compiled = this.compiler.compile(stored.specification, { nowISO: this.nowISO() });
+    const specification = applyPlanAdditionsToSpecification(stored.specification, session);
+
+    // Already live — never regress session stage; return checklist for review only.
+    if (String(session.currentStage) === "installed") {
+      let plan = stored.plan;
+      if (!plan) {
+        const compiled = this.compiler.compile(specification, { nowISO: this.nowISO() });
+        if (!compiled.ok) return compiled;
+        plan = compiled.plan;
+      }
+      const dry = stored.dryRunResult?.ok
+        ? stored.dryRunResult
+        : deepFreeze({
+          ok: true,
+          mutated: false,
+          simulatedOperations: plan?.actions ?? plan?.operations ?? [],
+          readiness: { ok: true, warnings: [], blocking: [] },
+        });
+      return deepFreeze({
+        ok: true,
+        alreadyInstalled: true,
+        session,
+        plan,
+        dryRunResult: dry,
+        checklist: buildDryRunChecklist({
+          plan,
+          dryRunResult: dry,
+          specification,
+        }),
+        openHref: session.businessId ? `/b/${session.businessId}/home` : null,
+        progressSteps: [
+          "Creating your workspaces",
+          "Configuring roles",
+          "Preparing AI teammates",
+          "Preparing home screens",
+          "Checking connections",
+        ],
+        approvalInvalidated: false,
+      });
+    }
+
+    const compiled = this.compiler.compile(specification, { nowISO: this.nowISO() });
     if (!compiled.ok) return compiled;
 
     const businessId = await this.ensurePlatformBusinessId(session, stored);
     const dry = this.installer.dryRun({
-      specification: { ...stored.specification, businessId },
+      specification: { ...specification, businessId },
       plan: compiled.plan,
       businessId,
       nowISO: this.nowISO(),
     });
 
+    // Do not wipe an existing approval if dry-run is a re-check before install.
     const proposalState = createBuilderProposalState({
       ...stored,
+      specification,
       plan: compiled.plan,
       dryRunResult: dry,
-      approval: null,
+      approval: dry.ok ? stored.approval : null,
       updatedAt: this.nowISO(),
     });
 
@@ -741,7 +982,7 @@ export class AiBuilderService {
       checklist: buildDryRunChecklist({
         plan: compiled.plan,
         dryRunResult: dry,
-        specification: stored.specification,
+        specification,
       }),
       progressSteps: [
         "Creating your workspaces",
@@ -804,6 +1045,19 @@ export class AiBuilderService {
     failAtOperationId = null,
   }) {
     const session = await this.requireSession(sessionId);
+
+    // Already live — idempotent success (reloading /install must not re-enter installing).
+    if (String(session.currentStage) === "installed" && session.businessId) {
+      const storedInstalled = await this.loadProposalState(session);
+      return deepFreeze({
+        ok: true,
+        alreadyInstalled: true,
+        session,
+        installation: storedInstalled?.installation ?? { ok: true },
+        openHref: `/b/${session.businessId}/home`,
+      });
+    }
+
     let stored = await this.loadProposalState(session);
     if (!stored?.specification || !stored?.plan || !stored?.dryRunResult) {
       return deepFreeze({ ok: false, reason: "dry_run_required" });
@@ -817,21 +1071,63 @@ export class AiBuilderService {
     }
 
     const businessId = await this.ensurePlatformBusinessId(session, stored);
+    await this.syncPlatformBusinessName({ session, stored, businessId });
+    await this.syncPlatformIndustryPackage({ session, stored, businessId });
     this.hydrateInstallationRepository(businessId, stored);
+
+    // Re-apply owner plan edits; if they changed the installable spec, re-dry-run + re-bind approval.
+    let specification = applyPlanAdditionsToSpecification(stored.specification, session);
+    let plan = stored.plan;
+    let dryRunResult = stored.dryRunResult;
+    let approval = stored.approval;
+    const specChanged = String(specification?.contentHash ?? "") !== String(stored.specification?.contentHash ?? "")
+      || (specification?.employeeDefinitions?.length ?? 0) !== (stored.specification?.employeeDefinitions?.length ?? 0);
+
+    if (specChanged) {
+      const compiled = this.compiler.compile(specification, { nowISO: this.nowISO() });
+      if (!compiled.ok) return compiled;
+      plan = compiled.plan;
+      dryRunResult = this.installer.dryRun({
+        specification: { ...specification, businessId },
+        plan,
+        businessId,
+        nowISO: this.nowISO(),
+      });
+      if (!dryRunResult?.ok) {
+        return deepFreeze({
+          ok: false,
+          reason: "dry_run_required",
+          dryRunResult,
+          checklist: buildDryRunChecklist({ plan, dryRunResult, specification }),
+        });
+      }
+      approval = createBusinessOSInstallationApproval({
+        approvalId: `appr_${session.sessionId}_${String(specification.contentHash ?? "plan").slice(0, 8)}`,
+        businessId,
+        specificationId: specification.specificationId,
+        specificationVersion: specification.version,
+        specificationContentHash: specification.contentHash,
+        planId: plan.planId,
+        planHash: plan.planHash,
+        approvedByUserId: actorId ?? session.actorId ?? "builder_actor",
+        approvedAt: this.nowISO(),
+      });
+      this.installationRepository.saveApproval(approval);
+    }
 
     const installing = withBuilderSessionPatch(session, { currentStage: "installing" });
     await this.repository.save(installing);
     await this.recordArchitectAudit(installing, "architect.change_execution_started", {
       businessId,
-      planId: stored.plan?.planId ?? null,
+      planId: plan?.planId ?? null,
     });
 
     const installed = this.installer.install({
-      specification: { ...stored.specification, businessId },
-      plan: stored.plan,
+      specification: { ...specification, businessId },
+      plan,
       businessId,
-      dryRunResult: stored.dryRunResult,
-      approval: stored.approval,
+      dryRunResult,
+      approval,
       actorUserId: actorId ?? session.actorId,
       nowISO: this.nowISO(),
       failAtOperationId,
@@ -839,6 +1135,10 @@ export class AiBuilderService {
 
     const proposalState = createBuilderProposalState({
       ...stored,
+      specification,
+      plan,
+      dryRunResult,
+      approval,
       installation: installed.installation ?? stored.installation,
       updatedAt: this.nowISO(),
     });
@@ -846,13 +1146,15 @@ export class AiBuilderService {
     const updated = await this.persistProposalState(installing, proposalState, {
       currentStage: installed.ok ? "installed" : "failed",
       businessId,
+      installationPlanId: plan?.planId,
+      installationPlanHash: plan?.planHash,
     });
 
     if (installed.ok) {
       await this.persistCanonicalBusinessOS({
         businessId,
-        specification: { ...stored.specification, businessId },
-        plan: stored.plan,
+        specification: { ...specification, businessId },
+        plan,
         installation: installed.installation ?? proposalState.installation,
         actorUserId: actorId ?? session.actorId,
       });
@@ -883,6 +1185,15 @@ export class AiBuilderService {
 
   async resumeInstall({ sessionId, actorId = null, failAtOperationId = null }) {
     const session = await this.requireSession(sessionId);
+    if (String(session.currentStage) === "installed" && session.businessId) {
+      return deepFreeze({
+        ok: true,
+        alreadyInstalled: true,
+        session,
+        installation: { ok: true },
+        openHref: `/b/${session.businessId}/home`,
+      });
+    }
     const stored = await this.loadProposalState(session);
     if (!stored?.approval) {
       return deepFreeze({ ok: false, reason: "approval_required" });
@@ -1005,12 +1316,7 @@ export class AiBuilderService {
     const existingId = session.businessId && !String(session.businessId).startsWith("draft_")
       ? String(session.businessId)
       : null;
-    const name = String(
-      session.businessName
-        ?? stored?.specification?.businessName
-        ?? stored?.specification?.name
-        ?? "New Business",
-    ).trim() || "New Business";
+    const name = this.resolveInstallBusinessName(session, stored);
 
     if (this.platformStore?.getBusinessById && this.platformStore?.createBusiness) {
       if (existingId) {
@@ -1024,6 +1330,60 @@ export class AiBuilderService {
     }
 
     return existingId ?? `draft_${session.sessionId}`;
+  }
+
+  resolveInstallBusinessName(session, stored) {
+    return resolveBusinessDisplayName(
+      session?.businessSummary?.businessName,
+      session?.appearance?.businessName,
+      session?.businessName,
+      stored?.specification?.businessProfile?.businessName,
+      stored?.specification?.businessName,
+      stored?.specification?.name,
+      "New Business",
+    );
+  }
+
+  /**
+   * Keep the platform business record aligned with the approved discovery name.
+   * Existing businesses (e.g. magna mare) previously kept their create-time name forever.
+   */
+  async syncPlatformBusinessName({ session, stored, businessId }) {
+    if (!businessId || String(businessId).startsWith("draft_")) return null;
+    if (typeof this.platformStore?.updateBusinessName !== "function") return null;
+    const nextName = this.resolveInstallBusinessName(session, stored);
+    if (!isUsableBusinessName(nextName) || nextName === "Your business" || nextName === "New Business") {
+      return null;
+    }
+    const current = await this.platformStore.getBusinessById?.(businessId);
+    if (current?.name && String(current.name).trim().toLowerCase() === nextName.toLowerCase()) {
+      return current;
+    }
+    return this.platformStore.updateBusinessName({ businessId, name: nextName });
+  }
+
+  /**
+   * Align industry package with the approved OS industry.
+   * Marketing / universal installs must not keep pkg_property_management active.
+   */
+  async syncPlatformIndustryPackage({ session, stored, businessId }) {
+    if (!businessId || String(businessId).startsWith("draft_")) return null;
+    if (typeof this.platformStore?.updateBusinessIndustryPackage !== "function") return null;
+    const industry = String(
+      stored?.specification?.businessProfile?.industry
+      ?? session?.businessSummary?.industry
+      ?? "",
+    ).toLowerCase().replace(/\s+/g, "_");
+    const isProperty = industry === "property_management" || industry === "property" || industry === "real_estate";
+    const nextPackageId = isProperty ? "pkg_property_management" : null;
+    const current = await this.platformStore.getBusinessById?.(businessId);
+    if ((current?.industryPackageId ?? null) === nextPackageId) return current;
+    return this.platformStore.updateBusinessIndustryPackage({
+      businessId,
+      industryPackageId: nextPackageId,
+      industryPackageVersion: 1,
+      packageConfiguration: isProperty ? (current?.packageConfiguration ?? {}) : {},
+    });
   }
 
   /**

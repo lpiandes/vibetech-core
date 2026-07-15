@@ -6,14 +6,103 @@ function safeArray(v) {
   return Array.isArray(v) ? v : [];
 }
 
+/** Map Business OS integration ids onto connection-center requirement ids. */
+const OS_INTEGRATION_TO_CONNECTION = Object.freeze({
+  business_email: "business_email",
+  email: "business_email",
+  sms: "sms_channel",
+  sms_channel: "sms_channel",
+  voice: "voice_channel",
+  voice_channel: "voice_channel",
+  phone: "voice_channel",
+  calendar: "calendar",
+  accounting: "accounting",
+  document_storage: "document_storage",
+  documents: "document_storage",
+  property_management_system: "property_management_system",
+  pms: "property_management_system",
+  meta_lead_ads: "meta_lead_ads",
+  facebook: "meta_lead_ads",
+  facebook_leads: "meta_lead_ads",
+});
+
+/**
+ * Prefer Business OS integration plan when present.
+ * Fall back to industry-package connectedSystemRequirements.
+ * Never invent rows from the frontend display catalog alone.
+ */
+export function resolveConnectionRequirements({
+  installationResult = null,
+  businessOsIntegrations = null,
+} = {}) {
+  const osIntegrations = safeArray(businessOsIntegrations);
+  if (osIntegrations.length) {
+    return osIntegrations
+      .map((entry) => {
+        const rawId = String(entry.integrationId ?? entry.id ?? "").toLowerCase();
+        const id = OS_INTEGRATION_TO_CONNECTION[rawId] ?? rawId;
+        if (!id) return null;
+        const status = String(entry.status ?? "required").toLowerCase();
+        if (status === "deferred" || status === "not_yet" || status === "prohibited") {
+          return null;
+        }
+        return {
+          id,
+          displayName: String(entry.label ?? entry.displayName ?? id.replace(/_/g, " ")),
+          requirementLevel: status === "optional" || status === "recommended" ? status : "required",
+        };
+      })
+      .filter(Boolean);
+  }
+
+  return safeArray(installationResult?.connectedSystemRequirements).map((req) => ({
+    id: String(req.id ?? ""),
+    displayName: String(req.displayName ?? req.id ?? ""),
+    requirementLevel: String(req.requirementLevel ?? "optional"),
+  })).filter((req) => req.id);
+}
+
+function buildUnlockMessage(connectionId, status) {
+  if (String(status) !== CONNECTION_STATUSES.CONNECTED) {
+    return null;
+  }
+  const id = String(connectionId);
+  if (id === "business_email" || id === "email") {
+    return "Email connected → teammates can draft/send (with approval).";
+  }
+  if (id === "calendar") {
+    return "Calendar connected → Work due dates and tours can sync.";
+  }
+  if (id === "sms_channel" || id === "sms") {
+    return "SMS connected → teammates can draft texts (with approval).";
+  }
+  if (id === "voice_channel" || id === "voice") {
+    return "Voice connected → call intents still require approval.";
+  }
+  if (id === "meta_lead_ads") {
+    return "Meta connected → leads import as Work, not spreadsheets.";
+  }
+  if (id === "document_storage") {
+    return "Document storage connected → import into Knowledge (VIBETech remains SoT).";
+  }
+  if (id === "accounting") {
+    return "Accounting connected → Memory facts only; ledger stays in your SoR.";
+  }
+  return "Connection healthy. Credentials survive process restart via durable vault.";
+}
+
 export function buildConnectionCenterViewModel({
   identity,
   installationResult,
   connectedSystemsSnapshot,
   connectionDependencyProjection,
   providerRegistry,
+  businessOsIntegrations = null,
 } = {}) {
-  const requirements = safeArray(installationResult?.connectedSystemRequirements);
+  const requirements = resolveConnectionRequirements({
+    installationResult,
+    businessOsIntegrations,
+  });
   const guidance = safeArray(installationResult?.connectionGuidance);
   const snapshotConnections = safeArray(connectedSystemsSnapshot?.connections);
   const dependencyByType = new Map(
@@ -37,9 +126,30 @@ export function buildConnectionCenterViewModel({
     } else if (status === CONNECTION_STATUSES.CONFIGURING) {
       availableActions.push({ id: "verify", label: "Verify", supported: true });
     } else if (status === CONNECTION_STATUSES.CONNECTED) {
-      availableActions.push({ id: "reconnect", label: "Reconnect", supported: false, reason: "Setup not yet available in-app" });
+      const needsReconnect =
+        health?.level === "ERROR"
+        || health?.level === "NEEDS_ATTENTION"
+        || health?.level === "DISCONNECTED";
+      availableActions.push({
+        id: "reconnect",
+        label: needsReconnect ? "Reconnect" : "Reconnect",
+        supported: Boolean(provider),
+        reason: provider ? null : "Setup not yet available in-app",
+      });
+      if (needsReconnect) {
+        availableActions.push({
+          id: "review_health",
+          label: "Health details",
+          supported: true,
+        });
+      }
     } else {
-      availableActions.push({ id: "connect", label: "Connect", supported: false, reason: "Setup not yet available in-app" });
+      availableActions.push({
+        id: "reconnect",
+        label: "Reconnect",
+        supported: Boolean(provider),
+        reason: provider ? null : "Setup not yet available in-app",
+      });
     }
 
     return deepFreeze({
@@ -50,6 +160,9 @@ export function buildConnectionCenterViewModel({
       requirementLevel: String(req.requirementLevel ?? guide.requirementLevel ?? "optional"),
       status,
       health,
+      healthLabel: health?.label ?? health?.level ?? null,
+      healthDetail: health?.message ?? health?.detail ?? providerGuidance?.reconnectInstructions ?? null,
+      unlockMessage: buildUnlockMessage(id, status),
       enables: dependency?.enables ?? deepFreeze({ capabilities: [], employees: [], automations: [], communicationIntents: [] }),
       blockedWithout: dependency?.blockedWithout ?? deepFreeze({ capabilities: [], employees: [], automations: [], communicationIntents: [] }),
       setupInstructions: String(providerGuidance?.steps?.join(" ") ?? guide.setupInstructions ?? "Provider-specific setup will appear when a provider is selected."),

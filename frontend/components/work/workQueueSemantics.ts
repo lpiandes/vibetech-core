@@ -23,6 +23,29 @@ export type WorkQueueItem = {
       nextStep?: string;
       assigneeName?: string | null;
     };
+    artifact?: {
+      kind?: string;
+      title?: string;
+      body?: string;
+      format?: string;
+      templateId?: string;
+      diagram?: {
+        layout?: string;
+        header?: { title?: string; subtitle?: string; meta?: Array<{ label?: string; value?: string }> };
+        nodes?: Array<{
+          id?: string;
+          index?: number;
+          label?: string;
+          intent?: string | null;
+          durationLabel?: string | null;
+          details?: string[];
+        }>;
+        sidePanels?: Array<{ id?: string; title?: string; items?: string[] }>;
+      } | null;
+    } | null;
+    outcomeSummary?: string | null;
+    memoryChanges?: string[];
+    customAi?: boolean;
     relationshipFollowUp?: {
       candidateId?: string;
       relationshipType?: string;
@@ -120,7 +143,8 @@ export function getActiveWorkItems(items: unknown) {
 export function resolveTargetWorkItem(items: unknown, workId: unknown) {
   const id = String(workId ?? "").trim();
   if (!id) return null;
-  return getActiveWorkItems(items).find((item) => String(item?.id ?? "") === id) ?? null;
+  const list = (Array.isArray(items) ? items : []) as WorkQueueItem[];
+  return list.find((item) => String(item?.id ?? "") === id) ?? null;
 }
 
 export function countWaitingWork(items: unknown) {
@@ -173,14 +197,16 @@ export function sortWorkQueueItems(items: WorkQueueItem[]) {
 export function resolveWorkRowHref(
   display: NonNullable<WorkQueueItem["metadata"]>["display"] | undefined,
   businessId: string,
+  workId?: string | null,
 ) {
-  if (!display) return null;
+  if (!display && !workId) return null;
   const bid = String(businessId ?? "");
-  if (display.rowHref) return String(display.rowHref);
-  if (display.personHref && bid) return String(display.personHref);
-  if (display.subjectId && bid) return `/b/${bid}/properties/${display.subjectId}`;
+  if (display?.rowHref) return String(display.rowHref);
+  if (bid && workId) return `/b/${bid}/work?workId=${encodeURIComponent(String(workId))}`;
+  if (display?.personHref && bid) return String(display.personHref);
+  if (display?.subjectId && bid) return `/b/${bid}/properties/${display.subjectId}`;
   if (bid) return null;
-  if (display.engagementHref) return String(display.engagementHref);
+  if (display?.engagementHref) return String(display.engagementHref);
   return null;
 }
 

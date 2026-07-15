@@ -4,6 +4,7 @@ import {
   resolveActionHref,
   resolveModulePresentation,
 } from "./registries.js";
+import { compileSpecialtySurfacesOnSpecification } from "../../../backend/core/ai-builder/specialty/SpecialtySurfaceCompiler.js";
 
 /**
  * Pure portal composition from installed Business OS (+ optional full specification).
@@ -179,7 +180,47 @@ export function composePortalModel({
 } = {}) {
   const config = configuration ?? {};
   const terminology = config.terminology ?? specification?.terminology ?? null;
-  const modules = enrichModules({ configuration: config, specification });
+
+  // Ensure specialty nav modules exist even for installs that predate SpecialtySurfaceCompiler.
+  // Prefer specification modules; thin config modules only fill gaps (avoid dupes wiping enrich fields).
+  const modulesForSpecialty = (() => {
+    const byId = new Map();
+    for (const module of asArray(config.modules)) {
+      byId.set(String(module.moduleId), module);
+    }
+    for (const module of asArray(specification?.modules)) {
+      const id = String(module.moduleId);
+      byId.set(id, { ...(byId.get(id) ?? {}), ...module });
+    }
+    return [...byId.values()];
+  })();
+  const employeesForSpecialty = (() => {
+    const byId = new Map();
+    for (const employee of asArray(config.employees)) {
+      byId.set(String(employee.employeeId ?? employee.id), employee);
+    }
+    for (const employee of asArray(specification?.employeeDefinitions)) {
+      const id = String(employee.employeeId ?? employee.id);
+      byId.set(id, { ...(byId.get(id) ?? {}), ...employee });
+    }
+    return [...byId.values()];
+  })();
+
+  const specialtySpec = compileSpecialtySurfacesOnSpecification({
+    ...(specification ?? {}),
+    modules: modulesForSpecialty,
+    employeeDefinitions: employeesForSpecialty,
+    businessId: businessId ?? specification?.businessId ?? null,
+  }, { businessId: businessId ?? null });
+
+  const modules = enrichModules({
+    configuration: config,
+    specification: {
+      ...(specification ?? {}),
+      modules: specialtySpec.modules,
+      employeeDefinitions: specialtySpec.employeeDefinitions,
+    },
+  });
   const dashboards = resolveDashboards({ configuration: config, specification });
   const emptyStates = resolveEmptyStates({ modules, terminology });
   const primaryActions = businessId

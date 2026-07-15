@@ -6,8 +6,20 @@ import { BuilderSessionRepository } from "./BuilderSessionRepository.js";
 import { DeterministicBuilderIntelligenceProvider } from "./BuilderIntelligenceProvider.js";
 import { BusinessDiscoveryCompleteness } from "./BusinessDiscoveryCompleteness.js";
 import { createBuilderSession } from "./BuilderSession.js";
+import {
+  DISCOVERY_QUESTION_BANK,
+  questionMatchesIndustry,
+  resolvePackIndustry,
+} from "./BusinessDiscoveryQuestionPlanner.js";
 
 const NOW = "2026-07-11T12:00:00.000Z";
+
+function allRequiredAnswersForIndustry(industry) {
+  const packIndustry = resolvePackIndustry(industry);
+  return DISCOVERY_QUESTION_BANK
+    .filter((question) => question.required && questionMatchesIndustry(question, packIndustry, null))
+    .map((question) => ({ questionId: question.questionId, answer: "covered" }));
+}
 
 test("durable builder session starts and answers without AI provider", async () => {
   const repository = new BuilderSessionRepository();
@@ -62,11 +74,34 @@ test("completeness requires identity and industry before proposal readiness", ()
     businessSummary: {},
   });
   assert.equal(early.readyForProposal, false);
+  assert.equal(early.minRequiredAnswers, 16);
 
   const session = createBuilderSession({
     businessSummary: { businessName: "Bright Smile Dental", industry: "dental" },
   });
   assert.equal(session.currentStage, "created");
+});
+
+test("completeness needs full required answers before ready", () => {
+  const completeness = new BusinessDiscoveryCompleteness();
+  const few = Array.from({ length: 5 }, (_, index) => ({
+    questionId: `q_${index}`,
+    answer: "yes",
+  }));
+  const notReady = completeness.evaluate({
+    answers: few,
+    businessSummary: { businessName: "Northline", industry: "sports" },
+  });
+  assert.equal(notReady.readyForProposal, false);
+
+  const answers = allRequiredAnswersForIndustry("sports");
+  const ready = completeness.evaluate({
+    answers,
+    businessSummary: { businessName: "Northline", industry: "sports" },
+  });
+  assert.equal(ready.readyForProposal, true);
+  assert.ok(ready.requiredAnswered >= 10);
+  assert.ok(answers.length >= 16);
 });
 
 test("session modes and stages are validated", () => {

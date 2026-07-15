@@ -17,8 +17,10 @@ export class CapabilityGapDetector {
       ...(recommendations.flatMap((entry) => entry.missingCapabilities ?? []).map((id) => ({ id, label: id }))),
     ];
 
-    // Common honest deferrals
-    const deferredHints = ["sms", "payroll", "accounting", "insurance_billing", "treatment_plan_runtime"];
+    // Common honest deferrals — never pretend these operate today.
+    const deferredHints = [
+      "payroll", "accounting", "insurance_billing", "treatment_plan_runtime",
+    ];
     for (const hint of deferredHints) {
       const blob = JSON.stringify(businessSummary).toLowerCase();
       if (blob.includes(hint) || needs.some((entry) => entry.id.includes(hint))) {
@@ -27,6 +29,19 @@ export class CapabilityGapDetector {
           kind: hint.includes("payroll") || hint.includes("accounting") ? "prohibited" : "deferred",
           label: hint.replace(/_/g, " "),
           requestedOutcome: `Support ${hint.replace(/_/g, " ")}`,
+        }));
+      }
+    }
+
+    // Owner-requested live channels that still need connection setup.
+    for (const employee of businessSummary.requestedEmployees ?? []) {
+      const id = String(employee?.archetypeId ?? employee ?? "").toLowerCase();
+      if (id === "ai_caller" || id === "facebook_lead_specialist") {
+        gaps.push(createBuilderGap({
+          gapId: `gap_employee_${id}_setup`,
+          kind: "missing_setup",
+          label: String(employee?.label ?? id.replace(/_/g, " ")),
+          requestedOutcome: `${employee?.label ?? id} — connect ${id === "ai_caller" ? "phone" : "Facebook Lead Ads"} in Integrations, then approve drafts before action.`,
         }));
       }
     }

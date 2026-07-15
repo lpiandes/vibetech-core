@@ -197,7 +197,7 @@ export class WorkEventEngine {
       }
 
       case WORK_EVENT_TYPES.WORK_ITEM_COMPLETED: {
-        const { workItemId, completedAtISO } = payload;
+        const { workItemId, completedAtISO, outcomeSummary = null, memoryChanges = null } = payload;
         requireString(workItemId, "payload.workItemId");
         const idx = workItems.findIndex((w) => String(w.id) === String(workItemId));
         if (idx === -1) throw new Error("WORK_ITEM_COMPLETED: workItem does not exist.");
@@ -208,6 +208,14 @@ export class WorkEventEngine {
           completedAt: String(completedAtISO ?? event.timestampISO),
           blockedReason: null,
           updatedAt: event.timestampISO,
+          outcomeSummary:
+            outcomeSummary != null
+              ? outcomeSummary
+              : workItems[idx].outcomeSummary ?? null,
+          memoryChanges:
+            memoryChanges != null
+              ? memoryChanges
+              : workItems[idx].memoryChanges ?? [],
         });
         workItems[idx] = merged;
 

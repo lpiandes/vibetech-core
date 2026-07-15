@@ -51,4 +51,8 @@ export class AutomationRuntime {
     validateAutomationRuntime(this);
     return this._state;
   }
+
+  exportState() {
+    return this._state;
+  }
 }

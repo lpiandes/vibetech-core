@@ -7,7 +7,7 @@ import { cockpitColors, spacing, radius } from "@/design/tokens";
 import { formatProductErrorMessage } from "@/lib/platform/productErrors";
 
 /**
- * Owner entry point: Improve this business / Ask VIBETech.
+ * Ask VIBETech entry — continuous improvement via the same Architect lifecycle.
  * Permanent surface: /b/[businessId]/architect
  */
 export default function ImproveBusinessButton({
@@ -69,7 +69,7 @@ export default function ImproveBusinessButton({
           width: compact ? "100%" : undefined,
         }}
       >
-        {busy ? "Opening…" : compact ? "Ask VIBETech" : "Improve this business"}
+        {busy ? "Opening…" : "Ask VIBETech"}
       </button>
       {error ? <div style={{ color: cockpitColors.warning, marginTop: 6, fontSize: 12 }}>{error}</div> : null}
     </div>

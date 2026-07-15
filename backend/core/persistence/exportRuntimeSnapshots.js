@@ -22,6 +22,8 @@ function exportKind({ kind, stack, integrationPlatform }) {
       return stack?.analyticsRuntime?.exportState?.() ?? null;
     case RUNTIME_SNAPSHOT_KINDS.INTELLIGENCE_CANDIDATE:
       return stack?.intelligenceCandidateRuntime?.exportState?.() ?? null;
+    case RUNTIME_SNAPSHOT_KINDS.AUTOMATION:
+      return stack?.automationRuntime?.exportState?.() ?? null;
     default:
       return null;
   }

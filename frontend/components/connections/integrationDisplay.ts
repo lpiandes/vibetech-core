@@ -1,9 +1,12 @@
 import type { LucideIcon } from "lucide-react";
-import { Building2, Calendar, Calculator, FileText, Mail, MessageSquare, Phone } from "lucide-react";
+import { Building2, Calendar, Calculator, FileText, Mail, MessageSquare, Phone, Share2 } from "lucide-react";
 
 import type { StatusBadgeTone } from "@/components/product/StatusBadge";
 
-export type IntegrationTier = "primary" | "coming_soon";
+/** Only `live` integrations are listed. Unavailable channels are omitted entirely. */
+export type IntegrationTier = "live";
+
+export type IntegrationSetupMode = "manual" | "dev_connect" | "oauth" | "api_key";
 
 export type IntegrationDisplay = {
   id: string;
@@ -12,66 +15,133 @@ export type IntegrationDisplay = {
   tier: IntegrationTier;
   icon: LucideIcon;
   unlocks?: string;
-  setupMode?: "manual" | "dev_connect";
+  setupMode?: IntegrationSetupMode;
+  /** When false, this connection is hidden from the owner UI. */
+  listed?: boolean;
 };
 
 const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
   business_email: {
     title: "Business email",
-    description: "Send and receive email through VIBETech",
-    tier: "primary",
+    description: "Send and receive email through your Gmail account",
+    tier: "live",
     icon: Mail,
-    setupMode: "dev_connect",
+    setupMode: "oauth",
+    listed: true,
   },
   property_management_system: {
     title: "Property management software",
     description: "Sync properties, residents, leases, and work",
-    tier: "primary",
+    tier: "live",
     icon: Building2,
     setupMode: "manual",
-  },
-  sms_channel: {
-    title: "Text messaging",
-    description: "Send and receive text messages",
-    tier: "coming_soon",
-    icon: MessageSquare,
-  },
-  voice_channel: {
-    title: "Phone",
-    description: "Place and receive phone calls",
-    tier: "coming_soon",
-    icon: Phone,
+    listed: true,
   },
   calendar: {
     title: "Calendar",
-    description: "Sync showings and appointments",
-    tier: "coming_soon",
+    description: "Create and update appointments on Google Calendar",
+    tier: "live",
     icon: Calendar,
+    setupMode: "oauth",
+    listed: false, // promoted when Google OAuth app is configured (see isIntegrationListed)
   },
+  sms_channel: {
+    title: "Text messaging",
+    description: "Send approved text messages through Twilio",
+    tier: "live",
+    icon: MessageSquare,
+    setupMode: "api_key",
+    listed: false,
+  },
+  voice_channel: {
+    title: "Phone",
+    description: "Place approved calls through Twilio Voice",
+    tier: "live",
+    icon: Phone,
+    setupMode: "api_key",
+    listed: false,
+  },
+  meta_lead_ads: {
+    title: "Facebook Lead Ads",
+    description: "Ingest Facebook lead form submissions into intake",
+    tier: "live",
+    icon: Share2,
+    setupMode: "api_key",
+    listed: false,
+  },
+  // Intentionally not listed until live connect exists:
   accounting: {
     title: "Accounting",
     description: "Connect your accounting software",
-    tier: "coming_soon",
+    tier: "live",
     icon: Calculator,
+    listed: false,
   },
   document_storage: {
     title: "Documents",
     description: "Store leases, policies, and files",
-    tier: "coming_soon",
+    tier: "live",
     icon: FileText,
+    listed: false,
   },
 };
 
-export function getIntegrationDisplay(connectionId: string, fallbackName?: string): IntegrationDisplay {
+export type LiveIntegrationFlags = {
+  business_email?: boolean;
+  business_email_oauth?: boolean;
+  calendar?: boolean;
+  sms_channel?: boolean;
+  voice_channel?: boolean;
+  meta_lead_ads?: boolean;
+  _googleOAuth?: boolean;
+};
+
+export function isIntegrationListed(connectionId: string, liveFlags: LiveIntegrationFlags = {}) {
   const id = String(connectionId);
   const config = INTEGRATION_CONFIG[id];
-  if (config) return { id, ...config };
+  if (!config) return true; // unknown required connections still surface
+  if (config.listed === false) {
+    // Promote when the matching live provider app is configured.
+    if (id === "calendar" || id === "business_email") return Boolean(liveFlags.business_email || liveFlags.calendar);
+    if (id === "sms_channel") return Boolean(liveFlags.sms_channel);
+    if (id === "voice_channel") return Boolean(liveFlags.voice_channel);
+    if (id === "meta_lead_ads") return Boolean(liveFlags.meta_lead_ads);
+    return false;
+  }
+  // business_email: always list (oauth when configured, else dev_connect when allowed)
+  return true;
+}
+
+export function getIntegrationDisplay(
+  connectionId: string,
+  fallbackName?: string,
+  liveFlags: LiveIntegrationFlags = {},
+): IntegrationDisplay {
+  const id = String(connectionId);
+  const config = INTEGRATION_CONFIG[id];
+  if (config) {
+    let setupMode = config.setupMode;
+    if (id === "business_email") {
+      setupMode = (liveFlags.business_email_oauth || liveFlags._googleOAuth) ? "oauth" : "dev_connect";
+    }
+    if ((id === "calendar") && liveFlags.calendar) setupMode = "oauth";
+    if (id === "sms_channel" && liveFlags.sms_channel) setupMode = "api_key";
+    if (id === "voice_channel" && liveFlags.voice_channel) setupMode = "api_key";
+    if (id === "meta_lead_ads" && liveFlags.meta_lead_ads) setupMode = "api_key";
+    return {
+      id,
+      ...config,
+      setupMode,
+      listed: isIntegrationListed(id, liveFlags),
+    };
+  }
   return {
     id,
     title: String(fallbackName ?? id.replace(/_/g, " ")),
     description: "Connect this tool to your business",
-    tier: "primary",
+    tier: "live",
     icon: Building2,
+    listed: true,
   };
 }
 
@@ -83,18 +153,14 @@ export function connectionStatusLabel(status: string): { label: string; tone: St
   return { label: "Not connected", tone: "neutral" };
 }
 
-export function partitionConnections(connections: any[]) {
+export function partitionConnections(connections: any[], liveFlags: LiveIntegrationFlags = {}) {
   const primary: Array<{ conn: any; display: IntegrationDisplay }> = [];
-  const comingSoon: Array<{ conn: any; display: IntegrationDisplay }> = [];
 
   for (const conn of connections) {
-    const display = getIntegrationDisplay(String(conn.id), conn.displayName);
-    if (display.tier === "coming_soon") {
-      comingSoon.push({ conn, display });
-    } else {
-      primary.push({ conn, display });
-    }
+    const display = getIntegrationDisplay(String(conn.id), conn.displayName, liveFlags);
+    if (!display.listed) continue;
+    primary.push({ conn, display });
   }
 
-  return { primary, comingSoon };
+  return { primary, comingSoon: [] as Array<{ conn: any; display: IntegrationDisplay }> };
 }

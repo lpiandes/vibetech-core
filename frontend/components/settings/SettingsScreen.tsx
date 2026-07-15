@@ -120,7 +120,7 @@ export default function SettingsScreen({
       </ShellPanel>
 
       <ShellPanel
-        title="Setup status"
+        title="Your steps to make your business prosper"
         subtitle={checklistComplete ? "All setup items complete" : `${setupSummary.incomplete} item${setupSummary.incomplete === 1 ? "" : "s"} remaining`}
       >
         {setupChecklist.length === 0 ? (
@@ -133,31 +133,58 @@ export default function SettingsScreen({
               <div
                 key={item.id}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: spacing.md,
+                  display: "grid",
+                  gap: spacing.sm,
                   padding: spacing.md,
                   borderBottom: `1px solid ${cockpitColors.panelBorder}`,
-                  flexWrap: "wrap",
                 }}
               >
-                <div>
-                  <div style={{ fontWeight: 600, color: cockpitColors.textPrimary }}>{item.title}</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: spacing.md, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: cockpitColors.textPrimary }}>{item.title}</div>
+                    {"whereInApp" in item && item.whereInApp ? (
+                      <div style={{ marginTop: 2, fontSize: 12, color: cockpitColors.accent, fontWeight: 650 }}>
+                        In VIBETech: {String(item.whereInApp)}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: spacing.sm }}>
+                    <StatusBadge label={item.complete ? "Complete" : "Needs setup"} tone={item.complete ? "success" : "warning"} />
+                    {!item.complete && item.href ? (
+                      <PrimaryButton href={item.href}>{item.actionLabel ?? "Open"}</PrimaryButton>
+                    ) : null}
+                  </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: spacing.sm }}>
-                  <StatusBadge label={item.complete ? "Complete" : "Needs setup"} tone={item.complete ? "success" : "warning"} />
-                  {!item.complete && item.href ? (
-                    <PrimaryButton href={item.href}>{item.actionLabel ?? "Open"}</PrimaryButton>
-                  ) : null}
-                </div>
+                {!item.complete && "summary" in item && item.summary ? (
+                  <div style={{ fontSize: 13, color: cockpitColors.textSecondary, lineHeight: 1.45 }}>{String(item.summary)}</div>
+                ) : null}
+                {!item.complete && "inApp" in item && Array.isArray(item.inApp) && item.inApp.length ? (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 750, letterSpacing: "0.06em", textTransform: "uppercase", color: cockpitColors.textMuted }}>
+                      In the app
+                    </div>
+                    <ol style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 13, lineHeight: 1.5, color: cockpitColors.textPrimary }}>
+                      {item.inApp.map((line: string) => <li key={line}>{line}</li>)}
+                    </ol>
+                  </div>
+                ) : null}
+                {!item.complete && "external" in item && Array.isArray(item.external) && item.external.length ? (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 750, letterSpacing: "0.06em", textTransform: "uppercase", color: cockpitColors.textMuted }}>
+                      On the external platform
+                    </div>
+                    <ol style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 13, lineHeight: 1.5, color: cockpitColors.textPrimary }}>
+                      {item.external.map((line: string) => <li key={line}>{line}</li>)}
+                    </ol>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
         )}
         {!checklistComplete && incomplete.length > 0 ? (
           <div style={{ padding: spacing.md, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>
-            Finish remaining setup so your Digital Employees can operate with full context.
+            Finish remaining steps so your AI teammates can operate with full context.
           </div>
         ) : null}
       </ShellPanel>

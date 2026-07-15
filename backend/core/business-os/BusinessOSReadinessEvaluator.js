@@ -29,9 +29,18 @@ export function evaluateBusinessOSInstallReadiness({ specification, plan, dryRun
 
   const setup = asArray(plan?.actions).filter((action) => action.requiresSetup || action.type === "REQUIRE_SETUP");
   if (setup.length) {
+    const labels = setup
+      .map((action) => String(action.label ?? action.explanation ?? action.setupId ?? action.type ?? "").trim())
+      .filter(Boolean);
+    const uniqueLabels = [...new Set(labels)];
     warnings.push({
       code: "setup_required",
-      message: `${setup.length} item(s) need connection or configuration after install.`,
+      message: uniqueLabels.length === 1
+        ? `Review: ${uniqueLabels[0]} — needs connection or configuration after install.`
+        : uniqueLabels.length > 1
+          ? `Review before go-live:\n${uniqueLabels.map((label) => `• ${label}`).join("\n")}`
+          : `${setup.length} item${setup.length === 1 ? "" : "s"} need connection or configuration after install.`,
+      items: uniqueLabels,
     });
   }
 

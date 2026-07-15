@@ -22,15 +22,17 @@ export function isGmailConfigured() {
   return REQUIRED_ENV_VARS.every((k) => safeString(process.env[k]).trim().length > 0);
 }
 
-export function validateGmailSendInput({ provider, message } = {}) {
+export function validateGmailSendInput({ provider, message, requireEnvConfig = true } = {}) {
   if (!provider) fail("provider required.");
   if (!message || typeof message !== "object") fail("message required.");
 
   // First: validate channel match with provider contract.
   validateCommunicationProviderMessage(provider, message);
 
-  // Next: ensure configured provider can execute.
-  if (!isGmailConfigured()) fail("Gmail not_configured");
+  // Env-global config OR per-business vault credentials (health !== not_configured).
+  const healthy = String(provider.health ?? "") === "healthy";
+  if (requireEnvConfig && !isGmailConfigured() && !healthy) fail("Gmail not_configured");
+  if (!requireEnvConfig && !healthy && !isGmailConfigured()) fail("Gmail not_configured");
 
   return { ok: true };
 }

@@ -73,17 +73,20 @@ export class ConnectedBusinessWorkspace {
     workspaceId,
     activation,
     runtimeSnapshots,
+    extraProviders,
   }: {
     nowISO?: string;
     workspaceId?: string;
     activation?: WorkspaceActivationInput | null;
     runtimeSnapshots?: Record<string, unknown>;
+    extraProviders?: unknown[];
   } = {}) {
     const result = activateWorkspace({
       nowISO,
       workspaceId,
       activation: activation ?? undefined,
       runtimeSnapshots,
+      extraProviders: Array.isArray(extraProviders) ? extraProviders : [],
     });
     this.ctx = result.ctx;
     this.activation = result.activation;

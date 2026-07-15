@@ -1,5 +1,5 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
-import { validateWebsiteUrl, createWebsiteFetchPolicy } from "./WebsiteFetchPolicy.js";
+import { validateWebsiteUrl, createWebsiteFetchPolicy, normalizeWebsiteUrl } from "./WebsiteFetchPolicy.js";
 import { extractWebsiteEvidence, createWebsiteResearchReport } from "./WebsiteEvidenceExtractor.js";
 import { createBuilderEvidence } from "./BuilderEvidence.js";
 
@@ -24,8 +24,14 @@ export class BusinessWebsiteResearchService {
     nowISO = new Date().toISOString(),
     manualFallbackText = null,
   } = {}) {
-    const approved = approvedUrls ?? (websiteUrl ? [websiteUrl] : []);
-    const validation = validateWebsiteUrl(websiteUrl, { approvedUrls: approved });
+    const normalizedInput = normalizeWebsiteUrl(websiteUrl);
+    const approved = (approvedUrls ?? (normalizedInput ? [normalizedInput] : []))
+      .map((entry) => normalizeWebsiteUrl(entry) || String(entry ?? "").trim())
+      .filter(Boolean);
+    if (normalizedInput && !approved.includes(normalizedInput)) {
+      approved.push(normalizedInput);
+    }
+    const validation = validateWebsiteUrl(normalizedInput || websiteUrl, { approvedUrls: approved });
     if (!validation.ok) {
       return deepFreeze({
         ok: false,

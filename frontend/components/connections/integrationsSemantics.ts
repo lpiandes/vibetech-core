@@ -1,5 +1,6 @@
 import type { StatusBadgeTone } from "@/components/product/StatusBadge";
-import type { IntegrationDisplay, IntegrationTier } from "./integrationDisplay";
+import type { IntegrationDisplay, IntegrationSetupMode, IntegrationTier, LiveIntegrationFlags } from "./integrationDisplay.ts";
+import { isIntegrationListed } from "./integrationDisplay.ts";
 
 export type ConnectionViewRow = {
   id: string;
@@ -7,6 +8,10 @@ export type ConnectionViewRow = {
   purpose?: string;
   requirementLevel?: string;
   status?: string;
+  health?: { level?: string; label?: string; message?: string; detail?: string } | null;
+  healthLabel?: string | null;
+  healthDetail?: string | null;
+  unlockMessage?: string | null;
   enables?: {
     employees?: Array<{ id?: string; name?: string } | string>;
     capabilities?: string[];
@@ -16,7 +21,7 @@ export type ConnectionViewRow = {
     employees?: Array<{ id?: string; name?: string } | string>;
     capabilities?: string[];
   };
-  availableActions?: Array<{ id: string; label: string; supported: boolean; reason?: string }>;
+  availableActions?: Array<{ id: string; label: string; supported: boolean; reason?: string | null }>;
 };
 
 export type IntegrationsPresentation = {
@@ -27,7 +32,7 @@ export type IntegrationsPresentation = {
       purpose?: string;
       unlocks?: string;
       tier?: IntegrationTier;
-      setupMode?: "manual" | "dev_connect";
+      setupMode?: IntegrationSetupMode;
     }
   >;
   statusLabels?: Record<string, string>;
@@ -37,6 +42,7 @@ export type IntegrationsPresentation = {
     connected?: string;
     available?: string;
   };
+  liveFlags?: LiveIntegrationFlags;
 };
 
 function safeArray<T>(value: unknown): T[] {
@@ -66,7 +72,10 @@ export function requirementLevelLabel(level: string, presentation: IntegrationsP
 }
 
 export function deriveIntegrationMetrics(connections: unknown, presentation: IntegrationsPresentation = {}) {
-  const rows = safeArray<ConnectionViewRow>(connections);
+  const liveFlags = presentation.liveFlags ?? {};
+  const rows = safeArray<ConnectionViewRow>(connections).filter((row) =>
+    isIntegrationListed(String(row.id), liveFlags),
+  );
   const connected = rows.filter((row) => isConnectionConnected(String(row.status ?? ""))).length;
   const required = rows.filter((row) => String(row.requirementLevel ?? "").toLowerCase() === "required").length;
   const needsSetup = rows.filter((row) => connectionNeedsSetup(row)).length;
@@ -85,7 +94,6 @@ export function deriveIntegrationMetrics(connections: unknown, presentation: Int
     metrics.push({ id: "optional", label: "Optional", value: String(optionalOrSoon) });
   }
 
-  void presentation;
   return { connected, needsSetup, required, optionalOrSoon, metrics };
 }
 
@@ -118,14 +126,19 @@ export function mergeIntegrationDisplay(
 export function partitionIntegrationSections(
   connections: unknown,
   resolveDisplay: (row: ConnectionViewRow) => IntegrationDisplay,
+  liveFlags: LiveIntegrationFlags = {},
 ) {
-  const rows = safeArray<ConnectionViewRow>(connections);
+  const rows = safeArray<ConnectionViewRow>(connections).filter((row) =>
+    isIntegrationListed(String(row.id), liveFlags),
+  );
   const required: Array<{ conn: ConnectionViewRow; display: IntegrationDisplay }> = [];
   const connected: Array<{ conn: ConnectionViewRow; display: IntegrationDisplay }> = [];
   const available: Array<{ conn: ConnectionViewRow; display: IntegrationDisplay }> = [];
+  const roadmap: Array<{ conn: ConnectionViewRow; display: IntegrationDisplay }> = [];
 
   for (const conn of rows) {
     const display = resolveDisplay(conn);
+    if (display.listed === false) continue;
     const item = { conn, display };
     if (String(conn.requirementLevel ?? "").toLowerCase() === "required") {
       required.push(item);
@@ -133,12 +146,13 @@ export function partitionIntegrationSections(
     if (isConnectionConnected(String(conn.status ?? ""))) {
       connected.push(item);
     }
-    if (String(conn.requirementLevel ?? "").toLowerCase() !== "required" && !isConnectionConnected(String(conn.status ?? ""))) {
-      available.push(item);
-    }
+    const isOptional = String(conn.requirementLevel ?? "").toLowerCase() !== "required"
+      && !isConnectionConnected(String(conn.status ?? ""));
+    if (!isOptional) continue;
+    available.push(item);
   }
 
-  return { required, connected, available };
+  return { required, connected, available, roadmap };
 }
 
 export function blockedEmployeeNames(conn: ConnectionViewRow) {
@@ -148,10 +162,40 @@ export function blockedEmployeeNames(conn: ConnectionViewRow) {
 }
 
 export function primaryIntegrationAction(conn: ConnectionViewRow, display: IntegrationDisplay) {
-  if (isConnectionConnected(String(conn.status ?? ""))) return null;
-  if (display.tier === "coming_soon") return null;
+  if (display.listed === false) return null;
 
-  if (display.id === "business_email" || display.setupMode === "dev_connect") {
+  const healthLevel = String(conn.health?.level ?? "").toUpperCase();
+  const reconnectAction = safeArray(conn.availableActions).find(
+    (action) => String(action.id) === "reconnect" && action.supported !== false,
+  );
+  const needsReconnect =
+    healthLevel === "ERROR"
+    || healthLevel === "NEEDS_ATTENTION"
+    || healthLevel === "DISCONNECTED"
+    || Boolean(reconnectAction);
+
+  if (isConnectionConnected(String(conn.status ?? ""))) {
+    if (needsReconnect && (display.setupMode === "oauth" || display.setupMode === "api_key" || display.setupMode === "dev_connect")) {
+      return { kind: "connect" as const, label: reconnectAction?.label ?? "Reconnect" };
+    }
+    return null;
+  }
+
+  if (display.setupMode === "oauth" || display.setupMode === "api_key" || display.setupMode === "dev_connect") {
+    const label =
+      display.setupMode === "oauth"
+        ? display.id === "business_email" || display.id === "calendar"
+          ? "Connect with Google"
+          : display.id === "meta_lead_ads"
+            ? "Connect Facebook"
+            : "Connect"
+        : display.setupMode === "api_key"
+          ? "Connect"
+          : "Connect";
+    return { kind: "connect" as const, label };
+  }
+
+  if (display.id === "business_email") {
     return { kind: "connect" as const, label: "Connect" };
   }
 

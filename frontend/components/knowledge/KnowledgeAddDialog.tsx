@@ -11,6 +11,19 @@ import { cockpitColors, spacing, typography } from "@/design/tokens";
 
 const MAX_MB = 10;
 
+export const UNIVERSAL_CATEGORY_OPTIONS = [
+  { id: "CONTRACTS", label: "Contracts" },
+  { id: "POLICIES", label: "Policies" },
+  { id: "SOP", label: "SOPs" },
+  { id: "PRICING", label: "Pricing" },
+  { id: "BRAND_VOICE", label: "Brand voice" },
+  { id: "FAQ", label: "FAQ" },
+  { id: "CURRICULUM", label: "Curriculum" },
+  { id: "LEGAL", label: "Legal" },
+  { id: "PLAYBOOKS", label: "Playbooks" },
+  { id: "EMPLOYEE_HANDBOOK", label: "Employee handbook" },
+] as const;
+
 export default function KnowledgeAddDialog({
   businessId,
   onClose,
@@ -23,9 +36,14 @@ export default function KnowledgeAddDialog({
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
+  const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submittingRef = useRef(false);
+
+  function toggleCategory(id: string) {
+    setCategoryIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   async function upload() {
     if (!file || submittingRef.current) return;
@@ -36,6 +54,7 @@ export default function KnowledgeAddDialog({
     const formData = new FormData();
     formData.append("file", file);
     if (title.trim()) formData.append("title", title.trim());
+    for (const id of categoryIds) formData.append("categoryIds", id);
 
     try {
       const res = await fetch(`/api/businesses/${businessId}/knowledge`, {
@@ -73,7 +92,7 @@ export default function KnowledgeAddDialog({
       }
     >
       <p style={{ ...typography.caption, color: cockpitColors.textSecondary, margin: `0 0 ${spacing.md}`, lineHeight: 1.45 }}>
-        Upload policies, procedures, guides, or reference documents. VIBETech uses these to follow how your business works.
+        Tag documents so AI teammates know what they can cite. Untagged uploads stay searchable but do not count toward category readiness.
       </p>
       <div
         style={{
@@ -112,6 +131,36 @@ export default function KnowledgeAddDialog({
           style={{ padding: `${spacing.sm} ${spacing.md}`, borderRadius: 8, border: `1px solid ${cockpitColors.panelBorder}` }}
         />
       </label>
+      <div style={{ marginTop: spacing.md }}>
+        <div style={{ fontSize: typography.caption.fontSize, fontWeight: 600, marginBottom: spacing.xs }}>
+          Categories
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: spacing.xs }}>
+          {UNIVERSAL_CATEGORY_OPTIONS.map((cat) => {
+            const on = categoryIds.includes(cat.id);
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                disabled={busy}
+                onClick={() => toggleCategory(cat.id)}
+                style={{
+                  border: `1px solid ${on ? cockpitColors.accent : cockpitColors.panelBorder}`,
+                  background: on ? cockpitColors.panelElevated : cockpitColors.panel,
+                  color: cockpitColors.textPrimary,
+                  borderRadius: 999,
+                  padding: "6px 12px",
+                  fontSize: typography.caption.fontSize,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {cat.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
       {error ? <p style={{ color: "#dc2626", margin: `${spacing.sm} 0 0`, fontSize: typography.caption.fontSize }}>{error}</p> : null}
     </SimpleModal>
   );

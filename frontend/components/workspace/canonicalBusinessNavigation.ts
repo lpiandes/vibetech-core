@@ -65,8 +65,21 @@ function hasPermission(permissions: Set<string> | string[], permission: string |
   return set.has(permission);
 }
 
+export type SpecialtyNavSource = {
+  moduleId?: string;
+  label?: string;
+  href?: string | null;
+  specialtyHref?: string | null;
+  surfaceKind?: string | null;
+  ownerAdded?: boolean;
+  primaryNavigationEligible?: boolean;
+  iconName?: string | null;
+  employeeId?: string | null;
+};
+
 /**
  * Build primary nav for the business shell. Labels may be terminology-adjusted by caller.
+ * Specialty modules (owner_mod_* / specialty_ai_*) append after canonical items.
  */
 export function getCanonicalBusinessNav(
   businessId: string,
@@ -74,10 +87,11 @@ export function getCanonicalBusinessNav(
   options?: {
     role?: string;
     subjectLabel?: string;
+    specialtyModules?: SpecialtyNavSource[] | null;
   },
 ): CanonicalNavItem[] {
   const base = `/b/${encodeURIComponent(businessId)}`;
-  return CANONICAL_ORDER.filter((item) => hasPermission(permissions ?? [], item.permission, options?.role)).map(
+  const canonical = CANONICAL_ORDER.filter((item) => hasPermission(permissions ?? [], item.permission, options?.role)).map(
     (item) => ({
       id: item.id,
       label: item.id === "subjects" ? options?.subjectLabel ?? "Properties" : item.label,
@@ -87,6 +101,67 @@ export function getCanonicalBusinessNav(
       badgeKey: item.badgeKey ?? null,
     }),
   );
+
+  const specialty = (Array.isArray(options?.specialtyModules) ? options!.specialtyModules! : [])
+    .filter((module) => {
+      if (module.primaryNavigationEligible === false) return false;
+      const id = String(module.moduleId ?? "");
+      const isSpecialty = Boolean(
+        module.surfaceKind
+        || module.ownerAdded
+        || id.startsWith("owner_mod_")
+        || id.startsWith("specialty_ai_"),
+      );
+      return isSpecialty && (module.href || module.specialtyHref || id);
+    })
+    .map((module) => {
+      const moduleId = String(module.moduleId);
+      const employeeId = module.employeeId ? String(module.employeeId) : null;
+      const surfaceId = (module.surfaceKind === "ai_teammate" || moduleId.startsWith("specialty_ai_"))
+        && employeeId
+        ? employeeId
+        : (moduleId.startsWith("specialty_ai_")
+          ? moduleId.slice("specialty_ai_".length)
+          : moduleId);
+      const href = String(
+        module.href
+        || module.specialtyHref
+        || `${base}/specialty/${encodeURIComponent(surfaceId)}`,
+      );
+      const normalizedHref = href.startsWith("/b/")
+        ? href
+        : `${base}/specialty/${encodeURIComponent(surfaceId)}`;
+      // Prefer employee specialty path for AI teammates so nav highlight matches Team redirects.
+      const finalHref = (module.surfaceKind === "ai_teammate" || moduleId.startsWith("specialty_ai_"))
+        ? `${base}/specialty/${encodeURIComponent(surfaceId)}`
+        : normalizedHref;
+      return {
+        id: `specialty_${moduleId}`,
+        label: String(module.label ?? moduleId),
+        href: finalHref,
+        iconName: String(module.iconName || (module.surfaceKind === "ai_teammate" ? "users" : "folder")),
+        permission: null as string | null,
+        badgeKey: null as "needsAttention" | null,
+      };
+    });
+
+  // Keep unique by href; specialty after Team, before Integrations when possible.
+  const seen = new Set(canonical.map((item) => item.href));
+  const uniqueSpecialty = specialty.filter((item) => {
+    if (seen.has(item.href)) return false;
+    seen.add(item.href);
+    return true;
+  });
+
+  const teamIndex = canonical.findIndex((item) => item.id === "team");
+  if (teamIndex >= 0) {
+    return [
+      ...canonical.slice(0, teamIndex + 1),
+      ...uniqueSpecialty,
+      ...canonical.slice(teamIndex + 1),
+    ];
+  }
+  return [...canonical, ...uniqueSpecialty];
 }
 
 /** Paths that should redirect into canonical destinations (relative to business). */

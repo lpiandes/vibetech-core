@@ -15,7 +15,7 @@ export function ArchitectShell({
   return (
     <div
       style={{
-        minHeight: "100vh",
+        minHeight: fullBleed ? undefined : "100vh",
         background: light ? architect.bgLight : architect.bg,
         color: light ? architect.inkDark : architect.ink,
         fontFamily: architect.font,
@@ -25,22 +25,15 @@ export function ArchitectShell({
         ${architectKeyframes}
         .architect-workspace-grid {
           display: grid;
-          grid-template-columns: minmax(300px, 1fr) minmax(420px, 1.35fr) minmax(260px, 0.9fr);
+          grid-template-columns: 1fr;
           gap: 16px;
           align-items: start;
-        }
-        .architect-preview-grid {
-          display: grid;
-          grid-template-columns: 220px 1fr;
-          min-height: 520px;
-        }
-        @media (max-width: 1100px) {
-          .architect-workspace-grid { grid-template-columns: 1fr; }
-          .architect-preview-grid { grid-template-columns: 1fr; }
+          max-width: 720px;
+          margin: 0 auto;
+          width: 100%;
         }
         @media (max-width: 720px) {
           .architect-workspace-grid { gap: 12px; }
-          .architect-preview-grid { min-height: 360px; }
         }
         button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
           outline: 2px solid ${architect.accent};
@@ -50,8 +43,9 @@ export function ArchitectShell({
       <div style={{
         maxWidth: fullBleed ? "100%" : maxWidth,
         margin: "0 auto",
-        padding: fullBleed ? 0 : "32px 24px 64px",
+        padding: fullBleed ? "12px 16px 20px" : "32px 24px 64px",
         animation: "architectFadeUp .5s ease",
+        boxSizing: "border-box",
       }}>
         {children}
       </div>
@@ -91,12 +85,14 @@ export function ArchitectButton({
   disabled,
   variant = "primary",
   accent = architect.accent,
+  type = "button",
 }: {
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   variant?: "primary" | "ghost" | "secondary";
   accent?: string;
+  type?: "button" | "submit" | "reset";
 }) {
   const base: CSSProperties = {
     borderRadius: 999,
@@ -122,7 +118,7 @@ export function ArchitectButton({
     },
   };
   return (
-    <button type="button" disabled={disabled} onClick={onClick} style={styles[variant]}>
+    <button type={type} disabled={disabled} onClick={onClick} style={styles[variant]}>
       {children}
     </button>
   );

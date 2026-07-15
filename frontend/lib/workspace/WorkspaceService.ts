@@ -30,6 +30,7 @@ import { RequestViewAdapter } from "../../../backend/core/request/views/RequestV
 
 import { WorkRuntime } from "../../../backend/core/work/WorkRuntime.js";
 import { WorkViewAdapter } from "../../../backend/core/work/views/WorkViewAdapter.js";
+import { WORK_EVENT_TYPES } from "../../../backend/core/work/WorkEventTypes.js";
 
 import { CapabilityRuntime } from "../../../backend/core/capabilities/runtime/CapabilityRuntime.js";
 import { CapabilityIntelligenceEngine } from "../../../backend/core/capabilities/intelligence/CapabilityIntelligenceEngine.js";
@@ -72,6 +73,8 @@ import { checkCommunicationPermitted } from "../../../backend/core/communication
 import { searchWorkspace as projectWorkspaceSearch } from "../../../backend/core/workspace/search/WorkspaceSearchProjection.js";
 import { refreshWorkspaceOperationalState as recomputeWorkspaceOperationalState } from "../../../backend/core/workspace/refreshWorkspaceOperationalState.js";
 import { connectBusinessEmailDev } from "../../../backend/core/integrations/use-cases/connectBusinessEmailDev.js";
+import { connectBusinessEmailGmail } from "../../../backend/core/integrations/use-cases/connectBusinessEmailGmail.js";
+import { connectProviderConnection } from "../../../backend/core/integrations/use-cases/connectProviderConnection.js";
 import { runProspectInquiryOperatingLoop } from "../../../backend/core/integration/ProspectInquiryOperatingLoopService.js";
 import {
   runMaintenanceRequestOperatingLoop,
@@ -85,6 +88,11 @@ import { buildBusinessSubjectIndex } from "../../../backend/core/business-subjec
 import { buildSubjectAudiencePreview } from "../../../backend/core/segments/views/buildSubjectAudiencePreview.js";
 import { buildBusinessOperatingHomeView } from "../../../backend/core/command-center/buildBusinessOperatingHomeView.js";
 import { buildExecutiveWorkspaceHomeView } from "../../../backend/core/command-center/buildExecutiveWorkspaceHomeView.js";
+import {
+  buildPlatformSetupChecklist,
+  deriveRequiredSetupStepsFromIntegrations,
+  deriveRequiredSetupStepsFromSpecification,
+} from "../../../backend/core/operating-home/buildPlatformSetupChecklist.js";
 import { buildBusinessSubjectPortfolioIndex } from "../../../backend/core/business-subject/views/buildBusinessSubjectPortfolioIndex.js";
 import { buildSubjectOperatingDetail } from "../../../backend/core/business-subject/views/buildSubjectOperatingDetail.js";
 import { persistAffectedRuntimes } from "../../../backend/core/persistence/PersistedMutationCoordinator.js";
@@ -160,6 +168,9 @@ function humanizeEmployeeBlocker(blocker: { type?: string; message?: string }, b
   if (type === "connection") return "Connection setup needed";
   if (type === "capability") return "Capability setup needed";
   if (type === "integration_capability") return "External integration needed";
+  if (type === "assisted_mode" || type === "outbound_approval") {
+    return String(blocker?.message ?? "Outbound messages always need your approval.");
+  }
   if (type === "approval") return String(blocker?.message ?? "Approval setup needed");
   return "Setup needed";
 }
@@ -194,7 +205,7 @@ function enrichDigitalEmployeesForTeam(
   const statusLabels: Record<string, string> = {
     ACTIVE: "Ready",
     DEGRADED: "Needs setup",
-    CONFIGURING: "Needs setup",
+    CONFIGURING: "Getting ready",
     BLOCKED: "Blocked",
     HANDLING: "Handling",
     READY: "Ready",
@@ -205,9 +216,26 @@ function enrichDigitalEmployeesForTeam(
   const employeeDescriptions = teamPresentation.employeeDescriptions ?? {};
   const businessId = String(workspaceId);
 
-  const rawById = new Map<string, { blockers?: unknown[]; status?: string; role?: string; name?: string }>();
+  const rawById = new Map<string, {
+    blockers?: unknown[];
+    status?: string;
+    role?: string;
+    name?: string;
+    ownerAdded?: boolean;
+    assistedMode?: boolean;
+    canCurrently?: { askAssisted?: boolean };
+  }>();
   for (const raw of Array.isArray(rawEmployees) ? rawEmployees : []) {
-    const entry = raw as { employeeId?: string; blockers?: unknown[]; status?: string; role?: string; name?: string };
+    const entry = raw as {
+      employeeId?: string;
+      blockers?: unknown[];
+      status?: string;
+      role?: string;
+      name?: string;
+      ownerAdded?: boolean;
+      assistedMode?: boolean;
+      canCurrently?: { askAssisted?: boolean };
+    };
     rawById.set(String(entry.employeeId), entry);
   }
 
@@ -223,6 +251,12 @@ function enrichDigitalEmployeesForTeam(
     const openAssignmentCount =
       monitoring.find((item) => String(item.label ?? "").toLowerCase().includes("assignment"))?.count ?? 0;
     const ready = isEmployeeReadyStatus(statusKey);
+    const ownerAdded = Boolean(raw.ownerAdded || raw.customAiWork || employeeId.startsWith("owner_emp_"));
+    const canRunJobs = Boolean(raw.canCurrently?.customAiJobs || (ownerAdded && ready));
+    const askAssisted = Boolean(raw.canCurrently?.askAssisted || ownerAdded);
+    const statusLabel = ready
+      ? (ownerAdded ? "Ready to work" : statusLabels[statusKey] ?? "Ready")
+      : (statusLabels[statusKey] ?? statusKey.replace(/_/g, " ").toLowerCase());
 
     return {
       ...emp,
@@ -233,8 +267,25 @@ function enrichDigitalEmployeesForTeam(
       description: employeeDescriptions[employeeId] ?? null,
       statusKey,
       status: statusKey,
-      statusLabel: statusLabels[statusKey] ?? statusKey.replace(/_/g, " ").toLowerCase(),
+      statusLabel,
       isReady: ready,
+      ownerAdded,
+      customAiWork: ownerAdded || Boolean(raw.customAiWork),
+      assistedMode: false,
+      askAssisted,
+      canRunJobs,
+      specialtyHref: businessId && (ownerAdded || canRunJobs)
+        ? `/b/${businessId}/specialty/${encodeURIComponent(employeeId)}`
+        : null,
+      detailHref: businessId && (ownerAdded || canRunJobs)
+        ? `/b/${businessId}/specialty/${encodeURIComponent(employeeId)}`
+        : (businessId ? `/b/${businessId}/team/${encodeURIComponent(employeeId)}` : null),
+      askHref: businessId
+        ? `/b/${encodeURIComponent(businessId)}/architect?employeeId=${encodeURIComponent(employeeId)}`
+        : null,
+      runJobHref: businessId && (ownerAdded || canRunJobs)
+        ? `/b/${businessId}/specialty/${encodeURIComponent(employeeId)}`
+        : null,
       blockerItems,
       blockerSummary:
         blockerItems.length === 0
@@ -269,10 +320,12 @@ export class WorkspaceService {
     workspaceId,
     activation,
     runtimeSnapshots,
+    extraProviders,
   }: {
     workspaceId: string;
     activation?: import("./ConnectedBusinessWorkspace").WorkspaceActivationInput | null;
     runtimeSnapshots?: Record<string, unknown>;
+    extraProviders?: unknown[];
   }) {
     if (!workspaceId) {
       throw new Error("WorkspaceService requires a workspaceId");
@@ -284,6 +337,7 @@ export class WorkspaceService {
         workspaceId: resolvedId,
         activation: activation ?? undefined,
         runtimeSnapshots,
+        extraProviders,
       });
     });
     this.runtime = this.connected.ctx.companyRuntime;
@@ -919,30 +973,243 @@ export class WorkspaceService {
     );
   }
 
-  loadConnectionCenterViewModel() {
+  loadConnectionCenterViewModel(options: {
+    businessOsIntegrations?: unknown[] | null;
+    liveFlags?: Record<string, boolean>;
+  } = {}) {
     const adapter = new ConnectionCenterViewAdapter();
-    return attachProductContext(
+    const businessOsIntegrations = options.businessOsIntegrations
+      ?? this.resolveBusinessOsIntegrations();
+    const viewModel = attachProductContext(
       adapter.translate({
         identity: this.connected.identityViewModel,
         installationResult: this.connected.installationResult,
         connectedSystemsSnapshot: this.connected.connectedSystemsSnapshot,
         connectionDependencyProjection: this.connected.connectionDependencyProjection,
         providerRegistry: this.connected.integrationPlatform?.providerRegistry,
+        businessOsIntegrations,
       }),
       this.connected,
     );
+    const liveFlags = options.liveFlags ?? {};
+    return {
+      ...viewModel,
+      liveFlags,
+      productContext: {
+        ...(viewModel as any).productContext,
+        liveFlags,
+        installationResult: {
+          ...((viewModel as any).productContext?.installationResult ?? {}),
+          executiveExperience: {
+            ...((viewModel as any).productContext?.installationResult?.executiveExperience ?? {}),
+            dashboardPresentation: {
+              ...((viewModel as any).productContext?.installationResult?.executiveExperience?.dashboardPresentation ?? {}),
+              integrations: {
+                ...((viewModel as any).productContext?.installationResult?.executiveExperience?.dashboardPresentation?.integrations ?? {}),
+                liveFlags,
+              },
+            },
+          },
+        },
+      },
+    };
+  }
+
+  /** Prefer installed Business OS integration plan over industry-package catalogs. */
+  resolveBusinessOsIntegrations() {
+    const config = (this.connected as any)?.operatingStack?.configuration
+      ?? (this.connected as any)?.installationResult?.configuration
+      ?? null;
+    const fromIntegrations = config?.integrations;
+    if (Array.isArray(fromIntegrations) && fromIntegrations.length) return fromIntegrations;
+    const fromRequirements = config?.integrationRequirements;
+    if (Array.isArray(fromRequirements) && fromRequirements.length) return fromRequirements;
+    return null;
+  }
+
+  resolveRequiredSetupSteps(installedSpecification: Record<string, unknown> | null = null) {
+    if (installedSpecification) {
+      return deriveRequiredSetupStepsFromSpecification(installedSpecification);
+    }
+    const config = (this.connected as any)?.operatingStack?.configuration
+      ?? (this.connected as any)?.installationResult?.configuration
+      ?? null;
+    const fromMetadata = config?.metadata?.requiredSetupSteps;
+    if (Array.isArray(fromMetadata) && fromMetadata.length) {
+      return fromMetadata.map(String);
+    }
+    const stackedSpec = (this.connected as any)?.operatingStack?.specification
+      ?? (this.connected as any)?.installationResult?.specification
+      ?? null;
+    if (stackedSpec) {
+      return deriveRequiredSetupStepsFromSpecification(stackedSpec);
+    }
+    return deriveRequiredSetupStepsFromIntegrations(this.resolveBusinessOsIntegrations() ?? []);
   }
 
   loadAutomationCenterViewModel() {
     const adapter = new AutomationCenterViewAdapter();
+    const base = adapter.translate({
+      identity: this.connected.identityViewModel,
+      installationResult: this.connected.installationResult,
+      automationRuntime: this.connected.ctx.automationRuntime,
+    });
     return attachProductContext(
-      adapter.translate({
-        identity: this.connected.identityViewModel,
-        installationResult: this.connected.installationResult,
-        automationRuntime: this.connected.ctx.automationRuntime,
-      }),
+      {
+        ...base,
+        businessId: this.workspaceId,
+      },
       this.connected,
     );
+  }
+
+  async setAutomationStatus(automationId: string, status: "ACTIVE" | "INACTIVE") {
+    const runtime = this.connected.ctx.automationRuntime;
+    if (!runtime?.getAutomationById || !runtime?.applyEvent) {
+      throw new Error("Automations are not available for this workspace.");
+    }
+    const id = String(automationId ?? "");
+    const automation = runtime.getAutomationById(id);
+    if (!automation) throw new Error(`Automation not found: ${id}`);
+    const next = String(status ?? "").toUpperCase();
+    if (next !== "ACTIVE" && next !== "INACTIVE") {
+      throw new Error("status must be ACTIVE or INACTIVE");
+    }
+    if (String(automation.status).toUpperCase() === next) {
+      return { ok: true, automationId: id, status: next, changed: false };
+    }
+    const nowISO = NOW_ISO;
+    runtime.applyEvent({
+      id: `evt_auto_${next === "ACTIVE" ? "activate" : "deactivate"}_${id}_${nowISO}`,
+      timestampISO: nowISO,
+      type: next === "ACTIVE" ? "AUTOMATION_ACTIVATED" : "AUTOMATION_DEACTIVATED",
+      source: "owner_automation_toggle",
+      payload: { automationId: id },
+    });
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack ?? this.connected.ctx,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.AUTOMATION],
+    });
+    return {
+      ok: true,
+      automationId: id,
+      status: String(runtime.getAutomationById(id)?.status ?? next),
+      changed: true,
+    };
+  }
+
+  async setAutomationsStatusForEmployee(employeeId: string, status: "ACTIVE" | "INACTIVE") {
+    const runtime = this.connected.ctx.automationRuntime;
+    const empId = String(employeeId ?? "");
+    const automations = (runtime?.getAutomations?.() ?? []).filter((auto: { id?: string; metadata?: { employeeId?: string }; assignedEmployeeId?: string }) => {
+      const linked = String(auto?.metadata?.employeeId ?? auto?.assignedEmployeeId ?? "");
+      return linked === empId || String(auto?.id ?? "").includes(empId);
+    });
+    const results = [];
+    for (const auto of automations) {
+      results.push(await this.setAutomationStatus(String(auto.id), status));
+    }
+    return { ok: true, employeeId: empId, status, results };
+  }
+
+  async runCustomAiJob({
+    employee,
+    brief = "",
+    actorId = "owner",
+  }: {
+    employee: Record<string, unknown>;
+    brief?: string;
+    actorId?: string;
+  }) {
+    const { CustomAiWorkerService } = await import(
+      "../../../backend/core/ai-builder/custom-ai/CustomAiWorkerService.js"
+    );
+    let knowledgeDocuments: Array<Record<string, unknown>> = [];
+    try {
+      knowledgeDocuments = await businessKnowledgeService.listOperationalDocuments(this.workspaceId);
+    } catch {
+      knowledgeDocuments = [];
+    }
+    const worker = new CustomAiWorkerService({
+      nowISO: () => NOW_ISO,
+      fetchImpl: typeof fetch === "function" ? fetch.bind(globalThis) : null,
+    });
+    const result = await worker.runJob({
+      workRuntime: this.workRuntime,
+      employee,
+      brief,
+      actorId,
+      businessId: this.workspaceId,
+      knowledgeDocuments,
+    });
+    if (result.ok) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack: this.connected.operatingStack ?? this.connected.ctx,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: [RUNTIME_SNAPSHOT_KINDS.WORK],
+      });
+    }
+    return result;
+  }
+
+  /**
+   * Complete Work with an owner-recorded outcome (what changed in Memory).
+   */
+  async completeWorkItem({
+    workItemId,
+    outcomeSummary = "",
+    memoryChanges = [],
+    actorId = "owner",
+  }: {
+    workItemId: string;
+    outcomeSummary?: string;
+    memoryChanges?: string[];
+    actorId?: string;
+  }) {
+    const id = String(workItemId ?? "").trim();
+    if (!id) return { ok: false, reason: "workItemId_required" };
+    const existing = this.workRuntime.getWorkItem?.(id);
+    if (!existing) return { ok: false, reason: "work_not_found" };
+    if (String(existing.status) === "completed") {
+      return {
+        ok: true,
+        alreadyCompleted: true,
+        workItem: existing,
+        workHref: `/b/${this.workspaceId}/work?workId=${encodeURIComponent(id)}`,
+      };
+    }
+    const nowISO = NOW_ISO;
+    const summary = String(outcomeSummary ?? "").trim();
+    const changes = Array.isArray(memoryChanges)
+      ? memoryChanges.map((entry) => String(entry).trim()).filter(Boolean)
+      : [];
+    this.workRuntime.applyEvent({
+      id: `evt_work_complete_${id}_${nowISO}`,
+      timestampISO: nowISO,
+      type: WORK_EVENT_TYPES.WORK_ITEM_COMPLETED,
+      source: `owner_complete:${actorId}`,
+      payload: {
+        workItemId: id,
+        completedAtISO: nowISO,
+        outcomeSummary: summary || "Marked complete",
+        memoryChanges: changes,
+      },
+    });
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack ?? this.connected.ctx,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.WORK],
+    });
+    const workItem = this.workRuntime.getWorkItem?.(id);
+    return {
+      ok: true,
+      workItem,
+      workHref: `/b/${this.workspaceId}/work?workId=${encodeURIComponent(id)}`,
+    };
   }
 
   loadEngagementViewModel(partyId: string) {
@@ -1561,7 +1828,10 @@ export class WorkspaceService {
     return this.api.sendReviewCommunication(workItemId);
   }
 
-  refreshOperationalState(platformActiveKnowledgeCount = 0) {
+  refreshOperationalState(
+    platformActiveKnowledgeCount = 0,
+    options: { bosEmployeeDefinitions?: unknown[] | null } = {},
+  ) {
     const count = Number(platformActiveKnowledgeCount ?? 0);
     const refreshed = recomputeWorkspaceOperationalState({
       ctx: this.connected.ctx,
@@ -1569,6 +1839,7 @@ export class WorkspaceService {
       integrationPlatform: this.connected.integrationPlatform,
       activation: this.connected.activation,
       platformActiveKnowledgeCount: count,
+      bosEmployeeDefinitions: options.bosEmployeeDefinitions ?? null,
     });
     if (Object.keys(refreshed).length > 0) {
       Object.assign(this.connected, refreshed);
@@ -1597,6 +1868,241 @@ export class WorkspaceService {
       kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
     });
     return connection;
+  }
+
+  async connectBusinessEmailGmail({
+    credentialId,
+    senderEmail,
+    platformActiveKnowledgeCount,
+  }: {
+    credentialId: string;
+    senderEmail?: string | null;
+    platformActiveKnowledgeCount?: number;
+  }) {
+    if (!this.connected.integrationPlatform) {
+      throw new Error("Integrations are not available for this workspace.");
+    }
+    const connection = await connectBusinessEmailGmail({
+      integrationPlatform: this.connected.integrationPlatform,
+      workspaceId: this.workspaceId,
+      credentialId,
+      senderEmail,
+      nowISO: NOW_ISO,
+    });
+    const knowledgeCount =
+      platformActiveKnowledgeCount ??
+      this.connected.platformKnowledgeCoverage?.activeDocumentCount ??
+      0;
+    this.refreshOperationalState(knowledgeCount);
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
+    });
+    return connection;
+  }
+
+  async connectGoogleCalendar({
+    credentialId,
+    senderEmail,
+    platformActiveKnowledgeCount,
+  }: {
+    credentialId: string;
+    senderEmail?: string | null;
+    platformActiveKnowledgeCount?: number;
+  }) {
+    if (!this.connected.integrationPlatform) {
+      throw new Error("Integrations are not available for this workspace.");
+    }
+    const connection = await connectProviderConnection({
+      integrationPlatform: this.connected.integrationPlatform,
+      workspaceId: this.workspaceId,
+      connectionType: "calendar",
+      displayName: "Calendar",
+      providerType: "google_calendar",
+      credentialId,
+      credentialType: "oauth2",
+      externalAccountReference: senderEmail ? `gcal:${senderEmail}` : `gcal:${credentialId}`,
+      metadata: { senderEmail: senderEmail ?? null },
+    });
+    const knowledgeCount =
+      platformActiveKnowledgeCount ??
+      this.connected.platformKnowledgeCoverage?.activeDocumentCount ??
+      0;
+    this.refreshOperationalState(knowledgeCount);
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
+    });
+    return connection;
+  }
+
+  async connectTwilioSms({
+    credentialId,
+    fromNumber,
+    platformActiveKnowledgeCount,
+  }: {
+    credentialId: string;
+    fromNumber?: string | null;
+    platformActiveKnowledgeCount?: number;
+  }) {
+    if (!this.connected.integrationPlatform) {
+      throw new Error("Integrations are not available for this workspace.");
+    }
+    const connection = await connectProviderConnection({
+      integrationPlatform: this.connected.integrationPlatform,
+      workspaceId: this.workspaceId,
+      connectionType: "sms_channel",
+      displayName: "Text messaging",
+      providerType: "twilio_sms",
+      credentialId,
+      credentialType: "api_key",
+      externalAccountReference: fromNumber ? `twilio_sms:${fromNumber}` : `twilio_sms:${credentialId}`,
+      metadata: { fromNumber: fromNumber ?? null },
+    });
+    const smsConn = this.connected.integrationPlatform.connectionRuntime.getConnectionByType?.("sms_channel");
+    if (smsConn?.id) {
+      this.connected.integrationPlatform.connectionService.updateMetadata({
+        connectionId: smsConn.id,
+        metadata: { a2pRegistrationStatus: "pending", fromNumber: fromNumber ?? null },
+      });
+    }
+    const knowledgeCount =
+      platformActiveKnowledgeCount ??
+      this.connected.platformKnowledgeCoverage?.activeDocumentCount ??
+      0;
+    this.refreshOperationalState(knowledgeCount);
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
+    });
+    return connection;
+  }
+
+  async connectTwilioVoice({
+    credentialId,
+    fromNumber,
+    platformActiveKnowledgeCount,
+  }: {
+    credentialId: string;
+    fromNumber?: string | null;
+    platformActiveKnowledgeCount?: number;
+  }) {
+    if (!this.connected.integrationPlatform) {
+      throw new Error("Integrations are not available for this workspace.");
+    }
+    const connection = await connectProviderConnection({
+      integrationPlatform: this.connected.integrationPlatform,
+      workspaceId: this.workspaceId,
+      connectionType: "voice_channel",
+      displayName: "Phone",
+      providerType: "twilio_voice",
+      credentialId,
+      credentialType: "api_key",
+      externalAccountReference: fromNumber ? `twilio_voice:${fromNumber}` : `twilio_voice:${credentialId}`,
+      metadata: { fromNumber: fromNumber ?? null },
+    });
+    const knowledgeCount =
+      platformActiveKnowledgeCount ??
+      this.connected.platformKnowledgeCoverage?.activeDocumentCount ??
+      0;
+    this.refreshOperationalState(knowledgeCount);
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
+    });
+    return connection;
+  }
+
+  async connectMetaLeadAds({
+    credentialId,
+    pageId,
+    platformActiveKnowledgeCount,
+  }: {
+    credentialId: string;
+    pageId?: string | null;
+    platformActiveKnowledgeCount?: number;
+  }) {
+    if (!this.connected.integrationPlatform) {
+      throw new Error("Integrations are not available for this workspace.");
+    }
+    const connection = await connectProviderConnection({
+      integrationPlatform: this.connected.integrationPlatform,
+      workspaceId: this.workspaceId,
+      connectionType: "meta_lead_ads",
+      displayName: "Facebook Lead Ads",
+      providerType: "meta_lead_ads",
+      credentialId,
+      credentialType: "oauth2",
+      externalAccountReference: pageId ? `meta:${pageId}` : `meta:${credentialId}`,
+      metadata: { pageId: pageId ?? null },
+    });
+    const knowledgeCount =
+      platformActiveKnowledgeCount ??
+      this.connected.platformKnowledgeCoverage?.activeDocumentCount ??
+      0;
+    this.refreshOperationalState(knowledgeCount);
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
+    });
+    return connection;
+  }
+
+  async markSmsA2pRegistrationComplete(platformActiveKnowledgeCount?: number) {
+    const platform = this.connected.integrationPlatform;
+    if (!platform?.connectionService || !platform?.connectionRuntime) {
+      throw new Error("Integrations are not available for this workspace.");
+    }
+    const conn = platform.connectionRuntime.getConnectionByType?.("sms_channel");
+    if (!conn) throw new Error("SMS connection not found.");
+    platform.connectionService.updateMetadata({
+      connectionId: conn.id,
+      metadata: { a2pRegistrationStatus: "complete" },
+    });
+    const knowledgeCount =
+      platformActiveKnowledgeCount ??
+      this.connected.platformKnowledgeCoverage?.activeDocumentCount ??
+      0;
+    this.refreshOperationalState(knowledgeCount);
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack,
+      integrationPlatform: platform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
+    });
+    return platform.connectionRuntime.getConnectionByType("sms_channel");
+  }
+
+  async disconnectIntegration(connectionType: string, platformActiveKnowledgeCount?: number) {
+    const platform = this.connected.integrationPlatform;
+    if (!platform?.connectionService || !platform?.connectionRuntime) {
+      throw new Error("Integrations are not available for this workspace.");
+    }
+    const conn = platform.connectionRuntime.getConnectionByType?.(String(connectionType));
+    if (!conn) throw new Error(`Connection not found: ${connectionType}`);
+    platform.connectionService.disconnect({ connectionId: conn.id });
+    const knowledgeCount =
+      platformActiveKnowledgeCount ??
+      this.connected.platformKnowledgeCoverage?.activeDocumentCount ??
+      0;
+    this.refreshOperationalState(knowledgeCount);
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack,
+      integrationPlatform: platform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
+    });
+    return platform.connectionRuntime.getConnectionByType(String(connectionType));
   }
 
   async submitProspectInquiry(
@@ -1928,78 +2434,54 @@ export class WorkspaceService {
   loadBusinessHomeViewModel({
     activeKnowledgeDocumentCount = null,
     teamInviteChecklistComplete = null,
+    installedSpecification = null,
   }: {
     activeKnowledgeDocumentCount?: number | null;
     teamInviteChecklistComplete?: boolean | null;
+    installedSpecification?: Record<string, unknown> | null;
   } = {}) {
     const identity = this.connected.identityViewModel ?? {};
     const ctx = this.connected.ctx;
     const isDemo = Boolean(identity.demoConfigurationId);
     const knowledgeCount = activeKnowledgeDocumentCount ?? ctx.companyRuntime.getKnowledgeRepository?.()?.items?.length ?? 0;
     const connections = this.connected.connectedSystemsSnapshot?.connections ?? [];
+    const requiredSetupSteps = this.resolveRequiredSetupSteps(installedSpecification);
+    const connectionRuntime = this.connected.integrationPlatform?.connectionRuntime ?? null;
+
+    const checklist = buildPlatformSetupChecklist({
+      workspaceId: this.workspaceId,
+      requiredSetupSteps,
+      connections,
+      connectionRuntime,
+      teamInviteChecklistComplete: teamInviteChecklistComplete ?? false,
+      knowledgeCount,
+      includeTeamAndKnowledge: true,
+    }) as Array<{
+      id: string;
+      title: string;
+      actionLabel: string;
+      href: string;
+      complete: boolean;
+      summary?: string | null;
+      whereInApp?: string | null;
+      inApp?: string[];
+      external?: string[];
+    }>;
+
+    const checklistComplete = checklist.every((item) => item.complete);
     const emailConnected = connections.some(
       (c: { id?: string; status?: string }) =>
         String(c.id) === "business_email" && String(c.status).toUpperCase() === "CONNECTED",
     );
-    const softwareConnected = connections.some(
-      (c: { id?: string; status?: string }) =>
-        String(c.id) !== "business_email" && String(c.status).toUpperCase() === "CONNECTED",
-    );
-    const prospectInquiryComplete = this.hasProspectInquiry();
-    const coordinatorReady = this.isResidentProspectCoordinatorReady();
-    const prerequisitesForProspect = knowledgeCount > 0 && emailConnected;
-
-    const checklist = [
-      {
-        id: "team",
-        title: "Invite your team",
-        actionLabel: "Add people",
-        href: `/b/${this.workspaceId}/team`,
-        complete: teamInviteChecklistComplete ?? false,
-      },
-      {
-        id: "knowledge",
-        title: "Add business knowledge",
-        actionLabel: "Add document",
-        href: `/b/${this.workspaceId}/knowledge?add=1`,
-        complete: knowledgeCount > 0,
-      },
-      {
-        id: "email",
-        title: "Connect your email",
-        actionLabel: "Connect",
-        href: `/b/${this.workspaceId}/integrations?focus=business_email`,
-        complete: emailConnected,
-      },
-      ...(coordinatorReady || prerequisitesForProspect
-        ? [
-            {
-              id: "prospect",
-              title: "Send your first prospect response",
-              actionLabel: "Add inquiry",
-              href: `#prospect-inquiry`,
-              complete: prospectInquiryComplete,
-            },
-          ]
-        : []),
-      {
-        id: "software",
-        title: "Connect your software",
-        actionLabel: "Connect",
-        href: `/b/${this.workspaceId}/integrations?focus=property_management_system`,
-        complete: softwareConnected,
-      },
-    ];
-
-    const checklistComplete = checklist.every((item) => item.complete);
 
     return {
       businessName: String(identity.businessName ?? "Your business"),
       isDemo,
       checklist,
       checklistComplete,
-      showProspectInquiryForm: coordinatorReady && !prospectInquiryComplete,
-      coordinatorReady,
+      requiredSetupSteps,
+      showProspectInquiryForm: false,
+      coordinatorReady: false,
       emailConnected,
       knowledgeCount,
       executive: this.loadExecutiveWorkspaceHomeViewModel({ checklistComplete }),

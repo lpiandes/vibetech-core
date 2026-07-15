@@ -3,6 +3,24 @@
  * Keeps presentation labels and staged install copy out of React trees for tests.
  */
 
+function isUsableBusinessName(value: string | null | undefined): boolean {
+  const text = String(value ?? "").trim();
+  if (text.length < 2) return false;
+  const lower = text.toLowerCase();
+  if (["ok", "okay", "yes", "y", "no", "n", "idk", "n/a", "na", "none", "test", "asdf"].includes(lower)) {
+    return false;
+  }
+  if (/^(ok|okay|yes|no)([!.]?)$/i.test(text)) return false;
+  return true;
+}
+
+function resolveBusinessDisplayName(...candidates: Array<string | null | undefined>): string {
+  for (const candidate of candidates) {
+    if (isUsableBusinessName(candidate)) return String(candidate).trim();
+  }
+  return "Your business";
+}
+
 export const ARCHITECT_HOME_ACTIONS = [
   "continue_session",
   "build_new",
@@ -13,11 +31,11 @@ export const ARCHITECT_HOME_ACTIONS = [
 
 export const ARCHITECT_PROPOSAL_SECTIONS = [
   { id: "overview", label: "Overview" },
+  { id: "employees", label: "Digital Workforce", viewKey: "digitalWorkforce" },
+  { id: "navigation", label: "Workspaces", viewKey: "navigation" },
   { id: "business", label: "Business", viewKey: "overview" },
   { id: "how_work_flows", label: "How work flows", viewKey: "workflows" },
-  { id: "employees", label: "Your team", viewKey: "digitalWorkforce" },
   { id: "roles", label: "Who sees what", viewKey: "rolesAccess" },
-  { id: "navigation", label: "Workspaces", viewKey: "navigation" },
   { id: "portal", label: "Home screens", viewKey: "dashboard" },
   { id: "knowledge", label: "Knowledge", viewKey: "knowledge" },
   { id: "integrations", label: "Connections", viewKey: "integrations" },
@@ -49,7 +67,7 @@ export const ARCHITECT_INSTALL_STAGES = [
 
 export const ARCHITECT_ASSEMBLY_STAGES = [
   { id: "navigation", label: "Laying out workspaces", viewKey: "navigation" },
-  { id: "workforce", label: "Assembling your team", viewKey: "digitalWorkforce" },
+  { id: "workforce", label: "Preparing your AI team", viewKey: "digitalWorkforce" },
   { id: "workflows", label: "Connecting how work flows", viewKey: "workflows" },
   { id: "dashboard", label: "Designing home screens", viewKey: "dashboard" },
   { id: "integrations", label: "Planning connections", viewKey: "integrations" },
@@ -96,22 +114,25 @@ export const UPLOAD_TYPE_HINTS: Record<string, { label: string; plannedUse: stri
   handbook: { label: "Employee handbook", plannedUse: "Team knowledge" },
   sop: { label: "Process guide", plannedUse: "Workflow knowledge" },
   crm: { label: "Customer export", plannedUse: "Customer data review — nothing imported until you confirm" },
-  default: { label: "Document", plannedUse: "Evidence for Architect" },
+  default: { label: "Document", plannedUse: "Evidence for your recommendation" },
 };
 
 export const HUMAN_COPY = {
-  prepareLaunch: "Prepare to launch",
-  previewPortal: "Preview your portal",
-  launchReadiness: "Launch readiness",
-  approveLaunch: "Approve and launch",
+  prepareLaunch: "Check readiness",
+  previewPortal: "Review before you approve",
+  launchReadiness: "Readiness check",
+  approveLaunch: "Approve",
   recordApproval: "Confirm approval",
   approved: "Approved",
-  installing: "Creating your operating system…",
-  launchComplete: "Your business is running",
-  rethink: "Architect is thinking",
+  installing: "Bringing your operating system online…",
+  launchComplete: "Your business is live",
+  rethink: "VIBETech is thinking",
   shareWebsite: "Share a website",
   addDocuments: "Add documents",
-  proposePlan: "Show me the plan",
+  proposePlan: "Show me the recommendation",
+  reviewContinue: "Looks good — continue",
+  reviewApply: "Looks good — apply",
+  requestChanges: "Tell us what we should change",
 } as const;
 
 export function detectUploadHint(filename: string, classification?: string) {
@@ -314,7 +335,7 @@ export function businessDnaPortrait(summary: Record<string, unknown> | null | un
   return {
     rings,
     overall,
-    label: overall >= 0.7 ? "Business DNA coming into focus" : overall > 0.25 ? "Business DNA forming" : "Beginning to understand your business",
+    label: overall >= 0.7 ? "Your business coming into focus" : overall > 0.25 ? "Building understanding" : "Beginning to understand your business",
   };
 }
 
@@ -389,10 +410,11 @@ export function aiEmployeePersonas(source: {
   const rows = fromPortal.length ? fromPortal : fromProposal;
   return rows.map((entry, index) => {
     const name = String(entry.name ?? entry.label ?? `Team member ${index + 1}`);
+    const rawPurpose = String(entry.purpose ?? entry.role ?? "Supports approved work");
     return {
       id: String(entry.id ?? entry.employeeId ?? `ai_${index}`),
       name,
-      purpose: String(entry.purpose ?? entry.role ?? "Supports approved work"),
+      purpose: scrubProposalPurpose(rawPurpose, name),
       responsibilities: Array.isArray(entry.responsibilities)
         ? entry.responsibilities.map(String)
         : [],
@@ -411,35 +433,199 @@ export function aiEmployeePersonas(source: {
   });
 }
 
+/** Scrub junk "for ok" / builder jargon left in persisted proposal purposes. */
+export function scrubProposalPurpose(text: string | null | undefined, roleLabel?: string | null): string {
+  let out = String(text ?? "").trim();
+  if (!out) return roleLabel ? `${roleLabel} helps run this business.` : "Supports approved work";
+  out = out.replace(/\bfor\s+(ok|okay|yes|y|no|n|idk|n\/a|na|none|test|asdf|foo|bar)\b/gi, "for this business");
+  out = out.replace(/\s*—\s*never invent a ['']?one-off['']? agent\.?/gi, "");
+  out = out.replace(/^Specialize reusable\s+/i, "");
+  out = out.replace(/\s+archetype\b/gi, "");
+  out = out.replace(/\s{2,}/g, " ").trim();
+  if (!out || out.length < 12) {
+    return roleLabel ? `${roleLabel} helps run this business.` : "Supports approved work";
+  }
+  return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
+export type ApproveWalkthroughStep = {
+  id: string;
+  kind: "nav" | "teammate" | "approvals" | "confirm";
+  title: string;
+  body: string;
+  items: string[];
+};
+
+/** One concrete proposal fact per step — no fake dashboard tiles. */
+export function buildApproveWalkthroughSteps({
+  proposal = null,
+  continuous = false,
+}: {
+  proposal?: {
+    businessName?: string;
+    explanation?: { summary?: string };
+    views?: Record<string, any>;
+  } | null;
+  continuous?: boolean;
+} = {}): ApproveWalkthroughStep[] {
+  const steps: ApproveWalkthroughStep[] = [];
+  const businessName = resolveBusinessDisplayName(proposal?.businessName);
+  const views = proposal?.views ?? {};
+  const navLabels = collectProposalLabels(views.navigation?.items, ["label", "title", "name"]);
+  const homeLabels = collectProposalLabels(
+    views.dashboard?.items ?? views.dashboard?.cards,
+    ["label", "title", "name"],
+  ).filter((label) => !/business health|kpi cards?/i.test(label));
+
+  const workspaceItems = uniqueStrings([
+    ...navLabels,
+    ...homeLabels,
+  ]).slice(0, 10);
+
+  steps.push({
+    id: "nav",
+    kind: "nav",
+    title: continuous ? "What this change covers" : "What your team will use",
+    body: continuous
+      ? `These are the workspaces and surfaces involved for ${businessName}.`
+      : `These are the workspaces ${businessName} will open with.`,
+    items: workspaceItems.length
+      ? workspaceItems
+      : ["Home", "Work", "People", "Ask VIBETech"],
+  });
+
+  const personas = aiEmployeePersonas({
+    proposalWorkforce: views.digitalWorkforce ?? null,
+  });
+  for (const persona of personas.slice(0, 6)) {
+    const items = uniqueStrings([
+      ...persona.responsibilities.slice(0, 4),
+      ...(persona.knowledge.length ? [`Uses: ${persona.knowledge.slice(0, 3).join(", ")}`] : []),
+    ]);
+    steps.push({
+      id: `teammate_${persona.id}`,
+      kind: "teammate",
+      title: persona.name,
+      body: persona.purpose,
+      items: items.length ? items : ["Ready once knowledge and connections are in place"],
+    });
+  }
+
+  const approvalItems = uniqueStrings(
+    personas.flatMap((persona) => persona.approvals.map((entry) => `${persona.name}: ${entry}`)),
+  ).slice(0, 8);
+  if (approvalItems.length) {
+    steps.push({
+      id: "approvals",
+      kind: "approvals",
+      title: "What waits on you",
+      body: continuous
+        ? "These are the moments VIBETech will still ask for your judgment."
+        : "VIBETech handles the work — these are the moments that still need your approval.",
+      items: approvalItems,
+    });
+  }
+
+  const summary = String(proposal?.explanation?.summary ?? "").trim();
+  steps.push({
+    id: "confirm",
+    kind: "confirm",
+    title: continuous ? "Ready to apply this change?" : "Ready to continue?",
+    body: summary
+      || (continuous
+        ? "Nothing changes in the live business until you approve the next step."
+        : "Next you’ll check readiness, then go live when it looks right."),
+    items: [],
+  });
+
+  return steps;
+}
+
+export function approveWalkthroughCopy(continuous = false) {
+  return {
+    badge: continuous ? "Review change" : "Before you approve",
+    headline: continuous ? "Review this change" : "Review what you’re approving",
+    primaryCta: continuous ? HUMAN_COPY.reviewApply : HUMAN_COPY.reviewContinue,
+    keepTalking: "Keep talking",
+    backToRecommendation: "Back to recommendation",
+  } as const;
+}
+
+function collectProposalLabels(
+  items: unknown,
+  keys: string[],
+): string[] {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => {
+      if (item == null) return "";
+      if (typeof item === "string" || typeof item === "number") return String(item);
+      const row = item as Record<string, unknown>;
+      for (const key of keys) {
+        if (row[key] != null && String(row[key]).trim()) return String(row[key]).trim();
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const trimmed = String(value ?? "").trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
+}
+
 export function executiveBriefing(proposal: {
   businessName?: string;
   views?: Record<string, any>;
   explanation?: { summary?: string };
 } | null | undefined) {
   const views = proposal?.views ?? {};
+  const businessName = resolveBusinessDisplayName(proposal?.businessName);
   const highlights = [
     { id: "workspaces", label: "Workspaces", value: views.navigation?.items?.length ?? 0 },
     { id: "team", label: "Team roles", value: views.digitalWorkforce?.items?.length ?? 0 },
     { id: "homes", label: "Home screens", value: views.dashboard?.items?.length ?? views.dashboard?.cards?.length ?? 0 },
     { id: "connections", label: "Connections planned", value: views.integrations?.items?.length ?? 0 },
   ];
+  const rawSummary = String(proposal?.explanation?.summary ?? "").trim();
+  const summary = rawSummary
+    ? rawSummary.replace(/^(ok|okay|yes|Your business)\b/i, businessName)
+    : `${businessName} is ready to run on VIBETech — tailored to how you work.`;
   return {
-    headline: "Your business is running",
-    businessName: proposal?.businessName ?? "Your business",
-    summary: proposal?.explanation?.summary
-      ?? "Architect installed a working operating system tailored to how you work.",
+    headline: "Your business is live",
+    businessName,
+    summary,
     highlights,
     actions: ARCHITECT_COMPLETION_ACTIONS,
   };
 }
 
-export function architectRoutes(sessionId?: string) {
+/** Canonical Architect routes. Legacy `/builder/*` redirects still exist; do not surface them to owners. */
+export function architectRoutes(sessionId?: string, businessId?: string | null) {
+  if (businessId && sessionId) {
+    const base = `/b/${encodeURIComponent(businessId)}/architect`;
+    return {
+      home: base,
+      session: `${base}?sessionId=${encodeURIComponent(sessionId)}`,
+      // Approve/install still live on the global Architect install trail.
+      dryRun: `/architect/${sessionId}/dry-run`,
+      install: `/architect/${sessionId}/install`,
+    };
+  }
   const base = sessionId ? `/architect/${sessionId}` : "/architect";
   return {
     home: "/architect",
     session: base,
     dryRun: sessionId ? `/architect/${sessionId}/dry-run` : "/architect",
     install: sessionId ? `/architect/${sessionId}/install` : "/architect",
-    legacyBuilderHome: "/builder",
   };
 }

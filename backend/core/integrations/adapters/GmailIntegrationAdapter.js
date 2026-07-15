@@ -4,6 +4,7 @@ import { createProviderSetupGuidance } from "../providers/ProviderSetupGuidance.
 import { GmailCommunicationProvider } from "../../communications/providers/gmail/GmailCommunicationProvider.js";
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 import { isGmailConfigured } from "../../communications/providers/gmail/GmailProviderValidator.js";
+import { isGoogleOAuthAppConfigured } from "../oauth/GoogleOAuthClient.js";
 
 /**
  * Gmail integration adapter — bridges universal IntegrationProvider to CommunicationProvider.
@@ -41,11 +42,11 @@ export class GmailIntegrationAdapter extends IntegrationProvider {
       summary: "Send business email through your Gmail account.",
       estimatedTime: "5 minutes",
       prerequisites: ["Google Workspace or Gmail account", "Administrator consent for OAuth"],
-      steps: ["Click Connect", "Sign in with Google", "Authorize send permissions", "Verify test delivery"],
-      permissionsRequested: ["send_email", "read_email_metadata"],
-      verificationMethod: "Send a test email and confirm delivery in Communications OS.",
-      commonProblems: ["OAuth consent screen not configured", "Refresh token missing"],
-      reconnectInstructions: "Reconnect Gmail and re-authorize scopes.",
+      steps: ["Click Connect with Google", "Sign in with Google", "Authorize send permissions", "Verify connection"],
+      permissionsRequested: ["send_email", "userinfo.email"],
+      verificationMethod: "OAuth token exchange and provider health check.",
+      commonProblems: ["OAuth consent screen not configured", "Refresh token missing — re-consent with prompt=consent"],
+      reconnectInstructions: "Disconnect and Connect with Google again.",
       documentationReference: "https://developers.google.com/gmail/api",
     });
   }
@@ -54,9 +55,30 @@ export class GmailIntegrationAdapter extends IntegrationProvider {
     return { status: this._communicationProvider.health, providerId: this.id };
   }
 
+  #providerForConnection({ connection, credentialResolver } = {}) {
+    if (!connection?.credentialReference || !credentialResolver) {
+      return this._communicationProvider;
+    }
+    try {
+      const resolved = credentialResolver.resolve(connection.credentialReference);
+      const refreshToken = resolved.refreshToken || resolved.refresh_token;
+      const senderEmail = resolved.senderEmail || resolved.metadata?.senderEmail || connection.credentialReference?.metadata?.senderEmail;
+      if (refreshToken) {
+        return this._communicationProvider.withCredentials({
+          refreshToken,
+          accessToken: resolved.accessToken || resolved.access_token || null,
+          senderEmail: senderEmail || null,
+        });
+      }
+    } catch {
+      // Fall through to default provider (env-configured or injected test double).
+    }
+    return this._communicationProvider;
+  }
+
   async verifyConnection({ connection, credentialResolver } = {}) {
-    void credentialResolver;
-    if (!connection?.credentialReference && !isGmailConfigured()) {
+    const hasVaultCreds = Boolean(connection?.credentialReference?.credentialId);
+    if (!hasVaultCreds && !isGmailConfigured() && !isGoogleOAuthAppConfigured()) {
       return deepFreeze({
         status: "failed",
         verifiedAt: this._nowISO,
@@ -65,8 +87,10 @@ export class GmailIntegrationAdapter extends IntegrationProvider {
         message: "Gmail credentials are not configured.",
       });
     }
-    const health = await this.healthCheck();
-    if (health.status !== "healthy") {
+
+    const provider = this.#providerForConnection({ connection, credentialResolver });
+    const health = provider.health;
+    if (health !== "healthy" && !connection?.credentialReference) {
       return deepFreeze({
         status: "failed",
         verifiedAt: this._nowISO,
@@ -75,6 +99,22 @@ export class GmailIntegrationAdapter extends IntegrationProvider {
         message: "Gmail provider is not healthy.",
       });
     }
+
+    // Vault-backed connections are verified when credentials resolve.
+    if (hasVaultCreds && credentialResolver) {
+      try {
+        credentialResolver.resolve(connection.credentialReference);
+      } catch (err) {
+        return deepFreeze({
+          status: "failed",
+          verifiedAt: this._nowISO,
+          capabilitiesVerified: [],
+          code: "credential_resolve_failed",
+          message: String(err?.message ?? err),
+        });
+      }
+    }
+
     return deepFreeze({
       status: "success",
       verifiedAt: this._nowISO,
@@ -85,8 +125,6 @@ export class GmailIntegrationAdapter extends IntegrationProvider {
   }
 
   async executeAction({ actionRequest, connection, credentialResolver } = {}) {
-    void connection;
-    void credentialResolver;
     if (actionRequest.capability !== INTEGRATION_CAPABILITIES.SEND_EMAIL) {
       return deepFreeze({ status: "failed", error: "unsupported_capability", completedAt: this._nowISO });
     }
@@ -95,7 +133,8 @@ export class GmailIntegrationAdapter extends IntegrationProvider {
       return deepFreeze({ status: "failed", error: "message_required", completedAt: this._nowISO });
     }
     try {
-      const sendResult = await this._communicationProvider.send({ message });
+      const provider = this.#providerForConnection({ connection, credentialResolver });
+      const sendResult = await provider.send(message);
       return deepFreeze({
         externalReference: String(sendResult.providerMessageId ?? ""),
         status: "completed",

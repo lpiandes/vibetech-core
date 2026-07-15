@@ -22,6 +22,7 @@ export function composeOperatingHomeSupervision({
       },
       recentActivity: [],
       needsDecision: emptyDecisionSection(),
+      approvalsInbox: emptyApprovalsSection(),
       workingNow: [],
       digitalWorkforce: [],
       recentOutcomes: [],
@@ -33,6 +34,8 @@ export function composeOperatingHomeSupervision({
   }
 
   const attention = asArray(experience.waitingOnYou);
+  const approvalAttention = attention.filter((item) => String(item.sourceType ?? "") === "approval");
+  const otherAttention = attention.filter((item) => String(item.sourceType ?? "") !== "approval");
   const episodes = asArray(experience.activeBusinessEpisodes);
   const handled = asArray(experience.aiWorkforceActivity?.handledByVibeTech);
   const employees = asArray(experience.aiWorkforceActivity?.digitalEmployees);
@@ -51,10 +54,19 @@ export function composeOperatingHomeSupervision({
     fabricatedForbidden: true,
     greeting: buildGreeting(ownerFirstName),
     operatingSummary: buildOperatingSummary({ attention, episodes, control, briefing }),
-    recentActivity: buildRecentActivity({ timeline, handled, improvements, briefing }).slice(0, 6),
+    recentActivity: buildRecentActivity({ timeline, handled, improvements, briefing, base }).slice(0, 6),
+    approvalsInbox: {
+      title: "Approvals",
+      subtitle: "Customer-facing send always needs a human grant",
+      items: approvalAttention.slice(0, 8).map((item) => normalizeApprovalItem(item, base)),
+      emptyTitle: "No outbound approvals waiting.",
+      emptyDetail: "Drafts can be prepared freely; sends, SMS, and calls stay gated.",
+      viewAllHref: base ? `${base}/intelligence` : null,
+      winClaim: "Automation without silent outbound. Owners supervise; AI executes approved work.",
+    },
     needsDecision: {
       title: "Needs your decision",
-      items: attention.slice(0, 8).map((item) => normalizeDecisionItem(item, base)),
+      items: otherAttention.slice(0, 8).map((item) => normalizeDecisionItem(item, base)),
       emptyTitle: "Nothing needs your judgment right now.",
       emptyDetail: "VIBETech will notify you when a decision is required.",
       recentOwnerDecision: findRecentOwnerDecision({ handled, improvements }),
@@ -62,7 +74,7 @@ export function composeOperatingHomeSupervision({
     },
     workingNow: episodes.slice(0, 5).map((ep) => normalizeEpisode(ep, base)),
     digitalWorkforce: employees.slice(0, 8).map((emp) => normalizeEmployee(emp, base)),
-    recentOutcomes: buildOutcomes({ handled, improvements }).slice(0, 8),
+    recentOutcomes: buildOutcomes({ handled, improvements, base }).slice(0, 8),
     businessOverview: metrics.slice(0, 6).map((metric) => deepFreeze({
       id: String(metric.id),
       label: String(metric.label ?? metric.id),
@@ -79,6 +91,7 @@ export function composeOperatingHomeSupervision({
 export const DEFAULT_SECTION_ORDER = Object.freeze([
   "greeting",
   "recentActivity",
+  "approvalsInbox",
   "needsDecision",
   "workingNow",
   "digitalWorkforce",
@@ -86,6 +99,38 @@ export const DEFAULT_SECTION_ORDER = Object.freeze([
   "businessOverview",
   "conversations",
 ]);
+
+function normalizeApprovalItem(item, base) {
+  const workHref = item.workHref
+    ? resolveBusinessHref(item.workHref, base)
+    : item.workId && base
+      ? `${base}/work?workId=${encodeURIComponent(String(item.workId))}`
+      : (base ? `${base}/intelligence` : null);
+  const knowledgeCited = asArray(item.knowledgeCited ?? item.audit?.knowledgeCited).map(String).filter(Boolean);
+  return deepFreeze({
+    id: String(item.id),
+    approvalId: item.approvalId ? String(item.approvalId) : null,
+    title: String(item.title ?? "Approve outbound"),
+    why: String(item.reason ?? item.summary ?? ""),
+    channel: item.channel ? String(item.channel) : null,
+    requestedBy: item.requestedBy ? String(item.requestedBy) : null,
+    requestedAt: item.requestedAt ?? null,
+    knowledgeCited,
+    auditSummary: [
+      item.channel ? `Channel: ${item.channel}` : null,
+      item.requestedBy ? `Requested by: ${item.requestedBy}` : null,
+      knowledgeCited.length ? `Knowledge: ${knowledgeCited.slice(0, 2).join(", ")}` : "No Knowledge cited yet",
+    ].filter(Boolean).join(" · "),
+    workHref,
+    actions: asArray(item.availableActions)
+      .map((action) => deepFreeze({
+        id: String(action.id ?? action.label ?? "action"),
+        label: String(action.label ?? "Open"),
+        href: resolveBusinessHref(action.href, base),
+        mutation: action.mutation ?? null,
+      })),
+  });
+}
 
 function buildGreeting(ownerFirstName) {
   const hour = new Date().getHours();
@@ -138,7 +183,7 @@ function buildOperatingSummary({ attention, episodes, control, briefing }) {
   });
 }
 
-function buildRecentActivity({ timeline, handled, improvements, briefing }) {
+function buildRecentActivity({ timeline, handled, improvements, briefing, base }) {
   const rows = [];
   for (const line of asArray(briefing?.whatChanged).slice(0, 2)) {
     rows.push({
@@ -171,7 +216,7 @@ function buildRecentActivity({ timeline, handled, improvements, briefing }) {
       actorLabel: String(item.actorName ?? "VIBETech"),
       title: String(item.title ?? "Handled"),
       description: item.summary == null ? null : String(item.summary),
-      href: null,
+      href: item.href == null ? (base ? `${base}/work` : null) : String(item.href),
       state: String(item.result ?? "handled"),
       steps: [],
     });
@@ -183,7 +228,7 @@ function buildRecentActivity({ timeline, handled, improvements, briefing }) {
       actorLabel: "Architect",
       title: String(item.label ?? "Approved change installed"),
       description: "An owner-approved operating change was installed.",
-      href: null,
+      href: item.href == null ? (base ? `${base}/architect` : null) : String(item.href),
       state: "installed",
       steps: [],
     });
@@ -200,9 +245,9 @@ function normalizeDecisionItem(item, base) {
   const actions = asArray(item.availableActions).map((action) => deepFreeze({
     id: String(action.id ?? action.label ?? "action"),
     label: String(action.label ?? "Open"),
-    href: action.href == null ? null : String(action.href),
-  }));
-  if (base && !actions.some((action) => /review/i.test(action.label))) {
+    href: resolveBusinessHref(action.href, base),
+  })).filter((action) => action.href);
+  if (base && !actions.some((action) => /review|connect|open/i.test(action.label))) {
     actions.push(deepFreeze({ id: "review", label: "Review", href: `${base}/intelligence` }));
   }
   return deepFreeze({
@@ -218,7 +263,8 @@ function normalizeDecisionItem(item, base) {
     ),
     source: String(item.sourceType ?? item.partyName ?? "VIBETech"),
     ageOrDue: item.dueAt ?? item.waitingDuration ?? null,
-    priority: item.priorityBadge ?? item.priority ?? null,
+    // Prefer priority level (high/medium/low). priorityBadge is a tone ("neutral") and must not drive UI badges.
+    priority: item.priority ?? null,
     actions,
     askHref: base
       ? `${base}/architect?${item.intelligenceCandidateId
@@ -228,6 +274,23 @@ function normalizeDecisionItem(item, base) {
           : ""}`.replace(/\?$/, "")
       : null,
   });
+}
+
+/** Map legacy package paths onto the in-business portal. */
+function resolveBusinessHref(href, base) {
+  if (href == null || href === "") return null;
+  const raw = String(href).trim();
+  if (/^https?:\/\//i.test(raw) || raw.startsWith("/b/")) return raw;
+  if (!base) return raw.startsWith("/") ? raw : null;
+  const [pathPart, query = ""] = raw.split("?");
+  const suffix = query ? `?${query}` : "";
+  const path = pathPart || "/";
+  if (path === "/connections" || path === "/integrations") return `${base}/integrations${suffix}`;
+  if (path === "/attention" || path === "/intelligence") return `${base}/intelligence${suffix}`;
+  if (path === "/architect") return `${base}/architect${suffix}`;
+  if (path === "/mission-control" || path === "/home") return `${base}/home${suffix}`;
+  if (path.startsWith("/")) return `${base}${path}${suffix}`;
+  return `${base}/${path}${suffix}`;
 }
 
 function summarizeEvidence(item) {
@@ -249,7 +312,6 @@ function normalizeEpisode(ep, base) {
     label: String(step.label ?? step.title ?? "Step completed"),
     done: true,
   }));
-  const workId = ep.workId ?? ep.relatedWorkId ?? null;
   return deepFreeze({
     id: String(ep.id ?? ep.episodeId ?? "episode"),
     title: String(ep.title ?? "Active work"),
@@ -270,9 +332,9 @@ function normalizeEpisode(ep, base) {
       ep.partyName,
     ].filter(Boolean).join(" · ") || null,
     waiting: /wait/i.test(String(ep.currentState ?? ep.operatingState ?? "")),
-    openWorkHref: workId && base
-      ? `${base}/work`
-      : (ep.href ? String(ep.href) : (base ? `${base}/work` : null)),
+    openWorkHref: ep.href
+      ? String(ep.href)
+      : (base ? `${base}/work` : null),
   });
 }
 
@@ -308,17 +370,30 @@ function normalizeEmployee(emp, base) {
         ? String(emp.needsFromOwner)
         : emp.currentHandling
           ? "Continue assigned work"
-          : "Standing by for the next assignment"),
+          : null),
     lastActivity: emp.handledToday?.[0]?.label ?? emp.currentHandling ?? null,
     readinessBlockers: asArray(emp.blockers ?? (emp.blockedCapability ? [emp.blockedCapability] : []))
       .map((entry) => String(entry.message ?? entry)),
-    askHref: base && employeeId
-      ? `${base}/architect?employeeId=${encodeURIComponent(employeeId)}`
-      : null,
+    askHref: employeeAskHref(base, employeeId, operating),
   });
 }
 
-function buildOutcomes({ handled, improvements }) {
+function employeeAskHref(base, employeeId, operating) {
+  if (!base || !employeeId) return null;
+  const params = new URLSearchParams({ employeeId });
+  if (operating.id === "needs_approval") {
+    params.set("prompt", "Review what this teammate needs approved and recommend the next step.");
+  } else if (operating.id === "blocked" || operating.id === "needs_setup") {
+    params.set("prompt", "Help me unblock this teammate.");
+  } else if (operating.id === "idle" || operating.id === "waiting") {
+    params.set("prompt", "What should this teammate take on next?");
+  } else {
+    params.set("prompt", "What is this teammate working on?");
+  }
+  return `${base}/architect?${params.toString()}`;
+}
+
+function buildOutcomes({ handled, improvements, base }) {
   const rows = [];
   for (const item of handled) {
     const result = String(item.result ?? "handled");
@@ -331,6 +406,7 @@ function buildOutcomes({ handled, improvements }) {
       when: item.occurredAt ?? null,
       who: String(item.actorName ?? "VIBETech"),
       related: formatRelated(item.relatedContext),
+      href: item.href == null ? (base ? `${base}/work` : null) : String(item.href),
     });
   }
   for (const item of improvements) {
@@ -341,6 +417,7 @@ function buildOutcomes({ handled, improvements }) {
       when: item.at ?? null,
       who: "Architect",
       related: null,
+      href: item.href == null ? (base ? `${base}/architect` : null) : String(item.href),
     });
   }
   return deepFreeze(rows.map((row) => deepFreeze(row)));
@@ -367,7 +444,7 @@ function normalizeConversation(entry, base) {
     direction,
     related: null,
     actionNeeded: /draft|wait|needs/i.test(status) ? "Review" : null,
-    href: entry.href == null ? (base ? `${base}/communications` : null) : String(entry.href),
+    href: entry.href == null ? (base ? `${base}/inbox` : null) : String(entry.href),
   });
 }
 
@@ -380,6 +457,10 @@ function normalizeSetup(checklist) {
       title: String(item.title ?? item.id),
       actionLabel: String(item.actionLabel ?? "Continue"),
       href: String(item.href ?? "#"),
+      summary: item.summary == null ? null : String(item.summary),
+      whereInApp: item.whereInApp == null ? null : String(item.whereInApp),
+      inApp: asArray(item.inApp).map(String),
+      external: asArray(item.external).map(String),
     })),
   });
 }
@@ -392,6 +473,18 @@ function emptyDecisionSection() {
     emptyDetail: "VIBETech will notify you when a decision is required.",
     recentOwnerDecision: null,
     viewAllHref: null,
+  });
+}
+
+function emptyApprovalsSection() {
+  return deepFreeze({
+    title: "Approvals",
+    subtitle: "Customer-facing send always needs a human grant",
+    items: [],
+    emptyTitle: "No outbound approvals waiting.",
+    emptyDetail: "Drafts can be prepared freely; sends, SMS, and calls stay gated.",
+    viewAllHref: null,
+    winClaim: "Automation without silent outbound. Owners supervise; AI executes approved work.",
   });
 }
 

@@ -1,11 +1,15 @@
+import Link from "next/link";
+
 import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
 import { getAdminPlatformService } from "@/lib/admin/getAdminServices";
 import { PageHeader } from "@/components/product";
-import ShellPanel from "@/components/shell/ShellPanel";
 import { cockpitColors, spacing } from "@/design/tokens";
-import Link from "next/link";
+import OpenBusinessAsAdminButton from "@/components/admin/OpenBusinessAsAdminButton";
 import SupportEnterForm from "@/components/admin/SupportEnterForm";
 
+/**
+ * Admin gate into a client business — primary job is open their real workspace.
+ */
 export default async function AdminBusinessDetailPage({
   params,
 }: {
@@ -24,42 +28,75 @@ export default async function AdminBusinessDetailPage({
   }
 
   const business = result.business;
+  const supportActive = Boolean(business.supportSession?.active ?? business.supportSession);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: spacing.lg }}>
-      <PageHeader title={business.name} description="Business summary · never silent ownership" />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: spacing.md }}>
-        <ShellPanel title="Overview" subtitle="Installation and readiness">
-          <div style={{ color: cockpitColors.textMuted, lineHeight: 1.6 }}>
-            <div>Industry: {business.industry ?? "—"}</div>
-            <div>Owner: {business.ownerStatus}</div>
-            <div>Install: {business.installation?.status ?? "not installed"}</div>
-            <div>Spec: {business.installation?.specificationVersion ?? "—"}</div>
-            <p style={{ marginTop: spacing.md }}>{business.note}</p>
-          </div>
-          <div style={{ display: "flex", gap: spacing.sm, marginTop: spacing.md, flexWrap: "wrap" }}>
-            <Link href={`/architect?businessId=${business.id}`}>Open Architect</Link>
-            <Link href={`/admin/installations`}>Install history</Link>
-          </div>
-        </ShellPanel>
-
-        <ShellPanel title="Members" subtitle="Tenant memberships">
-          {business.members.length ? business.members.map((member: any) => (
-            <div key={member.userId} style={{ padding: `${spacing.xs}px 0` }}>
-              {member.name ?? member.email} · {member.role}
-            </div>
-          )) : <div style={{ color: cockpitColors.textMuted }}>No members.</div>}
-        </ShellPanel>
-
-        <ShellPanel title="Audited support access" subtitle="Reason required">
-          <SupportEnterForm businessId={business.id} businessName={business.name} />
-          {business.supportSession ? (
-            <div style={{ marginTop: spacing.md, color: cockpitColors.textMuted }}>
-              Active support session: {business.supportSession.mode} · {business.supportSession.reason}
-            </div>
-          ) : null}
-        </ShellPanel>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 720 }}>
+      <div>
+        <Link href="/admin/businesses" style={{ color: cockpitColors.accent, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>
+          ← Businesses
+        </Link>
+        <PageHeader
+          title={business.name}
+          description="Open the same Home they use. You’ll see an Admin view banner at the top."
+        />
       </div>
+
+      <section
+        style={{
+          background: cockpitColors.panel,
+          border: `1px solid ${cockpitColors.panelBorder}`,
+          borderRadius: 18,
+          padding: 24,
+          display: "grid",
+          gap: 16,
+        }}
+      >
+        <OpenBusinessAsAdminButton
+          businessId={business.id}
+          businessName={business.name}
+          alreadyActive={supportActive}
+        />
+        <div style={{ color: cockpitColors.textMuted, fontSize: 14, lineHeight: 1.5 }}>
+          Owner: {business.ownerStatus ?? "—"} · Install: {business.installation?.status ?? "not installed"}
+          {business.members?.length ? ` · ${business.members.length} member${business.members.length === 1 ? "" : "s"}` : ""}
+        </div>
+      </section>
+
+      {business.members?.length ? (
+        <section
+          style={{
+            background: cockpitColors.panel,
+            border: `1px solid ${cockpitColors.panelBorder}`,
+            borderRadius: 18,
+            padding: 20,
+          }}
+        >
+          <h2 style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 650 }}>Members</h2>
+          <div style={{ display: "grid", gap: 8 }}>
+            {business.members.map((member: any) => (
+              <div key={member.userId} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span>{member.name ?? member.email}</span>
+                <span style={{ color: cockpitColors.textMuted }}>{member.role}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <details
+        style={{
+          background: cockpitColors.panel,
+          border: `1px solid ${cockpitColors.panelBorder}`,
+          borderRadius: 18,
+          padding: 20,
+        }}
+      >
+        <summary style={{ cursor: "pointer", fontWeight: 650 }}>Advanced support options</summary>
+        <div style={{ marginTop: spacing.md }}>
+          <SupportEnterForm businessId={business.id} businessName={business.name} />
+        </div>
+      </details>
     </div>
   );
 }

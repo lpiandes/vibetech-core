@@ -96,7 +96,8 @@ test("resolveBusinessWorkLinks prefers person href and never emits engagement ro
   });
 
   assert.equal(links.personHref, "/b/biz_1/people/party_jane");
-  assert.equal(links.rowHref, "/b/biz_1/people/party_jane");
+  assert.equal(links.rowHref, "/b/biz_1/work?workId=work_1");
+  assert.equal(links.workHref, "/b/biz_1/work?workId=work_1");
   assert.equal(links.engagementHref, null);
 });
 
@@ -120,10 +121,10 @@ test("resolveBusinessWorkLinks falls back to property href when no valid party e
 
   assert.equal(links.personHref, null);
   assert.equal(links.propertyHref, "/b/biz_1/properties/subj_main");
-  assert.equal(links.rowHref, "/b/biz_1/properties/subj_main");
+  assert.equal(links.rowHref, "/b/biz_1/work?workId=work_1");
 });
 
-test("resolveBusinessWorkLinks is not clickable without party or subject", () => {
+test("resolveBusinessWorkLinks deep-links work even without party or subject", () => {
   const links = resolveBusinessWorkLinks({
     businessId: "biz_1",
     businessGraphRuntime: new BusinessGraphRuntime(),
@@ -131,5 +132,5 @@ test("resolveBusinessWorkLinks is not clickable without party or subject", () =>
     workItem: { id: "work_1", requestedBy: "tm_system", relatedObjects: [] },
   });
 
-  assert.equal(links.rowHref, null);
+  assert.equal(links.rowHref, "/b/biz_1/work?workId=work_1");
 });

@@ -44,15 +44,19 @@ export function resolveBusinessWorkLinks({
       ? String(partyId)
       : resolveWorkPartyId({ workItem, requestRuntime, businessGraphRuntime });
   const bid = String(businessId ?? "");
+  const workId = workItem?.id ? String(workItem.id) : null;
   const normalizedSubjectId = subjectId ? String(subjectId) : null;
   const personHref = resolvedPartyId && bid ? `/b/${bid}/people/${resolvedPartyId}` : null;
   const propertyHref = normalizedSubjectId && bid ? `/b/${bid}/properties/${normalizedSubjectId}` : null;
+  // Work queue owns the artifact — always deep-link with workId when known.
+  const workHref = bid && workId ? `/b/${bid}/work?workId=${encodeURIComponent(workId)}` : null;
 
   return {
     partyId: resolvedPartyId,
     personHref,
     propertyHref,
-    rowHref: personHref ?? propertyHref ?? null,
+    rowHref: workHref ?? personHref ?? propertyHref ?? null,
+    workHref,
     engagementHref: null,
   };
 }

@@ -17,7 +17,7 @@ export default function BusinessDnaPortrait({
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <div>
-        <ArchitectBadge tone="accent">Business DNA</ArchitectBadge>
+        <ArchitectBadge tone="accent">How we see your business</ArchitectBadge>
         <h3 style={{ margin: "10px 0 4px", fontSize: 18 }}>Living portrait</h3>
         <p style={{ margin: 0, color: architect.inkMuted, fontSize: 13, lineHeight: 1.45 }}>
           {portrait.label}

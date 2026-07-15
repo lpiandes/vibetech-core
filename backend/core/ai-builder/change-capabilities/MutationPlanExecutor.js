@@ -1,6 +1,11 @@
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 import { createBusinessOSSpecification } from "../../business-os/BusinessOSSpecification.js";
 import { validateMutationPlan } from "./MutationPlan.js";
+import {
+  compileCustomAiEmployee,
+  ensureCustomAiCapabilityRequirement,
+} from "../custom-ai/CustomAiWorkerCompiler.js";
+import { compileSpecialtySurfacesOnSpecification } from "../specialty/SpecialtySurfaceCompiler.js";
 
 /**
  * Deterministic dispatcher by operationType — never by business intent.
@@ -84,7 +89,9 @@ export class MutationPlanExecutor {
         continue;
       }
 
-      const next = applyOperation(working, op);
+      const next = applyOperation(working, op, {
+        businessId: actorBusinessId ?? plan.businessId ?? specification.businessId ?? null,
+      });
       if (!next.ok) return deepFreeze({ ...next, operationId: op.operationId });
       working = next.specification;
       applied.push(op.operationId);
@@ -174,7 +181,7 @@ function applySideEffectHint(specification, op) {
   return specification;
 }
 
-function applyOperation(specification, op) {
+function applyOperation(specification, op, { businessId = null } = {}) {
   switch (op.operationType) {
     case "updateBusinessProfile":
       return ok({
@@ -247,24 +254,23 @@ function applyOperation(specification, op) {
       if (existing.some((e) => e.employeeId === employeeId || String(e.label).toLowerCase() === String(label).toLowerCase())) {
         return ok(specification);
       }
-      return ok({
-        ...specification,
-        employeeDefinitions: [
-          ...existing,
-          {
-            employeeId,
-            label,
-            archetypeId: op.payload?.archetypeId ?? "coordinator",
-            purpose: op.payload?.purpose ?? op.reason ?? `Hired: ${label}`,
-            applicableModules: op.payload?.applicableModules ?? ["work", "digital_workforce", "people"],
-            communicationPermissions: { customerFacingRequiresApproval: true },
-            approvalRequirements: ["human_approval"],
-            prohibitedActions: ["autonomous_customer_send"],
-            readinessState: op.payload?.readinessState ?? "needs_knowledge",
-            enabled: true,
-          },
-        ],
-      });
+      const hired = compileCustomAiEmployee({
+        employeeId,
+        label,
+        archetypeId: op.payload?.archetypeId ?? "coordinator",
+        purpose: op.payload?.purpose ?? op.reason ?? `Hired: ${label}`,
+        applicableModules: op.payload?.applicableModules ?? ["work", "digital_workforce", "people"],
+        readinessState: op.payload?.readinessState ?? "custom_ai_ready",
+        enabled: true,
+        ownerAdded: Boolean(op.payload?.ownerAdded ?? op.payload?.customAi ?? true),
+      }, { ownerAdded: true });
+      return ok(compileSpecialtySurfacesOnSpecification(
+        ensureCustomAiCapabilityRequirement({
+          ...specification,
+          employeeDefinitions: [...existing, hired],
+        }),
+        { businessId: businessId ?? specification.businessId ?? null },
+      ));
     }
     case "disableEmployeeDefinition": {
       const needle = String(op.targetId ?? op.payload?.employeeId ?? op.payload?.match ?? "").toLowerCase();

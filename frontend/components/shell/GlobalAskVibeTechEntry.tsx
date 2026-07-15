@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { MessageSquare } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
+import { useWorkspaceNavigation } from "@/components/workspace/WorkspaceNavigationContext";
 import { cockpitColors, spacing, radius, typography } from "@/design/tokens";
+import { ASK_NEW_CHAT_EVENT } from "@/components/architect/askOpenChat";
 
 /**
- * Persistent Ask VIBETech entry — always accessible from the business shell.
- * Optional context query params preserve candidate / work / person context.
+ * Persistent Ask VIBETech entry — top bar / mobile.
+ * When already on Ask: start a new chat (history keeps past threads).
  */
 export default function GlobalAskVibeTechEntry({
   context,
@@ -17,12 +20,15 @@ export default function GlobalAskVibeTechEntry({
   compact?: boolean;
 }) {
   const scope = useBusinessScope();
+  const pathname = usePathname() ?? "";
+  const { displayPath, beginNavigation } = useWorkspaceNavigation();
   const params = new URLSearchParams();
   if (context) {
     for (const [key, value] of Object.entries(context)) {
       if (value) params.set(key, value);
     }
   }
+  const active = /\/architect(?:\/|$|\?)/.test(displayPath) || /\/architect(?:\/|$)/.test(pathname);
   const qs = params.toString();
   const href = `/b/${encodeURIComponent(scope.businessId)}/architect${qs ? `?${qs}` : ""}`;
 
@@ -30,19 +36,36 @@ export default function GlobalAskVibeTechEntry({
     <Link
       href={href}
       aria-label="Ask VIBETech"
+      aria-current={active ? "page" : undefined}
+      onClick={(event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+        if (active) {
+          event.preventDefault();
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent(ASK_NEW_CHAT_EVENT));
+          }
+          return;
+        }
+        beginNavigation(href.split("?")[0]);
+      }}
       style={{
         display: "inline-flex",
         alignItems: "center",
+        justifyContent: "center",
         gap: 8,
+        width: compact ? "auto" : "100%",
         height: compact ? 34 : 40,
         padding: compact ? `0 ${spacing.md}` : `0 ${spacing.lg}`,
         borderRadius: radius.medium,
-        backgroundColor: cockpitColors.accent,
+        backgroundColor: active ? "#0d9488" : cockpitColors.accent,
         color: "#fff",
         textDecoration: "none",
-        fontWeight: 600,
+        fontWeight: 700,
         fontSize: typography.button.fontSize,
         whiteSpace: "nowrap",
+        boxShadow: active
+          ? "0 0 0 2px rgba(20, 184, 166, 0.45), inset 0 0 0 1px rgba(255,255,255,0.25)"
+          : "none",
       }}
     >
       <MessageSquare size={16} aria-hidden />

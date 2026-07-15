@@ -235,3 +235,83 @@ test("admin analytics and dashboard use real evidence only", async () => {
   assert.equal(dash.metrics.totalBusinesses, 1);
   assert.equal(dash.integrationHealth.status, "projected");
 });
+
+test("admin dashboard excludes pilot/test tenants and never caps totals at recent-slice length", async () => {
+  const sessions = Array.from({ length: 12 }, (_, index) => ({
+    sessionId: `sess_real_${index}`,
+    businessId: "biz_real",
+    currentStage: "awaiting_review",
+    capabilityGaps: [{ label: "sms" }, { label: "crm_import" }],
+    updatedAt: `2026-07-12T10:${String(index).padStart(2, "0")}:00.000Z`,
+    businessSummary: { businessName: "Mind and Mobility" },
+  }));
+  const pilotSessions = Array.from({ length: 33 }, (_, index) => ({
+    sessionId: `sess_pilot_${index}`,
+    businessId: "biz_pilot",
+    currentStage: "awaiting_review",
+    capabilityGaps: [
+      { label: "sms" },
+      { label: "sms_messaging" },
+      { label: "appfolio_api_sync" },
+      { label: "website_form_automation" },
+      { label: "missed_call_automation" },
+    ],
+    updatedAt: `2026-07-11T10:${String(index).padStart(2, "0")}:00.000Z`,
+    businessSummary: { businessName: `Pilot Co 1783888453${String(index).padStart(3, "0")}` },
+  }));
+
+  const service = new AdminPlatformService({
+    platformStore: createMockPlatformStore({
+      businesses: [
+        { id: "biz_real", name: "Mind and Mobility", status: "active" },
+        { id: "biz_pilot", name: "Pilot Co 1783888453789", status: "active" },
+        { id: "biz_journey", name: "Journey Co smoke", status: "active" },
+      ],
+      sessions: [...sessions, ...pilotSessions],
+      installations: {
+        biz_real: {
+          specificationId: "spec_real",
+          specificationVersion: "1.0.0",
+          status: "installed",
+          actorUserId: "admin_1",
+          history: [],
+          updatedAt: NOW,
+        },
+        biz_pilot: {
+          specificationId: "spec_pilot",
+          specificationVersion: "1.0.0",
+          status: "installed",
+          actorUserId: "admin_1",
+          history: [],
+          updatedAt: NOW,
+        },
+      },
+      audits: [
+        { id: "a1", action: "admin.dashboard_viewed", createdAt: NOW },
+        { id: "a2", action: "architect.improved", createdAt: NOW },
+      ],
+    }),
+  });
+
+  const dash = await service.getDashboard({
+    adminUserId: "admin_1",
+    platformRole: PLATFORM_ROLES.PLATFORM_ADMIN,
+  });
+
+  assert.equal(dash.metrics.totalBusinesses, 1);
+  assert.equal(dash.metrics.architectSessions, 12);
+  assert.equal(dash.metrics.recentArchitectSessions, 12);
+  assert.equal(dash.recentSessions.length, 1);
+  assert.equal(dash.recentSessions[0].businessName, "Mind and Mobility");
+  assert.equal(dash.recentSessions[0].stageLabel, "Waiting on review");
+  assert.equal(dash.metrics.installations, 1);
+  assert.ok(!dash.recentInstallations.some((entry) => /Pilot Co/i.test(String(entry.businessName))));
+  assert.deepEqual(
+    dash.capabilityGaps.map((gap) => gap.label).sort(),
+    ["crm_import", "sms"],
+  );
+  assert.equal(dash.capabilityGaps.find((gap) => gap.label === "sms")?.count, 12);
+  assert.ok(!dash.recentAudits.some((event) => event.action === "admin.dashboard_viewed"));
+  assert.ok(dash.recentAudits.some((event) => event.action === "architect.improved"));
+  assert.match(String(dash.recentAudits.find((event) => event.action === "architect.improved")?.label), /Ask change/i);
+});

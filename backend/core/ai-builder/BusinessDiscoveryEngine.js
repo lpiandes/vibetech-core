@@ -34,6 +34,7 @@ export class BusinessDiscoveryEngine {
     return this.planner.plan({
       answers: session.answers,
       evidence: session.evidence,
+      businessSummary: session.businessSummary,
       limit,
     });
   }
@@ -111,7 +112,12 @@ export class BusinessDiscoveryEngine {
       progress,
       summary,
       conversation,
-      nextQuestions: this.planner.plan({ answers, evidence: session.evidence, limit: 3 }),
+      nextQuestions: this.planner.plan({
+        answers,
+        evidence: session.evidence,
+        businessSummary,
+        limit: 3,
+      }),
     });
   }
 
@@ -158,16 +164,20 @@ export class BusinessDiscoveryEngine {
       text: String(text),
       at: nowISO,
     }));
-    const nextQuestions = this.planner.plan({ answers, evidence: session.evidence, limit: 3 });
+    const nextQuestions = this.planner.plan({
+      answers,
+      evidence: session.evidence,
+      businessSummary,
+      limit: 3,
+    });
     conversation = appendConversation(conversation, createBuilderConversationMessage({
       messageId: `msg_assistant_free_${Date.parse(nowISO)}`,
       role: "assistant",
-      text: extracted.note
-        ?? (nextQuestions[0]?.prompt
-          ? `Got it. ${nextQuestions[0].prompt}`
-          : "I have enough to propose an operating system when you’re ready."),
+      text: nextQuestions[0]?.prompt
+        ?? "I have enough to recommend how your business should run when you’re ready.",
       at: nowISO,
       relatedQuestionId: nextQuestions[0]?.questionId ?? null,
+      metadata: nextQuestions[0] ? { why: nextQuestions[0].why } : {},
     }));
 
     return deepFreeze({

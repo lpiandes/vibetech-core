@@ -15,7 +15,7 @@ export default function SupportEnterForm({
 }) {
   const router = useRouter();
   const [reason, setReason] = useState("");
-  const [mode, setMode] = useState<"read_only" | "elevated">("read_only");
+  const [mode, setMode] = useState<"read_only" | "elevated">("elevated");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -45,13 +45,14 @@ export default function SupportEnterForm({
       body: JSON.stringify({ businessId }),
     });
     setBusy(false);
+    router.push("/admin/businesses");
     router.refresh();
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
       <div style={{ color: cockpitColors.textMuted, fontSize: 13 }}>
-        Enter {businessName} with an audited support session. Your admin identity is retained.
+        Custom reason / read-only mode if you need it. Default open uses full edit.
       </div>
       <textarea
         value={reason}
@@ -71,13 +72,13 @@ export default function SupportEnterForm({
         onChange={(event) => setMode(event.target.value as "read_only" | "elevated")}
         style={{ padding: spacing.sm, borderRadius: 8, border: `1px solid ${cockpitColors.panelBorder}` }}
       >
+        <option value="elevated">Full edit (audited)</option>
         <option value="read_only">Read-only</option>
-        <option value="elevated">Elevated (still audited, no permanent membership)</option>
       </select>
       {error ? <div style={{ color: "#b91c1c" }}>{error}</div> : null}
       <div style={{ display: "flex", gap: spacing.sm }}>
         <PrimaryButton onClick={enter} disabled={busy || !reason.trim()}>
-          Enter support
+          Enter with custom reason
         </PrimaryButton>
         <button type="button" onClick={exit} disabled={busy} style={{ padding: "8px 12px" }}>
           Exit support

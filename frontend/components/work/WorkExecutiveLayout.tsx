@@ -29,6 +29,7 @@ import {
 import RelationshipFollowUpResolutionDialog from "./RelationshipFollowUpResolutionDialog";
 import RelationshipFollowUpDraftDialog from "./RelationshipFollowUpDraftDialog";
 import CampaignStudioPanel from "./CampaignStudioPanel";
+import SpecialtyDeliverableView from "@/components/specialty/SpecialtyDeliverableView";
 import {
   isResolvableRelationshipFollowUpWork,
   type RelationshipFollowUpOutcome,
@@ -98,7 +99,7 @@ function WorkQueueRow({
   highlighted?: boolean;
 }) {
   const display = item.metadata?.display ?? {};
-  const href = resolveWorkRowHref(display, businessId);
+  const href = resolveWorkRowHref(display, businessId, item.id);
   const canResolveFollowUp = isResolvableRelationshipFollowUpWork(item);
   const title = String(item.title ?? "Work item");
   const avatarName = display.partyName ? String(display.partyName) : title;
@@ -236,6 +237,122 @@ function CampaignReviewPanel({
   return <CampaignStudioPanel item={item} businessId={businessId} />;
 }
 
+function CompleteWorkPanel({
+  item,
+  businessId,
+  onCompleted,
+}: {
+  item: WorkQueueItem;
+  businessId: string;
+  onCompleted: () => void;
+}) {
+  const [outcomeSummary, setOutcomeSummary] = useState("");
+  const [memoryNote, setMemoryNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const status = String(item.status ?? "").toLowerCase();
+  const existingOutcome = item.metadata?.outcomeSummary;
+  const existingChanges = item.metadata?.memoryChanges ?? [];
+
+  if (status === "completed") {
+    return (
+      <div style={{ padding: spacing.md, borderTop: `1px solid ${cockpitColors.panelBorder}` }}>
+        <div style={{ fontWeight: 650, marginBottom: spacing.xs, color: cockpitColors.textPrimary }}>Outcome</div>
+        <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
+          {existingOutcome || "Completed."}
+        </div>
+        {existingChanges.length ? (
+          <ul style={{ margin: `${spacing.xs} 0 0`, paddingLeft: spacing.lg, color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
+            {existingChanges.map((change) => (
+              <li key={change}>{change}</li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (["cancelled", "failed", "rejected"].includes(status)) return null;
+
+  async function complete() {
+    if (busy || !item.id) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/businesses/${encodeURIComponent(businessId)}/work/${encodeURIComponent(String(item.id))}/complete`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            outcomeSummary: outcomeSummary.trim() || "Marked complete",
+            memoryChanges: memoryNote.trim() ? [memoryNote.trim()] : [],
+          }),
+        },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.reason ?? json?.error ?? "Could not complete work");
+      }
+      onCompleted();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not complete work");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ padding: spacing.md, borderTop: `1px solid ${cockpitColors.panelBorder}`, display: "grid", gap: spacing.sm }}>
+      <div style={{ fontWeight: 650, color: cockpitColors.textPrimary }}>Record outcome</div>
+      <p style={{ margin: 0, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
+        If it isn’t on Work, it didn’t happen. Note what changed so Memory stays trustworthy.
+      </p>
+      <textarea
+        value={outcomeSummary}
+        onChange={(e) => setOutcomeSummary(e.target.value)}
+        placeholder="What was decided or delivered?"
+        rows={2}
+        style={{
+          padding: spacing.sm,
+          borderRadius: 8,
+          border: `1px solid ${cockpitColors.panelBorder}`,
+          resize: "vertical",
+        }}
+      />
+      <input
+        value={memoryNote}
+        onChange={(e) => setMemoryNote(e.target.value)}
+        placeholder="Memory change (optional)"
+        style={{
+          padding: spacing.sm,
+          borderRadius: 8,
+          border: `1px solid ${cockpitColors.panelBorder}`,
+        }}
+      />
+      {error ? <div style={{ color: "#dc2626", fontSize: typography.caption.fontSize }}>{error}</div> : null}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void complete()}
+        style={{
+          justifySelf: "start",
+          borderRadius: radius.medium,
+          border: `1px solid ${cockpitColors.accent}`,
+          backgroundColor: cockpitColors.accent,
+          color: "#fff",
+          padding: "8px 14px",
+          fontSize: typography.caption.fontSize,
+          fontWeight: 700,
+          cursor: busy ? "wait" : "pointer",
+          opacity: busy ? 0.7 : 1,
+        }}
+      >
+        {busy ? "Completing…" : "Complete work"}
+      </button>
+    </div>
+  );
+}
+
 function FilterChips({
   active,
   counts,
@@ -355,7 +472,7 @@ export default function WorkExecutiveLayout() {
       {targetWork ? (
         <ShellPanel
           title="Selected work"
-          subtitle="Opened from the contact record."
+          subtitle={targetWork.metadata?.artifact ? "Specialty deliverable opened for review." : "Opened from the contact record."}
           action={
             <button
               type="button"
@@ -382,6 +499,15 @@ export default function WorkExecutiveLayout() {
             onDraftFollowUp={setDraftTarget}
             highlighted
           />
+          {targetWork.metadata?.artifact ? (
+            <div style={{ padding: spacing.md, borderTop: `1px solid ${cockpitColors.panelBorder}` }}>
+              <SpecialtyDeliverableView
+                artifact={targetWork.metadata.artifact}
+                knowledgeHref={`/b/${businessId}/knowledge`}
+              />
+            </div>
+          ) : null}
+          <CompleteWorkPanel item={targetWork} businessId={businessId} onCompleted={() => router.refresh()} />
           <CampaignReviewPanel item={targetWork} businessId={businessId} />
         </ShellPanel>
       ) : null}

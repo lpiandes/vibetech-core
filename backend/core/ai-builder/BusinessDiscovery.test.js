@@ -14,10 +14,11 @@ test("question planner asks required topics first and skips known optional topic
 
   const withEvidence = planner.plan({
     answers: [{ questionId: "q_tell_us", answer: "Hockey club" }],
-    evidence: [{ payload: { topics: ["communications"] } }],
+    evidence: [{ payload: { topics: ["software"] } }],
     limit: 20,
   });
-  assert.ok(!withEvidence.some((question) => question.questionId === "q_communications"));
+  assert.ok(withEvidence.some((question) => question.questionId === "q_communications"));
+  assert.ok(!withEvidence.some((question) => question.questionId === "q_software"));
 });
 
 test("answer interpreter maps industry signals without inventing certainty", () => {
@@ -36,6 +37,20 @@ test("answer interpreter maps industry signals without inventing certainty", () 
   });
   assert.equal(unknown.unknown, true);
   assert.deepEqual(unknown.fields, {});
+
+  const junkName = interpreter.interpret({
+    questionId: "q_company_name",
+    answer: "ok",
+  });
+  assert.equal(junkName.unknown, true);
+  assert.equal(junkName.fields.businessName, undefined);
+  assert.ok(junkName.unresolved.includes("q_company_name"));
+
+  const junkIndustry = interpreter.interpret({
+    questionId: "q_industry",
+    answer: "ok",
+  });
+  assert.equal(junkIndustry.fields.industry, "other");
 });
 
 test("discovery engine progresses conversationally", async () => {
@@ -47,18 +62,32 @@ test("discovery engine progresses conversationally", async () => {
   });
   assert.equal(applied.businessSummary.industry, "property_management");
   assert.ok(applied.nextQuestions.length >= 1);
-  assert.ok(DISCOVERY_QUESTION_BANK.length >= 15);
+  assert.ok(DISCOVERY_QUESTION_BANK.length >= 40);
   assert.match(engine.initialPrompt().text, /what does your business do/i);
-  const requiredIds = DISCOVERY_QUESTION_BANK.filter((q) => q.required).map((q) => q.questionId);
-  assert.deepEqual(requiredIds, [
-    "q_tell_us",
-    "q_company_name",
-    "q_industry",
-    "q_services",
-    "q_customers",
-    "q_repetitive_work",
-    "q_pain_points",
-  ]);
+});
+
+test("integrations answer maps to connection ids the owner must sign into", () => {
+  const interpreter = new BusinessDiscoveryAnswerInterpreter();
+  const result = interpreter.interpret({
+    questionId: "q_integrations",
+    answer: "gmail, google_calendar, twilio_sms, facebook_lead_ads",
+  });
+  assert.deepEqual([...result.fields.integrationNeeds].sort(), [
+    "business_email",
+    "calendar",
+    "meta_lead_ads",
+    "sms_channel",
+  ].sort());
+  assert.deepEqual(result.fields.requiredSetupSteps, ["email", "calendar", "sms", "a2p_registration"]);
+  assert.equal(result.fields.ownerWillConnectAccounts, true);
+  assert.match(result.fields.connectionSetupNote, /sign into/i);
+
+  const none = interpreter.interpret({
+    questionId: "q_integrations",
+    answer: "none yet",
+  });
+  assert.deepEqual(none.fields.integrationNeeds, []);
+  assert.equal(none.fields.ownerWillConnectAccounts, false);
 });
 
 test("free-form text extracts structured answers and skips inferred questions", async () => {
@@ -76,7 +105,20 @@ test("free-form text extracts structured answers and skips inferred questions", 
 
 test("question bank covers departments, lead sources, automation, and expansion", () => {
   const ids = DISCOVERY_QUESTION_BANK.map((q) => q.questionId);
-  for (const id of ["q_departments", "q_lead_sources", "q_request_sources", "q_automation_comfort", "q_expansion_plans"]) {
+  for (const id of ["q_departments", "q_lead_sources", "q_request_sources", "q_automation_comfort", "q_expansion_plans", "q_value_promise", "q_bottlenecks"]) {
     assert.ok(ids.includes(id), `missing ${id}`);
   }
+});
+
+test("political campaign industry pack is gated to political_campaigns", () => {
+  const planner = new BusinessDiscoveryQuestionPlanner();
+  const campaignQuestions = planner.plan({
+    answers: [
+      { questionId: "q_industry", answer: "political_campaigns" },
+    ],
+    businessSummary: { industry: "political_campaigns" },
+    limit: 20,
+  });
+  assert.ok(campaignQuestions.some((question) => question.questionId === "q_campaign_race_type"));
+  assert.ok(!campaignQuestions.some((question) => question.questionId === "q_dental_pms"));
 });

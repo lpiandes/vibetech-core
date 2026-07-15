@@ -9,6 +9,15 @@ export type TeamDigitalEmployee = {
   status?: string;
   statusLabel?: string;
   isReady?: boolean;
+  ownerAdded?: boolean;
+  customAiWork?: boolean;
+  assistedMode?: boolean;
+  askAssisted?: boolean;
+  canRunJobs?: boolean;
+  specialtyHref?: string | null;
+  detailHref?: string | null;
+  askHref?: string | null;
+  runJobHref?: string | null;
   blockerItems?: string[];
   blockerSummary?: string | null;
   setupHref?: string | null;
@@ -71,6 +80,18 @@ export function employeeStatusTone(employee: TeamDigitalEmployee): "success" | "
 export function primaryEmployeeAction(employee: TeamDigitalEmployee): { label: string; href: string } | null {
   if (employee.isReady === false && employee.setupHref) {
     return { label: "Finish setup", href: employee.setupHref };
+  }
+  if (employee.specialtyHref) {
+    return { label: "Open specialty page", href: employee.specialtyHref };
+  }
+  if ((employee.ownerAdded || employee.customAiWork || employee.canRunJobs) && employee.detailHref) {
+    return { label: "Open specialty page", href: employee.detailHref };
+  }
+  if (employee.askAssisted && employee.askHref) {
+    return { label: "Ask this teammate", href: employee.askHref };
+  }
+  if (employee.detailHref) {
+    return { label: "Open teammate", href: employee.detailHref };
   }
   if ((employee.openAssignmentCount ?? 0) > 0 && employee.workHref) {
     return { label: "View work", href: employee.workHref };

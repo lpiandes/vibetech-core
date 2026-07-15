@@ -16,6 +16,7 @@ import {
   resolvePrimarySubjectIdForParty,
   resolveWorkPartyId,
 } from "./resolveWorkRowLinks.js";
+import { hydrateSpecialtyArtifact } from "../../ai-builder/specialty/SpecialtyArtifactComposer.js";
 
 function safeArray(v) {
   return Array.isArray(v) ? v : [];
@@ -670,6 +671,25 @@ export class WorkViewAdapter {
           display,
           relationshipFollowUp: w.metadata?.relationshipFollowUp ?? null,
           campaignPreparation: resolveCampaignPreparationReview({ workItem: w, communicationRuntime }),
+          purpose: w.metadata?.purpose ?? null,
+          employeeId: w.metadata?.employeeId ?? null,
+          sourceRefs: Array.isArray(w.metadata?.sourceRefs) ? w.metadata.sourceRefs : null,
+          outcomeSummary: w.outcomeSummary ?? w.metadata?.outcomeSummary ?? null,
+          memoryChanges: Array.isArray(w.memoryChanges)
+            ? w.memoryChanges
+            : Array.isArray(w.metadata?.memoryChanges)
+              ? w.metadata.memoryChanges
+              : [],
+          artifact: w.metadata?.artifact
+            ? hydrateSpecialtyArtifact({
+              artifact: w.metadata.artifact,
+              label: display?.assigneeName ?? "Specialty",
+              purpose: w.metadata?.purpose ?? "",
+              instruction: w.description ?? "",
+              nowISO: w.updatedAt ?? effectiveNowISO,
+              sources: w.metadata?.artifact?.sources ?? w.metadata?.sourceRefs ?? [],
+            })
+            : null,
         }),
       });
     });

@@ -6,7 +6,7 @@ import { ChevronRight } from "lucide-react";
 
 import StatusBadge, { type StatusBadgeTone } from "./StatusBadge";
 import PrimaryButton from "./PrimaryButton";
-import { useWorkspaceNavigation } from "@/components/workspace/WorkspaceNavigationContext";
+import { useOptionalWorkspaceNavigation } from "@/components/workspace/WorkspaceNavigationContext";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
 
 function isInternalBusinessHref(href: string) {
@@ -36,11 +36,11 @@ export default function ActionRow({
   isLast?: boolean;
   complete?: boolean;
 }) {
-  const { beginNavigation } = useWorkspaceNavigation();
+  const nav = useOptionalWorkspaceNavigation();
 
   function onLinkClick(event: MouseEvent<HTMLAnchorElement>, href: string) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-    if (isInternalBusinessHref(href)) beginNavigation(href);
+    if (isInternalBusinessHref(href)) nav?.beginNavigation(href);
   }
 
   const content = (

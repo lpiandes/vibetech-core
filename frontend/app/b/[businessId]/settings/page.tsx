@@ -13,7 +13,29 @@ export default async function SettingsPage({ params }: { params: Promise<{ busin
 
   const knowledgeDocumentCount = await platformStore.countActiveKnowledgeDocuments(businessId);
   ctx.service.refreshOperationalState(knowledgeDocumentCount);
-  const homeState = ctx.service.loadBusinessHomeViewModel({ activeKnowledgeDocumentCount: knowledgeDocumentCount });
+
+  let installedSpecification: Record<string, unknown> | null = null;
+  try {
+    const installation = await platformStore.getBusinessOSInstallation(businessId);
+    if (installation?.specificationId) {
+      const specRow = await platformStore.getBusinessOSSpecification({
+        businessId,
+        specificationId: installation.specificationId,
+      });
+      const specification = specRow?.specification ?? null;
+      installedSpecification = specification && typeof specification === "object"
+        ? (specification as Record<string, unknown>)
+        : null;
+    }
+  } catch {
+    installedSpecification = null;
+  }
+
+  const homeState = ctx.service.loadBusinessHomeViewModel({
+    activeKnowledgeDocumentCount: knowledgeDocumentCount,
+    teamInviteChecklistComplete: await platformStore.isTeamInviteChecklistComplete(businessId),
+    installedSpecification,
+  });
 
   return (
     <SettingsScreen

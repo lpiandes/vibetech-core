@@ -125,7 +125,7 @@ export class BuilderSessionService {
 
     const nextQuestions = applied.nextQuestions;
     const assistantText = applied.progress.readyForProposal
-      ? "We have enough to propose your Business Operating System. You can still answer more, or review the proposal."
+      ? "I have enough to recommend how your business should run."
       : (nextQuestions[0]?.prompt ?? "Thanks — that helps.");
 
     const conversation = appendConversation(applied.conversation, createBuilderConversationMessage({

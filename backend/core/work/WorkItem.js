@@ -35,6 +35,8 @@ export function createWorkItem({
   relatedObjects,
   requirements,
   metadata,
+  outcomeSummary = null,
+  memoryChanges = null,
 } = {}) {
   requireString(id, "id");
   requireString(title, "title");
@@ -50,6 +52,10 @@ export function createWorkItem({
   requireString(source, "source");
   requireString(createdAt, "createdAt");
   requireString(updatedAt, "updatedAt");
+
+  const changes = Array.isArray(memoryChanges)
+    ? memoryChanges.map((entry) => String(entry)).filter(Boolean)
+    : [];
 
   const workItem = {
     id,
@@ -70,6 +76,11 @@ export function createWorkItem({
     blockedReason: blockedReason === undefined ? null : blockedReason,
     relatedObjects: Array.isArray(relatedObjects) ? relatedObjects : [],
     requirements: Array.isArray(requirements) ? requirements : [],
+    outcomeSummary:
+      outcomeSummary == null || outcomeSummary === undefined
+        ? null
+        : String(outcomeSummary).trim() || null,
+    memoryChanges: deepFreeze(changes),
     metadata: metadata && typeof metadata === "object" ? deepFreeze(metadata) : deepFreeze({}),
   };
 

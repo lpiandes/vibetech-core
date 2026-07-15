@@ -318,7 +318,7 @@ export const PROPERTY_MANAGEMENT_PACKAGE = createIndustryPackage({
       role: "maintenance_coordination",
       capabilities: ["maintenance_coordination", "vendor_coordination", "inspection_coordination"],
       knowledgeRequirements: ["PM_MAINTENANCE", "PM_VENDORS"],
-      connectionDependencies: ["business_email", "sms_channel", "property_management_system"],
+      connectionDependencies: ["business_email", "property_management_system"],
       integrationCapabilities: ["SEND_EMAIL", "SEND_SMS", "READ_EXTERNAL_RECORD"],
       requiresApproval: false,
     },

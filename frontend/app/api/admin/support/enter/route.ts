@@ -12,7 +12,7 @@ export async function POST(request: Request) {
       platformRole: user.platformRole,
       businessId: String(body.businessId ?? ""),
       reason: String(body.reason ?? ""),
-      mode: body.mode === "elevated" ? "elevated" : "read_only",
+      mode: body.mode === "read_only" ? "read_only" : "elevated",
     });
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (error) {

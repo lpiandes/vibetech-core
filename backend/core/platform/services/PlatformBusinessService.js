@@ -35,20 +35,23 @@ export function createPlatformBusinessService({ store, createAndDeliverInvitatio
     name,
     ownerEmail,
     createdByUserId,
-    industryPackageId = PROPERTY_MANAGEMENT_PACKAGE_ID,
+    industryPackageId = null,
   }) {
     const businessId = crypto.randomUUID();
     const businessName = String(name).trim() || "New Business";
-    const packageConfiguration = buildEmptyPropertyManagementConfiguration({
-      companyName: businessName,
-      workspaceId: businessId,
-    });
+    const isPropertyPackage = industryPackageId === PROPERTY_MANAGEMENT_PACKAGE_ID;
+    const packageConfiguration = isPropertyPackage
+      ? buildEmptyPropertyManagementConfiguration({
+        companyName: businessName,
+        workspaceId: businessId,
+      })
+      : {};
 
     const business = await store.createBusiness({
       id: businessId,
       name: businessName,
       kind: "NORMAL",
-      industryPackageId,
+      industryPackageId: industryPackageId || null,
       industryPackageVersion: 1,
       packageConfiguration,
     });

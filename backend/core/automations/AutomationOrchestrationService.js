@@ -4,6 +4,7 @@ import { resolveAutomationParameters } from "./engine/AutomationValueResolver.js
 import { ACTION_EXECUTION_STATUSES, createAutomationActionExecutionResult } from "./actions/AutomationActionExecutionResult.js";
 import { APPROVAL_INTERNAL_EVENT_TYPES } from "../approvals/ApprovalEventTypes.js";
 import { createApprovalRequest } from "../approvals/ApprovalRequest.js";
+import { isOutboundAutomationAction } from "../approvals/OutboundApprovalGate.js";
 
 function fail(message) {
   throw new Error(`AutomationOrchestrationService: ${message}`);
@@ -199,6 +200,7 @@ export class AutomationOrchestrationService {
         workRuntime,
         interactionRuntime: this.interactionRuntime,
         triggerEventId: String(run.triggerEventId),
+        approvalGranted: true,
       },
     });
 
@@ -305,12 +307,16 @@ export class AutomationOrchestrationService {
     const executables = toSortedByOrderThenId(plannedActions);
 
     for (const plannedAction of executables) {
-      if (Boolean(plannedAction.requiresApproval)) {
+      const outboundNeedsApproval = isOutboundAutomationAction(plannedAction);
+      if (Boolean(plannedAction.requiresApproval) || outboundNeedsApproval) {
+        const gatedAction = outboundNeedsApproval && !plannedAction.requiresApproval
+          ? deepFreeze({ ...plannedAction, requiresApproval: true })
+          : plannedAction;
         const gate = this._createApprovalGate({
           runId,
           automationId,
           triggerEventId,
-          plannedAction,
+          plannedAction: gatedAction,
           nowISO,
         });
         executionResults.push(gate.executionResult);

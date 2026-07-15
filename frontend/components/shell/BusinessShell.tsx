@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 import PageContainer from "@/components/layout/PageContainer";
 import WorkspaceMainArea from "@/components/workspace/WorkspaceMainArea";
@@ -10,17 +11,19 @@ import NavPerfDebug from "@/components/workspace/NavPerfDebug";
 import PrimaryNavigation from "@/components/shell/PrimaryNavigation";
 import ShellTopBar from "@/components/shell/ShellTopBar";
 import MobileNavigationDrawer from "@/components/shell/MobileNavigationDrawer";
-import GlobalAskVibeTechEntry from "@/components/shell/GlobalAskVibeTechEntry";
 import AccountMenu from "@/components/shell/AccountMenu";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { cockpitColors, spacing } from "@/design/tokens";
 
 /**
  * Unified business shell for `/b/[businessId]/**`.
- * Brand · switcher · primary nav · Ask VIBETech · Needs Attention · account · mobile drawer.
+ * Brand · switcher · primary nav · Needs Attention · account · mobile drawer.
+ * Ask lives in the top bar (and mobile drawer), not the desktop sidebar foot.
  */
 export default function BusinessShell({ children }: { children: ReactNode }) {
   const scope = useBusinessScope();
+  const pathname = usePathname() ?? "";
+  const isAskSurface = /\/architect(?:\/|$)/.test(pathname);
   const [needsAttentionCount, setNeedsAttentionCount] = useState(0);
 
   useEffect(() => {
@@ -74,7 +77,9 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
               flexShrink: 0,
               backgroundColor: cockpitColors.sidebar,
               borderRight: `1px solid ${cockpitColors.sidebarBorder}`,
+              display: "flex",
               flexDirection: "column",
+              minHeight: 0,
             }}
           >
             <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
@@ -84,21 +89,39 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
               style={{
                 padding: spacing.md,
                 borderTop: `1px solid ${cockpitColors.sidebarBorder}`,
-                display: "grid",
-                gap: spacing.sm,
               }}
             >
-              <GlobalAskVibeTechEntry />
               <AccountMenu variant="dark" />
             </div>
           </aside>
 
-          <div style={{ display: "flex", minWidth: 0, flex: 1, flexDirection: "column" }}>
+      <div
+        style={{
+          display: "flex",
+          minWidth: 0,
+          flex: 1,
+          flexDirection: "column",
+          backgroundColor: isAskSurface ? "#070c10" : undefined,
+        }}
+      >
             <ShellTopBar attentionCount={needsAttentionCount} />
-            <main id="main-content" className="vt-shell-main" style={{ flex: 1, overflow: "auto" }}>
-              <PageContainer>
+            <main
+              id="main-content"
+              className="vt-shell-main"
+              style={{
+                flex: 1,
+                overflow: "auto",
+                // Ask fills the content column — no cream PageContainer frame around it.
+                backgroundColor: isAskSurface ? "#070c10" : undefined,
+              }}
+            >
+              {isAskSurface ? (
                 <WorkspaceMainArea>{children}</WorkspaceMainArea>
-              </PageContainer>
+              ) : (
+                <PageContainer>
+                  <WorkspaceMainArea>{children}</WorkspaceMainArea>
+                </PageContainer>
+              )}
             </main>
           </div>
         </div>

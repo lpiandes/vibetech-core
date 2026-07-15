@@ -4,6 +4,10 @@ export type SetupChecklistItem = {
   actionLabel?: string;
   href?: string;
   complete?: boolean;
+  summary?: string | null;
+  whereInApp?: string | null;
+  inApp?: string[];
+  external?: string[];
 };
 
 export function deriveSetupStatusSummary(checklist: unknown) {

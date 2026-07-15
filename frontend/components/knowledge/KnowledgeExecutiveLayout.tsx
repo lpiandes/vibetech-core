@@ -1,12 +1,12 @@
 "use client";
 
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FileText } from "lucide-react";
 
 import type { KnowledgeViewModel } from "./KnowledgeContext";
 import { KnowledgeViewModelContext } from "./KnowledgeContext";
-import KnowledgeAddDialog from "./KnowledgeAddDialog";
+import KnowledgeAddDialog, { UNIVERSAL_CATEGORY_OPTIONS } from "./KnowledgeAddDialog";
 import type { PlatformKnowledgeData, PlatformKnowledgeDocument } from "./KnowledgeRenderer";
 import type { KnowledgeExecutiveContext, KnowledgePresentation } from "./knowledgeSemantics";
 import PageHeader from "@/components/product/PageHeader";
@@ -40,6 +40,10 @@ function PanelEmpty({ description }: { description: string }) {
   );
 }
 
+function categoryLabel(id: string) {
+  return UNIVERSAL_CATEGORY_OPTIONS.find((c) => c.id === id)?.label ?? id;
+}
+
 function DocumentRow({
   doc,
   presentation,
@@ -56,6 +60,7 @@ function DocumentRow({
   const status = documentStatusPresentation(doc, presentation);
   const source = sourceTypePresentation(doc, presentation);
   const extraction = extractionStatusPresentation(doc, presentation);
+  const categories = Array.isArray(doc.categoryIds) ? doc.categoryIds : [];
 
   return (
     <div
@@ -94,6 +99,9 @@ function DocumentRow({
         <div style={{ display: "flex", flexWrap: "wrap", gap: spacing.xs, marginTop: spacing.xs }}>
           <StatusBadge label={status.label} tone={status.tone} />
           {extraction ? <StatusBadge label={extraction} tone="info" /> : null}
+          {categories.length
+            ? categories.map((id) => <StatusBadge key={id} label={categoryLabel(id)} tone="info" />)
+            : <StatusBadge label="Untagged" tone="warning" />}
         </div>
       </div>
       {canManage ? (
@@ -120,6 +128,19 @@ function DocumentRow({
   );
 }
 
+type PowersAiPanel = {
+  totalDocuments: number;
+  taggedDocuments: number;
+  untaggedDocuments: number;
+  categories: Array<{
+    categoryId: string;
+    label: string;
+    description: string;
+    documentCount: number;
+  }>;
+  winClaim?: string;
+};
+
 export default function KnowledgeExecutiveLayout({
   platformKnowledge,
   knowledgeContext,
@@ -132,6 +153,9 @@ export default function KnowledgeExecutiveLayout({
   const searchParams = useSearchParams();
   const [showAdd, setShowAdd] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [powersAi, setPowersAi] = useState<PowersAiPanel | null>(null);
   const deletingRef = useRef(false);
   const openedFromChecklist = useRef(false);
 
@@ -143,15 +167,43 @@ export default function KnowledgeExecutiveLayout({
     }
   }, [searchParams, platformKnowledge?.canManage]);
 
+  const businessId = platformKnowledge?.businessId ?? "";
+
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    void fetch(`/api/businesses/${businessId}/knowledge?panel=powers-ai`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.powersAi) setPowersAi(data.powersAi);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId, platformKnowledge?.documents?.length]);
+
   if (!viewModel) return null;
 
   const documents = platformKnowledge?.documents ?? [];
   const canManage = canManageKnowledge(platformKnowledge?.canManage);
-  const businessId = platformKnowledge?.businessId ?? "";
   const presentation = (knowledgeContext?.presentation ?? {}) as KnowledgePresentation;
   const emptyCopy =
     presentation.emptyStates?.documents ??
     "Upload policies, procedures, and guides so VIBETech can follow how your business works.";
+
+  const filteredDocuments = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return documents.filter((doc) => {
+      if (categoryFilter && !(doc.categoryIds ?? []).includes(categoryFilter)) return false;
+      if (!q) return true;
+      const hay = [doc.title, doc.originalFilename, ...(doc.categoryIds ?? [])]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [documents, searchQuery, categoryFilter]);
 
   const counts = useMemo(
     () => deriveKnowledgeCounts(documents, knowledgeContext),
@@ -190,22 +242,99 @@ export default function KnowledgeExecutiveLayout({
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>
       <PageHeader
         title="Knowledge"
-        description="Documents and business instructions VIBETech uses to understand how this company works."
+        description="Citeable business memory. AI teammates consult tagged documents — they do not invent specialty content."
         action={addAction}
       />
 
       <ShellMetricStrip metrics={metricStrip} />
 
+      <ShellPanel title="What powers AI" subtitle="Categories owners understand">
+        {powersAi ? (
+          <div style={{ padding: spacing.md, display: "flex", flexDirection: "column", gap: spacing.md }}>
+            <p style={{ margin: 0, fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
+              {powersAi.winClaim ??
+                "Every AI output shows what it read. If Knowledge is empty, we show a gap — we don’t fake expertise."}
+            </p>
+            <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>
+              {powersAi.taggedDocuments} tagged · {powersAi.untaggedDocuments} untagged · {powersAi.totalDocuments} total
+            </div>
+            <div style={{ display: "grid", gap: spacing.sm }}>
+              {powersAi.categories.map((cat) => (
+                <div
+                  key={cat.categoryId}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: spacing.md,
+                    alignItems: "center",
+                    padding: `${spacing.xs} 0`,
+                    borderBottom: `1px solid ${cockpitColors.panelBorder}`,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, color: cockpitColors.textPrimary }}>{cat.label}</div>
+                    <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>
+                      {cat.description}
+                    </div>
+                  </div>
+                  <StatusBadge
+                    label={cat.documentCount ? `${cat.documentCount} doc${cat.documentCount === 1 ? "" : "s"}` : "Empty"}
+                    tone={cat.documentCount ? "success" : "warning"}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <PanelEmpty description="Loading what AI can cite…" />
+        )}
+      </ShellPanel>
+
       <ShellPanel
         title="Business knowledge"
-        subtitle={`${counts.total} document${counts.total === 1 ? "" : "s"}`}
+        subtitle={`${filteredDocuments.length} of ${counts.total} document${counts.total === 1 ? "" : "s"}`}
         action={documents.length === 0 ? addAction : undefined}
       >
+        <div style={{ padding: spacing.md, display: "flex", flexDirection: "column", gap: spacing.sm }}>
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search titles, filenames, categories…"
+            style={{
+              padding: `${spacing.sm} ${spacing.md}`,
+              borderRadius: 8,
+              border: `1px solid ${cockpitColors.panelBorder}`,
+              background: cockpitColors.panel,
+              color: cockpitColors.textPrimary,
+            }}
+          />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: spacing.xs }}>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter("")}
+              style={chipStyle(!categoryFilter)}
+            >
+              All
+            </button>
+            {UNIVERSAL_CATEGORY_OPTIONS.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setCategoryFilter(cat.id)}
+                style={chipStyle(categoryFilter === cat.id)}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
         {documents.length === 0 ? (
           <PanelEmpty description={emptyCopy} />
+        ) : filteredDocuments.length === 0 ? (
+          <PanelEmpty description="No documents match this search." />
         ) : (
           <div>
-            {documents.map((doc) => (
+            {filteredDocuments.map((doc) => (
               <DocumentRow
                 key={doc.id}
                 doc={doc}
@@ -291,4 +420,17 @@ export default function KnowledgeExecutiveLayout({
       ) : null}
     </div>
   );
+}
+
+function chipStyle(active: boolean): CSSProperties {
+  return {
+    border: `1px solid ${active ? cockpitColors.accent : cockpitColors.panelBorder}`,
+    background: active ? cockpitColors.panelElevated : cockpitColors.panel,
+    color: cockpitColors.textPrimary,
+    borderRadius: 999,
+    padding: "6px 12px",
+    fontSize: typography.caption.fontSize,
+    fontWeight: 600,
+    cursor: "pointer",
+  };
 }

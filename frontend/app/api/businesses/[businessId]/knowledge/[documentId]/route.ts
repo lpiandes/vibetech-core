@@ -18,6 +18,26 @@ export async function GET(_req: Request, { params }: { params: Promise<{ busines
   }
 }
 
+export async function PATCH(request: Request, { params }: { params: Promise<{ businessId: string; documentId: string }> }) {
+  try {
+    const { businessId, documentId } = await params;
+    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.KNOWLEDGE_MANAGE);
+    const body = await request.json().catch(() => ({}));
+    const document = await businessKnowledgeService.updateDocumentCategories({
+      businessId,
+      documentId,
+      userId: ctx.user.id,
+      categoryIds: body?.categoryIds ?? [],
+    });
+    return NextResponse.json({ document });
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "NOT_FOUND") {
+      return NextResponse.json({ error: "Knowledge document not found." }, { status: 404 });
+    }
+    return authorizationErrorResponse(err);
+  }
+}
+
 export async function DELETE(_req: Request, { params }: { params: Promise<{ businessId: string; documentId: string }> }) {
   try {
     const { businessId, documentId } = await params;

@@ -16,6 +16,10 @@ import {
   mapImportRunRowResultRow,
 } from "../../import/persistence/importMappers.js";
 import { encryptInvitationToken, decryptInvitationToken } from "../delivery/InvitationDeliveryTokenCrypto.js";
+import {
+  encryptIntegrationSecrets,
+  decryptIntegrationSecrets,
+} from "../../integrations/credentials/IntegrationCredentialCrypto.js";
 import { INVITATION_TTL_DAYS, MEMBERSHIP_ROLES } from "../permissions/rolePermissions.js";
 
 export class PostgresPlatformStore {
@@ -108,6 +112,48 @@ export class PostgresPlatformStore {
   async getBusinessById(businessId) {
     const { rows } = await this.withClient((client) =>
       client.query(`SELECT * FROM businesses WHERE id = $1`, [String(businessId)]),
+    );
+    return mapBusinessRow(rows[0] ?? null);
+  }
+
+  async updateBusinessName({ businessId, name }) {
+    const nextName = String(name ?? "").trim();
+    if (!businessId || !nextName) return null;
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `UPDATE businesses
+         SET name = $2, updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [String(businessId), nextName],
+      ),
+    );
+    return mapBusinessRow(rows[0] ?? null);
+  }
+
+  async updateBusinessIndustryPackage({
+    businessId,
+    industryPackageId = null,
+    industryPackageVersion = 1,
+    packageConfiguration = {},
+  }) {
+    if (!businessId) return null;
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `UPDATE businesses
+         SET industry_package_id = $2,
+             industry_package_version = $3,
+             package_configuration = $4::jsonb,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [
+          String(businessId),
+          industryPackageId ? String(industryPackageId) : null,
+          Number(industryPackageVersion ?? 1),
+          JSON.stringify(packageConfiguration ?? {}),
+        ],
+      ),
     );
     return mapBusinessRow(rows[0] ?? null);
   }
@@ -327,6 +373,64 @@ export class PostgresPlatformStore {
     );
   }
 
+  async upsertIntegrationCredential({ workspaceId, credentialId, providerType, secrets, metadata = {} } = {}) {
+    const secretsCiphertext = encryptIntegrationSecrets(secrets);
+    const meta = metadata && typeof metadata === "object" ? metadata : {};
+    await this.withClient((client) =>
+      client.query(
+        `INSERT INTO integration_credentials (workspace_id, credential_id, provider_type, secrets_ciphertext, metadata, updated_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+         ON CONFLICT (workspace_id, credential_id) DO UPDATE SET
+           provider_type = EXCLUDED.provider_type,
+           secrets_ciphertext = EXCLUDED.secrets_ciphertext,
+           metadata = EXCLUDED.metadata,
+           updated_at = NOW()`,
+        [
+          String(workspaceId),
+          String(credentialId),
+          String(providerType),
+          secretsCiphertext,
+          JSON.stringify(meta),
+        ],
+      ),
+    );
+    return {
+      workspaceId: String(workspaceId),
+      credentialId: String(credentialId),
+      providerType: String(providerType),
+      metadata: meta,
+    };
+  }
+
+  async listIntegrationCredentialsForWorkspace(workspaceId) {
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `SELECT workspace_id, credential_id, provider_type, secrets_ciphertext, metadata, updated_at
+         FROM integration_credentials
+         WHERE workspace_id = $1
+         ORDER BY credential_id ASC`,
+        [String(workspaceId)],
+      ),
+    );
+    return rows.map((row) => ({
+      workspaceId: String(row.workspace_id),
+      credentialId: String(row.credential_id),
+      providerType: String(row.provider_type),
+      secrets: decryptIntegrationSecrets(String(row.secrets_ciphertext)),
+      metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : {},
+      updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    }));
+  }
+
+  async deleteIntegrationCredential({ workspaceId, credentialId } = {}) {
+    await this.withClient((client) =>
+      client.query(
+        `DELETE FROM integration_credentials WHERE workspace_id = $1 AND credential_id = $2`,
+        [String(workspaceId), String(credentialId)],
+      ),
+    );
+  }
+
   async acceptInvitation({ invitationId, userId }) {
     return this.withClient(async (client) => {
       await client.query("BEGIN");
@@ -424,14 +528,16 @@ export class PostgresPlatformStore {
     sizeBytes,
     sourceType,
     uploadedByUserId,
+    categoryIds = [],
   }) {
+    const cats = Array.isArray(categoryIds) ? categoryIds.map(String) : [];
     const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO business_knowledge_documents (
            business_id, title, original_filename, storage_key, mime_type, size_bytes,
-           source_type, status, text_extraction_status, uploaded_by_user_id
+           source_type, status, text_extraction_status, uploaded_by_user_id, category_ids
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'ready', 'skipped', $8)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'ready', 'skipped', $8, $9::text[])
          RETURNING *`,
         [
           String(businessId),
@@ -442,10 +548,25 @@ export class PostgresPlatformStore {
           Number(sizeBytes),
           String(sourceType),
           uploadedByUserId ? String(uploadedByUserId) : null,
+          cats,
         ],
       ),
     );
     return mapKnowledgeDocumentRow(rows[0]);
+  }
+
+  async updateKnowledgeDocumentCategories({ documentId, businessId, categoryIds = [] }) {
+    const cats = Array.isArray(categoryIds) ? categoryIds.map(String) : [];
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `UPDATE business_knowledge_documents
+         SET category_ids = $3::text[], updated_at = NOW()
+         WHERE id = $1 AND business_id = $2 AND deleted_at IS NULL
+         RETURNING *`,
+        [String(documentId), String(businessId), cats],
+      ),
+    );
+    return mapKnowledgeDocumentRow(rows[0] ?? null);
   }
 
   async listKnowledgeDocumentsForBusiness(businessId) {
@@ -1038,6 +1159,12 @@ export class PostgresPlatformStore {
     return mapBusinessOSInstallationRow(rows[0] ?? null);
   }
 
+  /**
+   * @deprecated Legacy Business Builder sessions table. Production uses
+   * upsertAiBuilderSession / ai_builder_sessions. Kept only for migration
+   * compatibility — do not call from product paths.
+   * @see docs/product/VIBETECH_PRODUCT_CONSTITUTION.md
+   */
   async upsertBusinessBuilderSession({
     id,
     businessId = null,
@@ -1081,6 +1208,9 @@ export class PostgresPlatformStore {
     return mapBusinessBuilderSessionRow(rows[0] ?? null);
   }
 
+  /**
+   * @deprecated See upsertBusinessBuilderSession — use getAiBuilderSession instead.
+   */
   async getBusinessBuilderSession(sessionId, businessId = null) {
     const params = [String(sessionId)];
     let sql = `SELECT * FROM business_builder_sessions WHERE id = $1`;

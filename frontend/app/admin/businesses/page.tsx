@@ -16,7 +16,7 @@ export default async function AdminBusinessesPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.lg }}>
       <PageHeader title="Businesses" description="Directory of client businesses" />
-      <ShellPanel title="Business directory" subtitle="Open summary or start audited support">
+      <ShellPanel title="Business directory" subtitle="Open a business to see their real Home in Admin view">
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
@@ -35,8 +35,7 @@ export default async function AdminBusinessesPage() {
                   <td style={{ padding: 8 }}>{business.installedOsVersion ?? "—"}</td>
                   <td style={{ padding: 8 }}>{business.readiness}</td>
                   <td style={{ padding: 8, display: "flex", gap: 8 }}>
-                    <Link href={`/admin/businesses/${business.id}`}>Summary</Link>
-                    <Link href={`/admin/support?businessId=${business.id}`}>Support</Link>
+                    <Link href={`/admin/businesses/${business.id}`}>Open</Link>
                   </td>
                 </tr>
               ))}

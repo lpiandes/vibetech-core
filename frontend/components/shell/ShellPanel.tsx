@@ -46,7 +46,7 @@ export default function ShellPanel({
         </div>
         {action}
       </div>
-      <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
+          <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
     </section>
   );
 }

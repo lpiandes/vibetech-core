@@ -14,6 +14,9 @@ import {
 import { workspaceCompositionRegistry } from "../workspace/WorkspaceCompositionRegistry.js";
 import { WorkspaceService } from "../workspace/WorkspaceService";
 import type { WorkspaceActivationInput } from "../workspace/ConnectedBusinessWorkspace";
+import { createLiveIntegrationProviders } from "@/lib/server/liveIntegrations";
+import { platformStore } from "@/lib/server/compose";
+import { hydrateWorkspaceCredentials } from "../../../backend/core/integrations/credentials/durableCredentialVault.js";
 
 export type AuthorizedContext = Awaited<ReturnType<typeof getAuthorizedWorkspace>>;
 
@@ -90,8 +93,21 @@ export const getAuthorizedWorkspace = cache(async (businessId: string, requiredP
     workspaceId: businessId,
     activation: scope.authz.activation as WorkspaceActivationInput,
     runtimeSnapshots,
+    extraProviders: createLiveIntegrationProviders({ nowISO: "2026-07-01T00:00:00.000Z" }),
   });
   timer.mark("WORKSPACE_SERVICE");
+
+  const connected = (service as any).connected as { credentialsHydrated?: boolean };
+  if (!connected.credentialsHydrated) {
+    await timer.time("CREDENTIAL_HYDRATE", () =>
+      hydrateWorkspaceCredentials({
+        platformStore,
+        workspaceId: businessId,
+      }),
+    );
+    connected.credentialsHydrated = true;
+  }
+
   await timer.time("SUBJECT_INTEREST_RECONCILIATION", () =>
     service.reconcileHistoricalSubjectInterestsIfNeeded(),
   );

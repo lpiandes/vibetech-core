@@ -7,6 +7,7 @@ export type PlatformKnowledgeDocument = {
   sizeBytes: number;
   status: string;
   textExtractionStatus: string;
+  categoryIds?: string[];
   uploadedBy: { id: string; name: string } | null;
   createdAt: string;
   updatedAt: string;

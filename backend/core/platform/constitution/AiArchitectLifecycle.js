@@ -1,7 +1,13 @@
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 
 /**
- * AI Architect reasoning lifecycle — propose before install; improve after operate.
+ * AI Architect product lifecycle — propose before install; improve after operate.
+ *
+ * Persisted session stages live in BuilderSession (BUILDER_SESSION_STAGES) and map
+ * here via BuilderSessionLifecycle. Intelligence pipeline stages (ArchitectPipeline)
+ * are internal only — never session state, never owner-facing.
+ *
+ * @see docs/product/VIBETECH_PRODUCT_CONSTITUTION.md
  */
 export const AI_ARCHITECT_LIFECYCLE = Object.freeze([
   "discovery",

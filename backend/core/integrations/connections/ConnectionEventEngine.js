@@ -144,6 +144,21 @@ export class ConnectionEventEngine {
         });
         break;
       }
+      case CONNECTION_EVENT_TYPES.CONNECTION_METADATA_UPDATED: {
+        const connectionId = String(payload.connectionId ?? "");
+        const idx = connections.findIndex((c) => c.id === connectionId);
+        if (idx === -1) fail("CONNECTION_METADATA_UPDATED: connection not found.");
+        const existing = connections[idx];
+        connections[idx] = createConnection({
+          ...existing,
+          metadata: deepFreeze({
+            ...(existing.metadata ?? {}),
+            ...(payload.metadata ?? {}),
+          }),
+          updatedAt: timestampISO,
+        });
+        break;
+      }
       default:
         fail(`unsupported event type: ${type}`);
     }

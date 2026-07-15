@@ -28,14 +28,14 @@ export default function ReasoningStrip({
   if (!moments.length) {
     return (
       <div style={{ color: architect.inkMuted, fontSize: 13, lineHeight: 1.5 }}>
-        Architect will explain each step in plain English as understanding grows.
+        VIBETech will explain each step in plain English as understanding grows.
       </div>
     );
   }
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
-      <ArchitectBadge tone="accent">Architect reasoning</ArchitectBadge>
+      <ArchitectBadge tone="accent">Why this matters</ArchitectBadge>
       {moments.map((moment) => (
         <div
           key={moment.id}

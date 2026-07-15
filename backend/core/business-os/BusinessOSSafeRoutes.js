@@ -1,8 +1,10 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
+import { isSpecialtySurfaceModuleId } from "../ai-builder/specialty/SpecialtySurfaceCompiler.js";
 
 /**
  * Safe registered product routes for Business OS modules.
  * Arbitrary route generation is forbidden — only these destinations may appear in nav.
+ * Specialty surfaces use a single hosted route: /specialty/{surfaceId}.
  */
 export const BUSINESS_OS_SAFE_ROUTES = Object.freeze({
   home: "home",
@@ -42,15 +44,25 @@ export const BUSINESS_OS_SAFE_ROUTES = Object.freeze({
   scouting: "work",
 });
 
+function specialtySegment(moduleId) {
+  return `specialty/${encodeURIComponent(String(moduleId))}`;
+}
+
 export function resolveSafeModuleHref(moduleId, { businessId = null } = {}) {
-  const segment = BUSINESS_OS_SAFE_ROUTES[String(moduleId)] ?? null;
+  const id = String(moduleId ?? "");
+  let segment = BUSINESS_OS_SAFE_ROUTES[id] ?? null;
+  if (!segment && isSpecialtySurfaceModuleId(id)) {
+    segment = specialtySegment(id);
+  }
   if (!segment) return null;
   if (!businessId) return `/${segment}`;
   return `/b/${businessId}/${segment}`;
 }
 
 export function isSafeModuleRoute(moduleId) {
-  return Object.prototype.hasOwnProperty.call(BUSINESS_OS_SAFE_ROUTES, String(moduleId));
+  const id = String(moduleId ?? "");
+  if (Object.prototype.hasOwnProperty.call(BUSINESS_OS_SAFE_ROUTES, id)) return true;
+  return isSpecialtySurfaceModuleId(id);
 }
 
 export function listSafeModuleIds() {

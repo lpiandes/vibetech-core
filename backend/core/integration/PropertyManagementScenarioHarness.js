@@ -127,7 +127,10 @@ export function buildPropertyManagementWorkspaceStack({
       ? () => snap(RUNTIME_SNAPSHOT_KINDS.INTELLIGENCE_CANDIDATE)
       : undefined,
   });
-  const automationRuntime = new AutomationRuntime({ nowISO });
+  const automationRuntime = new AutomationRuntime({
+    nowISO,
+    seed: snap(RUNTIME_SNAPSHOT_KINDS.AUTOMATION) ? () => snap(RUNTIME_SNAPSHOT_KINDS.AUTOMATION) : undefined,
+  });
   const automationRuleEngine = new AutomationRuleEngine();
   const approvalRuntime = new ApprovalRuntime({ nowISO });
   const installationRuntime = new IndustryPackageInstallationRuntime();

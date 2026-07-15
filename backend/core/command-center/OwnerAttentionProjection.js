@@ -113,11 +113,11 @@ export function projectOwnerAttention({
 
     items.push({
       id: `attention_approval_${approvalId}`,
-      title: party ? `${party}` : `Approve: ${approval.title ?? "owner authorization"}`,
+      title: party ? `Approve send to ${party}` : `Approve: ${approval.title ?? "outbound message"}`,
       summary: subject
-        ? `Owner response for ${subject} — ${approval.description ?? approval.title ?? "authorization required"}`
-        : approval.description ?? `Authorization required before external communication.`,
-      reason: "External communication requires authorization.",
+        ? `Owner approval for ${subject} — ${approval.description ?? approval.title ?? "authorization required"}`
+        : approval.description ?? `Customer-facing send needs your approval before it leaves the building.`,
+      reason: "Automation without silent outbound. Owners supervise; AI executes approved work.",
       businessImpact: "Work cannot continue until approved.",
       priority: "critical",
       dueAt: approval.dueAt ?? null,
@@ -128,13 +128,39 @@ export function projectOwnerAttention({
       partyId,
       partyName: party,
       subjectName: subject,
+      channel: approval.channel ?? approval.metadata?.channel ?? approval.capability ?? null,
+      workId: relatedWork?.id ? String(relatedWork.id) : null,
+      workHref: relatedWork?.id && presentation?.businessId
+        ? `/b/${presentation.businessId}/work?workId=${encodeURIComponent(String(relatedWork.id))}`
+        : null,
+      knowledgeCited: Array.isArray(approval.metadata?.knowledgeCited)
+        ? approval.metadata.knowledgeCited.map(String)
+        : Array.isArray(relatedWork?.metadata?.sourceRefs)
+          ? relatedWork.metadata.sourceRefs.map((ref) => String(ref.title ?? ref.id ?? ref)).filter(Boolean)
+          : [],
+      requestedBy: approval.requestedBy ?? approval.requesterId ?? "AI teammate",
+      requestedAt: approval.requestedAt ?? approval.createdAt ?? null,
       recommendedAction: "Approve the prepared response if it aligns with your policies.",
       availableActions: [
         { id: "approve", label: "Approve", mutation: { type: "approval_decision", approvalId, decision: "GRANT" } },
         { id: "reject", label: "Reject", mutation: { type: "approval_decision", approvalId, decision: "REJECT" } },
-        { id: "review_approval", label: "Review details", href: "/attention" },
+        {
+          id: "review_approval",
+          label: "Open Work",
+          href: relatedWork?.id ? `/work?workId=${encodeURIComponent(String(relatedWork.id))}` : "/work",
+        },
       ],
       relatedObjects: [createEntityRef({ entityType: "Approval", entityId: approvalId })],
+      audit: {
+        approvalId,
+        channel: approval.channel ?? approval.metadata?.channel ?? null,
+        requestedBy: approval.requestedBy ?? approval.requesterId ?? null,
+        requestedAt: approval.requestedAt ?? approval.createdAt ?? null,
+        knowledgeCited: Array.isArray(approval.metadata?.knowledgeCited)
+          ? approval.metadata.knowledgeCited.map(String)
+          : [],
+        winClaim: "Every customer email/SMS/call has an approval event.",
+      },
     });
   }
 
@@ -248,19 +274,24 @@ export function projectOwnerAttention({
   for (const conn of safeArray(connectedSystemsSnapshot?.connections).filter(
     (c) => c.requirementLevel === "required" && c.status !== "CONNECTED" && !String(c.connectionLabel ?? "").includes("Demo connection active"),
   )) {
+    const connId = String(conn.id);
     items.push({
-      id: `attention_conn_${conn.id}`,
-      title: `Connect ${conn.displayName} for production`,
-      summary: conn.purpose || "Production provider setup required.",
-      reason: "Real business provider is not yet connected.",
-      businessImpact: "Live communications and integrations remain unavailable.",
+      id: `attention_conn_${connId}`,
+      title: `Connect ${conn.displayName}`,
+      summary: conn.purpose || `${conn.displayName} must be connected before related features can run.`,
+      reason: `${conn.displayName} is not connected yet.`,
+      businessImpact: "Live communications and integrations remain unavailable until this connection is complete.",
       priority: "medium",
       dueAt: null,
       sourceType: "connection",
-      sourceId: String(conn.id),
-      recommendedAction: "Complete production provider setup in Connections.",
-      availableActions: [{ id: "connect_system", label: "Open connections", href: "/connections" }],
-      relatedObjects: [createEntityRef({ entityType: "Connection", entityId: String(conn.id) })],
+      sourceId: connId,
+      recommendedAction: `Connect ${conn.displayName} in Integrations.`,
+      availableActions: [{
+        id: "connect_system",
+        label: "Open Integrations",
+        href: `/integrations?focus=${encodeURIComponent(connId)}`,
+      }],
+      relatedObjects: [createEntityRef({ entityType: "Connection", entityId: connId })],
     });
   }
 

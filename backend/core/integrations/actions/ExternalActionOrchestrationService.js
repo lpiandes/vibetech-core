@@ -9,6 +9,7 @@ import { INTEGRATION_CAPABILITIES } from "../capabilities/IntegrationCapability.
 import { providerSupportsCapability } from "../providers/IntegrationProviderValidator.js";
 import { CommunicationExecutionService } from "../../communications/providers/CommunicationExecutionService.js";
 import { checkCommunicationPermitted } from "../../communications/preferences/CommunicationPreferenceEnforcer.js";
+import { evaluateOutboundSendPermission } from "../../approvals/OutboundApprovalGate.js";
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 
 function fail(message) {
@@ -114,21 +115,34 @@ export class ExternalActionOrchestrationService {
     });
   }
 
+  #resolveOutboundApproved(actionRequest) {
+    if (
+      actionRequest.outboundApproved
+      || actionRequest.parameters?.outboundApproved
+      || actionRequest.metadata?.outboundApproved
+    ) {
+      return true;
+    }
+
+    const messageId = actionRequest.parameters?.messageId;
+    if (!messageId || !this.communicationRuntime?.getMessage) return false;
+
+    const message = this.communicationRuntime.getMessage(messageId);
+    if (!message) return false;
+
+    // Align with CommunicationExecutionService: already-queued messages were staged for delivery.
+    return Boolean(
+      message.metadata?.outboundApproved
+      || message.metadata?.approvalStatus === "approved"
+      || String(message.status).toLowerCase() === "queued",
+    );
+  }
+
   async execute(actionInput = {}) {
     const actionRequest =
       actionInput.id && actionInput.capability
         ? deepFreeze(actionInput)
         : createExternalActionRequest(actionInput);
-
-    if (actionRequest.requiresApproval) {
-      return createExternalActionResult({
-        actionRequestId: actionRequest.id,
-        status: EXTERNAL_ACTION_STATUSES.PENDING_APPROVAL,
-        connectionId: actionRequest.connectionId,
-        providerId: actionRequest.providerId,
-        startedAt: this.nowISO,
-      });
-    }
 
     const idemKey = String(actionRequest.idempotencyKey ?? actionRequest.id);
     if (this._idempotency.has(idemKey)) {
@@ -137,6 +151,7 @@ export class ExternalActionOrchestrationService {
 
     this.#publishActionEvent({ eventType: "EXTERNAL_ACTION_REQUESTED", actionRequest });
 
+    // Opt-out / preference blocks must win before outbound approval staging.
     const preferenceCheck = this.#enforceCommunicationPreference(actionRequest);
     if (!preferenceCheck.permitted) {
       const blocked = createExternalActionResult({
@@ -151,6 +166,41 @@ export class ExternalActionOrchestrationService {
       });
       this._idempotency.set(idemKey, blocked);
       return blocked;
+    }
+
+    const messageId = actionRequest.parameters?.messageId;
+    const message = messageId && this.communicationRuntime?.getMessage
+      ? this.communicationRuntime.getMessage(messageId)
+      : null;
+
+    const outboundGate = evaluateOutboundSendPermission({
+      capability: actionRequest.capability,
+      channel: message?.channel ?? null,
+      direction: message?.direction ?? null,
+      requiresApproval: actionRequest.requiresApproval,
+      outboundApproved: this.#resolveOutboundApproved(actionRequest),
+      messageStatus: message?.status ?? null,
+    });
+
+    if (outboundGate.forceApproval || (actionRequest.requiresApproval && !outboundGate.allowed)) {
+      return createExternalActionResult({
+        actionRequestId: actionRequest.id,
+        status: EXTERNAL_ACTION_STATUSES.PENDING_APPROVAL,
+        connectionId: actionRequest.connectionId,
+        providerId: actionRequest.providerId,
+        startedAt: this.nowISO,
+        error: outboundGate.reason ?? "approval_required",
+      });
+    }
+
+    if (actionRequest.requiresApproval && !outboundGate.outbound) {
+      return createExternalActionResult({
+        actionRequestId: actionRequest.id,
+        status: EXTERNAL_ACTION_STATUSES.PENDING_APPROVAL,
+        connectionId: actionRequest.connectionId,
+        providerId: actionRequest.providerId,
+        startedAt: this.nowISO,
+      });
     }
 
     const connection = this.#resolveConnection(actionRequest);

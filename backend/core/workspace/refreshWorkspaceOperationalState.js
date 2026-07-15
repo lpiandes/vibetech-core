@@ -3,7 +3,7 @@ import { buildConnectedSystemsSnapshot } from "../industries/connections/buildCo
 import { buildDigitalEmployeeReadinessReport } from "../industries/employees/DigitalEmployeeReadinessEngine.js";
 import { buildConnectionDependencyProjection } from "../integrations/dependencies/ConnectionDependencyProjection.js";
 import { buildPmProspectCoordinatorPlatformCoverage } from "../platform/knowledge/PlatformKnowledgeReadinessBridge.js";
-import { PROPERTY_MANAGEMENT_PACKAGE_ID } from "./activation/activateWorkspace.js";
+import { resolveEmployeeDefinitionsForReadiness } from "../workforce/normalizeBosEmployeesForReadiness.js";
 
 /**
  * Recompute integration + employee readiness using durable platform knowledge counts.
@@ -13,6 +13,7 @@ import { PROPERTY_MANAGEMENT_PACKAGE_ID } from "./activation/activateWorkspace.j
  *   integrationPlatform: object,
  *   activation?: object | null,
  *   platformActiveKnowledgeCount?: number,
+ *   bosEmployeeDefinitions?: object[],
  * }} params
  */
 export function refreshWorkspaceOperationalState({
@@ -21,15 +22,27 @@ export function refreshWorkspaceOperationalState({
   integrationPlatform,
   activation,
   platformActiveKnowledgeCount = 0,
+  bosEmployeeDefinitions = null,
 } = {}) {
   if (!ctx || !installationResult || !integrationPlatform) {
     return {};
   }
 
   const industryPackage =
-    getDefaultIndustryPackageRegistry().getPackage(activation?.industryPackageId ?? PROPERTY_MANAGEMENT_PACKAGE_ID) ??
-    null;
-  const employeeDefinitions = industryPackage?.employeeDefinitions ?? installationResult.employeeDefinitions ?? [];
+    (activation?.industryPackageId
+      ? getDefaultIndustryPackageRegistry().getPackage(activation.industryPackageId)
+      : null)
+    ?? null;
+
+  // Prefer installed Business OS employees (incl. owner-added), then package, then activation install.
+  const employeeDefinitions = resolveEmployeeDefinitionsForReadiness({
+    bosEmployees: bosEmployeeDefinitions
+      ?? installationResult?.configuration?.employees
+      ?? installationResult?.employeeDefinitions
+      ?? [],
+    packageEmployees: industryPackage?.employeeDefinitions ?? [],
+    installationEmployees: installationResult?.employeeDefinitions ?? [],
+  });
 
   const platformKnowledgeCoverage = buildPmProspectCoordinatorPlatformCoverage(platformActiveKnowledgeCount);
 

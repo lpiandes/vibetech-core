@@ -85,11 +85,32 @@ export class ConnectionService {
   }
 
   attachMockCredentials({ connectionId, providerType } = {}) {
-    const credentialReference = createCredentialReference({
-      credentialId: `cred_${connectionId}`,
-      credentialType: "mock",
+    return this.attachProviderCredentials({
+      connectionId,
       providerType,
+      credentialType: "mock",
+      externalAccountReference: `mock_account_${connectionId}`,
       metadata: { mock: true },
+    });
+  }
+
+  /**
+   * Attach a credential reference and mark the connection as connected.
+   * Secrets live in CredentialVault keyed by credentialId — never in events.
+   */
+  attachProviderCredentials({
+    connectionId,
+    providerType,
+    credentialId = null,
+    credentialType = "oauth2",
+    externalAccountReference = null,
+    metadata = {},
+  } = {}) {
+    const credentialReference = createCredentialReference({
+      credentialId: String(credentialId ?? `cred_${connectionId}`),
+      credentialType: String(credentialType),
+      providerType,
+      metadata: metadata && typeof metadata === "object" ? metadata : {},
     });
 
     this.connectionRuntime.applyEvent({
@@ -108,7 +129,7 @@ export class ConnectionService {
       payload: {
         connectionId,
         providerType,
-        externalAccountReference: `mock_account_${connectionId}`,
+        externalAccountReference: String(externalAccountReference ?? `account_${connectionId}`),
         connectedAt: this.nowISO,
       },
     });
@@ -201,6 +222,21 @@ export class ConnectionService {
         connectionId,
         message,
         health: deepFreeze({ level: "NEEDS_ATTENTION", message }),
+      },
+    });
+    return this.connectionRuntime.getConnection(connectionId);
+  }
+
+  updateMetadata({ connectionId, metadata = {} } = {}) {
+    if (!connectionId) throw new Error("ConnectionService: connectionId required.");
+    this.connectionRuntime.applyEvent({
+      id: `evt_${CONNECTION_EVENT_TYPES.CONNECTION_METADATA_UPDATED}_${connectionId}_${Date.now()}`,
+      timestampISO: this.nowISO,
+      type: CONNECTION_EVENT_TYPES.CONNECTION_METADATA_UPDATED,
+      source: "connection_service",
+      payload: {
+        connectionId,
+        metadata: metadata && typeof metadata === "object" ? metadata : {},
       },
     });
     return this.connectionRuntime.getConnection(connectionId);

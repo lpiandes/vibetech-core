@@ -107,15 +107,30 @@ test("business OS specifications and installations are tenant-isolated", async (
   assert.equal(proposal.businessId, businessA.id);
   assert.equal(await platformStore.getBusinessCapabilityProposal(proposal.proposalId, businessB.id), null);
 
-  const session = await platformStore.upsertBusinessBuilderSession({
-    id: `session_${uid()}`,
+  const session = await platformStore.upsertAiBuilderSession({
+    sessionId: `abs_persist_${uid()}`,
     businessId: businessA.id,
-    status: "discovery",
-    mode: "operator",
-    discovery: { answers: [] },
+    actorId: owner.id,
+    mode: "client_self_service",
+    currentStage: "discovering",
+    businessSummary: {},
+    websiteUrls: [],
+    uploadedArtifactIds: [],
+    questions: [],
+    answers: [],
     evidence: [],
-    createdByUserId: owner.id,
+    assumptions: [],
+    unresolvedQuestions: [],
+    recommendations: [],
+    selectedBlueprints: [],
+    selectedComponents: [],
+    capabilityGaps: [],
+    conversation: [],
+    progress: { percent: 0, label: "Getting started", readyForProposal: false },
+    appearance: {},
+    metadata: {},
   });
   assert.equal(session.businessId, businessA.id);
-  assert.equal(await platformStore.getBusinessBuilderSession(session.id, businessB.id), null);
+  const forBusinessB = await platformStore.listAiBuilderSessionsForBusiness(businessB.id);
+  assert.equal(forBusinessB.some((row) => row.sessionId === session.sessionId), false);
 });

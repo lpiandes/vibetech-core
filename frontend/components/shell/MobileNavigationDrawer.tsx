@@ -2,12 +2,14 @@
 
 import { useEffect, useId, useState, type CSSProperties } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Menu, MessageSquare, X } from "lucide-react";
 
 import PrimaryNavigation from "@/components/shell/PrimaryNavigation";
 import AccountMenu from "@/components/shell/AccountMenu";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { cockpitColors, spacing, radius, typography } from "@/design/tokens";
+import { ASK_NEW_CHAT_EVENT } from "@/components/architect/askOpenChat";
 
 /**
  * Mobile drawer + sticky Ask VIBETech entry for the business shell.
@@ -20,6 +22,8 @@ export default function MobileNavigationDrawer({
 }) {
   const [open, setOpen] = useState(false);
   const scope = useBusinessScope();
+  const pathname = usePathname() ?? "";
+  const onAsk = /\/architect(?:\/|$)/.test(pathname);
   const titleId = useId();
   const architectHref = `/b/${encodeURIComponent(scope.businessId)}/architect`;
 
@@ -83,6 +87,14 @@ export default function MobileNavigationDrawer({
         <Link
           href={architectHref}
           aria-label="Ask VIBETech"
+          onClick={(event) => {
+            if (!onAsk) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+            event.preventDefault();
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent(ASK_NEW_CHAT_EVENT));
+            }
+          }}
           style={{
             ...iconButtonStyle,
             backgroundColor: cockpitColors.accent,
@@ -94,6 +106,7 @@ export default function MobileNavigationDrawer({
         </Link>
       </div>
 
+      {!onAsk ? (
       <Link
         href={architectHref}
         className="vt-mobile-fab"
@@ -119,6 +132,7 @@ export default function MobileNavigationDrawer({
         <MessageSquare size={16} aria-hidden />
         Ask VIBETech
       </Link>
+      ) : null}
 
       {open ? (
         <div

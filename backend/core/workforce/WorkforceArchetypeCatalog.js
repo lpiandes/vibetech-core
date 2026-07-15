@@ -83,6 +83,30 @@ export const WORKFORCE_ORG_TEMPLATES = deepFreeze({
       { archetypeId: "communications_specialist", title: "Parent Communications Specialist", departmentId: "admin", teamId: "front_office", reportsTo: "owner" },
     ],
   },
+  marketing_agency: {
+    departments: [
+      { departmentId: "growth", label: "Growth & Leads", purpose: "Inbound leads, qualification, and follow-up." },
+      { departmentId: "delivery", label: "Client Delivery", purpose: "Campaigns, content, and client communications." },
+      { departmentId: "admin", label: "Agency Administration", purpose: "Knowledge, reporting, and owner briefings." },
+    ],
+    teams: [
+      { teamId: "intake", label: "Lead Intake", departmentId: "growth" },
+      { teamId: "campaigns", label: "Campaigns", departmentId: "delivery" },
+      { teamId: "owner_office", label: "Owner Office", departmentId: "admin" },
+    ],
+    humanRoles: [
+      { roleId: "owner", label: "Agency Owner", membershipRole: "OWNER", departmentId: "admin", reportsTo: null },
+      { roleId: "manager", label: "Account Manager", membershipRole: "MANAGER", departmentId: "delivery", reportsTo: "owner" },
+      { roleId: "specialist", label: "Specialist", membershipRole: "EMPLOYEE", departmentId: "growth", reportsTo: "manager" },
+    ],
+    aiPositions: [
+      { archetypeId: "intake_specialist", title: "Lead Intake Coordinator", departmentId: "growth", teamId: "intake", reportsTo: "manager" },
+      { archetypeId: "follow_up_specialist", title: "Lead Follow-Up Specialist", departmentId: "growth", teamId: "intake", reportsTo: "manager" },
+      { archetypeId: "campaign_coordinator", title: "Campaign Coordinator", departmentId: "delivery", teamId: "campaigns", reportsTo: "manager" },
+      { archetypeId: "communications_specialist", title: "Client Communications Specialist", departmentId: "delivery", teamId: "campaigns", reportsTo: "manager" },
+      { archetypeId: "executive_assistant", title: "Owner Briefing Assistant", departmentId: "admin", teamId: "owner_office", reportsTo: "owner" },
+    ],
+  },
   default: {
     departments: [
       { departmentId: "ops", label: "Operations", purpose: "Core day-to-day work." },
@@ -110,7 +134,13 @@ export const WORKFORCE_ORG_TEMPLATES = deepFreeze({
 });
 
 export function resolveOrgTemplate(industry) {
-  const key = String(industry ?? "default");
+  const key = String(industry ?? "default").toLowerCase().replace(/\s+/g, "_");
+  if (key === "marketing" || key === "agency" || key === "advertising") {
+    return WORKFORCE_ORG_TEMPLATES.marketing_agency;
+  }
+  if (key === "property" || key === "real_estate") {
+    return WORKFORCE_ORG_TEMPLATES.property_management;
+  }
   return WORKFORCE_ORG_TEMPLATES[key] ?? WORKFORCE_ORG_TEMPLATES.default;
 }
 

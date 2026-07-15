@@ -78,10 +78,19 @@ function DigitalEmployeeCard({ employee, businessId }: { employee: TeamDigitalEm
   const monitoring = monitoringSummary(employee);
   const blockers = safeArray<string>(employee.blockerItems);
   const statusLabel = String(employee.statusLabel ?? "Unknown");
-  const askHref = `/b/${encodeURIComponent(businessId)}/architect?employeeId=${encodeURIComponent(String(employee.id ?? employee.employeeId ?? ""))}`;
+  const employeeId = String(employee.id ?? employee.employeeId ?? "");
+  const askHref = employee.askHref
+    ?? `/b/${encodeURIComponent(businessId)}/architect?employeeId=${encodeURIComponent(employeeId)}`;
+  const specialtyHref = employee.specialtyHref
+    ?? (employee.ownerAdded || employee.customAiWork || employeeId.startsWith("owner_emp_")
+      ? `/b/${encodeURIComponent(businessId)}/specialty/${encodeURIComponent(employeeId)}`
+      : null);
+  const detailHref = specialtyHref
+    ?? employee.detailHref
+    ?? `/b/${encodeURIComponent(businessId)}/team/${encodeURIComponent(employeeId)}`;
 
   return (
-    <div>
+    <div style={{ padding: `0 0 ${spacing.md}` }}>
       <EmployeeWorkerCard
         name={String(employee.name ?? "Teammate")}
         role={String(employee.responsibility ?? employee.role ?? "")}
@@ -98,7 +107,7 @@ function DigitalEmployeeCard({ employee, businessId }: { employee: TeamDigitalEm
             ? String(employee.needsFromOwner)
             : null
         }
-        nextAction={action?.label ?? null}
+        nextAction={specialtyHref ? "Open specialty page" : (action?.label ?? null)}
         recentOutcome={
           monitoring.length
             ? monitoring.map((m) => `${m.label}: ${m.count}`).join(" · ")
@@ -108,13 +117,28 @@ function DigitalEmployeeCard({ employee, businessId }: { employee: TeamDigitalEm
         blockers={blockers}
         askHref={askHref}
       />
-      {action?.href ? (
-        <div style={{ padding: `0 ${spacing.md} ${spacing.md}` }}>
+      <div
+        style={{
+          padding: `0 ${spacing.lg} ${spacing.lg}`,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: spacing.sm,
+          alignItems: "center",
+        }}
+      >
+        {specialtyHref ? (
+          <PrimaryButton href={specialtyHref}>Open specialty page</PrimaryButton>
+        ) : (
+          <Link href={detailHref} style={{ color: cockpitColors.accent, fontWeight: 600, fontSize: typography.caption.fontSize }}>
+            Open teammate
+          </Link>
+        )}
+        {action?.href && action.href !== detailHref && action.href !== specialtyHref ? (
           <Link href={action.href} style={{ color: cockpitColors.accent, fontWeight: 600, fontSize: typography.caption.fontSize }}>
             {action.label}
           </Link>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -236,7 +260,7 @@ export default function TeamExecutiveLayout({
     flashMessage("Invitation link copied.");
   }
 
-  const inviteAction = canInvite ? <PrimaryButton onClick={() => setShowInvite(true)}>+ Invite person</PrimaryButton> : undefined;
+  const inviteAction = canInvite ? <PrimaryButton onClick={() => setShowInvite(true)}>+ Invite teammate</PrimaryButton> : undefined;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>

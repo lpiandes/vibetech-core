@@ -2,6 +2,7 @@ import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { buildBusinessOSNavigation } from "../business-os/BusinessOSNavigationBuilder.js";
 import { DashboardRecommendationEngine } from "./DashboardRecommendationEngine.js";
 import { explainBusinessOSSpecification } from "../business-os/BusinessOSExplanationProjection.js";
+import { scrubOwnerFacingPurpose } from "./businessIdentity.js";
 
 /**
  * Client-safe visual proposal — plain language, no raw JSON by default.
@@ -13,6 +14,23 @@ export function buildVisualBusinessOSProposal({
   businessId = "preview",
 } = {}) {
   const explanation = explainBusinessOSSpecification(specification);
+  const navOverrides = session?.appearance?.navigationOverrides ?? {};
+  const employeeOverrides = session?.appearance?.employeeOverrides ?? {};
+  const roleOverrides = session?.appearance?.roleOverrides ?? {};
+  const sectionOverrides = session?.appearance?.sectionOverrides ?? {};
+  const planAdditions = session?.appearance?.planAdditions ?? { modules: [], employees: [] };
+  const addedModules = Array.isArray(planAdditions.modules) ? planAdditions.modules : [];
+  const addedEmployees = Array.isArray(planAdditions.employees) ? planAdditions.employees : [];
+
+  const explanationWithOverrides = {
+    ...explanation,
+    sections: (explanation.sections ?? []).map((section) => ({
+      ...section,
+      body: sectionOverrides?.[section.id]?.body ?? section.body,
+      title: sectionOverrides?.[section.id]?.title ?? section.title,
+    })),
+  };
+
   const navigation = buildBusinessOSNavigation({
     modules: specification.modules,
     navigation: { ...specification.navigation, primaryItems: [], maximumPrimaryItems: 7 },
@@ -26,19 +44,32 @@ export function buildVisualBusinessOSProposal({
   const views = {
     overview: {
       title: "Overview",
-      headline: explanation.summary,
-      bullets: explanation.sections.find((section) => section.id === "profile")
-        ? [explanation.sections.find((section) => section.id === "profile").body]
+      headline: explanationWithOverrides.summary,
+      bullets: explanationWithOverrides.sections.find((section) => section.id === "profile")
+        ? [explanationWithOverrides.sections.find((section) => section.id === "profile").body]
         : [],
     },
     navigation: {
-      title: "Navigation",
-      headline: "You will have these workspaces",
-      items: navigation.primaryItems
-        .filter((item) => item.moduleId !== "more")
-        .map((item) => ({ id: item.moduleId, label: item.label })),
+      title: "Workspaces",
+      headline: "You will have these workspaces — rename any of them",
+      items: [
+        ...navigation.primaryItems
+          .filter((item) => item.moduleId !== "more")
+          .filter((item) => !navOverrides?.hidden?.[item.moduleId])
+          .map((item) => ({
+            id: item.moduleId,
+            label: navOverrides?.labels?.[item.moduleId] ?? item.label,
+          })),
+        ...addedModules
+          .filter((item) => item?.id && !navOverrides?.hidden?.[item.id])
+          .map((item) => ({
+            id: String(item.id),
+            label: String(item.label ?? item.id),
+            ownerAdded: true,
+          })),
+      ],
       overflow: navigation.overflowItems.map((item) => item.label),
-      note: "Digital employees stay under Digital Workforce — not as separate tabs.",
+      note: "Digital Workforce is where your AI employees live. Rename workspaces anytime before you go live.",
     },
     dashboard: {
       title: "Dashboard",
@@ -58,27 +89,52 @@ export function buildVisualBusinessOSProposal({
     },
     digitalWorkforce: {
       title: "Digital Workforce",
-      headline: "These digital employees will help",
-      items: (specification.employeeDefinitions ?? []).map((employee) => ({
-        id: employee.employeeId,
-        label: employee.label,
-        purpose: employee.purpose,
-        responsibilities: employee.responsibilities ?? employee.duties ?? [
-          employee.purpose,
-        ].filter(Boolean),
-        approvals: employee.approvalRequirements ?? [],
-        knowledgeNeeded: employee.requiredKnowledge ?? [],
-        integrationsNeeded: employee.requiredIntegrations ?? [],
-        readiness: employee.readinessState ?? "needs setup",
-        escalation: employee.escalationRules ?? "Escalate to the owner when unsure.",
-      })),
+      headline: "These digital employees will help run the business — rename or rewrite their focus",
+      items: [
+        ...(specification.employeeDefinitions ?? [])
+          .filter((employee) => !employeeOverrides?.hidden?.[employee.employeeId])
+          .map((employee) => ({
+            id: employee.employeeId,
+            label: employeeOverrides?.labels?.[employee.employeeId] ?? employee.label,
+            purpose: scrubOwnerFacingPurpose(
+              employeeOverrides?.purposes?.[employee.employeeId] ?? employee.purpose,
+              {
+                businessName: specification.businessProfile?.businessName,
+                industry: specification.businessProfile?.industry,
+                roleLabel: employeeOverrides?.labels?.[employee.employeeId] ?? employee.label,
+              },
+            ),
+            responsibilities: employee.responsibilities ?? employee.duties ?? [
+              employeeOverrides?.purposes?.[employee.employeeId] ?? employee.purpose,
+            ].filter(Boolean),
+            approvals: employee.approvalRequirements ?? [],
+            knowledgeNeeded: employee.requiredKnowledge ?? [],
+            integrationsNeeded: employee.requiredIntegrations ?? [],
+            readiness: employee.readinessState ?? "needs setup",
+            escalation: employee.escalationRules ?? "Escalate to the owner when unsure.",
+          })),
+        ...addedEmployees
+          .filter((employee) => employee?.id && !employeeOverrides?.hidden?.[employee.id])
+          .map((employee) => ({
+            id: String(employee.id),
+            label: String(employee.label ?? employee.id),
+            purpose: String(employee.purpose ?? `Owner-requested teammate.`),
+            responsibilities: [employee.purpose].filter(Boolean),
+            approvals: ["human_approval"],
+            knowledgeNeeded: [],
+            integrationsNeeded: [],
+            readiness: "owner_requested",
+            escalation: "Escalate to the owner when unsure.",
+            ownerAdded: true,
+          })),
+      ],
     },
     rolesAccess: {
       title: "Roles & Access",
-      headline: "Who can see what",
+      headline: "Who can see what — rename roles if you want",
       items: (specification.roleDefinitions ?? []).map((role) => ({
         id: role.roleId,
-        label: role.label,
+        label: roleOverrides?.labels?.[role.roleId] ?? role.label,
         modules: (role.moduleVisibility ?? [])
           .map((moduleId) => specification.modules?.find((module) => module.moduleId === moduleId)?.label ?? moduleId),
         denied: (role.deniedModules ?? [])
@@ -145,7 +201,7 @@ export function buildVisualBusinessOSProposal({
   return deepFreeze({
     businessName: specification.businessProfile?.businessName ?? session?.businessSummary?.businessName ?? "Your business",
     accentColor: session?.appearance?.accentColor ?? "#0F766E",
-    explanation,
+    explanation: explanationWithOverrides,
     navigationPreview: navigation,
     views,
     progress: session?.progress ?? null,

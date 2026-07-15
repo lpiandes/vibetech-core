@@ -17,6 +17,7 @@ export class ExecuteExternalActionExecutor {
 
   async execute({ action, context } = {}) {
     this.validatePlan({ action });
+    const approvalGranted = Boolean(context?.approvalGranted);
     const actionRequest = createExternalActionRequest({
       id: `auto_action_${action.id}`,
       workspaceId: this.workspaceId,
@@ -26,8 +27,12 @@ export class ExecuteExternalActionExecutor {
       requestedBy: context?.requestedBy ?? "automation",
       source: "automation",
       sourceReference: action.id,
-      parameters: action.parameters.payload ?? {},
-      requiresApproval: action.requiresApproval,
+      parameters: {
+        ...(action.parameters.payload ?? {}),
+        outboundApproved: approvalGranted || undefined,
+      },
+      requiresApproval: approvalGranted ? false : Boolean(action.requiresApproval),
+      outboundApproved: approvalGranted,
       requestedAt: context?.nowISO ?? this.nowISO,
       idempotencyKey: `auto_${action.id}_${context?.runId ?? ""}`,
     });

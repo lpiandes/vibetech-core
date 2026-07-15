@@ -18,7 +18,7 @@ const REASON_MAP: Record<string, Omit<ProductErrorView, "supportReferenceId">> =
     message: "Someone updated the plan after it was approved.",
     whatHappened: "The approval no longer matches the current Business OS plan.",
     dataSafe: true,
-    nextAction: "Run launch readiness again, then approve the new plan.",
+    nextAction: "Check readiness again, then approve the new plan.",
     canRetry: true,
   },
   stale_approval_specification: {
@@ -30,19 +30,19 @@ const REASON_MAP: Record<string, Omit<ProductErrorView, "supportReferenceId">> =
     canRetry: true,
   },
   stale_approval_plan_hash: {
-    title: "Launch plan changed",
-    message: "The launch checklist no longer matches your approval.",
-    whatHappened: "A newer launch readiness check replaced the prior plan.",
+    title: "Readiness plan changed",
+    message: "The readiness checklist no longer matches your approval.",
+    whatHappened: "A newer readiness check replaced the prior plan.",
     dataSafe: true,
-    nextAction: "Re-check launch readiness, then approve and launch.",
+    nextAction: "Re-check readiness, then approve and go live.",
     canRetry: true,
   },
   missing_business_os: {
-    title: "Business OS not installed",
+    title: "Your operating system is not live yet",
     message: "This business does not have an operating system yet.",
-    whatHappened: "Install has not completed for this business.",
+    whatHappened: "Go-live has not completed for this business.",
     dataSafe: true,
-    nextAction: "Open Architect to finish design and launch.",
+    nextAction: "Continue with VIBETech to finish your recommendation and go live.",
     canRetry: false,
   },
   permission_denied: {
@@ -71,32 +71,56 @@ const REASON_MAP: Record<string, Omit<ProductErrorView, "supportReferenceId">> =
   },
   research_failed: {
     title: "Website review unavailable",
-    message: "Architect could not review that website right now.",
+    message: "VIBETech could not review that website right now.",
     whatHappened: "Website research failed or timed out.",
     dataSafe: true,
     nextAction: "Continue the conversation without it, or try another URL.",
     canRetry: true,
   },
+  invalid_url: {
+    title: "Website address needs a fix",
+    message: "That doesn’t look like a website address we can open.",
+    whatHappened: "The URL could not be understood.",
+    dataSafe: true,
+    nextAction: "Try something like www.yourcompany.com, or say you don’t have a website.",
+    canRetry: true,
+  },
+  discovery_incomplete: {
+    title: "A few more questions first",
+    message: "VIBETech needs a fuller picture before recommending your operating system.",
+    whatHappened: "Discovery is not complete yet (at least 10 answers).",
+    dataSafe: true,
+    nextAction: "Keep answering the remaining questions, then ask for the recommendation.",
+    canRetry: true,
+  },
   upload_failed: {
     title: "Document not saved",
-    message: "That file could not be added to Architect.",
+    message: "That file could not be added to your conversation.",
     whatHappened: "Upload processing failed.",
     dataSafe: true,
     nextAction: "Try a smaller file or a different format (PDF, DOCX, TXT, CSV).",
     canRetry: true,
   },
   dry_run_failed: {
-    title: "Launch readiness incomplete",
-    message: "Architect could not finish the launch checklist.",
+    title: "Readiness check incomplete",
+    message: "VIBETech could not finish the readiness checklist.",
     whatHappened: "The readiness simulation failed.",
     dataSafe: true,
     nextAction: "Fix any checklist warnings, then check again.",
     canRetry: true,
   },
+  validation_failed: {
+    title: "Plan needs a small fix",
+    message: "Something in the recommendation could not be validated for install.",
+    whatHappened: "The Business OS plan failed a safety check before readiness.",
+    dataSafe: true,
+    nextAction: "Go back to the plan, try Update plan again, then check readiness.",
+    canRetry: true,
+  },
   install_failed: {
-    title: "Launch did not finish",
+    title: "Go-live did not finish",
     message: "Your business was not changed completely.",
-    whatHappened: "Installation stopped before completion.",
+    whatHappened: "Going live stopped before completion.",
     dataSafe: true,
     nextAction: "Use Try again to resume. Nothing silent was left half-applied without a status.",
     canRetry: true,
@@ -110,11 +134,11 @@ const REASON_MAP: Record<string, Omit<ProductErrorView, "supportReferenceId">> =
     canRetry: true,
   },
   unsupported_capability: {
-    title: "Capability not available yet",
+    title: "Not available yet",
     message: "This business cannot use that capability right now.",
     whatHappened: "The requested capability is missing or unsupported.",
     dataSafe: true,
-    nextAction: "Ask Architect to propose an improvement, or choose another path.",
+    nextAction: "Ask VIBETech to propose an improvement, or choose another path.",
     canRetry: false,
   },
   empty_analytics: {
@@ -126,9 +150,9 @@ const REASON_MAP: Record<string, Omit<ProductErrorView, "supportReferenceId">> =
     canRetry: false,
   },
   session_create_failed: {
-    title: "Could not start Architect",
-    message: "A new design session could not be created.",
-    whatHappened: "Builder session creation failed.",
+    title: "Could not start",
+    message: "A new conversation with VIBETech could not be started.",
+    whatHappened: "Session creation failed.",
     dataSafe: true,
     nextAction: "Refresh and try again. If it continues, contact support.",
     canRetry: true,
@@ -166,11 +190,11 @@ const REASON_MAP: Record<string, Omit<ProductErrorView, "supportReferenceId">> =
     canRetry: false,
   },
   installed_specification_required: {
-    title: "Install the Business OS first",
-    message: "Improvements need an installed business before Architect can revise it.",
+    title: "Go live with your business first",
+    message: "Improvements need a live operating system before VIBETech can revise it.",
     whatHappened: "No installed specification was found for this business.",
     dataSafe: true,
-    nextAction: "Finish Architect launch for this business, then ask for improvements.",
+    nextAction: "Finish going live for this business, then ask VIBETech to improve it.",
     canRetry: false,
   },
   email_not_configured: {
@@ -245,31 +269,42 @@ function extractRaw(input: unknown): string {
 function matchReasonKey(raw: string): string | null {
   const text = String(raw ?? "").toLowerCase();
   if (!text) return null;
+  // Exact / specific keys before generic substring matches (e.g. "installed_*" contains "install").
+  if (text.includes("installed_specification_required")) return "installed_specification_required";
+  if (text.includes("missing_business_os") || (text.includes("business os") && text.includes("not"))) {
+    return "missing_business_os";
+  }
   if (text.includes("stale_approval_specification_hash") || text.includes("stale approval specification hash")) {
     return "stale_approval_specification_hash";
   }
   if (text.includes("stale_approval_plan")) return "stale_approval_plan_hash";
   if (text.includes("stale_approval")) return "stale_approval_specification";
   if (text.includes("relation") && text.includes("does not exist")) return "relation_does_not_exist";
-  if (text.includes("econnrefused") || text.includes("database") && text.includes("unavailable")) {
+  if (text.includes("econnrefused") || (text.includes("database") && text.includes("unavailable"))) {
     return "database_unavailable";
   }
   if (text.includes("permission") || text.includes("forbidden") || text.includes("not authorized")) {
     return "permission_denied";
   }
+  if (text.includes("invalid_url") || text.includes("invalid url")) return "invalid_url";
+  if (text.includes("discovery_incomplete")) return "discovery_incomplete";
   if (text.includes("research")) return "research_failed";
   if (text.includes("upload")) return "upload_failed";
-  if (text.includes("dry_run") || text.includes("dry run") || text.includes("launch readiness")) {
+  if (text.includes("validation_failed") || text.includes("validation failed")) return "validation_failed";
+  if (text.includes("dry_run") || text.includes("dry run") || text.includes("launch readiness") || text.includes("readiness check")) {
     return "dry_run_failed";
   }
-  if (text.includes("install") || text.includes("launch failed")) return "install_failed";
+  if (text.includes("install_failed") || text.includes("launch failed") || text.includes("going live stopped")) {
+    return "install_failed";
+  }
   if (text.includes("provider") || text.includes("oauth") || text.includes("smtp")) {
     return "provider_connection_failed";
   }
   if (text.includes("unsupported") || text.includes("capability")) return "unsupported_capability";
   if (text.includes("analytics") || text.includes("no evidence")) return "empty_analytics";
-  if (text.includes("start session") || text.includes("could not start")) return "session_create_failed";
-  if (text.includes("business os") && text.includes("not")) return "missing_business_os";
+  if (text.includes("start session") || text.includes("could not start") || text.includes("session_create")) {
+    return "session_create_failed";
+  }
   for (const key of Object.keys(REASON_MAP)) {
     if (text.includes(key)) return key;
   }

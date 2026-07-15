@@ -5,6 +5,7 @@ import { COMMUNICATION_PROVIDER_EXECUTION_SOURCE, PROVIDER_EXECUTION_STATUS } fr
 import { validateCommunicationProvider, validateCommunicationProviderMessage, validateCommunicationProviderSendResult } from "./CommunicationProviderValidator.js";
 
 import { createCommunicationExecutionResult } from "./CommunicationExecutionResult.js";
+import { evaluateOutboundSendPermission, isOutboundChannel } from "../../approvals/OutboundApprovalGate.js";
 
 function fail(message) {
   throw new Error(`CommunicationExecutionService: ${message}`);
@@ -34,6 +35,23 @@ export class CommunicationExecutionService {
 
     const effectiveNowISO = safeString(nowISO ?? "2026-07-01T00:00:00.000Z");
     const executionId = generateExecutionId({ providerId: provider.id, messageId: message.id, nowISO: effectiveNowISO });
+
+    const outboundGate = evaluateOutboundSendPermission({
+      channel: message.channel,
+      direction: message.direction,
+      outboundApproved: Boolean(
+        message.metadata?.outboundApproved
+        || message.metadata?.approvalStatus === "approved"
+        || String(message.status).toLowerCase() === "queued",
+      ),
+      messageStatus: message.status,
+    });
+    if (
+      (String(message.direction).toLowerCase() === "outbound" || isOutboundChannel(message.channel))
+      && !outboundGate.allowed
+    ) {
+      fail(outboundGate.reason ?? "outbound_approval_required");
+    }
 
     let sendResult;
     try {

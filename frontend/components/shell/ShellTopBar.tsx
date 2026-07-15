@@ -87,7 +87,61 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
     return `Search ${people}, ${String(subjects).replace(/_/g, " ")}, work…`;
   })();
 
+  const supportAccess = scope.supportAccess;
+  const adminView = Boolean(supportAccess?.active);
+
+  async function exitAdminView() {
+    try {
+      await fetch("/api/admin/support/exit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: scope.businessId }),
+      });
+    } catch {
+      /* non-blocking */
+    }
+    router.push(`/admin/businesses/${encodeURIComponent(scope.businessId)}`);
+    router.refresh();
+  }
+
   return (
+    <>
+    {adminView ? (
+      <div
+        role="status"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: spacing.md,
+          padding: `${spacing.sm} ${spacing.lg}`,
+          background: "#0f766e",
+          color: "#fff",
+          fontSize: 13,
+          fontWeight: 600,
+        }}
+      >
+        <span>
+          Admin view · {supportAccess?.mode === "elevated" ? "full edit" : "read-only"} · {scope.businessName || "Business"}
+        </span>
+        <button
+          type="button"
+          onClick={() => void exitAdminView()}
+          style={{
+            border: "1px solid rgba(255,255,255,0.35)",
+            background: "transparent",
+            color: "#fff",
+            borderRadius: radius.medium,
+            padding: "4px 10px",
+            cursor: "pointer",
+            fontWeight: 650,
+            fontSize: 12,
+          }}
+        >
+          Exit to admin
+        </button>
+      </div>
+    ) : null}
     <header
       className="vt-desktop-only"
       style={{
@@ -271,5 +325,6 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
         <GlobalAskVibeTechEntry compact />
       </div>
     </header>
+    </>
   );
 }

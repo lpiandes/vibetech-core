@@ -44,7 +44,7 @@ export default function EmployeeWorkerCard({
       style={{
         display: "grid",
         gap: spacing.sm,
-        padding: `${spacing.lg} 0`,
+        padding: spacing.lg,
         borderBottom: `1px solid ${cockpitColors.panelBorder}`,
       }}
     >

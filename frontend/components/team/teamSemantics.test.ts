@@ -58,6 +58,17 @@ test("digital employee actions prefer setup then work", () => {
   assert.equal(primaryEmployeeAction({ isReady: true }), null);
 });
 
+test("ready custom AI primary action opens specialty page", () => {
+  assert.deepEqual(
+    primaryEmployeeAction({
+      isReady: true,
+      specialtyHref: "/b/biz/specialty/owner_emp_workout",
+      workHref: "/b/biz/work",
+    }),
+    { label: "Open specialty page", href: "/b/biz/specialty/owner_emp_workout" },
+  );
+});
+
 test("status tone and monitoring only use real evidence", () => {
   assert.equal(employeeStatusTone({ statusKey: "ACTIVE", isReady: true }), "success");
   assert.equal(employeeStatusTone({ statusKey: "BLOCKED" }), "warning");

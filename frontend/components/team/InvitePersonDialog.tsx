@@ -74,7 +74,7 @@ export default function InvitePersonDialog({
 
   return (
     <SimpleModal
-      title="Invite person"
+      title="Invite teammate"
       onClose={onClose}
       footer={
         devLink ? (

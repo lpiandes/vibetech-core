@@ -108,3 +108,8 @@ export function useWorkspaceNavigation() {
   if (!ctx) throw new Error("useWorkspaceNavigation requires WorkspaceNavigationProvider");
   return ctx;
 }
+
+/** Safe outside business workspace shells (e.g. /platform). */
+export function useOptionalWorkspaceNavigation() {
+  return useContext(WorkspaceNavigationContext);
+}

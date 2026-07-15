@@ -4,6 +4,10 @@ import { ComponentRecommendationEngine } from "./ComponentRecommendationEngine.j
 import { EmployeeArchetypeRecommendationEngine } from "./EmployeeArchetypeRecommendationEngine.js";
 import { CapabilityGapDetector } from "./CapabilityGapDetector.js";
 import { createBuilderAssumption } from "./BuilderAssumption.js";
+import {
+  extractOwnerRequestedEmployees,
+  toSelectedEmployeeRecommendations,
+} from "./extractOwnerRequestedEmployees.js";
 
 /**
  * Plans assembly from existing blueprints/components before any install.
@@ -29,11 +33,34 @@ export class BuilderAssemblyPlanner {
     const blueprints = this.blueprintEngine.recommend({ businessSummary, evidence });
     const components = this.componentEngine.recommend({ businessSummary });
     const employees = this.employeeEngine.recommend({ businessSummary });
+    const ownerRequested = extractOwnerRequestedEmployees({
+      answers: session.answers ?? [],
+      conversation: session.conversation ?? [],
+      businessSummary,
+    });
+    const ownerEmployeeRecs = toSelectedEmployeeRecommendations(ownerRequested);
+
+    const ownerArchetypes = new Set(ownerRequested.map((entry) => entry.archetypeId));
+    const templateEmployees = employees.recommendations
+      .filter((entry) => entry.selected)
+      .filter((entry) => {
+        const archetype = String(
+          (entry.evidence ?? []).find((item) => String(item).startsWith("archetype:"))
+          ?? entry.payload?.employee?.archetypeId
+          ?? entry.payload?.archetype?.archetypeId
+          ?? "",
+        ).replace("archetype:", "");
+        return archetype && !ownerArchetypes.has(archetype);
+      });
+    const selectedEmployees = ownerEmployeeRecs.length
+      ? [...ownerEmployeeRecs, ...templateEmployees].slice(0, 8)
+      : employees.recommendations.filter((entry) => entry.selected);
+
     const gaps = this.gapDetector.detect({
       businessSummary,
       recommendations: [
         ...blueprints.recommendations,
-        ...employees.recommendations,
+        ...selectedEmployees,
       ],
     });
 
@@ -50,13 +77,21 @@ export class BuilderAssemblyPlanner {
         confidence: 0.6,
         source: "blueprint",
       })),
+      ...(ownerRequested.length
+        ? [createBuilderAssumption({
+          assumptionId: "assume_owner_workforce",
+          text: `Digital Workforce prioritizes what you asked for: ${ownerRequested.map((entry) => entry.label).join(", ")}.`,
+          confidence: 0.9,
+          source: "owner_request",
+        })]
+        : []),
     ];
 
     return deepFreeze({
       ok: true,
       selectedBlueprints: blueprints.recommendations.filter((entry) => entry.selected),
       selectedComponents: components.recommendations.filter((entry) => entry.selected),
-      selectedEmployees: employees.recommendations.filter((entry) => entry.selected),
+      selectedEmployees,
       capabilityGaps: [
         ...gaps.gaps,
         ...(employees.gaps ?? []).map((gap, index) => ({
@@ -69,7 +104,9 @@ export class BuilderAssemblyPlanner {
       assumptions,
       explanation: {
         title: "What we recommend",
-        summary: "We matched reusable blueprints and components to what you described. Gaps stay visible — nothing unsupported will pretend to work.",
+        summary: ownerRequested.length
+          ? `We matched reusable blueprints and put your requested digital teammates first (${ownerRequested.map((entry) => entry.label).join(", ")}). Gaps stay visible — nothing unsupported will pretend to work.`
+          : "We matched reusable blueprints and components to what you described. Gaps stay visible — nothing unsupported will pretend to work.",
       },
     });
   }

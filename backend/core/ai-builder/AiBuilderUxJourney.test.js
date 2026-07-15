@@ -303,23 +303,43 @@ test("McBride still works and dental/hockey portals are distinct", async () => {
   );
 });
 
-test("dry run checklist is client readable", () => {
+test("dry run checklist is client readable with named details and setup walkthrough", () => {
   const checklist = buildDryRunChecklist({
+    specification: {
+      modules: [{ moduleId: "home", label: "Home" }, { moduleId: "work", label: "Work" }],
+      roleDefinitions: [{ roleId: "owner", label: "Owner" }],
+      employeeDefinitions: [
+        { employeeId: "emp_1", label: "Scheduler" },
+        { employeeId: "emp_2", label: "Practice & Workout Plan Builder" },
+      ],
+      knowledgeRequirements: [{ categoryId: "OPERATING_POLICIES", label: "Operating policies" }],
+      integrationRequirements: [
+        { integrationId: "business_email", label: "Business email", status: "required" },
+        { integrationId: "sms_channel", label: "Text messaging", status: "required" },
+      ],
+      metadata: { requiredSetupSteps: ["email", "sms", "a2p_registration"] },
+      capabilityRequirements: [{ capabilityId: "scheduling" }],
+    },
     dryRunResult: {
       ok: true,
       mutated: false,
       simulatedOperations: [
-        { type: "CONFIGURE_MODULE", outcome: "would_apply" },
-        { type: "CONFIGURE_ROLE", outcome: "would_apply" },
-        { type: "INSTALL_EMPLOYEE", outcome: "would_apply" },
-        { type: "REQUIRE_SETUP", outcome: "requires_setup" },
-        { type: "REQUIRE_PLATFORM_CAPABILITY", outcome: "deferred" },
+        { type: "CONFIGURE_MODULE", outcome: "would_apply", label: "Home" },
+        { type: "INSTALL_EMPLOYEE", outcome: "would_apply", label: "Scheduler" },
+        { type: "REQUIRE_SETUP", outcome: "requires_setup", label: "Connect Business email" },
       ],
     },
   });
   assert.equal(checklist.mutated, false);
-  assert.ok(checklist.items.some((item) => /workspaces/i.test(item.label)));
-  assert.match(checklist.headline, /Architect will set up/i);
+  const workspaces = checklist.items.find((item) => item.id === "workspaces");
+  assert.ok(workspaces?.details.includes("Home"));
+  assert.ok(workspaces?.details.includes("Work"));
+  const employees = checklist.items.find((item) => item.id === "employees");
+  assert.ok(employees?.details.includes("Practice & Workout Plan Builder"));
+  assert.match(checklist.headline, /VIBETech will set up/i);
+  assert.ok(checklist.setupWalkthrough.some((step) => step.id === "email"));
+  assert.ok(checklist.setupWalkthrough.some((step) => step.id === "sms"));
+  assert.ok(checklist.setupWalkthrough.find((step) => step.id === "sms")?.external?.some((line) => /twilio/i.test(line)));
   assert.ok(!JSON.stringify(checklist).includes("CONFIGURE_MODULE"));
   assert.ok(!/Installing|Registering/i.test(JSON.stringify(checklist.items)));
 });

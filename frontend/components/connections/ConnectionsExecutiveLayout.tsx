@@ -88,14 +88,23 @@ function IntegrationRow({
           {String(conn.requirementLevel ?? "").toLowerCase() === "required" ? (
             <StatusBadge label={requirement} tone="warning" />
           ) : null}
-          {display.tier === "coming_soon" ? <StatusBadge label="Coming soon" tone="neutral" /> : null}
         </div>
         <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, marginTop: 4, lineHeight: 1.45 }}>
           {display.description}
         </div>
-        {display.unlocks ? (
+        {conn.unlockMessage ? (
+          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.accent, marginTop: 6 }}>
+            {conn.unlockMessage}
+          </div>
+        ) : display.unlocks ? (
           <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 6 }}>
             Unlocks: {display.unlocks}
+          </div>
+        ) : null}
+        {conn.healthLabel || conn.healthDetail ? (
+          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, marginTop: 6 }}>
+            Health: {conn.healthLabel ?? conn.health?.level ?? "Unknown"}
+            {conn.healthDetail ? ` · ${conn.healthDetail}` : ""}
           </div>
         ) : null}
         {blocker ? (
@@ -122,22 +131,32 @@ export default function ConnectionsExecutiveLayout() {
   const presentation = ((vm?.productContext?.installationResult?.executiveExperience?.dashboardPresentation ??
     vm?.productContext?.installationResult?.dashboardPresentation ??
     {}) as { integrations?: IntegrationsPresentation }).integrations ?? {};
+  const liveFlags = (vm?.liveFlags ?? presentation.liveFlags ?? {}) as IntegrationsPresentation["liveFlags"];
+  const presentationWithFlags: IntegrationsPresentation = { ...presentation, liveFlags };
   const [setupTarget, setSetupTarget] = useState<IntegrationDisplay | null>(null);
   const consumedFocusRef = useRef<string | null>(null);
+  const connectError = searchParams.get("error");
+  const justConnected = searchParams.get("connected") === "1";
 
   const resolveDisplay = useCallback(
     (conn: ConnectionViewRow) =>
       mergeIntegrationDisplay(
         String(conn.id),
         conn.displayName,
-        getIntegrationDisplay(String(conn.id), conn.displayName),
-        presentation,
+        getIntegrationDisplay(String(conn.id), conn.displayName, liveFlags ?? {}),
+        presentationWithFlags,
       ),
-    [presentation],
+    [presentationWithFlags, liveFlags],
   );
 
-  const sections = useMemo(() => partitionIntegrationSections(connections, resolveDisplay), [connections, resolveDisplay]);
-  const metrics = useMemo(() => deriveIntegrationMetrics(connections, presentation).metrics, [connections, presentation]);
+  const sections = useMemo(
+    () => partitionIntegrationSections(connections, resolveDisplay, liveFlags ?? {}),
+    [connections, resolveDisplay, liveFlags],
+  );
+  const metrics = useMemo(
+    () => deriveIntegrationMetrics(connections, presentationWithFlags).metrics,
+    [connections, presentationWithFlags],
+  );
 
   const dismissSetupDialog = useCallback(() => {
     setSetupTarget(null);
@@ -159,25 +178,56 @@ export default function ConnectionsExecutiveLayout() {
       setupTarget,
       consumedFocus: consumedFocusRef.current,
       primary,
-      isConnected: (status: string) => connectionStatusPresentation(status, presentation).label === "Connected",
+      isConnected: (status: string) => connectionStatusPresentation(status, presentationWithFlags).label === "Connected",
     });
 
     if (display) {
       consumedFocusRef.current = focus;
       setSetupTarget(display);
     }
-  }, [searchParams, sections.required, sections.available, setupTarget, presentation]);
+  }, [searchParams, sections.required, sections.available, setupTarget, presentationWithFlags]);
 
-  const emptyRequired = presentation.emptyStates?.required;
-  const emptyConnected = presentation.emptyStates?.connected;
-  const emptyAvailable = presentation.emptyStates?.available;
+  const emptyRequired = presentationWithFlags.emptyStates?.required;
+  const emptyConnected = presentationWithFlags.emptyStates?.connected;
+  const emptyAvailable = presentationWithFlags.emptyStates?.available;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>
       <PageHeader
-        title="Integrations"
-        description="Connect the systems VIBETech uses to operate this business."
+        title="Connections"
+        description="Connect what you already pay for. Operate everything important here — credentials survive restart via durable vault."
       />
+
+      {connectError ? (
+        <div
+          style={{
+            padding: spacing.md,
+            borderRadius: radius.medium,
+            border: `1px solid #fecaca`,
+            backgroundColor: "#fef2f2",
+            color: "#991b1b",
+            fontSize: typography.caption.fontSize,
+            lineHeight: 1.5,
+          }}
+        >
+          Could not finish connecting: {connectError}
+        </div>
+      ) : null}
+      {justConnected ? (
+        <div
+          style={{
+            padding: spacing.md,
+            borderRadius: radius.medium,
+            border: `1px solid #bbf7d0`,
+            backgroundColor: "#f0fdf4",
+            color: "#166534",
+            fontSize: typography.caption.fontSize,
+            lineHeight: 1.5,
+          }}
+        >
+          Connected. You can disconnect and reconnect anytime from this page.
+        </div>
+      ) : null}
 
       <ShellMetricStrip metrics={metrics} />
 
@@ -191,7 +241,7 @@ export default function ConnectionsExecutiveLayout() {
                 key={display.id}
                 conn={conn}
                 display={display}
-                presentation={presentation}
+                presentation={presentationWithFlags}
                 onAction={setSetupTarget}
               />
             ))}
@@ -209,7 +259,7 @@ export default function ConnectionsExecutiveLayout() {
                 key={`connected_${display.id}`}
                 conn={conn}
                 display={display}
-                presentation={presentation}
+                presentation={presentationWithFlags}
                 onAction={setSetupTarget}
               />
             ))}
@@ -217,9 +267,9 @@ export default function ConnectionsExecutiveLayout() {
         )}
       </ShellPanel>
 
-      <ShellPanel title="Available and coming soon" subtitle={`${sections.available.length} available`}>
+      <ShellPanel title="Available now" subtitle={`${sections.available.length} available`}>
         {sections.available.length === 0 ? (
-          <PanelEmpty description={emptyAvailable ?? "Additional integrations will appear here as they become available."} />
+          <PanelEmpty description={emptyAvailable ?? "Additional integrations will appear here when they can actually connect for this business."} />
         ) : (
           <div>
             {sections.available.map(({ conn, display }) => (
@@ -227,7 +277,7 @@ export default function ConnectionsExecutiveLayout() {
                 key={`available_${display.id}`}
                 conn={conn}
                 display={display}
-                presentation={presentation}
+                presentation={presentationWithFlags}
                 onAction={setSetupTarget}
               />
             ))}

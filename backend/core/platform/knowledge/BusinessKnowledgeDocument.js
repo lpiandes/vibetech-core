@@ -26,6 +26,9 @@ export function mapKnowledgeDocumentRow(row) {
     sourceType: String(row.source_type),
     status: String(row.status),
     textExtractionStatus: String(row.text_extraction_status ?? "skipped"),
+    categoryIds: Array.isArray(row.category_ids)
+      ? row.category_ids.map(String)
+      : [],
     uploadedByUserId: row.uploaded_by_user_id ? String(row.uploaded_by_user_id) : null,
     uploadedByName: row.uploaded_by_name ? String(row.uploaded_by_name) : null,
     deletedAt: row.deleted_at?.toISOString?.() ?? row.deleted_at ?? null,
@@ -46,6 +49,7 @@ export function toPublicKnowledgeDocument(doc) {
     sizeBytes: doc.sizeBytes,
     status: doc.status,
     textExtractionStatus: doc.textExtractionStatus,
+    categoryIds: Array.isArray(doc.categoryIds) ? doc.categoryIds.map(String) : [],
     uploadedBy: doc.uploadedByUserId
       ? deepFreeze({
           id: doc.uploadedByUserId,

@@ -6,16 +6,18 @@ import {
 } from "./WorkforceArchetypeCatalog.js";
 import { createWorkforceRecommendation } from "./WorkforceRecommendation.js";
 import { mapWorkforceToBusinessOS } from "./mapWorkforceToBusinessOS.js";
+import { resolveIndustryDisplayLabel, resolveIndustryLabel } from "../ai-builder/businessIdentity.js";
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
 function industryOf({ dna = null, businessSummary = {} } = {}) {
-  return String(
+  return resolveIndustryLabel(
     businessSummary.industry
     ?? dna?.company?.industry
     ?? "default",
+    "default",
   );
 }
 
@@ -151,11 +153,12 @@ export class WorkforceEngine {
       };
       aiEmployees.push(employee);
 
+      const industryLabel = resolveIndustryDisplayLabel(industry, "this business");
       recommendations.push(createWorkforceRecommendation({
         recommendationId: `rec_emp_${position.archetypeId}`,
         kind: "employee_archetype",
         label: position.title,
-        reason: `Specialize reusable ${archetype.label} archetype for ${industry.replace(/_/g, " ")} — never invent a one-off agent.`,
+        reason: `${position.title} supports day-to-day work for ${industryLabel}.`,
         confidence: 0.88,
         evidence: [
           ...baseEvidence,

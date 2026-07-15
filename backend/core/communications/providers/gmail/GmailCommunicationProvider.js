@@ -5,30 +5,58 @@ import { CommunicationProvider } from "../CommunicationProvider.js";
 import { isGmailConfigured, validateGmailSendInput } from "./GmailProviderValidator.js";
 import { mapCommunicationMessageToGmailPayload } from "./GmailMessageMapper.js";
 import { deepFreeze } from "../../../workspace/_utils/deepFreeze.js";
+import { createGoogleAuthedClient, getGoogleOAuthAppConfig } from "../../../integrations/oauth/GoogleOAuthClient.js";
 
 function safeString(v) {
   return v === null || v === undefined ? "" : String(v);
 }
 
+function normalizeMessageArg(messageOrOpts) {
+  if (!messageOrOpts) return null;
+  if (messageOrOpts.message && typeof messageOrOpts.message === "object") return messageOrOpts.message;
+  return messageOrOpts;
+}
+
 export class GmailCommunicationProvider extends CommunicationProvider {
   /**
    * @param {object} [params]
-   * @param {any} [params.gmailClient] - injected Gmail client for tests (must support users.messages.send)
-   * @param {string} [params.nowISO] - deterministic clock for sentAt
+   * @param {any} [params.gmailClient] - injected Gmail client for tests
+   * @param {string} [params.nowISO]
+   * @param {string} [params.refreshToken] - per-business vault refresh token
+   * @param {string} [params.accessToken]
+   * @param {string} [params.senderEmail]
    */
-  constructor({ gmailClient = null, nowISO = null } = {}) {
+  constructor({
+    gmailClient = null,
+    nowISO = null,
+    refreshToken = null,
+    accessToken = null,
+    senderEmail = null,
+  } = {}) {
     super();
     this._gmailClient = gmailClient;
     this._nowISO = nowISO;
 
-    this._clientId = safeString(process.env.GMAIL_CLIENT_ID);
-    this._clientSecret = safeString(process.env.GMAIL_CLIENT_SECRET);
-    this._redirectUri = safeString(process.env.GMAIL_REDIRECT_URI);
-    this._refreshToken = safeString(process.env.GMAIL_REFRESH_TOKEN);
-    this._senderEmail = safeString(process.env.GMAIL_SENDER_EMAIL);
+    const app = getGoogleOAuthAppConfig();
+    this._clientId = app.clientId || safeString(process.env.GMAIL_CLIENT_ID);
+    this._clientSecret = app.clientSecret || safeString(process.env.GMAIL_CLIENT_SECRET);
+    this._redirectUri = app.redirectUri || safeString(process.env.GMAIL_REDIRECT_URI);
+    this._refreshToken = safeString(refreshToken ?? process.env.GMAIL_REFRESH_TOKEN);
+    this._accessToken = safeString(accessToken);
+    this._senderEmail = safeString(senderEmail ?? process.env.GMAIL_SENDER_EMAIL);
 
     this._oauth2Client = null;
     this._gmail = null;
+  }
+
+  withCredentials({ refreshToken, accessToken = null, senderEmail = null } = {}) {
+    return new GmailCommunicationProvider({
+      gmailClient: this._gmailClient,
+      nowISO: this._nowISO,
+      refreshToken: refreshToken ?? this._refreshToken,
+      accessToken: accessToken ?? this._accessToken,
+      senderEmail: senderEmail ?? this._senderEmail,
+    });
   }
 
   get id() {
@@ -44,40 +72,58 @@ export class GmailCommunicationProvider extends CommunicationProvider {
   }
 
   get health() {
+    // Injected client + vault refresh token is enough for execution tests / live sends.
+    if (this._gmailClient && this._refreshToken) return "healthy";
+    if (this._refreshToken && this._clientId && this._clientSecret) return "healthy";
     return isGmailConfigured() ? "healthy" : "not_configured";
+  }
+
+  get senderEmail() {
+    return this._senderEmail || null;
   }
 
   async #connectIfNeeded() {
     if (this._gmailClient) return;
     if (this._gmail) return;
 
-    if (!isGmailConfigured()) {
-      throw new Error("GmailCommunicationProvider not_configured: missing GMAIL OAuth environment variables.");
+    if (this.health === "not_configured") {
+      throw new Error("GmailCommunicationProvider not_configured: missing Gmail OAuth credentials.");
     }
 
-    this._oauth2Client = new google.auth.OAuth2(
-      this._clientId,
-      this._clientSecret,
-      this._redirectUri,
-    );
-
-    this._oauth2Client.setCredentials({
-      refresh_token: this._refreshToken,
-    });
+    if (this._refreshToken) {
+      this._oauth2Client = createGoogleAuthedClient({
+        refreshToken: this._refreshToken,
+        accessToken: this._accessToken || null,
+      });
+    } else {
+      this._oauth2Client = new google.auth.OAuth2(
+        this._clientId,
+        this._clientSecret,
+        this._redirectUri,
+      );
+      this._oauth2Client.setCredentials({
+        refresh_token: safeString(process.env.GMAIL_REFRESH_TOKEN),
+      });
+    }
 
     this._gmail = google.gmail({ version: "v1", auth: this._oauth2Client });
   }
 
-  async send({ message } = {}) {
+  /**
+   * Accepts a CommunicationMessage, or `{ message }` for IntegrationProvider callers.
+   */
+  async send(messageOrOpts) {
+    const message = normalizeMessageArg(messageOrOpts);
     if (!message || typeof message !== "object") {
       throw new Error("GmailCommunicationProvider.send: message required.");
     }
 
-    // Validate channel and required fields deterministically.
-    validateGmailSendInput({ provider: this, message });
+    // Ensure From is present for Gmail API — prefer vault sender identity.
+    const enriched = ensureSenderEmail(message, this._senderEmail);
 
-    // Mapper validates message structure and extracts headers.
-    const payload = mapCommunicationMessageToGmailPayload(message);
+    validateGmailSendInput({ provider: this, message: enriched, requireEnvConfig: false });
+
+    const payload = mapCommunicationMessageToGmailPayload(enriched);
 
     await this.#connectIfNeeded();
 
@@ -111,3 +157,19 @@ export class GmailCommunicationProvider extends CommunicationProvider {
   }
 }
 
+function ensureSenderEmail(message, senderEmail) {
+  const email = safeString(senderEmail).trim();
+  if (!email) return message;
+  const existing = message.sender?.metadata?.email || message.sender?.email;
+  if (existing) return message;
+  return {
+    ...message,
+    sender: {
+      ...(message.sender && typeof message.sender === "object" ? message.sender : { id: "business", type: "system" }),
+      metadata: {
+        ...((message.sender && message.sender.metadata) || {}),
+        email,
+      },
+    },
+  };
+}

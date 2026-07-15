@@ -11,6 +11,7 @@ export function createBuilderQuestion({
   allowUnknown = true,
   answerType = "text",
   options = [],
+  whenIndustry = null,
 } = {}) {
   if (!questionId) throw new Error("BuilderQuestion: questionId required.");
   return deepFreeze({
@@ -24,6 +25,9 @@ export function createBuilderQuestion({
     allowUnknown: allowUnknown !== false,
     answerType: String(answerType),
     options: deepFreeze(Array.isArray(options) ? options : []),
+    whenIndustry: whenIndustry == null
+      ? null
+      : deepFreeze((Array.isArray(whenIndustry) ? whenIndustry : [whenIndustry]).map(String)),
   });
 }
 

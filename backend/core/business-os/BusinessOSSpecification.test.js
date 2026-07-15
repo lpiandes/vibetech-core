@@ -92,7 +92,9 @@ test("employee archetype resolution and capability classification", () => {
 
   const registry = getDefaultBusinessOSCapabilityRegistry();
   assert.equal(registry.classifyRequirement({ capabilityId: "work_queue" }).availability, "supported");
-  assert.equal(registry.classifyRequirement({ capabilityId: "sms_messaging" }).deferred, true);
+  assert.equal(registry.classifyRequirement({ capabilityId: "sms_messaging" }).availability, "supported_with_configuration");
+  assert.equal(registry.classifyRequirement({ capabilityId: "appfolio_api_sync" }).deferred, true);
+  assert.equal(registry.classifyRequirement({ capabilityId: "pkg.scheduling" }).capabilityId, "scheduling");
   assert.equal(registry.classifyRequirement({ capabilityId: "autonomous_customer_send" }).prohibited, true);
   assert.equal(registry.classifyRequirement({ capabilityId: "quantum_billing" }).proposalRequired, true);
 });

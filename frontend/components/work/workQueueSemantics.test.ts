@@ -123,7 +123,7 @@ test("resolveWorkRowHref never uses legacy engagement routes in business scope",
   );
 });
 
-test("resolveTargetWorkItem opens only active work present in the current business queue", () => {
+test("resolveTargetWorkItem deep-links completed work by id so outcomes stay reviewable", () => {
   const items = [
     makeItem({ id: "work_current", status: "in_progress" }),
     makeItem({ id: "work_done", status: "completed" }),
@@ -131,8 +131,22 @@ test("resolveTargetWorkItem opens only active work present in the current busine
 
   assert.equal(resolveTargetWorkItem(items, "work_current")?.id, "work_current");
   assert.equal(resolveTargetWorkItem(items, "work_missing"), null);
-  assert.equal(resolveTargetWorkItem(items, "work_done"), null);
+  assert.equal(resolveTargetWorkItem(items, "work_done")?.id, "work_done");
   assert.equal(resolveTargetWorkItem(items, ""), null);
+});
+
+test("resolveWorkRowHref prefers workId deep-link when provided", () => {
+  assert.equal(
+    resolveWorkRowHref(
+      {
+        engagementHref: "/engagement/tm_system",
+        personHref: "/b/biz_1/people/party_jane",
+      },
+      "biz_1",
+      "work_9",
+    ),
+    "/b/biz_1/work?workId=work_9",
+  );
 });
 
 test("campaign review semantics expose draft content only from selected Work context", () => {

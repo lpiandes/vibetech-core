@@ -3,7 +3,7 @@
 import type { ReactNode, MouseEvent } from "react";
 import Link from "next/link";
 
-import { useWorkspaceNavigation } from "@/components/workspace/WorkspaceNavigationContext";
+import { useOptionalWorkspaceNavigation } from "@/components/workspace/WorkspaceNavigationContext";
 import { cockpitColors, typography, radius } from "@/design/tokens";
 
 const baseStyle = {
@@ -28,29 +28,41 @@ export default function SecondaryButton({
   href,
   onClick,
   type = "button",
+  disabled,
 }: {
   children: ReactNode;
   href?: string;
   onClick?: () => void;
   type?: "button" | "submit";
+  disabled?: boolean;
 }) {
-  const { beginNavigation } = useWorkspaceNavigation();
+  const nav = useOptionalWorkspaceNavigation();
+  const style = {
+    ...baseStyle,
+    opacity: disabled ? 0.5 : 1,
+    pointerEvents: disabled ? ("none" as const) : undefined,
+    cursor: disabled ? ("not-allowed" as const) : baseStyle.cursor,
+  };
 
   function onLinkClick(event: MouseEvent<HTMLAnchorElement>, targetHref: string) {
+    if (disabled) {
+      event.preventDefault();
+      return;
+    }
     if (onClick) onClick();
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-    if (targetHref.startsWith("/b/")) beginNavigation(targetHref);
+    if (targetHref.startsWith("/b/")) nav?.beginNavigation(targetHref);
   }
 
   if (href) {
     return (
-      <Link href={href} style={baseStyle} onClick={(event) => onLinkClick(event, href)}>
+      <Link href={href} style={style} onClick={(event) => onLinkClick(event, href)}>
         {children}
       </Link>
     );
   }
   return (
-    <button type={type} style={baseStyle} onClick={onClick}>
+    <button type={type} style={style} onClick={onClick} disabled={disabled}>
       {children}
     </button>
   );

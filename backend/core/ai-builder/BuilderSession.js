@@ -1,5 +1,6 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { randomUUID } from "node:crypto";
+import { assertSessionStageTransition } from "./BuilderSessionLifecycle.js";
 
 export const BUILDER_SESSION_STAGES = Object.freeze([
   "created",
@@ -17,6 +18,13 @@ export const BUILDER_SESSION_STAGES = Object.freeze([
   "failed",
   "archived",
 ]);
+
+export {
+  SESSION_STAGE_TO_CONSTITUTION,
+  sessionStageToConstitution,
+  validateSessionStageTransition,
+  constitutionStageOwnerLabel,
+} from "./BuilderSessionLifecycle.js";
 
 export const BUILDER_SESSION_MODES = Object.freeze([
   "new_business",
@@ -121,6 +129,16 @@ export function createBuilderSession({
 }
 
 export function withBuilderSessionPatch(session, patch = {}, { updatedAt = new Date().toISOString() } = {}) {
+  if (
+    patch.currentStage != null
+    && String(patch.currentStage) !== String(session?.currentStage)
+  ) {
+    assertSessionStageTransition({
+      from: session?.currentStage,
+      to: patch.currentStage,
+    });
+  }
+
   return createBuilderSession({
     ...session,
     ...patch,

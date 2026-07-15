@@ -12,6 +12,12 @@ test("maps stale approval to recovery copy", () => {
   assert.ok(!/stale_approval_specification_hash/.test(view.message));
 });
 
+test("maps installed_specification_required before generic install failures", () => {
+  const view = presentProductError("installed_specification_required");
+  assert.match(view.title, /Go live with your business first/i);
+  assert.ok(!/Go-live did not finish/i.test(view.title));
+});
+
 test("maps missing relation to migration guidance", () => {
   const view = presentProductError("relation \"ai_builder_sessions\" does not exist");
   assert.match(view.nextAction, /migration/i);

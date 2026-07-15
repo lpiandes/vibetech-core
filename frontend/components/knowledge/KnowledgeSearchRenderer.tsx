@@ -2,17 +2,13 @@
 
 import { useContext } from "react";
 import { KnowledgeViewModelContext } from "./KnowledgeContext";
-import SearchInput from "@/components/design-system/SearchInput";
 
+/**
+ * Search lives on the executive Knowledge layout (live filter).
+ * Kept as a no-op stub so package viewModel slots remain compatible.
+ */
 export default function KnowledgeSearchRenderer() {
   const viewModel = useContext<any | null>(KnowledgeViewModelContext);
   if (!viewModel) return null;
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="mb-2 text-sm font-semibold">Search</div>
-      <SearchInput placeholder="Search knowledge" disabled />
-    </div>
-  );
+  return null;
 }
-

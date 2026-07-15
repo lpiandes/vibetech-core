@@ -11,6 +11,7 @@ import { buildDigitalEmployeeReadinessReport } from "../../industries/employees/
 import { buildPackagePageLabels } from "../../industries/terminology/TerminologyResolver.js";
 import { KnowledgeReadinessEngine } from "../../knowledge/readiness/KnowledgeReadinessEngine.js";
 import { createIntegrationPlatform } from "../../integrations/createIntegrationPlatform.js";
+import { getSharedCredentialVault } from "../../integrations/credentials/CredentialVault.js";
 import { buildConnectionDependencyProjection } from "../../integrations/dependencies/ConnectionDependencyProjection.js";
 import { createOperationalBoundary } from "../../approvals/OwnerApprovalDecisionService.js";
 
@@ -45,9 +46,10 @@ export function resolveDefaultActivationForWorkspace(_workspaceId) {
   return null;
 }
 
-function buildGenericWorkspaceStack({ nowISO, workspaceId, activation }) {
+function buildGenericWorkspaceStack({ nowISO, workspaceId, activation, runtimeSnapshots = {} }) {
   const effectiveNowISO = String(nowISO ?? "2026-07-01T00:00:00.000Z");
   const companyName = String(activation?.packageConfiguration?.companyName ?? "New Business");
+  const snap = (kind) => runtimeSnapshots?.[kind] ?? null;
   return {
     nowISO: effectiveNowISO,
     workspaceId: String(workspaceId ?? "demo"),
@@ -71,7 +73,10 @@ function buildGenericWorkspaceStack({ nowISO, workspaceId, activation }) {
     segmentDefinitionRuntime: new SegmentDefinitionRuntime(),
     interactionRuntime: new InteractionRuntime(),
     intelligenceCandidateRuntime: new IntelligenceCandidateRuntime(),
-    automationRuntime: new AutomationRuntime({ nowISO: effectiveNowISO }),
+    automationRuntime: new AutomationRuntime({
+      nowISO: effectiveNowISO,
+      seed: snap(RUNTIME_SNAPSHOT_KINDS.AUTOMATION) ? () => snap(RUNTIME_SNAPSHOT_KINDS.AUTOMATION) : undefined,
+    }),
     approvalRuntime: new ApprovalRuntime({ nowISO: effectiveNowISO }),
     platformEventStore: new PlatformEventStore({ nowISO: effectiveNowISO }),
     installationResult: null,
@@ -79,7 +84,7 @@ function buildGenericWorkspaceStack({ nowISO, workspaceId, activation }) {
   };
 }
 
-function activateIndustryWorkspace({ workspaceId, activation, nowISO, runtimeSnapshots = {} }) {
+function activateIndustryWorkspace({ workspaceId, activation, nowISO, runtimeSnapshots = {}, extraProviders = [] }) {
   const packageRegistry = getDefaultIndustryPackageRegistry();
   const industryPackage = packageRegistry.getPackage(activation.industryPackageId);
   if (!industryPackage) {
@@ -130,6 +135,8 @@ function activateIndustryWorkspace({ workspaceId, activation, nowISO, runtimeSna
     nowISO: effectiveNowISO,
     platformEventBus: stack.bus,
     platformEventStore: stack.store,
+    extraProviders,
+    credentialVault: getSharedCredentialVault(),
   });
 
   if (isHorizonDemo) {
@@ -234,14 +241,30 @@ function activateIndustryWorkspace({ workspaceId, activation, nowISO, runtimeSna
   };
 }
 
-function activateGenericWorkspace({ workspaceId, activation, nowISO }) {
-  const stack = buildGenericWorkspaceStack({ nowISO, workspaceId, activation });
+function activateGenericWorkspace({ workspaceId, activation, nowISO, runtimeSnapshots = {}, extraProviders = [] }) {
+  const stack = buildGenericWorkspaceStack({ nowISO, workspaceId, activation, runtimeSnapshots });
+  const effectiveNowISO = String(nowISO ?? "2026-07-01T00:00:00.000Z");
+  const integrationPlatform = createIntegrationPlatform({
+    workspaceId,
+    installationResult: {
+      connectedSystemRequirements: [
+        { id: "business_email", displayName: "Business Email", requirementLevel: "required" },
+      ],
+    },
+    communicationRuntime: stack.communicationRuntime,
+    communicationPreferenceRuntime: stack.communicationPreferenceRuntime,
+    connectionRuntimeSeed: runtimeSnapshots[RUNTIME_SNAPSHOT_KINDS.CONNECTION] ?? null,
+    nowISO: effectiveNowISO,
+    platformEventStore: stack.platformEventStore,
+    extraProviders,
+    credentialVault: getSharedCredentialVault(),
+  });
   const identityViewModel = createWorkspaceIdentityViewModel({
     activation,
     installationResult: null,
     readinessReport: null,
     packageDisplayName: "Generic",
-    businessName: "Workspace",
+    businessName: String(activation?.packageConfiguration?.companyName ?? "Workspace"),
     pageLabels: {},
   });
 
@@ -264,21 +287,25 @@ function activateGenericWorkspace({ workspaceId, activation, nowISO }) {
       approvalRuntime: stack.approvalRuntime,
       platformEventStore: stack.platformEventStore,
       analyticsRuntime: stack.analyticsRuntime,
+      connectionRuntime: integrationPlatform.connectionRuntime,
     },
     activation,
     installationResult: null,
     readinessReport: null,
     employeeReadinessReport: null,
     employeeActivations: null,
-    connectedSystemsSnapshot: buildConnectedSystemsSnapshot({ installationResult: null }),
+    connectedSystemsSnapshot: buildConnectedSystemsSnapshot({
+      installationResult: { connectedSystemRequirements: [{ id: "business_email", displayName: "Business Email" }] },
+      connectionRuntime: integrationPlatform.connectionRuntime,
+    }),
     pageLabels: {},
     identityViewModel,
     demoConfigurationResult: null,
     demoBootstrap: null,
     knowledgeReadinessReport: null,
-    integrationPlatform: null,
+    integrationPlatform,
     connectionDependencyProjection: null,
-    operationalBoundary: null,
+    operationalBoundary: createOperationalBoundary(stack, { nowISO: effectiveNowISO }),
     operatingStack: stack,
   };
 }
@@ -286,16 +313,20 @@ function activateGenericWorkspace({ workspaceId, activation, nowISO }) {
 /**
  * Explicit workspace activation boundary.
  * Future persistence: replace registry with durable activation store keyed by workspaceId.
- */
-/**
+ *
+ * Live provider adapters (Gmail / Twilio / Meta) must be injected via extraProviders from a
+ * server composition root — never imported here — so Next.js does not pull provider SDKs
+ * into every workspace activation path.
+ *
  * @param {{
  *   workspaceId?: string,
  *   activation?: object,
  *   nowISO?: string,
  *   runtimeSnapshots?: Record<string, unknown>,
+ *   extraProviders?: object[],
  * }} [params]
  */
-export function activateWorkspace({ workspaceId, activation, nowISO, runtimeSnapshots = {} } = {}) {
+export function activateWorkspace({ workspaceId, activation, nowISO, runtimeSnapshots = {}, extraProviders = [] } = {}) {
   const wid = String(workspaceId ?? "demo");
   const mergedActivation = activation ?? {};
   const resolvedActivation = workspaceActivationRegistry.ensure(wid, mergedActivation);
@@ -307,6 +338,7 @@ export function activateWorkspace({ workspaceId, activation, nowISO, runtimeSnap
       activation: resolveWorkspaceActivation({ workspaceId: wid, activation: resolvedActivation }),
       nowISO: effectiveNowISO,
       runtimeSnapshots,
+      extraProviders,
     });
   }
 
@@ -314,5 +346,7 @@ export function activateWorkspace({ workspaceId, activation, nowISO, runtimeSnap
     workspaceId: wid,
     activation: resolveWorkspaceActivation({ workspaceId: wid, activation: resolvedActivation }),
     nowISO: effectiveNowISO,
+    runtimeSnapshots,
+    extraProviders,
   });
 }

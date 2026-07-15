@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 
 import { architect } from "./architectTheme";
 import {
-  ArchitectBadge,
   ArchitectButton,
   ArchitectPanel,
   ArchitectShell,
@@ -15,38 +14,39 @@ import {
 import {
   HUMAN_COPY,
   architectRoutes,
-  askVibetechContinuity,
-  confidenceLabel,
 } from "./architectSemantics";
 import ConversationRail from "./ConversationRail";
-import BusinessUnderstandingPanel from "./BusinessUnderstandingPanel";
-import BusinessDnaPortrait from "./BusinessDnaPortrait";
-import ReasoningStrip from "./ReasoningStrip";
+import DiscoveryStepWizard from "./DiscoveryStepWizard";
 import OsAssemblyCanvas from "./OsAssemblyCanvas";
 import ProposalStudio from "./ProposalStudio";
-import PortalPreviewImmersive from "./PortalPreviewImmersive";
+import ApproveWalkthrough from "./ApproveWalkthrough";
 import { presentProductError, type ProductErrorView } from "@/lib/platform/productErrors";
 import ProductErrorBanner from "@/components/product/ProductErrorBanner";
+import { parseOwnerPlanAdditions } from "./parseOwnerPlanAdditions";
 
-type PreviewRole = "OWNER" | "MANAGER" | "EMPLOYEE";
-type CenterMode = "discovery" | "assembly" | "proposal" | "portal";
+/** Shared mode model for initial + continuous — maps to constitution progress. */
+type CenterMode = "conversation" | "recommendation" | "proposal" | "preview";
 
 /**
- * Consultant shell — conversation left, stage canvas center, understanding right.
- * Reuses /api/builder/sessions actions only.
- * continuous: in-business Ask VIBETech (skip greenfield discovery framing).
+ * One conversation at a time — Ask VIBETech.
+ * Discovery: chat only. Recommendation/preview: replace the chat with that one surface.
  */
 export default function ArchitectWorkspace({
   sessionId,
   continuous = false,
   businessId = null,
+  embedded = false,
+  onSessionMutated,
 }: {
   sessionId: string;
   continuous?: boolean;
   businessId?: string | null;
+  /** When true, skip outer ArchitectShell (parent provides chrome, e.g. Ask history layout). */
+  embedded?: boolean;
+  onSessionMutated?: (session: any) => void;
 }) {
   const router = useRouter();
-  const routes = architectRoutes(sessionId);
+  const routes = architectRoutes(sessionId, businessId);
   const [session, setSession] = useState<any>(null);
   const [proposal, setProposal] = useState<any>(null);
   const [journey, setJourney] = useState<any>(null);
@@ -54,19 +54,17 @@ export default function ArchitectWorkspace({
   const [researchFindings, setResearchFindings] = useState<any>(null);
   const [uploads, setUploads] = useState<any[]>([]);
   const [changeImpact, setChangeImpact] = useState<any>(null);
-  const [portalPreview, setPortalPreview] = useState<any>(null);
-  const [previewRole, setPreviewRole] = useState<PreviewRole>("OWNER");
-  const [centerMode, setCenterMode] = useState<CenterMode>(continuous ? "proposal" : "discovery");
+  const [centerMode, setCenterMode] = useState<CenterMode>("conversation");
   const [message, setMessage] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [researchBusy, setResearchBusy] = useState(false);
   const [thinking, setThinking] = useState(false);
-  const [editingAnswerId, setEditingAnswerId] = useState<string | null>(null);
   const [accentColor, setAccentColor] = useState<string>(architect.accent);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ProductErrorView | null>(null);
+  /** Soft notice for optional research — never blocks discovery. */
+  const [researchNotice, setResearchNotice] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [showEvidence, setShowEvidence] = useState(false);
 
   async function refresh(action?: string, body: Record<string, unknown> = {}) {
     const response = await fetch(`/api/builder/sessions/${encodeURIComponent(sessionId)}`, {
@@ -80,7 +78,10 @@ export default function ArchitectWorkspace({
         productError: data.productError ?? presentProductError(data.error ?? data.reason ?? data.message),
       });
     }
-    if (data.session) setSession(data.session);
+    if (data.session) {
+      setSession(data.session);
+      onSessionMutated?.(data.session);
+    }
     if (data.proposal) setProposal(data.proposal);
     if (data.journey) setJourney(data.journey);
     if (data.quickReplies) setQuickReplies(data.quickReplies);
@@ -96,8 +97,16 @@ export default function ArchitectWorkspace({
       try {
         setThinking(true);
         const data = await refresh();
-        if (data.proposal || continuous) setCenterMode("proposal");
-        else if (data.journey?.readyForProposal) setCenterMode("assembly");
+        // Ask is a chatbot first. Continuous improve never dumps into the plan studio.
+        if (continuous) {
+          setCenterMode("conversation");
+        } else if (data.proposal) {
+          setCenterMode("proposal");
+        } else if (data.journey?.readyForProposal) {
+          setCenterMode("recommendation");
+        } else {
+          setCenterMode("conversation");
+        }
       } catch (err) {
         setError((err as any)?.productError ?? presentProductError(err));
       } finally {
@@ -106,14 +115,6 @@ export default function ArchitectWorkspace({
     })();
   }, [sessionId, continuous]);
 
-  const continuity = continuous
-    ? askVibetechContinuity({
-      businessId: businessId ?? session?.businessId,
-      hasDna: Boolean(session?.businessSummary?.businessName),
-      hasInstalledOs: true,
-      hasHistory: Boolean(session?.conversation?.length),
-    })
-    : null;
   const accent = proposal?.accentColor ?? accentColor;
   const conversation = session?.conversation ?? [];
   const nextQuestionRaw = session?.questions?.[0] ?? null;
@@ -124,37 +125,48 @@ export default function ArchitectWorkspace({
         why: nextQuestionRaw.why,
       }
     : null;
-  const confidence = confidenceLabel(
-    proposal?.confidence ?? session?.progress?.confidence ?? researchFindings?.confidence ?? "medium",
-  );
   const readyForProposal = Boolean(journey?.readyForProposal) || Boolean(proposal);
 
-  async function send(override?: string, opts: { unknown?: boolean; skipped?: boolean; forceQuestion?: boolean } = {}) {
+  async function answerDiscovery({ questionId, answer }: { questionId: string; answer: string }) {
+    setBusy(true);
+    setThinking(true);
+    setError(null);
+    setResearchNotice(null);
+    try {
+      await refresh("answer", {
+        questionId,
+        answer,
+        unknown: false,
+        skipped: false,
+      });
+      const workspace = await refresh();
+      setQuickReplies(workspace.quickReplies ?? []);
+      if (workspace.journey?.readyForProposal && !workspace.proposal) setCenterMode("recommendation");
+      setMessage("");
+      setWebsiteUrl("");
+    } catch (err) {
+      setError((err as any)?.productError ?? presentProductError(err));
+    } finally {
+      setBusy(false);
+      setThinking(false);
+    }
+  }
+
+  async function send(override?: string) {
     const text = (override ?? message).trim();
     setBusy(true);
     setThinking(true);
     setError(null);
     try {
-      const questionId = editingAnswerId ?? (opts.forceQuestion ? nextQuestionRaw?.questionId : null);
-      // Free-form consultant chat during discovery; bind to a question only when explicitly answering one.
-      if (questionId && !proposal) {
-        await refresh("answer", {
-          questionId,
-          answer: text || "I don't know",
-          unknown: opts.unknown || !text,
-          skipped: Boolean(opts.skipped),
-        });
-        setEditingAnswerId(null);
+      if (!proposal) {
+        await refresh("chat", { text: text || "I don't know" });
+        setQuickReplies([]);
         const workspace = await refresh();
-        setQuickReplies(workspace.quickReplies ?? []);
-        if (workspace.journey?.readyForProposal && !workspace.proposal) setCenterMode("assembly");
-      } else if (!proposal) {
-        const data = await refresh("chat", { text: text || "I don't know" });
-        setQuickReplies(data.nextQuestions?.map((q: any) => q.prompt).filter(Boolean).slice(0, 4) ?? []);
-        if (data.journey?.readyForProposal) setCenterMode("assembly");
+        if (workspace.journey?.readyForProposal) setCenterMode("recommendation");
       } else {
         const data = await refresh("chat", { text });
         setChangeImpact(data.changeImpact ?? null);
+        setQuickReplies([]);
       }
       setMessage("");
     } catch (err) {
@@ -169,7 +181,7 @@ export default function ArchitectWorkspace({
     setBusy(true);
     setThinking(true);
     setError(null);
-    setCenterMode("assembly");
+    setCenterMode("recommendation");
     try {
       await refresh("propose");
       setCenterMode("proposal");
@@ -184,16 +196,29 @@ export default function ArchitectWorkspace({
 
   async function runResearch() {
     setResearchBusy(true);
-    setThinking(true);
-    setError(null);
+    setResearchNotice(null);
     try {
       await refresh("research", { websiteUrl: websiteUrl || session?.websiteUrls?.[0] });
       await refresh();
+      setResearchNotice(null);
     } catch (err) {
-      setError((err as any)?.productError ?? presentProductError(err));
+      // Website review is optional — soft-fail so discovery can continue without a blocking banner.
+      const productError = (err as any)?.productError ?? presentProductError(err);
+      const reason = String((err as any)?.message ?? productError?.whatHappened ?? "").toLowerCase();
+      const soft =
+        /research|fetch_failed|unavailable|timeout|could not reach|could not review/i.test(reason)
+        || productError?.title === "Website review unavailable";
+      if (soft) {
+        setResearchNotice(
+          "We couldn’t review that website right now. Your answer was saved — continue, or try another URL later.",
+        );
+      } else if (/invalid.?url/i.test(reason) || productError?.title?.includes("Website address")) {
+        setResearchNotice(productError.message || "That website address needs a fix.");
+      } else {
+        setError(productError);
+      }
     } finally {
       setResearchBusy(false);
-      setThinking(false);
     }
   }
 
@@ -231,7 +256,7 @@ export default function ArchitectWorkspace({
           mimeType: file.type,
           textPreview,
           contentBase64,
-          notes: "Uploaded during Architect discovery",
+          notes: "Uploaded while talking with VIBETech",
         });
       }
       await refresh();
@@ -243,21 +268,8 @@ export default function ArchitectWorkspace({
     }
   }
 
-  async function loadPortal(role: PreviewRole = previewRole) {
-    setBusy(true);
-    setThinking(true);
-    setError(null);
-    try {
-      const data = await refresh("portal_preview", { membershipRole: role });
-      setPortalPreview(data);
-      setPreviewRole(role);
-      setCenterMode("portal");
-    } catch (err) {
-      setError((err as any)?.productError ?? presentProductError(err));
-    } finally {
-      setBusy(false);
-      setThinking(false);
-    }
+  function openReview() {
+    setCenterMode("preview");
   }
 
   async function saveAccent(next: string) {
@@ -274,83 +286,113 @@ export default function ArchitectWorkspace({
       },
     };
     await refresh("update_appearance", { navigationOverrides: overrides });
-    if (centerMode === "portal") await loadPortal(previewRole);
+  }
+
+  async function renameProposalItem(input: {
+    sectionId: string;
+    id: string;
+    label?: string;
+    purpose?: string;
+  }) {
+    if (input.sectionId === "navigation") {
+      await renameModule(input.id, String(input.label ?? ""));
+      return;
+    }
+    if (input.sectionId === "employees") {
+      await refresh("update_appearance", {
+        employeeOverrides: {
+          labels: input.label ? { [input.id]: input.label } : {},
+          purposes: input.purpose ? { [input.id]: input.purpose } : {},
+        },
+      });
+      return;
+    }
+    if (input.sectionId === "roles") {
+      await refresh("update_appearance", {
+        roleOverrides: {
+          labels: input.label ? { [input.id]: input.label } : {},
+        },
+      });
+    }
+  }
+
+  async function applyPlanChanges(input: {
+    removeModuleIds: string[];
+    removeEmployeeIds: string[];
+    addRequest: string;
+  }) {
+    setBusy(true);
+    setThinking(true);
+    setError(null);
+    try {
+      // Optimistic local merge so the teammate appears before the round-trip finishes.
+      const parsed = parseOwnerPlanAdditions(input.addRequest);
+      if (proposal && (parsed.employees.length || parsed.modules.length)) {
+        setProposal(mergeParsedAdditionsIntoProposal(proposal, parsed, input));
+      }
+
+      // Server parses + persists — source of truth (survives stale client parsers / HMR).
+      const data = await refresh("apply_plan_changes", {
+        removeModuleIds: input.removeModuleIds,
+        removeEmployeeIds: input.removeEmployeeIds,
+        addRequest: input.addRequest,
+      });
+      if (data?.proposal) setProposal(data.proposal);
+    } catch (err) {
+      setError((err as any)?.productError ?? presentProductError(err));
+      // Re-sync on failure so optimistic junk does not stick.
+      try {
+        const workspace = await refresh();
+        if (workspace?.proposal) setProposal(workspace.proposal);
+      } catch {
+        // ignore secondary refresh failure
+      }
+      throw err;
+    } finally {
+      setBusy(false);
+      setThinking(false);
+    }
   }
 
   if (!session && !error) {
-    return (
-      <ArchitectShell maxWidth={1100}>
-        <ArchitectPanel style={{ display: "grid", gap: 14 }}>
-          <ThinkingDots label="Opening your Architect session" />
-          <ArchitectSkeleton height={28} width="40%" />
-          <ArchitectSkeleton height={120} />
-          <ArchitectSkeleton height={220} />
-        </ArchitectPanel>
-      </ArchitectShell>
+    const loading = (
+      <ArchitectPanel style={{ display: "grid", gap: 14 }}>
+        <ThinkingDots label="Opening Ask VIBETech" />
+        <ArchitectSkeleton height={28} width="40%" />
+        <ArchitectSkeleton height={220} />
+      </ArchitectPanel>
     );
+    return embedded ? loading : <ArchitectShell maxWidth={720}>{loading}</ArchitectShell>;
   }
 
-  return (
-    <ArchitectShell maxWidth={1480}>
-      <header style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
-        <div>
-          <ArchitectBadge tone="accent">
-            {continuous ? (continuity?.entryLabel ?? "Ask VIBETech") : "Ask VIBETech"}
-          </ArchitectBadge>
-          <h1 style={{
-            margin: "10px 0 6px",
-            fontFamily: architect.display,
-            fontSize: "clamp(1.6rem, 3vw, 2.2rem)",
-            letterSpacing: "-0.02em",
-          }}>
-            {continuous
-              ? "Ask VIBETech"
-              : (proposal?.businessName ?? session?.businessSummary?.businessName ?? "Understanding your business")}
-          </h1>
-          <p style={{ margin: 0, color: architect.inkMuted }}>
-            {continuous
-              ? "Talk about your business like you would with an executive partner. Nothing goes live until you approve."
-              : "One thoughtful conversation. Nothing goes live until you approve."}
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <ArchitectBadge tone={confidence.tone}>{confidence.label}</ArchitectBadge>
-          {(continuous
-            ? (proposal ? (["proposal", "portal"] as CenterMode[]) : [])
-            : (["discovery", "assembly", "proposal", "portal"] as CenterMode[])
-          ).map((mode) => {
-            const disabled = (mode === "proposal" || mode === "portal") && !proposal;
-            const label =
-              mode === "discovery" ? "Conversation"
-                : mode === "assembly" ? "Building plan"
-                  : mode === "proposal" ? (continuous ? "Proposed change" : "Plan")
-                    : "Preview";
-            return (
-              <button
-                key={mode}
-                type="button"
-                disabled={disabled}
-                onClick={() => {
-                  if (mode === "portal" && proposal) void loadPortal(previewRole);
-                  else setCenterMode(mode);
-                }}
-                style={{
-                  borderRadius: 999,
-                  border: `1px solid ${centerMode === mode ? architect.accent : architect.border}`,
-                  background: centerMode === mode ? architect.accentSoft : "transparent",
-                  color: architect.ink,
-                  padding: "7px 12px",
-                  cursor: disabled ? "not-allowed" : "pointer",
-                  opacity: disabled ? 0.45 : 1,
-                  fontSize: 13,
-                  fontWeight: centerMode === mode ? 700 : 500,
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+  const showingProposal = centerMode === "proposal" && Boolean(proposal);
+  const showingPreview = centerMode === "preview";
+  const showingRecommendationPrep = centerMode === "recommendation" && !proposal;
+  const inConversation = !showingProposal && !showingPreview && !showingRecommendationPrep;
+
+  const body = (
+    <>
+      <header style={{ marginBottom: continuous && embedded ? 12 : 20, textAlign: embedded ? "left" : "center" }}>
+        <h1 style={{
+          margin: 0,
+          fontFamily: architect.display,
+          fontSize: continuous && embedded ? "clamp(1.25rem, 2.4vw, 1.55rem)" : "clamp(1.5rem, 3vw, 1.9rem)",
+          letterSpacing: "-0.02em",
+          fontWeight: 650,
+        }}>
+          Ask VIBETech
+        </h1>
+        <p style={{ margin: continuous && embedded ? "4px 0 0" : "8px 0 0", color: architect.inkMuted, fontSize: continuous && embedded ? 13 : 15, lineHeight: 1.5 }}>
+          {showingProposal
+            ? "Here is how VIBETech recommends running your business."
+            : showingPreview
+              ? continuous
+                ? "One step at a time — review this change before it applies."
+                : "One step at a time — review what you’re approving."
+              : continuous
+                ? "Ask anything about this business. Nothing changes until you approve."
+                : "One question at a time. Type an answer, then Next."}
+        </p>
       </header>
 
       {error ? (
@@ -359,81 +401,135 @@ export default function ArchitectWorkspace({
         </div>
       ) : null}
 
-      <div className="architect-workspace-grid">
-        <ArchitectPanel style={{ display: "grid", gap: 14, alignContent: "start", minHeight: 680 }}>
-          <ConversationRail
-            conversation={conversation}
-            nextQuestion={nextQuestion}
-            quickReplies={quickReplies}
-            message={message}
-            setMessage={setMessage}
-            thinking={thinking}
-            busy={busy}
-            mode={proposal || continuous ? "chat" : "discovery"}
-            suggestQuestion={!continuous}
-            onSubmit={() => void send()}
-            onQuickReply={(value) => void send(value, {
-              unknown: /don.?t know|not sure/i.test(value),
-              skipped: /skip/i.test(value),
-            })}
-            onSkip={() => void send("Skipped for now", { skipped: true })}
-            onUnknown={() => void send("I'm not sure", { unknown: true })}
-            websiteUrl={websiteUrl}
-            setWebsiteUrl={setWebsiteUrl}
-            onResearch={() => void runResearch()}
-            researchBusy={researchBusy}
-            researchFindings={researchFindings}
-            onConfirmResearch={(accepted) => void confirmResearch(accepted)}
-            uploads={uploads}
-            onUploadFiles={(files) => void onUpload(files)}
-            dragOver={dragOver}
-            setDragOver={setDragOver}
-            showEvidence={showEvidence}
-            setShowEvidence={setShowEvidence}
-          />
-        </ArchitectPanel>
+      {researchNotice && !error ? (
+        <div
+          role="status"
+          style={{
+            marginBottom: 16,
+            borderRadius: 12,
+            border: `1px solid ${architect.border}`,
+            background: "rgba(15,23,42,.55)",
+            padding: "12px 14px",
+            color: architect.inkMuted,
+            fontSize: 14,
+            lineHeight: 1.5,
+          }}
+        >
+          {researchNotice}
+        </div>
+      ) : null}
 
-        <ArchitectPanel style={{ display: "grid", gap: 16, alignContent: "start", minHeight: 680 }}>
-          {centerMode === "discovery" && !continuous ? (
-            <div style={{ display: "grid", gap: 16 }}>
-              <div>
-                <ArchitectBadge tone="accent">Discovery</ArchitectBadge>
-                <h2 style={{ margin: "10px 0 6px", fontFamily: architect.display, fontSize: 28 }}>
-                  Listening first
-                </h2>
-                <p style={{ margin: 0, color: architect.inkMuted, lineHeight: 1.55 }}>
-                  Architect builds understanding as you talk. When enough is clear, you can ask for the plan.
+      <div
+        className="architect-workspace-grid"
+        style={
+          embedded
+            ? continuous
+              ? { maxWidth: 640, margin: 0 }
+              : { maxWidth: "100%", margin: 0 }
+            : undefined
+        }
+      >
+        {inConversation ? (
+          <ArchitectPanel style={{ display: "grid", gap: 12, padding: continuous ? "18px 18px" : "28px 24px" }}>
+            {!continuous ? (
+              <DiscoveryStepWizard
+                answers={session?.answers ?? []}
+                nextQuestion={nextQuestion}
+                busy={busy}
+                thinking={thinking}
+                websiteUrl={websiteUrl}
+                setWebsiteUrl={setWebsiteUrl}
+                onResearch={() => void runResearch()}
+                researchBusy={researchBusy}
+                uploads={uploads}
+                onUploadFiles={(files) => void onUpload(files)}
+                dragOver={dragOver}
+                setDragOver={setDragOver}
+                onAnswer={answerDiscovery}
+                minRequiredAnswers={Number(journey?.minRequiredAnswers ?? session?.progress?.minRequiredAnswers ?? 16)}
+                requiredTotal={Number(session?.progress?.requiredTotal ?? journey?.requiredTotal ?? 18)}
+                answeredCount={Number(session?.progress?.requiredAnswered ?? session?.answers?.length ?? 0)}
+                onFinish={() => setCenterMode("recommendation")}
+              />
+            ) : (
+              <ConversationRail
+                conversation={conversation}
+                nextQuestion={nextQuestion}
+                quickReplies={quickReplies}
+                message={message}
+                setMessage={setMessage}
+                thinking={thinking}
+                busy={busy}
+                mode="chat"
+                onSubmit={() => void send()}
+                onQuickReply={(value) => void send(value)}
+                websiteUrl={websiteUrl}
+                setWebsiteUrl={setWebsiteUrl}
+                onResearch={() => void runResearch()}
+                researchBusy={researchBusy}
+                researchFindings={researchFindings}
+                onConfirmResearch={(accepted) => void confirmResearch(accepted)}
+                uploads={uploads}
+                onUploadFiles={(files) => void onUpload(files)}
+                dragOver={dragOver}
+                setDragOver={setDragOver}
+              />
+            )}
+
+            {!continuous && journey?.readyForProposal && !proposal ? (
+              <div style={{
+                borderTop: `1px solid ${architect.border}`,
+                paddingTop: 16,
+                display: "grid",
+                gap: 10,
+              }}>
+                <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.5 }}>
+                  VIBETech has enough to recommend how your business should run.
                 </p>
+                <ArchitectButton disabled={busy} onClick={() => setCenterMode("recommendation")}>
+                  Continue
+                </ArchitectButton>
               </div>
-              {readyForProposal ? (
-                <OsAssemblyCanvas
-                  proposal={proposal}
-                  readyForProposal={readyForProposal}
-                  busy={busy}
-                  onPropose={() => void propose()}
-                  onOpenProposal={() => setCenterMode("proposal")}
-                />
-              ) : (
-                <div style={{
-                  borderRadius: architect.radius,
-                  border: `1px solid ${architect.border}`,
-                  background: "rgba(15,23,42,.4)",
-                  padding: 24,
-                  color: architect.inkMuted,
-                  lineHeight: 1.55,
-                }}>
-                  Keep answering in plain language. Share a website or documents anytime from the conversation.
-                </div>
-              )}
-              {journey?.readyForProposal && !proposal ? (
+            ) : null}
+
+            {continuous && journey?.readyForProposal && !proposal ? (
+              <div style={{
+                borderTop: `1px solid ${architect.border}`,
+                paddingTop: 16,
+                display: "grid",
+                gap: 10,
+              }}>
+                <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.5 }}>
+                  VIBETech has enough to recommend how your business should run.
+                </p>
                 <ArchitectButton disabled={busy} onClick={() => void propose()}>
                   {busy ? HUMAN_COPY.rethink : HUMAN_COPY.proposePlan}
                 </ArchitectButton>
-              ) : null}
-            </div>
-          ) : null}
+              </div>
+            ) : null}
 
-          {centerMode === "assembly" ? (
+            {continuous && proposal ? (
+              <div style={{
+                borderTop: `1px solid ${architect.border}`,
+                paddingTop: 12,
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                alignItems: "center",
+              }}>
+                <p style={{ margin: 0, color: architect.inkMuted, fontSize: 13, lineHeight: 1.45, flex: "1 1 220px" }}>
+                  A recommendation is ready when you want to review it.
+                </p>
+                <ArchitectButton variant="secondary" disabled={busy} onClick={() => setCenterMode("proposal")}>
+                  Review recommendation
+                </ArchitectButton>
+              </div>
+            ) : null}
+          </ArchitectPanel>
+        ) : null}
+
+        {showingRecommendationPrep ? (
+          <ArchitectPanel style={{ display: "grid", gap: 16, padding: "24px 22px" }}>
             <OsAssemblyCanvas
               proposal={proposal}
               readyForProposal={readyForProposal}
@@ -441,68 +537,81 @@ export default function ArchitectWorkspace({
               onPropose={() => void propose()}
               onOpenProposal={() => setCenterMode("proposal")}
             />
-          ) : null}
+            <ArchitectButton variant="ghost" onClick={() => setCenterMode("conversation")}>
+              {continuous ? "Back to conversation" : "Back"}
+            </ArchitectButton>
+          </ArchitectPanel>
+        ) : null}
 
-          {centerMode === "proposal" && proposal ? (
+        {showingProposal ? (
+          <ArchitectPanel style={{ display: "grid", gap: 16, padding: "24px 22px" }}>
             <ProposalStudio
               proposal={proposal}
-              accentColor={accent}
-              onAccent={(color) => void saveAccent(color)}
-              onRenameNav={(moduleId, label) => void renameModule(moduleId, label)}
-              onPreview={() => void loadPortal(previewRole)}
-              onPrepareLaunch={() => router.push(routes.dryRun)}
+              continuous={continuous}
+              onApprove={() => router.push(routes.dryRun)}
+              onRequestChanges={(input) => applyPlanChanges(input)}
+              onBack={() => setCenterMode(continuous ? "conversation" : "recommendation")}
               busy={busy}
             />
-          ) : null}
+          </ArchitectPanel>
+        ) : null}
 
-          {continuous && !proposal && centerMode === "proposal" ? (
-            <div style={{
-              borderRadius: architect.radius,
-              border: `1px solid ${architect.border}`,
-              background: "rgba(15,23,42,.4)",
-              padding: 24,
-              color: architect.inkMuted,
-              lineHeight: 1.55,
-            }}>
-              Describe what you want VIBETech to change. When a plan is ready, it will appear here for your review — nothing goes live until you approve.
-            </div>
-          ) : null}
-
-          {centerMode === "portal" ? (
-            <PortalPreviewImmersive
-              portalPreview={portalPreview}
+        {showingPreview ? (
+          <ArchitectPanel style={{ display: "grid", gap: 16, padding: "24px 22px" }}>
+            <ApproveWalkthrough
               proposal={proposal}
-              previewRole={previewRole}
-              onRoleChange={(role) => void loadPortal(role)}
-              accentColor={accent}
+              continuous={continuous}
               busy={busy}
-              onPrepareLaunch={() => router.push(routes.dryRun)}
-            />
-          ) : null}
-        </ArchitectPanel>
-
-        <div style={{ display: "grid", gap: 14, alignContent: "start" }}>
-          <ArchitectPanel>
-            <BusinessUnderstandingPanel
-              summary={session?.businessSummary}
-              session={session}
-              journey={journey}
+              onConfirm={() => router.push(routes.dryRun)}
+              onBackToRecommendation={() => setCenterMode("proposal")}
+              onKeepTalking={continuous ? () => setCenterMode("conversation") : undefined}
             />
           </ArchitectPanel>
-          <ArchitectPanel>
-            <BusinessDnaPortrait summary={session?.businessSummary} />
-          </ArchitectPanel>
-          <ArchitectPanel>
-            <ReasoningStrip
-              nextQuestion={nextQuestion}
-              proposal={proposal}
-              assumptions={proposal?.assumptions ?? session?.assumptions}
-              recommendations={proposal?.recommendations ?? session?.recommendations}
-              changeImpact={changeImpact}
-            />
-          </ArchitectPanel>
-        </div>
+        ) : null}
       </div>
-    </ArchitectShell>
+    </>
   );
+
+  return embedded ? body : <ArchitectShell maxWidth={760}>{body}</ArchitectShell>;
+}
+
+/** Optimistic UI merge so owner additions show before the server round-trip. */
+function mergeParsedAdditionsIntoProposal(
+  proposal: any,
+  parsed: { modules: Array<{ id: string; label: string; purpose?: string; ownerAdded?: boolean }>; employees: Array<{ id: string; label: string; purpose?: string; ownerAdded?: boolean }> },
+  input: { removeModuleIds: string[]; removeEmployeeIds: string[] },
+) {
+  const navItems = [...(proposal?.views?.navigation?.items ?? [])]
+    .filter((item: any) => !input.removeModuleIds.includes(String(item.id)));
+  const workforceItems = [...(proposal?.views?.digitalWorkforce?.items ?? [])]
+    .filter((item: any) => !input.removeEmployeeIds.includes(String(item.id)));
+
+  for (const mod of parsed.modules) {
+    if (navItems.some((item: any) => String(item.id) === String(mod.id))) continue;
+    navItems.push({ id: mod.id, label: mod.label, ownerAdded: true });
+  }
+  for (const emp of parsed.employees) {
+    if (workforceItems.some((item: any) => String(item.id) === String(emp.id))) continue;
+    workforceItems.push({
+      id: emp.id,
+      label: emp.label,
+      purpose: emp.purpose,
+      ownerAdded: true,
+    });
+  }
+
+  return {
+    ...proposal,
+    views: {
+      ...proposal.views,
+      navigation: {
+        ...(proposal.views?.navigation ?? {}),
+        items: navItems,
+      },
+      digitalWorkforce: {
+        ...(proposal.views?.digitalWorkforce ?? {}),
+        items: workforceItems,
+      },
+    },
+  };
 }

@@ -38,13 +38,47 @@ test("MissionControlRenderer mounts OperatingHomeExperience for mission_control 
   assert.ok(source.includes("<OperatingHomeExperience"));
 });
 
-test("canonical Home page no longer mounts PortalHome or ExecutiveHomeLayout", () => {
+test("canonical Home splits pre-install Ask VIBETech from post-install operating Home", () => {
   const page = readFileSync(
     path.join(here, "../../app/b/[businessId]/home/page.tsx"),
     "utf8",
   );
+  assert.match(page, /BusinessOnboardingHome/);
   assert.match(page, /MissionControlRenderer/);
+  assert.match(page, /Talk to VIBETech|hasInstalledOs/);
   assert.ok(!page.includes("PortalHome"));
   assert.ok(!page.includes("ExecutiveHomeLayout"));
-  assert.match(page, /showMissionControl = Boolean\(executive\.showOperatingDashboard\)/);
+  assert.ok(!page.includes("EmptyBusinessHome"));
+  assert.ok(!page.includes("FirstLoginBriefingBanner"));
+  assert.ok(!page.includes("SetupChecklistBanner"));
+});
+
+test("operating Home is mockup-density dashboard from live supervision, not industry CRM hardcodes", () => {
+  const home = readFileSync(
+    path.join(here, "../operating/OperatingHomeExperience.tsx"),
+    "utf8",
+  );
+  assert.ok(!home.includes("AskVibeTechComposer"));
+  assert.ok(!home.includes("AskCard"));
+  assert.match(home, /Needs you/);
+  assert.match(home, /AI team/);
+  assert.match(home, /MetricStrip/);
+  assert.match(home, /DashGrid/);
+  assert.match(home, /What changed/);
+  assert.match(home, /buildMetricCards/);
+  assert.match(home, /Same queue as Needs Attention/);
+  assert.match(home, /teammateActionLabel/);
+  assert.match(home, /metricHrefForLabel/);
+  assert.ok(!home.includes("ownerActionOutcomes"));
+  assert.ok(!home.includes("needsOwnerAction"));
+  assert.ok(!home.includes("estimateProgress"));
+  assert.ok(!home.includes("Business memory"));
+  assert.ok(!home.includes("Operating pulse"));
+  assert.ok(!home.includes("DemoStoryMode"));
+  assert.ok(!home.includes("leasing"));
+  assert.ok(!home.includes("maintenance"));
+  assert.ok(!home.includes("commission"));
+  assert.ok(!home.includes("Showings"));
+  assert.ok(!home.includes("New Leads"));
+  assert.ok(!home.includes("Zillow"));
 });

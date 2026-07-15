@@ -3,6 +3,9 @@
 Authoritative full document:
 `docs/architecture/VIBETECH_PLATFORM_CONSTITUTION.md`
 
+Companion (what we sell / how it must feel):
+`PRODUCT_CONSTITUTION.md` → `docs/product/VIBETECH_PRODUCT_CONSTITUTION.md`
+
 Short permanent rules:
 
 1. Business state exists exactly once.

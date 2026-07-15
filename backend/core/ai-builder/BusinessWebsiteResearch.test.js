@@ -16,6 +16,16 @@ test("website policy rejects authenticated and unapproved URLs", () => {
   assert.equal(validateWebsiteUrl("https://example.com", { approvedUrls: ["https://example.com"] }).ok, true);
 });
 
+test("website policy accepts bare domains like www.magna-mare.com", () => {
+  const result = validateWebsiteUrl("www.magna-mare.com");
+  assert.equal(result.ok, true);
+  assert.match(String(result.url), /^https:\/\/www\.magna-mare\.com\/?$/);
+  const approved = validateWebsiteUrl("www.magna-mare.com", {
+    approvedUrls: ["www.magna-mare.com"],
+  });
+  assert.equal(approved.ok, true);
+});
+
 test("website research uses fixtures and never installs capabilities", async () => {
   const fixtures = new Map([
     ["https://northline.hockey.example", {

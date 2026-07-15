@@ -99,6 +99,16 @@ test("defaults register and match legacy intents deterministically", () => {
   assert.equal(hire.legacyKind, "add_employee");
 });
 
+test("practice plan builder requests match hire, not schedule ambiguity", () => {
+  const registry = resetDefaultArchitectChangeCapabilityRegistryForTests();
+  resetArchitectChangeCapabilityRegistrationForTests(registry);
+  const matched = registry.match(
+    "Add a Practice Plans module and a Workout Plan Builder that builds weekly practice plans for every player",
+  );
+  assert.equal(matched.status, "matched");
+  assert.equal(matched.legacyKind, "add_employee");
+});
+
 test("unsupported and ambiguous matching outcomes", () => {
   const registry = resetDefaultArchitectChangeCapabilityRegistryForTests();
   resetArchitectChangeCapabilityRegistrationForTests(registry);
@@ -364,4 +374,25 @@ test("unsupported propose does not mutate specification", async () => {
   assert.equal(result.ok, false);
   assert.equal(result.status, "unsupported");
   assert.equal(specification.contentHash, before);
+});
+
+test("high-value packages match newsletter, inquiry, schedule, fundraising", () => {
+  const registry = resetDefaultArchitectChangeCapabilityRegistryForTests();
+  resetArchitectChangeCapabilityRegistrationForTests(registry);
+
+  const newsletter = registry.match("Create weekly newsletters for our business contacts");
+  assert.equal(newsletter.status, "matched");
+  assert.equal(newsletter.capabilityId, "architect.change.enable_weekly_newsletter");
+
+  const inquiry = registry.match("Auto reply to property inquiries with the info I approve");
+  assert.equal(inquiry.status, "matched");
+  assert.equal(inquiry.capabilityId, "architect.change.configure_inquiry_replies");
+
+  const schedule = registry.match("Manage our practice and game schedule for the season");
+  assert.equal(schedule.status, "matched");
+  assert.equal(schedule.capabilityId, "architect.change.enable_scheduling");
+
+  const fundraise = registry.match("Help us manage fundraisers and sponsorship outreach");
+  assert.equal(fundraise.status, "matched");
+  assert.equal(fundraise.capabilityId, "architect.change.enable_fundraising");
 });

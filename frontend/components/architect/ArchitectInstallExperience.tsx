@@ -22,6 +22,7 @@ import {
 import ExecutiveBriefing from "./ExecutiveBriefing";
 import { presentProductError, type ProductErrorView } from "@/lib/platform/productErrors";
 import ProductErrorBanner from "@/components/product/ProductErrorBanner";
+import { resolveBusinessDisplayName } from "@/lib/operating/businessLanguage";
 
 export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
@@ -45,6 +46,10 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
         return;
       }
       setResult(data);
+      if (data.alreadyInstalled && data.openHref) {
+        // Session is already live — home has the prosper walkthrough.
+        setTimeout(() => router.push(data.openHref), 50);
+      }
     } catch (err) {
       setError(presentProductError(err));
     } finally {
@@ -63,17 +68,17 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
       <header style={{ display: "grid", gap: 10, marginBottom: 24 }}>
         <ArchitectBadge tone="accent">{HUMAN_COPY.launchReadiness}</ArchitectBadge>
         <h1 style={{ margin: 0, fontFamily: architect.display, fontSize: "clamp(1.8rem, 3vw, 2.4rem)" }}>
-          Everything ready for launch?
+          Everything ready to go live?
         </h1>
         <p style={{ margin: 0, color: architect.inkMuted, maxWidth: 640 }}>
-          Architect checks the plan without changing your live business. Nothing is installed yet.
+          VIBETech checks the recommendation without changing your live business. Nothing is live yet.
         </p>
       </header>
 
       <ArchitectPanel>
         {busy ? (
           <div style={{ display: "grid", gap: 12 }}>
-            <ThinkingDots label="Preparing your launch checklist" />
+            <ThinkingDots label="Preparing your readiness checklist" />
             <ArchitectSkeleton height={56} />
             <ArchitectSkeleton height={56} />
             <ArchitectSkeleton height={56} />
@@ -81,54 +86,137 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
         ) : null}
         {error ? <ProductErrorBanner error={error} onRetry={() => void run()} /> : null}
         {checklist ? (
-          <div style={{ display: "grid", gap: 16 }}>
-            <h2 style={{ margin: 0, fontSize: 20 }}>{checklist.headline ?? "Launch checklist"}</h2>
-            <div style={{ display: "grid", gap: 10 }}>
-              {(checklist.items ?? [])
-                .filter((item: any) => {
-                  const count = Number(item.count ?? item.value ?? NaN);
-                  if (Number.isFinite(count) && count === 0 && (item.status === "ready" || item.status === "ok")) {
-                    return false;
-                  }
-                  return true;
-                })
-                .map((item: any) => {
+          <div style={{ display: "grid", gap: 22 }}>
+            <div style={{ display: "grid", gap: 8 }}>
+              <h2 style={{ margin: 0, fontSize: 20 }}>{checklist.headline ?? "What VIBETech will set up"}</h2>
+              <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.5 }}>
+                Named ingredients for your operating system — nothing goes live until you continue.
+              </p>
+            </div>
+
+            <div style={readyComposition}>
+              {(checklist.items ?? []).map((item: any, index: number) => {
                 const ready = item.status === "ready" || item.status === "ok";
                 return (
-                  <div key={item.id} style={rowCard}>
-                    <div style={{ fontWeight: 650 }}>{item.label}</div>
-                    <ArchitectBadge tone={ready ? "success" : "warning"}>
-                      {item.statusLabel
-                        ?? (ready ? "Ready" : "Needs attention")}
-                    </ArchitectBadge>
+                  <div
+                    key={item.id}
+                    style={{
+                      ...readySection,
+                      animation: `architectFadeUp .35s ease ${Math.min(index, 8) * 0.04}s both`,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                      <div style={{ display: "grid", gap: 2 }}>
+                        <div style={{ fontWeight: 750, fontSize: 15, letterSpacing: "-0.01em" }}>
+                          {item.title ?? item.label}
+                          <span style={{ marginLeft: 8, color: architect.inkMuted, fontWeight: 600, fontSize: 13 }}>
+                            {(item.details ?? []).length}
+                          </span>
+                        </div>
+                        {item.summary ? (
+                          <div style={{ color: architect.inkMuted, fontSize: 12, lineHeight: 1.4 }}>{item.summary}</div>
+                        ) : null}
+                      </div>
+                      <ArchitectBadge tone={ready ? "success" : "warning"}>
+                        {item.statusLabel ?? (ready ? "Ready" : "Needs attention")}
+                      </ArchitectBadge>
+                    </div>
+                    {(item.details ?? []).length ? (
+                      <div style={chipRow}>
+                        {(item.details as string[]).map((detail) => (
+                          <span key={detail} style={chip}>{detail}</span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
             </div>
+
             {(checklist.blocking ?? []).length ? (
               <div style={{ ...rowCard, borderColor: "rgba(220,38,38,.35)", background: "rgba(220,38,38,.06)" }} role="alert">
-                <strong>Must resolve before launch</strong>
+                <strong>Must resolve before going live</strong>
                 <ul style={{ marginBottom: 0 }}>
                   {(checklist.blocking as string[]).map((item) => <li key={item}>{item}</li>)}
                 </ul>
               </div>
             ) : null}
-            {(checklist.warnings ?? []).length ? (
-              <div style={{ ...rowCard, borderColor: "rgba(251,191,36,.35)", background: "rgba(251,191,36,.08)" }}>
-                <strong>Things to review</strong>
-                <ul style={{ marginBottom: 0 }}>{checklist.warnings.map((warning: string) => <li key={warning}>{warning}</li>)}</ul>
-              </div>
+
+            {(checklist.setupWalkthrough ?? []).length ? (
+              <section style={{ display: "grid", gap: 14 }}>
+                <div style={{ display: "grid", gap: 6 }}>
+                  <h3 style={{ margin: 0, fontSize: 18 }}>Your steps to make your business prosper</h3>
+                  <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.5 }}>
+                    Approve now — then finish these on Home and Settings → Setup after go-live. Each step covers VIBETech and the external platform (Twilio, Google, Meta, and more).
+                  </p>
+                </div>
+                {(checklist.setupWalkthrough as any[]).map((step, index) => (
+                  <article
+                    key={step.id}
+                    style={{
+                      ...walkCard,
+                      animation: `architectFadeUp .4s ease ${0.08 + Math.min(index, 10) * 0.05}s both`,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", minWidth: 0 }}>
+                        <div style={stepNumber}>{index + 1}</div>
+                        <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
+                          <div style={{ fontWeight: 760, fontSize: 16 }}>{step.title}</div>
+                          {step.whereInApp ? (
+                            <div style={{ color: architect.accentSecondary, fontSize: 12, fontWeight: 650 }}>
+                              In VIBETech: {step.whereInApp}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                      <ArchitectBadge tone="warning">Needs setup</ArchitectBadge>
+                    </div>
+                    {step.summary ? (
+                      <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.5 }}>{step.summary}</p>
+                    ) : null}
+                    {(step.inApp ?? []).length ? (
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <div style={sectionEyebrow}>In the app</div>
+                        <ol style={stepList}>
+                          {(step.inApp as string[]).map((line) => <li key={line}>{line}</li>)}
+                        </ol>
+                      </div>
+                    ) : null}
+                    {(step.external ?? []).length ? (
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <div style={sectionEyebrow}>On the external platform</div>
+                        <ol style={stepList}>
+                          {(step.external as string[]).map((line) => <li key={line}>{line}</li>)}
+                        </ol>
+                      </div>
+                    ) : null}
+                  </article>
+                ))}
+              </section>
             ) : null}
-            <p style={{ color: architect.inkMuted, margin: 0 }}>No live records were changed.</p>
+
+            <p style={{ color: architect.inkMuted, margin: 0, fontSize: 13 }}>
+              {result?.alreadyInstalled
+                ? "This business is already live. Open Home to finish your prosper steps."
+                : "No live records were changed."}
+            </p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <ArchitectButton
-                disabled={(checklist.blocking ?? []).length > 0}
-                onClick={() => router.push(routes.install)}
-              >
-                Continue to launch
+              {result?.alreadyInstalled && result?.openHref ? (
+                <ArchitectButton onClick={() => router.push(String(result.openHref))}>
+                  Open Home
+                </ArchitectButton>
+              ) : (
+                <ArchitectButton
+                  disabled={(checklist.blocking ?? []).length > 0}
+                  onClick={() => router.push(routes.install)}
+                >
+                  Continue to approval
+                </ArchitectButton>
+              )}
+              <ArchitectButton variant="secondary" onClick={() => router.push(routes.session)}>
+                Back
               </ArchitectButton>
-              <ArchitectButton variant="secondary" onClick={() => router.push(routes.session)}>Back to Ask VIBETech</ArchitectButton>
-              <ArchitectButton variant="ghost" disabled={busy} onClick={() => void run()}>Check again</ArchitectButton>
             </div>
           </div>
         ) : null}
@@ -151,7 +239,17 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
     void (async () => {
       const response = await fetch(`/api/builder/sessions/${encodeURIComponent(sessionId)}`);
       const data = await response.json();
-      if (data.ok) setWorkspace(data);
+      if (!data.ok) return;
+      setWorkspace(data);
+      const stage = String(data.session?.currentStage ?? "");
+      const businessId = data.session?.businessId;
+      if (stage === "installed" && businessId) {
+        setStatus("installed");
+        setActiveStep(ARCHITECT_INSTALL_STAGES.length - 1);
+        setOpenHref(`/b/${businessId}/home`);
+      } else if (stage === "failed") {
+        setStatus("failed");
+      }
     })();
   }, [sessionId]);
 
@@ -178,9 +276,10 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
         setError(data.productError ?? presentProductError(data.error ?? data.reason ?? "install_failed"));
         return;
       }
+      if (data.session) setWorkspace((prev: any) => ({ ...(prev ?? {}), session: data.session, proposal: prev?.proposal ?? data.proposal }));
       setStatus("installed");
       setActiveStep(ARCHITECT_INSTALL_STAGES.length - 1);
-      setOpenHref(data.openHref);
+      setOpenHref(data.openHref ?? (data.session?.businessId ? `/b/${data.session.businessId}/home` : null));
     } catch (err) {
       setStatus("failed");
       setError(presentProductError(err));
@@ -193,7 +292,11 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
   const proposal = workspace?.proposal;
   const session = workspace?.session;
   const stages = installStageProgress(activeStep, status);
-  const businessName = proposal?.businessName ?? session?.businessSummary?.businessName ?? "Your business";
+  const businessName = resolveBusinessDisplayName(
+    proposal?.businessName,
+    session?.businessSummary?.businessName,
+    session?.appearance?.businessName,
+  );
 
   if (status === "installed") {
     return (
@@ -226,12 +329,12 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
   return (
     <ArchitectShell maxWidth={920}>
       <header style={{ display: "grid", gap: 10, marginBottom: 24 }}>
-        <ArchitectBadge tone="accent">Launch</ArchitectBadge>
+        <ArchitectBadge tone="accent">Go live</ArchitectBadge>
         <h1 style={{ margin: 0, fontFamily: architect.display, fontSize: "clamp(1.8rem, 3vw, 2.4rem)" }}>
-          Create your operating system
+          Approve your operating system
         </h1>
         <p style={{ margin: 0, color: architect.inkMuted, maxWidth: 640 }}>
-          Approval is tied to this exact plan. If anything changes, Architect will ask you to review launch readiness again.
+          Approval is tied to this exact recommendation. If anything changes, VIBETech will ask you to review readiness again.
         </p>
       </header>
 
@@ -287,7 +390,7 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
             {busy ? HUMAN_COPY.installing : HUMAN_COPY.approveLaunch}
           </ArchitectButton>
           <ArchitectButton variant="ghost" onClick={() => router.push(routes.session)}>
-            Back to Architect
+            Back to Ask VIBETech
           </ArchitectButton>
         </div>
       </ArchitectPanel>
@@ -335,3 +438,86 @@ const rowCard = {
   gap: 12,
   alignItems: "center" as const,
 };
+
+const readyComposition = {
+  borderRadius: architect.radius,
+  border: `1px solid ${architect.border}`,
+  background: "linear-gradient(180deg, rgba(20,184,166,.07) 0%, rgba(15,23,42,.35) 28%, rgba(12,20,26,.55) 100%)",
+  padding: 6,
+  display: "grid" as const,
+  gap: 6,
+};
+
+const readySection = {
+  borderRadius: architect.radiusSm,
+  border: `1px solid rgba(148,163,184,.1)`,
+  background: "rgba(7,12,16,.45)",
+  padding: "14px 14px 12px",
+  display: "grid" as const,
+  gap: 10,
+};
+
+const chipRow = {
+  display: "flex" as const,
+  flexWrap: "wrap" as const,
+  gap: 6,
+};
+
+const chip = {
+  display: "inline-flex" as const,
+  alignItems: "center" as const,
+  padding: "5px 10px",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 600,
+  color: architect.ink,
+  background: "rgba(20,184,166,.12)",
+  border: "1px solid rgba(20,184,166,.28)",
+};
+
+const walkCard = {
+  borderRadius: architect.radius,
+  border: `1px solid rgba(251,191,36,.28)`,
+  background: "linear-gradient(165deg, rgba(251,191,36,.08) 0%, rgba(15,23,42,.55) 42%)",
+  padding: "18px 16px",
+  display: "grid" as const,
+  gap: 12,
+};
+
+const indexBadge = {
+  width: 28,
+  height: 28,
+  borderRadius: 999,
+  display: "grid" as const,
+  placeItems: "center" as const,
+  fontSize: 12,
+  fontWeight: 760,
+  color: architect.ink,
+  background: "rgba(20,184,166,.18)",
+  border: `1px solid rgba(20,184,166,.35)`,
+  flex: "0 0 auto",
+};
+
+const stepNumber = {
+  ...indexBadge,
+  background: "rgba(251,191,36,.14)",
+  border: `1px solid rgba(251,191,36,.4)`,
+  color: architect.warning,
+};
+
+const stepList = {
+  margin: 0,
+  paddingLeft: 18,
+  color: architect.ink,
+  lineHeight: 1.6,
+  fontSize: 14,
+};
+
+const sectionEyebrow = {
+  fontSize: 11,
+  fontWeight: 750,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase" as const,
+  color: architect.inkMuted,
+};
+

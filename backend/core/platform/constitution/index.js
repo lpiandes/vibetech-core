@@ -23,3 +23,9 @@ export {
   validateLifecycleTransition,
   requireGovernedInstallPath,
 } from "./AiArchitectLifecycle.js";
+
+/**
+ * Persisted BuilderSession stages map to AI_ARCHITECT_LIFECYCLE via
+ * backend/core/ai-builder/BuilderSessionLifecycle.js.
+ * ArchitectPipeline stages remain intelligence-only (not session state).
+ */

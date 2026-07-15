@@ -1,8 +1,10 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { isPlatformAdmin } from "../platform/persistence/platformMappers.js";
+import { isLikelyAutomatedTestBusiness } from "../platform/platformTestData.js";
 import { getDefaultBlueprintRegistry } from "../blueprints/BlueprintRegistry.js";
 import { BUSINESS_OS_EMPLOYEE_ARCHETYPES } from "../business-os/BusinessOSEmployeeArchetypes.js";
 import { listDashboardComponentTypes, BUSINESS_OS_DASHBOARD_COMPONENTS } from "../business-os/BusinessOSDashboardComponentRegistry.js";
+import { getDefaultCapabilityPackageRegistry } from "../ai-builder/capability-packages/CapabilityPackageRegistry.js";
 
 function fail(message) {
   throw new Error(`AdminPlatformService: ${message}`);
@@ -11,6 +13,7 @@ function fail(message) {
 /**
  * VIBETech Admin Platform orchestration — wraps existing stores/registries.
  * Does not invent parallel auth or become business owner.
+ * Dashboard/directory evidence excludes automated pilot/test tenants.
  *
  * @param {{
  *   platformStore: any,
@@ -44,10 +47,25 @@ export class AdminPlatformService {
     const gate = this.assertAdmin(platformRole);
     if (!gate.ok) return deepFreeze(gate);
 
-    const businesses = await this.platformStore.listBusinesses();
-    const sessions = await this.platformStore.listAiBuilderSessions?.() ?? [];
+    const allBusinesses = await this.platformStore.listBusinesses();
+    const businesses = allBusinesses.filter((business) => !isTestBusiness(business));
+    const testBusinessIds = new Set(
+      allBusinesses.filter((business) => isTestBusiness(business)).map((business) => String(business.id)),
+    );
+
+    const allSessions = await this.platformStore.listAiBuilderSessions?.() ?? [];
+    const sessions = allSessions.filter((session) => {
+      const businessId = session.businessId == null ? null : String(session.businessId);
+      if (businessId && testBusinessIds.has(businessId)) return false;
+      if (isTestBusiness({ name: session.businessSummary?.businessName ?? session.appearance?.businessName })) {
+        return false;
+      }
+      return true;
+    });
+
     const installations = await this._listInstallationsSafe(businesses);
-    const audits = await this._listAuditsSafe(40);
+    const audits = (await this._listAuditsSafe(40))
+      .filter((event) => !isNoiseAuditAction(event?.action));
     const supportActive = await this._listActiveSupportSafe();
 
     const needsAttention = businesses.filter((business) => {
@@ -57,30 +75,39 @@ export class AdminPlatformService {
 
     const failedInstalls = installations.filter((entry) => /fail|partial/i.test(String(entry.status ?? ""))).length;
 
-    await this.platformStore.recordAuditEvent?.({
-      actorUserId: adminUserId,
-      action: "admin.dashboard_viewed",
-      targetType: "platform",
-      targetId: "admin_dashboard",
-    });
-
     return deepFreeze({
       ok: true,
       metrics: {
         totalBusinesses: businesses.length,
         activeBusinesses: businesses.filter((entry) => !entry.archivedAt && entry.status !== "archived").length,
         needingAttention: needsAttention,
-        recentArchitectSessions: sessions.slice(0, 8).length,
-        recentInstallations: installations.slice(0, 8).length,
+        // Totals — never the length of a "recent" slice (that looked like hardcoded 8s).
+        architectSessions: sessions.length,
+        installations: installations.length,
         failedOrPartialInstalls: failedInstalls,
         activeSupportSessions: supportActive.length,
+        // Keep legacy keys for older UI bindings.
+        recentArchitectSessions: sessions.length,
+        recentInstallations: installations.length,
       },
-      recentSessions: sessions.slice(0, 8).map(summarizeSession),
-      recentInstallations: installations.slice(0, 8),
+      recentSessions: latestSessionPerBusiness(sessions)
+        .slice(0, 6)
+        .map(summarizeSession),
+      recentInstallations: installations.slice(0, 6),
       activeSupportSessions: supportActive,
       platformAlerts: buildPlatformAlerts({ failedInstalls, needsAttention, supportActive }),
-      recentAudits: audits,
+      recentAudits: audits.slice(0, 6).map(summarizeAudit),
       capabilityGaps: collectGaps(sessions),
+      businesses: businesses
+        .slice()
+        .sort((left, right) => String(right.updatedAt ?? right.createdAt ?? "").localeCompare(String(left.updatedAt ?? left.createdAt ?? "")))
+        .slice(0, 8)
+        .map((business) => ({
+          id: String(business.id),
+          name: String(business.name ?? "Business"),
+          status: business.status ?? "active",
+          href: `/admin/businesses/${encodeURIComponent(business.id)}`,
+        })),
       integrationHealth: { status: "projected", note: "Per-business integration health appears on business detail." },
     });
   }
@@ -169,7 +196,15 @@ export class AdminPlatformService {
   async listArchitectSessions({ adminUserId, platformRole }) {
     const gate = this.assertAdmin(platformRole);
     if (!gate.ok) return deepFreeze(gate);
-    const sessions = await this.platformStore.listAiBuilderSessions?.() ?? [];
+    const businesses = await this.platformStore.listBusinesses();
+    const testBusinessIds = new Set(
+      businesses.filter((business) => isTestBusiness(business)).map((business) => String(business.id)),
+    );
+    const sessions = (await this.platformStore.listAiBuilderSessions?.() ?? []).filter((session) => {
+      const businessId = session.businessId == null ? null : String(session.businessId);
+      if (businessId && testBusinessIds.has(businessId)) return false;
+      return true;
+    });
     await this.platformStore.recordAuditEvent?.({
       actorUserId: adminUserId,
       action: "admin.architect_sessions_listed",
@@ -251,7 +286,7 @@ export class AdminPlatformService {
   async listInstallations({ adminUserId, platformRole }) {
     const gate = this.assertAdmin(platformRole);
     if (!gate.ok) return deepFreeze(gate);
-    const businesses = await this.platformStore.listBusinesses();
+    const businesses = (await this.platformStore.listBusinesses()).filter((business) => !isTestBusiness(business));
     const installations = await this._listInstallationsSafe(businesses);
     await this.platformStore.recordAuditEvent?.({
       actorUserId: adminUserId,
@@ -305,6 +340,16 @@ export class AdminPlatformService {
       blueprintUsage: blueprints.ok ? blueprints.blueprints.length : 0,
       componentUsage: listDashboardComponentTypes().length,
       honesty: { fabricatedRevenueForbidden: true },
+      capabilityHonesty: getDefaultCapabilityPackageRegistry().honestyMatrix(),
+    });
+  }
+
+  getCapabilityHonesty({ platformRole }) {
+    const gate = this.assertAdmin(platformRole);
+    if (!gate.ok) return deepFreeze(gate);
+    return deepFreeze({
+      ok: true,
+      packages: getDefaultCapabilityPackageRegistry().honestyMatrix(),
     });
   }
 
@@ -338,17 +383,91 @@ export class AdminPlatformService {
   }
 }
 
+function latestSessionPerBusiness(sessions) {
+  const sorted = sessions
+    .slice()
+    .sort((left, right) => String(right.updatedAt ?? "").localeCompare(String(left.updatedAt ?? "")));
+  const seen = new Set();
+  const out = [];
+  for (const session of sorted) {
+    const key = session.businessId == null
+      ? `session:${session.sessionId ?? session.id}`
+      : `business:${session.businessId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(session);
+  }
+  return out;
+}
+
 function summarizeSession(session) {
   return {
     sessionId: session.sessionId ?? session.id,
     businessId: session.businessId ?? null,
+    businessName:
+      session.businessSummary?.businessName
+      ?? session.appearance?.businessName
+      ?? null,
     stage: session.currentStage ?? session.stage ?? null,
+    stageLabel: humanizeArchitectStage(session.currentStage ?? session.stage),
     status: session.status ?? null,
     progress: session.progress ?? null,
     gaps: session.capabilityGaps ?? [],
     updatedAt: session.updatedAt ?? null,
     blocked: /fail|block/i.test(String(session.status ?? session.currentStage ?? "")),
+    href: session.businessId
+      ? `/admin/businesses/${encodeURIComponent(session.businessId)}`
+      : (session.sessionId ? `/architect/${session.sessionId}` : "/admin/architect"),
   };
+}
+
+function summarizeAudit(event) {
+  return {
+    id: event.id ?? `${event.action}-${event.createdAt}`,
+    action: event.action,
+    label: humanizeAuditAction(event.action),
+    createdAt: event.createdAt ?? null,
+    when: formatRelativeTime(event.createdAt),
+  };
+}
+
+function humanizeArchitectStage(stage) {
+  const key = String(stage ?? "").toLowerCase();
+  if (!key) return "In progress";
+  if (key === "installed") return "Live";
+  if (key === "awaiting_review" || key === "proposal_ready") return "Waiting on review";
+  if (key === "awaiting_approval") return "Waiting on approval";
+  if (key === "interviewing" || key === "discovering") return "Learning the business";
+  if (key === "installing") return "Going live";
+  if (key === "dry_run_ready") return "Ready to check";
+  if (key === "failed" || key === "blocked") return "Needs attention";
+  return key.replace(/_/g, " ");
+}
+
+function humanizeAuditAction(action) {
+  const key = String(action ?? "");
+  if (/architect\.installed/i.test(key)) return "Business went live";
+  if (/architect\.improved/i.test(key)) return "Ask change applied";
+  if (/architect\.change/i.test(key)) return "Change executed";
+  if (/support\.enter/i.test(key)) return "Support entered a business";
+  if (/support\.exit/i.test(key)) return "Support exited a business";
+  if (/invitation/i.test(key)) return "Invitation sent";
+  return key.replace(/[._]/g, " ");
+}
+
+function formatRelativeTime(value) {
+  if (!value) return null;
+  const ms = Date.parse(String(value));
+  if (!Number.isFinite(ms)) return null;
+  const delta = Date.now() - ms;
+  const minutes = Math.round(delta / 60_000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return `${days}d ago`;
+  return new Date(ms).toLocaleDateString();
 }
 
 function summarizeInstallation(installation) {
@@ -408,7 +527,15 @@ function groupBy(items, keyFn) {
 }
 
 function isTestBusiness(business) {
-  return /journey|test|smoke/i.test(String(business.name ?? ""));
+  return isLikelyAutomatedTestBusiness({
+    name: business?.name ?? business?.businessName ?? null,
+    ownerInviteEmail: business?.ownerInviteEmail ?? business?.ownerEmail ?? null,
+  });
+}
+
+function isNoiseAuditAction(action) {
+  return /admin\.(dashboard_viewed|businesses_listed|architect_sessions_listed|installations_listed|users_listed|business_viewed)/i
+    .test(String(action ?? ""));
 }
 
 async function safeGet(store, method, ...args) {

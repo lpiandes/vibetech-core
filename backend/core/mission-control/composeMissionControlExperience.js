@@ -159,6 +159,7 @@ export function composeMissionControlExperience({
 
   return {
     ...missionControlViewModel,
+    setupChecklist: deepFreeze(asArray(setupChecklist)),
     experience: deepFreeze({
       ...experience,
       supervision,
