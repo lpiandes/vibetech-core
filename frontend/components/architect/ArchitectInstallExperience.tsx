@@ -43,7 +43,13 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
       });
       const data = await response.json();
       if (!response.ok || !data.ok) {
-        setError(data.productError ?? presentProductError(data.error ?? data.reason ?? "dry_run_failed"));
+        const base = data.productError ?? presentProductError(data.error ?? data.reason ?? "dry_run_failed");
+        const firstValidation = data.validation?.errors?.[0]?.message;
+        setError(
+          firstValidation
+            ? { ...base, whatHappened: String(firstValidation), message: String(firstValidation) }
+            : base,
+        );
         return;
       }
       setResult(data);

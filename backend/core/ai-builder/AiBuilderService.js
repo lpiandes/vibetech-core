@@ -53,6 +53,7 @@ import {
   sessionListCard,
 } from "./BuilderUxPresentation.js";
 import { buildDryRunChecklist } from "./BuilderDryRunChecklist.js";
+import { sanitizeSpecificationEmployeeArchetypes } from "./sanitizeSpecificationEmployeeArchetypes.js";
 import { buildBuilderPortalPreview } from "./BuilderPortalPreview.js";
 
 // Proposals assembled before this version can contain retired template defaults.
@@ -1521,7 +1522,9 @@ export class AiBuilderService {
       });
     }
 
-    const specification = applyPlanAdditionsToSpecification(stored.specification, session);
+    const specification = sanitizeSpecificationEmployeeArchetypes(
+      applyPlanAdditionsToSpecification(stored.specification, session),
+    );
 
     // Already live — never regress session stage; return checklist for review only.
     if (String(session.currentStage) === "installed") {
@@ -1706,7 +1709,9 @@ export class AiBuilderService {
     this.hydrateInstallationRepository(businessId, stored);
 
     // Re-apply owner plan edits; if they changed the installable spec, re-dry-run + re-bind approval.
-    let specification = applyPlanAdditionsToSpecification(stored.specification, session);
+    let specification = sanitizeSpecificationEmployeeArchetypes(
+      applyPlanAdditionsToSpecification(stored.specification, session),
+    );
     let plan = stored.plan;
     let dryRunResult = stored.dryRunResult;
     let approval = stored.approval;

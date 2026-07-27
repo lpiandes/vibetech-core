@@ -1267,7 +1267,8 @@ export function filterEmployeesForPurchasedPackages(employees = [], purchasedPac
         id: key,
         label: "Front Desk Follow-up",
         displayName: "Front Desk Follow-up",
-        archetypeId: "receptionist_coordinator",
+        // Must match BusinessOSEmployeeArchetypes — unknown ids fail dry-run validation.
+        archetypeId: "intake_specialist",
         purpose: "Capture caller/form requests into Work and draft approve-first follow-ups.",
       });
     }

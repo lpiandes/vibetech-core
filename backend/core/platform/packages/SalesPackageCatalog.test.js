@@ -321,11 +321,16 @@ test("sellable admin list hides roadmap voice family", () => {
   assert.ok(sellable.some((row) => row.id === "addon_priority_support"));
 });
 
-test("sales_assistant guarantees a default worker when none match", () => {
-  const kept = filterEmployeesForPurchasedPackages([], ["sales_assistant"]);
-  assert.equal(kept.length, 1);
-  assert.match(String(kept[0].label ?? ""), /Sales Assistant/i);
-  assert.ok(kept[0].operatingContract?.automationPath?.steps?.length >= 1);
+test("thin SKU default employees use registered archetypes", () => {
+  const receptionist = filterEmployeesForPurchasedPackages([], ["ai_receptionist"]);
+  assert.equal(receptionist.length, 1);
+  assert.equal(receptionist[0].archetypeId, "intake_specialist");
+
+  const sales = filterEmployeesForPurchasedPackages([], ["sales_assistant"]);
+  assert.equal(sales[0].archetypeId, "follow_up_specialist");
+
+  const lead = filterEmployeesForPurchasedPackages([], ["lead_follow_up"]);
+  assert.equal(lead[0].archetypeId, "intake_specialist");
 });
 
 test("lead_follow_up guarantees a default follow-up worker", () => {

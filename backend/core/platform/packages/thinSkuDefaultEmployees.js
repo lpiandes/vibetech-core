@@ -101,7 +101,7 @@ export function buildDefaultSalesAssistantEmployee() {
     {
       employeeId: "emp_sales_assistant_default",
       id: "emp_sales_assistant_default",
-      archetypeId: "sales_outreach",
+      archetypeId: "follow_up_specialist",
       label: "Sales Assistant",
       displayName: "Sales Assistant",
       purpose: "Draft outreach from new leads for owner approval before send.",
@@ -124,7 +124,7 @@ export function buildDefaultLeadFollowUpEmployee() {
     {
       employeeId: "emp_lead_follow_up_default",
       id: "emp_lead_follow_up_default",
-      archetypeId: "intake_coordinator",
+      archetypeId: "intake_specialist",
       label: "Lead Follow-up",
       displayName: "Lead Follow-up",
       purpose: "On form or Meta lead, add to pipeline and draft approve-first follow-up.",
