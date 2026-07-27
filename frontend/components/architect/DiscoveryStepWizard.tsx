@@ -218,8 +218,9 @@ export default function DiscoveryStepWizard({
     if (shouldResearchWebsite) {
       onResearch();
     }
-    setDraft("");
-    setSelectedChoices([]);
+    // Do not clear the draft here. If the server re-asks the same question
+    // (e.g. answer marked unknown), wiping the box looks like a blank refresh.
+    // The step effect resets draft when nextQuestion advances.
     if (editingPast) {
       if (safeIndex >= steps.length - 1) {
         onFinish?.();

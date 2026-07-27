@@ -111,10 +111,16 @@ export class BusinessDiscoveryCompleteness {
         : (llmCovered
           ? requiredAnswered.length >= minRequired
           : (requiredMissing.length === 0 && requiredAnswered.length >= Math.min(minRequired, required.length)));
-    const readyForProposal = depthMet
-      && hasIdentity
-      && (fullOs ? hasIndustry : (hasIndustry || substantiveAnswered >= 2))
-      && substantiveAnswered <= DISCOVERY_MAX_OWNER_ANSWERS;
+    // Package-add Ask already runs in an installed business — don't block completion on
+    // re-proving identity/industry (that left owners stuck re-answering the last question).
+    const readyForProposal = packageAsk
+      ? (depthMet && substantiveAnswered <= DISCOVERY_MAX_OWNER_ANSWERS)
+      : (
+        depthMet
+        && hasIdentity
+        && (fullOs ? hasIndustry : (hasIndustry || substantiveAnswered >= 2))
+        && substantiveAnswered <= DISCOVERY_MAX_OWNER_ANSWERS
+      );
 
     const percent = Math.min(
       100,

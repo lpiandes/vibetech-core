@@ -114,7 +114,14 @@ export class OptionalAIBuilderIntelligenceProvider extends DeterministicBuilderI
     }
     try {
       const refined = await this.client.refineAnswer?.(input);
-      return refined ? deepFreeze(refined) : super.refineAnswer(input);
+      if (!refined) return super.refineAnswer(input);
+      const answerText = String(input?.answer ?? "").trim();
+      const interpretedUnknown = Boolean(input?.interpreted?.unknown);
+      // Safety net: never demote a concrete answer to unknown (re-asks forever).
+      if (answerText && !interpretedUnknown && refined.unknown) {
+        return deepFreeze({ ...refined, unknown: false });
+      }
+      return deepFreeze(refined);
     } catch {
       return super.refineAnswer(input);
     }

@@ -63,6 +63,8 @@ export class OpenAIBuilderIntelligenceClient {
       "You refine business discovery answers for an AI Business OS builder.",
       "Return JSON only: { fields: object, unknown: boolean, note: string, answeredQuestionIds: string[] }",
       "Only include fields you are confident about. Prefer short plain values.",
+      "Set unknown=true ONLY when the owner truly did not answer (empty, 'I don't know', or nonsense).",
+      "If the owner wrote a real answer, unknown must be false — never demote a usable answer to unknown.",
       `questionId: ${questionId ?? "free_text"}`,
       `userAnswer: ${String(answer ?? "").slice(0, 2000)}`,
       `currentInterpreted: ${JSON.stringify(interpreted ?? {})}`,
@@ -74,13 +76,25 @@ export class OpenAIBuilderIntelligenceClient {
       const raw = await this.#provider().generate(prompt, { json: true, temperature: 0.1 });
       const parsed = parseJsonObject(raw);
       if (!parsed || typeof parsed !== "object") return interpreted;
+      const answerText = String(answer ?? "").trim();
+      const interpretedUnknown = Boolean(interpreted?.unknown);
+      // Concrete answers must stay answered — LLM "unknown" caused the same question to loop.
+      const unknown = interpretedUnknown
+        ? true
+        : (answerText ? false : Boolean(parsed.unknown));
+      const llmFields = parsed.fields && typeof parsed.fields === "object" ? parsed.fields : {};
+      // Never wipe existing identity with empty LLM fields.
+      const fields = { ...(interpreted?.fields ?? {}) };
+      for (const [key, value] of Object.entries(llmFields)) {
+        if (value == null) continue;
+        if (typeof value === "string" && !value.trim()) continue;
+        if (Array.isArray(value) && value.length === 0) continue;
+        fields[key] = value;
+      }
       return {
         ...interpreted,
-        fields: {
-          ...(interpreted?.fields ?? {}),
-          ...(parsed.fields && typeof parsed.fields === "object" ? parsed.fields : {}),
-        },
-        unknown: Boolean(parsed.unknown ?? interpreted?.unknown),
+        fields,
+        unknown,
         note: parsed.note ?? interpreted?.note,
         answeredQuestionIds: Array.isArray(parsed.answeredQuestionIds)
           ? parsed.answeredQuestionIds.map(String)

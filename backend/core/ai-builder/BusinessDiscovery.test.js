@@ -105,6 +105,25 @@ test("ready discovery does not queue a question behind recommendation", async ()
   assert.deepEqual(applied.nextQuestions, []);
 });
 
+test("package-ask is ready when focus questions are answered even without re-proving identity", async () => {
+  const { BusinessDiscoveryCompleteness } = await import("./BusinessDiscoveryCompleteness.js");
+  const completeness = new BusinessDiscoveryCompleteness();
+  const progress = completeness.evaluate({
+    answers: [
+      { questionId: "q_communications", answer: "Phone and SMS" },
+      { questionId: "q_integrations", answer: "twilio_voice" },
+      { questionId: "q_desired_outcomes", answer: "Missed calls answered in 30 days" },
+    ],
+    businessSummary: {
+      packageAsk: true,
+      packageAskPackages: ["ai_receptionist", "social_background_screening"],
+      purchasedPackages: ["ai_receptionist", "social_background_screening"],
+    },
+  });
+  assert.equal(progress.requiredMissing.length, 0);
+  assert.equal(progress.readyForProposal, true);
+});
+
 test("integrations answer maps to connection ids the owner must sign into", () => {
   const interpreter = new BusinessDiscoveryAnswerInterpreter();
   const result = interpreter.interpret({
