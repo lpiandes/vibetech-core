@@ -54,6 +54,7 @@ const INLINE_SETUP_IDS = new Set([
   "calendar",
   "sms_channel",
   "voice_channel",
+  "social_screening",
   "meta_lead_ads",
 ]);
 
@@ -63,6 +64,7 @@ const SIMPLE_TITLE: Record<string, string> = {
   calendar_scheduling: "Connect calendar",
   sms_send: "Connect text messaging",
   voice_calls: "Connect phone calling",
+  social_screen_prove: "Prove social background screening",
   meta_lead_intake: "Connect Facebook leads",
   website_forms: "Website form intake",
   knowledge_consult: "Add business knowledge",
@@ -76,6 +78,7 @@ const SIMPLE_DETAIL: Record<string, string> = {
   calendar_scheduling: "Connect Google Calendar so scheduling can book real appointments.",
   sms_send: "Enter your business details — VIBETech sets up a texting number for you (no Twilio Console required).",
   voice_calls: "Connect Twilio Voice for the Knowledge-backed AI receptionist. Prove places a test call. Customer outbound calls stay approval-gated.",
+  social_screen_prove: "Connect Serper + ScrapingBee, then run a sample public-web screen. Filtered report lands in Needs Attention.",
   meta_lead_intake: "Connect your Facebook Page, then run a Lead Ad. New leads land in People and fire intake automations (sends still need your approval).",
   website_forms: "Open your hosted intake form, share the link, and prove with a test submission. Leads land in People.",
   knowledge_consult: "Upload playbooks and FAQs so AI teammates answer with your voice.",

@@ -35,6 +35,7 @@ export async function executeSpecialtyPathSteps({
   integrationHub = null,
   sendEmail = null,
   sendSms = null,
+  platformJobQueue = null,
   nowISO = () => new Date().toISOString(),
 } = {}) {
   const path = normalizeAutomationPath(employee?.operatingContract?.automationPath, {
@@ -147,6 +148,87 @@ export async function executeSpecialtyPathSteps({
         reason: manual ? "awaiting_owner_review" : "draft_auto",
         label: step.label,
         runMode: manual ? "manual" : "auto",
+      });
+      continue;
+    }
+
+    if (type === PATH_STEP_TYPES.SOCIAL_SCREEN) {
+      if (manual) {
+        notes.push({
+          stepId: step.id,
+          type,
+          ok: true,
+          deferred: true,
+          needsYou: true,
+          reason: "awaiting_owner_manual",
+          label: step.label,
+          message: "Manual social screen — confirm in Needs you before research runs.",
+        });
+        continue;
+      }
+      const subjectName = String(
+        eventPayload?.name
+        ?? eventPayload?.subjectName
+        ?? eventPayload?.contact?.name
+        ?? "",
+      ).trim();
+      if (!subjectName || !businessId) {
+        notes.push({
+          stepId: step.id,
+          type,
+          ok: false,
+          reason: "subject_name_required",
+          label: step.label,
+          message: "Provide a person name (from People) to run a social background screen.",
+        });
+        continue;
+      }
+      if (platformJobQueue?.enqueue) {
+        try {
+          const job = await platformJobQueue.enqueue({
+            businessId: String(businessId),
+            jobType: "social_background_screen",
+            idempotencyKey: `social_screen_${businessId}_${subjectName}_${at}`.slice(0, 120),
+            payload: {
+              subjectName,
+              name: subjectName,
+              email: eventPayload?.email ?? eventPayload?.contact?.email ?? "",
+              phone: eventPayload?.phone ?? eventPayload?.contact?.phone ?? "",
+              handles: eventPayload?.handles ?? [],
+              contactId: eventPayload?.contactId ?? eventPayload?.contact?.id ?? null,
+              employeeId: String(employee?.employeeId ?? employee?.id ?? "emp_social_background_screener_default"),
+            },
+          });
+          notes.push({
+            stepId: step.id,
+            type,
+            ok: true,
+            deferred: true,
+            needsYou: false,
+            reason: "social_screen_enqueued",
+            label: step.label,
+            runMode: "auto",
+            jobId: job?.id ?? null,
+          });
+        } catch (err) {
+          notes.push({
+            stepId: step.id,
+            type,
+            ok: false,
+            reason: "social_screen_enqueue_failed",
+            label: step.label,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+        continue;
+      }
+      notes.push({
+        stepId: step.id,
+        type,
+        ok: false,
+        reason: "job_queue_unavailable",
+        label: step.label,
+        message: "Job queue unavailable — use People → Run social background screen.",
       });
       continue;
     }

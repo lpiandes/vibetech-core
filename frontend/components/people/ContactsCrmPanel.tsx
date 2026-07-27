@@ -194,6 +194,33 @@ export default function ContactsCrmPanel({ businessId }: { businessId: string })
     }
   }
 
+  async function runSocialScreen() {
+    if (!selected && !editName.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/social-screening/run`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contactId: selected?.id ?? null,
+          subjectName: editName.trim() || selected?.name,
+          name: editName.trim() || selected?.name,
+          email: editEmail.trim() || selected?.email,
+          phone: editPhone.trim() || selected?.phone,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Screen failed");
+      setError(null);
+      window.alert(data.message ?? "Social background screen started.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Screen failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <VtPage>
       <VtHero
@@ -281,6 +308,12 @@ export default function ContactsCrmPanel({ businessId }: { businessId: string })
               </select>
               <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={3} style={vtInputStyle} />
               <PrimaryButton onClick={() => void saveSelected()} disabled={busy}>Save</PrimaryButton>
+              <PrimaryButton
+                onClick={() => void runSocialScreen()}
+                disabled={busy || !editName.trim()}
+              >
+                {busy ? "…" : "Run social background screen"}
+              </PrimaryButton>
               <SecondaryButton href={`/b/${encodeURIComponent(businessId)}/people/${encodeURIComponent(selected.partyId ?? selected.id)}`}>
                 Open person
               </SecondaryButton>

@@ -17,6 +17,7 @@ export const PROVE_ACTIONS = Object.freeze({
   run_sports_golden_path: "run_sports_golden_path",
   run_dental_golden_path: "run_dental_golden_path",
   submit_test_form: "submit_test_form",
+  run_sample_social_screen: "run_sample_social_screen",
 });
 
 const CONNECTIONLESS_ACTIONS = new Set([

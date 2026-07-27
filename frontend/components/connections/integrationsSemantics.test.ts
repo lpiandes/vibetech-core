@@ -17,6 +17,7 @@ const liveFlags = {
   calendar: true,
   sms_channel: true,
   voice_channel: true,
+  social_screening: true,
   meta_lead_ads: true,
 };
 

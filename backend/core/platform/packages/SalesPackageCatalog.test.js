@@ -334,6 +334,14 @@ test("thin SKU default employees use registered archetypes", () => {
 
   const lead = filterEmployeesForPurchasedPackages([], ["lead_follow_up"]);
   assert.equal(lead[0].archetypeId, "intake_specialist");
+
+  const screener = filterEmployeesForPurchasedPackages([], ["social_background_screening"]);
+  assert.equal(screener.length, 1);
+  assert.match(String(screener[0].label ?? ""), /Social Background/i);
+  assert.ok(screener[0].operatingContract?.trigger?.eventTypes?.includes("SOCIAL_SCREEN_REQUESTED"));
+  assert.ok(
+    screener[0].operatingContract?.automationPath?.steps?.some((s) => s.type === "social_screen"),
+  );
 });
 
 test("lead_follow_up guarantees a default follow-up worker", () => {

@@ -6,6 +6,7 @@ import {
 } from "./PlatformJobQueue.js";
 import { processSpecialtyScheduleDueJob } from "./processSpecialtyScheduleDueJob.js";
 import { processCalendarReminderDueJob } from "./processCalendarReminderDueJob.js";
+import { processSocialBackgroundScreenJob } from "./processSocialBackgroundScreenJob.js";
 import { loadSpecialtyWorkerWorkspace } from "./loadSpecialtyWorkerWorkspace.js";
 
 export function createPlatformJobExecutor({ queue, platformStore }) {
@@ -113,6 +114,36 @@ export function createPlatformJobExecutor({ queue, platformStore }) {
             installation: loaded.installation,
             platformStore,
             persistWork: loaded.persistWork,
+          };
+        },
+      });
+    },
+    runSocialBackgroundScreen: async (job) => {
+      const employeeId = String(
+        job?.payload?.employeeId ?? "emp_social_background_screener_default",
+      );
+      return processSocialBackgroundScreenJob({
+        job,
+        platformStore,
+        nowISO: () => new Date().toISOString(),
+        loadWorkspace: async (businessId) => {
+          const loaded = await loadSpecialtyWorkerWorkspace({
+            businessId,
+            platformStore,
+            employeeId,
+          });
+          if (!loaded.ok) return loaded;
+          return {
+            ok: true,
+            workRuntime: loaded.workRuntime,
+            automationRuntime: loaded.automationRuntime,
+            approvalRuntime: loaded.approvalRuntime,
+            employee: loaded.employee,
+            knowledgeDocuments: loaded.knowledgeDocuments,
+            installation: loaded.installation,
+            platformStore,
+            persistWork: loaded.persistWork,
+            credentialVault: loaded.credentialVault ?? null,
           };
         },
       });

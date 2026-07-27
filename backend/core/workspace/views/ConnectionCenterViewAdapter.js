@@ -24,6 +24,7 @@ const OS_INTEGRATION_TO_CONNECTION = Object.freeze({
   meta_lead_ads: "meta_lead_ads",
   facebook: "meta_lead_ads",
   facebook_leads: "meta_lead_ads",
+  social_screening: "social_screening",
 });
 
 /**

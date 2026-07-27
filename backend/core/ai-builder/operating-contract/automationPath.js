@@ -1,5 +1,6 @@
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 import { presentTriggerStartCopy } from "../specialty/triggerHowItStarts.js";
+import { attachAutomationPathReadiness } from "./automationPathReadiness.js";
 
 export const PATH_STEP_TYPES = Object.freeze({
   SEND_EMAIL: "send_email",
@@ -7,6 +8,7 @@ export const PATH_STEP_TYPES = Object.freeze({
   CREATE_DRAFT: "create_draft",
   ADD_TO_PIPELINE: "add_to_pipeline",
   NOTIFY_TEAM: "notify_team",
+  SOCIAL_SCREEN: "social_screen",
 });
 
 export const PATH_RUN_MODES = Object.freeze({
@@ -77,6 +79,7 @@ export function pathNeedsOwnerAttention(path = {}) {
 function defaultRunModeForType(type, direction = "external") {
   if (type === PATH_STEP_TYPES.ADD_TO_PIPELINE) return PATH_RUN_MODES.AUTO;
   if (type === PATH_STEP_TYPES.NOTIFY_TEAM) return PATH_RUN_MODES.AUTO;
+  if (type === PATH_STEP_TYPES.SOCIAL_SCREEN) return PATH_RUN_MODES.AUTO;
   if (type === PATH_STEP_TYPES.SEND_EMAIL || type === PATH_STEP_TYPES.SEND_SMS) {
     return direction === "internal" ? PATH_RUN_MODES.AUTO : PATH_RUN_MODES.MANUAL;
   }
@@ -168,6 +171,17 @@ export function normalizePathStep(step = {}, index = 0) {
       requiresApproval: false,
     });
   }
+  if (type === PATH_STEP_TYPES.SOCIAL_SCREEN) {
+    const runMode = resolveStepRunMode(step, { defaultMode: PATH_RUN_MODES.AUTO });
+    return deepFreeze({
+      ...base,
+      networks: asArray(step.networks).length
+        ? asArray(step.networks)
+        : ["facebook", "instagram", "x", "linkedin", "tiktok", "youtube"],
+      runMode,
+      requiresApproval: runMode === PATH_RUN_MODES.MANUAL,
+    });
+  }
   // create_draft (default)
   const runMode = resolveStepRunMode(step, { defaultMode: PATH_RUN_MODES.MANUAL });
   return deepFreeze({
@@ -189,6 +203,8 @@ function defaultLabelForType(type) {
       return "Add to pipeline";
     case PATH_STEP_TYPES.NOTIFY_TEAM:
       return "Notify team";
+    case PATH_STEP_TYPES.SOCIAL_SCREEN:
+      return "Run social background screen";
     case PATH_STEP_TYPES.CREATE_DRAFT:
     default:
       return "Create draft";
@@ -258,6 +274,11 @@ export function describePathStep(step = {}) {
       ? `Alerts your business team · “${subject}”`
       : "Alerts your business team";
     return `${modeLabel} · ${base}`;
+  }
+  if (type === PATH_STEP_TYPES.SOCIAL_SCREEN) {
+    return manual
+      ? "Manual · Public social search for owner review"
+      : "Auto · Public social search → filtered report draft";
   }
   return defaultLabelForType(type);
 }
@@ -357,8 +378,13 @@ export function normalizeAutomationPath(path = null, { contract = {}, schema = n
 
 /**
  * Presentation for Zapier-like UI: trigger node + ordered action nodes.
+ * @param {object} [readinessSnapshot] - optional connection/CRM snapshot for ✓/✗
  */
-export function presentAutomationPath({ contract = {}, schema = null } = {}) {
+export function presentAutomationPath({
+  contract = {},
+  schema = null,
+  readinessSnapshot = null,
+} = {}) {
   const path = normalizeAutomationPath(contract.automationPath, { contract, schema });
   const triggerMode = String(contract?.trigger?.mode ?? "manual_or_events");
   const eventTypes = asArray(contract?.trigger?.eventTypes);
@@ -382,11 +408,14 @@ export function presentAutomationPath({ contract = {}, schema = null } = {}) {
     displaySummary: describePathStep(step),
   }));
 
-  return deepFreeze({
+  const presented = deepFreeze({
     trigger: triggerNode,
     steps: actionNodes,
     path,
   });
+
+  if (!readinessSnapshot) return presented;
+  return attachAutomationPathReadiness(presented, readinessSnapshot);
 }
 
 function stepTypeTone(type) {
@@ -399,6 +428,8 @@ function stepTypeTone(type) {
       return "pipeline";
     case PATH_STEP_TYPES.NOTIFY_TEAM:
       return "team";
+    case PATH_STEP_TYPES.SOCIAL_SCREEN:
+      return "screen";
     default:
       return "draft";
   }

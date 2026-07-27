@@ -26,6 +26,7 @@ const ACTION_TO_CAPABILITY: Record<string, string> = {
   create_test_event: "calendar_scheduling",
   send_test_sms: "sms_send",
   place_test_call: "voice_calls",
+  run_sample_social_screen: "social_screen_prove",
   ingest_test_lead: "meta_lead_intake",
   upload_and_cite: "knowledge_consult",
   approve_and_send: "outbound_approvals",
@@ -331,6 +332,46 @@ async function executeProveForAction(input: {
       ok: true,
       simulated: input.allowSimulated,
       message: "Website form intake recorded for prove.",
+    };
+  }
+
+  if (action === "run_sample_social_screen" || action === PROVE_ACTIONS.run_sample_social_screen) {
+    const { processSocialBackgroundScreenJob } = await import(
+      "../../../../../../../backend/core/platform/jobs/processSocialBackgroundScreenJob.js"
+    );
+    const { loadSpecialtyWorkerWorkspace } = await import(
+      "../../../../../../../backend/core/platform/jobs/loadSpecialtyWorkerWorkspace.js"
+    );
+    const { getSharedCredentialVault } = await import("@/lib/server/liveIntegrations");
+    const result = await processSocialBackgroundScreenJob({
+      job: {
+        businessId: input.businessId,
+        payload: {
+          subjectName: "Sample Candidate",
+          name: "Sample Candidate",
+          handles: ["sample.candidate"],
+          employeeId: "emp_social_background_screener_default",
+        },
+      },
+      platformStore: input.platformStore,
+      loadWorkspace: async (id: string) => {
+        const loaded = await loadSpecialtyWorkerWorkspace({
+          businessId: id,
+          platformStore: input.platformStore,
+          employeeId: "emp_social_background_screener_default",
+        });
+        if (!loaded.ok) return loaded;
+        return { ...loaded, credentialVault: getSharedCredentialVault() };
+      },
+    });
+    return {
+      ok: Boolean(result?.ok),
+      simulated: false,
+      workItemId: result?.workItemId ?? null,
+      message: result?.ok
+        ? "Sample social background screen complete — review the report in Needs Attention / Work."
+        : String(result?.reason ?? "Social screen prove failed"),
+      detail: result,
     };
   }
 

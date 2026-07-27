@@ -3,6 +3,7 @@ import {
   buildDefaultLeadFollowUpEmployee,
   buildDefaultSalesAssistantEmployee,
   buildDefaultReceptionistEmployee,
+  buildDefaultSocialScreenerEmployee,
 } from "./thinSkuDefaultEmployees.js";
 
 /**
@@ -341,6 +342,20 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskQuestionIds: ["q_communications", "q_integrations", "q_approvals"],
     packageAskConnectionOptions: ["gmail", "twilio_sms"],
     honestyNote: "Approve-first campaign-lite on Campaigns: save template → Prepare & review → Work approve → send.",
+    commercialStatus: "product",
+    sellable: true,
+  },
+  {
+    id: "social_background_screening",
+    label: "Social Background Screening",
+    description: "Public social media search → FCRA-filtered background report for owner review (approve-first). Not a licensed CRA substitute.",
+    moduleIds: ["home", "knowledge", "integrations", "people", "settings", "work"],
+    canonicalNavIds: ["home", "needs_attention", "people", "work", "knowledge", "automations", "integrations", "settings"],
+    discoveryTopics: ["identity", "industry", "operations", "integrations", "outcomes"],
+    packageAskQuestionIds: ["q_integrations", "q_desired_outcomes"],
+    packageAskConnectionOptions: ["social_screening"],
+    launchMissionIds: ["knowledge_consult", "social_screen_prove", "outbound_approvals"],
+    honestyNote: "Public-web social search (Serper + ScrapingBee) + AI filter for protected characteristics. Employer remains responsible for FCRA adverse-action process. No private/authenticated scraping.",
     commercialStatus: "product",
     sellable: true,
   },
@@ -915,9 +930,11 @@ const CONNECTION_OPTION_LABELS = Object.freeze({
   google_calendar: "Google Calendar",
   twilio_sms: "Text messaging",
   twilio_voice: "Voice calling",
+  social_screening: "Social screening",
   google_ads: "Google Ads",
   google_search_console: "Google Search Console",
   meta_platform: "Meta lead forms",
+  social_screening: "Social screening",
   none_yet: "None yet",
 });
 
@@ -930,6 +947,7 @@ export const PACKAGE_ASK_OPTION_TO_CONNECTION = Object.freeze({
   google_ads: "google_ads",
   google_search_console: "google_search_console",
   meta_platform: "meta_lead_ads",
+  social_screening: "social_screening",
 });
 
 /**
@@ -1258,6 +1276,21 @@ export function filterEmployeesForPurchasedPackages(employees = [], purchasedPac
     ))
   ) {
     const def = buildDefaultReceptionistEmployee();
+    const key = String(def.employeeId);
+    if (!seen.has(key)) {
+      seen.add(key);
+      kept.push(def);
+    }
+  }
+
+  // Social background screening SKU.
+  if (
+    packages.includes("social_background_screening")
+    && !kept.some((emp) => /social.?background|social.?screen/i.test(
+      String(emp?.employeeId ?? emp?.label ?? ""),
+    ))
+  ) {
+    const def = buildDefaultSocialScreenerEmployee();
     const key = String(def.employeeId);
     if (!seen.has(key)) {
       seen.add(key);

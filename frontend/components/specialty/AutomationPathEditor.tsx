@@ -12,7 +12,11 @@ const STEP_TYPES = [
   { id: "send_email", label: "Send email / text" },
   { id: "notify_team", label: "Alert your team" },
   { id: "add_to_pipeline", label: "Add to pipeline" },
+  { id: "social_screen", label: "Social background screen" },
 ] as const;
+
+type ReadinessBlocker = { code?: string; label?: string; href?: string | null };
+type PathReadiness = { ready?: boolean; blockers?: ReadinessBlocker[] };
 
 type PathStep = {
   id: string;
@@ -38,6 +42,7 @@ type PathStep = {
   kind?: string;
   displayTitle?: string;
   displaySummary?: string;
+  readiness?: PathReadiness;
 };
 
 type PathPresentation = {
@@ -46,6 +51,7 @@ type PathPresentation = {
     summary?: string;
     mode?: string;
     eventTypes?: string[];
+    readiness?: PathReadiness;
   };
   steps?: PathStep[];
   path?: { steps?: PathStep[]; customized?: boolean };
@@ -311,6 +317,7 @@ export default function AutomationPathEditor({
         }
         badge="START"
         tone="trigger"
+        readiness={trigger?.readiness}
       />
 
       {steps.map((step, index) => {
@@ -343,8 +350,11 @@ export default function AutomationPathEditor({
                     flex: 1,
                   }}
                 >
-                  <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: cockpitColors.textMuted }}>
-                    {typeBadge(step.type, step)}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: cockpitColors.textMuted }}>
+                      {typeBadge(step.type, step)}
+                    </div>
+                    <SetupReadyMark readiness={step.readiness} />
                   </div>
                   <div style={{ fontWeight: 800, fontSize: 15, color: cockpitColors.textPrimary, marginTop: 2 }}>
                     {step.displayTitle || simpleStepTitle(step.type, step)}
@@ -352,6 +362,7 @@ export default function AutomationPathEditor({
                   <div style={{ fontSize: 12, color: cockpitColors.textSecondary, marginTop: 4, lineHeight: 1.45 }}>
                     {shortStepSummary(step)}
                   </div>
+                  <SetupBlockers readiness={step.readiness} />
                 </button>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                   <RunModeToggle
@@ -452,12 +463,14 @@ function PathNode({
   subtitle,
   badge,
   tone,
+  readiness,
 }: {
   kind: string;
   title: string;
   subtitle: string;
   badge: string;
   tone: string;
+  readiness?: PathReadiness;
 }) {
   const bg = tone === "trigger" ? "#0f766e" : "#fff";
   const color = tone === "trigger" ? "#fff" : cockpitColors.textPrimary;
@@ -472,10 +485,83 @@ function PathNode({
       }}
       data-kind={kind}
     >
-      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", opacity: 0.8 }}>{badge}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", opacity: 0.8 }}>{badge}</div>
+        <SetupReadyMark readiness={readiness} onDark={tone === "trigger"} />
+      </div>
       <div style={{ fontWeight: 800, fontSize: 15, marginTop: 4 }}>{title}</div>
       <div style={{ fontSize: 13, marginTop: 4, opacity: 0.85, lineHeight: 1.4 }}>{subtitle}</div>
+      <SetupBlockers readiness={readiness} onDark={tone === "trigger"} />
     </div>
+  );
+}
+
+function SetupReadyMark({
+  readiness,
+  onDark = false,
+}: {
+  readiness?: PathReadiness;
+  onDark?: boolean;
+}) {
+  if (!readiness || typeof readiness.ready !== "boolean") return null;
+  const ready = readiness.ready;
+  return (
+    <span
+      title={ready ? "Setup ready" : "Setup not ready"}
+      aria-label={ready ? "Setup ready" : "Setup not ready"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 20,
+        height: 20,
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 900,
+        background: ready
+          ? (onDark ? "rgba(255,255,255,0.2)" : "rgba(22,163,74,0.12)")
+          : (onDark ? "rgba(0,0,0,0.2)" : "rgba(220,38,38,0.12)"),
+        color: ready
+          ? (onDark ? "#ecfdf5" : "#15803d")
+          : (onDark ? "#fecaca" : "#b91c1c"),
+      }}
+    >
+      {ready ? "✓" : "✕"}
+    </span>
+  );
+}
+
+function SetupBlockers({
+  readiness,
+  onDark = false,
+}: {
+  readiness?: PathReadiness;
+  onDark?: boolean;
+}) {
+  const blockers = Array.isArray(readiness?.blockers) ? readiness!.blockers! : [];
+  if (!blockers.length || readiness?.ready) return null;
+  return (
+    <ul
+      style={{
+        margin: "8px 0 0",
+        paddingLeft: 16,
+        fontSize: 12,
+        lineHeight: 1.45,
+        color: onDark ? "rgba(254,226,226,0.95)" : cockpitColors.critical,
+      }}
+    >
+      {blockers.map((row) => (
+        <li key={String(row.code ?? row.label)}>
+          {row.href ? (
+            <a href={row.href} style={{ color: "inherit", fontWeight: 700 }}>
+              {row.label}
+            </a>
+          ) : (
+            <span style={{ fontWeight: 700 }}>{row.label}</span>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -596,6 +682,7 @@ function IconBtn({ children, onClick, title }: { children: string; onClick: () =
 }
 
 function typeBadge(type: string, step?: PathStep) {
+  if (type === "social_screen") return "SCREEN";
   const channels = normalizeChannels(step?.channels, type, step?.channel);
   const hasEmail = channels.includes("email");
   const hasSms = channels.includes("sms");
@@ -608,6 +695,7 @@ function typeBadge(type: string, step?: PathStep) {
 }
 
 function simpleStepTitle(type: string, step?: PathStep) {
+  if (type === "social_screen") return "Run social background screen";
   if (type === "add_to_pipeline") return "Add to pipeline";
   if (type === "create_draft") return "Create draft";
   const direction = step?.direction ?? (type === "notify_team" ? "internal" : "external");

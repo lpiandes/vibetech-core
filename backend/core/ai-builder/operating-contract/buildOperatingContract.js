@@ -306,7 +306,7 @@ export function applyOperatingContractPatch({
 /**
  * Owner-facing presentation helpers for specialty UI / automations.
  */
-export function presentOperatingContract(contract = {}, schema = null) {
+export function presentOperatingContract(contract = {}, schema = null, readinessSnapshot = null) {
   const resolved = schema ?? resolveOperatingContractSchema({});
   const completeness = contract?.scope?.completeness
     ?? validateOperatingContractCompleteness(contract, resolved);
@@ -346,7 +346,11 @@ export function presentOperatingContract(contract = {}, schema = null) {
       smsBody: "",
       channels: [],
     },
-    automationPath: presentAutomationPath({ contract, schema: resolved }),
+    automationPath: presentAutomationPath({
+      contract,
+      schema: resolved,
+      readinessSnapshot,
+    }),
     scopeRows,
     completeness,
     statusLabel: completeness.complete

@@ -46,6 +46,7 @@ export function liveIntegrationAvailability() {
     meta_ads: true,
     sms_channel: true,
     voice_channel: true,
+    social_screening: true,
     meta_lead_ads: true,
     // Phase C connect patterns — listed as optional SoR bridges (import/read, not clone).
     document_storage: true,

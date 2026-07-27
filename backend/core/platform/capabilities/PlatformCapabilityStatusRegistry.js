@@ -59,6 +59,15 @@ export const PLATFORM_CAPABILITIES = deepFreeze([
     proveAction: "place_test_call",
   },
   {
+    id: "social_screen_prove",
+    label: "Social background screening",
+    description: "Connect Serper + ScrapingBee, then prove with a sample public-web screen report.",
+    verticals: ["*"],
+    requiredIntegrations: ["social_screening"],
+    requiredPermissions: ["integrations.manage"],
+    proveAction: "run_sample_social_screen",
+  },
+  {
     id: "meta_lead_intake",
     label: "Meta lead intake",
     description: "Lead form → contact → intake pipeline Work.",

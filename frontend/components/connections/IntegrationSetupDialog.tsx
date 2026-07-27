@@ -29,7 +29,15 @@ export default function IntegrationSetupDialog({
   const { businessId } = useBusinessScope();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiKeyForm, setApiKeyForm] = useState({ accountSid: "", authToken: "", fromNumber: "", twimlUrl: "" });
+  const [apiKeyForm, setApiKeyForm] = useState({
+    accountSid: "",
+    authToken: "",
+    fromNumber: "",
+    twimlUrl: "",
+    serperApiKey: "",
+    scrapingBeeApiKey: "",
+    usePlatformKeys: false,
+  });
   const [metaForm, setMetaForm] = useState({ pageId: "", pageAccessToken: "" });
   const [metaConnectResult, setMetaConnectResult] = useState<{
     webhookUrl?: string | null;
@@ -189,19 +197,26 @@ export default function IntegrationSetupDialog({
         ? `/api/businesses/${businessId}/integrations/google-ads`
         : integration.id === "meta_ads"
           ? `/api/businesses/${businessId}/integrations/meta-ads`
-          :
-        integration.id === "voice_channel"
-          ? `/api/businesses/${businessId}/integrations/voice`
-          : `/api/businesses/${businessId}/integrations/sms`;
+          : integration.id === "voice_channel"
+            ? `/api/businesses/${businessId}/integrations/voice`
+            : integration.id === "social_screening"
+              ? `/api/businesses/${businessId}/integrations/social-screening`
+              : `/api/businesses/${businessId}/integrations/sms`;
       const res = await fetch(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           integration.id === "google_ads" || integration.id === "meta_ads"
             ? growthForm
-            : integration.id === "sms_channel"
-              ? { ...apiKeyForm }
-              : apiKeyForm,
+            : integration.id === "social_screening"
+              ? {
+                serperApiKey: apiKeyForm.serperApiKey,
+                scrapingBeeApiKey: apiKeyForm.scrapingBeeApiKey,
+                usePlatformKeys: apiKeyForm.usePlatformKeys,
+              }
+              : integration.id === "sms_channel"
+                ? { ...apiKeyForm }
+                : apiKeyForm,
         ),
       });
       const data = await res.json();
@@ -734,6 +749,47 @@ export default function IntegrationSetupDialog({
                   style={fieldInputStyle}
                 />
               </label>
+            </div>
+          ) : canConnect && setupMode === "api_key" && integration.id === "social_screening" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
+              <div style={{ fontWeight: 600, fontSize: typography.caption.fontSize, color: cockpitColors.textPrimary }}>
+                Social screening keys
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
+                Public-web discovery uses Serper; page fetch uses ScrapingBee. Reports are FCRA-filtered for owner review only.
+              </p>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 650 }}>
+                <input
+                  type="checkbox"
+                  checked={apiKeyForm.usePlatformKeys}
+                  onChange={(e) => setApiKeyForm((s) => ({ ...s, usePlatformKeys: e.target.checked }))}
+                />
+                Use platform keys (SERPER_API_KEY + SCRAPINGBEE_API_KEY)
+              </label>
+              {!apiKeyForm.usePlatformKeys ? (
+                <>
+                  <label style={fieldLabelStyle}>
+                    Serper API key
+                    <input
+                      placeholder="Serper key"
+                      type="password"
+                      value={apiKeyForm.serperApiKey}
+                      onChange={(e) => setApiKeyForm((s) => ({ ...s, serperApiKey: e.target.value }))}
+                      style={fieldInputStyle}
+                    />
+                  </label>
+                  <label style={fieldLabelStyle}>
+                    ScrapingBee API key
+                    <input
+                      placeholder="ScrapingBee key"
+                      type="password"
+                      value={apiKeyForm.scrapingBeeApiKey}
+                      onChange={(e) => setApiKeyForm((s) => ({ ...s, scrapingBeeApiKey: e.target.value }))}
+                      style={fieldInputStyle}
+                    />
+                  </label>
+                </>
+              ) : null}
             </div>
           ) : canConnect && integration.id === "meta_lead_ads" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>

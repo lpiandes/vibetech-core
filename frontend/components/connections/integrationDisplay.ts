@@ -74,6 +74,15 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
     listed: false,
     unlocks: "Answered calls → Knowledge + People notes",
   },
+  social_screening: {
+    title: "Social screening",
+    description: "Public social media search (Serper + ScrapingBee) → FCRA-filtered background report for review.",
+    tier: "live",
+    icon: Search,
+    setupMode: "api_key",
+    listed: false,
+    unlocks: "People → Run social background screen → Needs Attention report",
+  },
   meta_lead_ads: {
     title: "Meta Lead Forms",
     description: "Connect your Facebook Page. New Lead Ad submissions land in People and fire intake automations.",
@@ -130,6 +139,7 @@ export type LiveIntegrationFlags = {
   calendar?: boolean;
   sms_channel?: boolean;
   voice_channel?: boolean;
+  social_screening?: boolean;
   meta_lead_ads?: boolean;
   google_search_console?: boolean;
   google_ads?: boolean;
@@ -151,6 +161,7 @@ export function isIntegrationListed(connectionId: string, liveFlags: LiveIntegra
     if (id === "calendar" || id === "business_email") return Boolean(liveFlags.business_email || liveFlags.calendar);
     if (id === "sms_channel") return Boolean(liveFlags.sms_channel);
     if (id === "voice_channel") return Boolean(liveFlags.voice_channel);
+    if (id === "social_screening") return Boolean(liveFlags.social_screening);
     if (id === "meta_lead_ads") return Boolean(liveFlags.meta_lead_ads);
     if (id === "google_search_console") return Boolean(liveFlags.google_search_console);
     if (id === "google_ads") return Boolean(liveFlags.google_ads);
@@ -176,6 +187,7 @@ export function getIntegrationDisplay(
     if ((id === "calendar") && liveFlags.calendar) setupMode = "oauth";
     if (id === "sms_channel" && liveFlags.sms_channel) setupMode = "api_key";
     if (id === "voice_channel" && liveFlags.voice_channel) setupMode = "api_key";
+    if (id === "social_screening" && liveFlags.social_screening) setupMode = "api_key";
     if (id === "meta_lead_ads" && liveFlags.meta_lead_ads) setupMode = "api_key";
     if (id === "google_search_console" && liveFlags.google_search_console) setupMode = "oauth";
     if (id === "google_ads" && liveFlags.google_ads) setupMode = "api_key";

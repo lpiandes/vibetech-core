@@ -13,6 +13,7 @@ export const JOB_TYPES = Object.freeze({
   GOLDEN_PATH_STEP: "golden_path_step",
   SPECIALTY_SCHEDULE_DUE: "specialty_schedule_due",
   CALENDAR_REMINDER_DUE: "calendar_reminder_due",
+  SOCIAL_BACKGROUND_SCREEN: "social_background_screen",
 });
 
 export class InMemoryPlatformJobQueue {
@@ -238,6 +239,7 @@ export class DurableWorkflowExecutor {
         JOB_TYPES.OUTBOUND_SEND,
         JOB_TYPES.SPECIALTY_SCHEDULE_DUE,
         JOB_TYPES.CALENDAR_REMINDER_DUE,
+        JOB_TYPES.SOCIAL_BACKGROUND_SCREEN,
       ],
     });
     if (!job) return null;
@@ -251,6 +253,9 @@ export class DurableWorkflowExecutor {
       }
       if (job.jobType === JOB_TYPES.CALENDAR_REMINDER_DUE) {
         return await this._processCalendarReminder(job);
+      }
+      if (job.jobType === JOB_TYPES.SOCIAL_BACKGROUND_SCREEN) {
+        return await this._processSocialBackgroundScreen(job);
       }
       return await this._processWorkflowStep(job);
     } catch (err) {
@@ -275,6 +280,27 @@ export class DurableWorkflowExecutor {
     const completed = await this.queue.complete(job.id, {
       skipped: true,
       reason: "calendar_reminder_handler_missing",
+      at: this.nowISO(),
+    });
+    return deepFreeze({ ok: true, jobId: completed.id, skipped: true });
+  }
+
+  async _processSocialBackgroundScreen(job) {
+    if (typeof this.runSocialBackgroundScreen === "function") {
+      const outcome = await this.runSocialBackgroundScreen(job);
+      if (outcome?.ok === false) {
+        await this.queue.fail(job.id, outcome.reason ?? outcome.error ?? "social_screen_failed");
+        return deepFreeze({ ok: false, jobId: job.id, ...outcome });
+      }
+      const completed = await this.queue.complete(job.id, {
+        ...(outcome ?? {}),
+        at: this.nowISO(),
+      });
+      return deepFreeze({ ok: true, jobId: completed.id, socialBackgroundScreen: true, ...(outcome ?? {}) });
+    }
+    const completed = await this.queue.complete(job.id, {
+      skipped: true,
+      reason: "social_screen_handler_missing",
       at: this.nowISO(),
     });
     return deepFreeze({ ok: true, jobId: completed.id, skipped: true });

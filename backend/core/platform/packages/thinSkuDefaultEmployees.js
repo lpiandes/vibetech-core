@@ -102,6 +102,41 @@ function leadFollowUpPath() {
   };
 }
 
+function socialScreenerPath() {
+  return {
+    version: 1,
+    customized: true,
+    steps: [
+      {
+        id: "step_social_screen",
+        type: PATH_STEP_TYPES.SOCIAL_SCREEN,
+        enabled: true,
+        runMode: PATH_RUN_MODES.AUTO,
+        label: "Run social background screen",
+      },
+      {
+        id: "step_draft_report",
+        type: PATH_STEP_TYPES.CREATE_DRAFT,
+        enabled: true,
+        runMode: PATH_RUN_MODES.MANUAL,
+        label: "Review filtered report",
+        briefHint: "Social background screening report for owner review before any adverse action.",
+      },
+      {
+        id: "step_email_report",
+        type: PATH_STEP_TYPES.SEND_EMAIL,
+        enabled: true,
+        runMode: PATH_RUN_MODES.MANUAL,
+        audience: PATH_AUDIENCES.TEAM,
+        direction: "internal",
+        label: "Email report to hiring manager",
+        subject: "Social background screening report — {{name}}",
+        body: "A filtered social background screening report is ready for review in Needs Attention / Work.\n\nSubject: {{name}}\n\n— {{businessName}}",
+      },
+    ],
+  };
+}
+
 function withRunnableContract(base, { automationPath, trigger }) {
   const ensured = ensureEmployeeOperatingContract(base, {});
   const patched = applyOperatingContractPatch({
@@ -212,4 +247,30 @@ export function healReceptionistEmployeeIfNeeded(employee) {
   const missingVoice = !events.includes("INBOUND_VOICE_CALL");
   if (!hasLeadNoise && !missingVoice) return employee;
   return buildDefaultReceptionistEmployee();
+}
+
+/**
+ * Social Background Screening default — public-web screen → filtered report for review.
+ */
+export function buildDefaultSocialScreenerEmployee() {
+  return withRunnableContract(
+    {
+      employeeId: "emp_social_background_screener_default",
+      id: "emp_social_background_screener_default",
+      archetypeId: "follow_up_specialist",
+      label: "Social Background Screener",
+      displayName: "Social Background Screener",
+      purpose: "Run public social media searches and draft an FCRA-filtered background report for owner review before any adverse action.",
+      communicationPermissions: { customerFacingRequiresApproval: true },
+      connectionDependencies: ["social_screening"],
+    },
+    {
+      automationPath: socialScreenerPath(),
+      trigger: {
+        mode: "manual_or_events",
+        summary: "When a social background screen is requested",
+        eventTypes: ["SOCIAL_SCREEN_REQUESTED", "SPECIALTY_JOB_REQUESTED"],
+      },
+    },
+  );
 }

@@ -21,6 +21,8 @@ import {
 } from "../../../../../../backend/core/ai-builder/operating-contract/buildOperatingContract.js";
 import { resolveOperatingIndustry } from "../../../../../../backend/core/ai-builder/mapPackAiRolesToSelectedEmployees.js";
 import { healReceptionistEmployeeIfNeeded } from "../../../../../../backend/core/platform/packages/thinSkuDefaultEmployees.js";
+import { buildPathReadinessSnapshot } from "../../../../../../backend/core/ai-builder/operating-contract/automationPathReadiness.js";
+import { isSocialScreeningReady } from "../../../../../../backend/core/integrations/social-screening/socialScreeningKeys.js";
 
 /** Prefer installation employee records (runtime config) over frozen specification copies. */
 function mergeEmployeesPreferInstallation(
@@ -307,8 +309,38 @@ export default async function SpecialtySurfacePage({
           ?? null,
       })
       : null;
+
+    const snapshotConnections = Array.isArray(
+      (ctx.service as any)?.connected?.connectedSystemsSnapshot?.connections,
+    )
+      ? (ctx.service as any).connected.connectedSystemsSnapshot.connections
+      : [];
+    const runtimeConnections = (ctx.service as any)?.connected?.integrationPlatform
+      ?.connectionRuntime?.getConnections?.() ?? [];
+    const connections = snapshotConnections.length ? snapshotConnections : runtimeConnections;
+    const smsConn = connections.find((c: any) => {
+      const t = String(c?.connectionType ?? c?.type ?? "").toLowerCase();
+      return t === "sms_channel" || t === "twilio_sms";
+    });
+    const readinessSnapshot = buildPathReadinessSnapshot({
+      businessId,
+      connections,
+      appOrigin: process.env.APP_ORIGIN || process.env.NEXTAUTH_URL || "",
+      crmAvailable: true,
+      socialScreeningReady: isSocialScreeningReady({
+        env: process.env,
+        connection: connections.find((c: any) => {
+          const t = String(c?.connectionType ?? c?.type ?? "").toLowerCase();
+          return t === "social_screening";
+        }),
+      }),
+      smsBrandComplete: smsConn
+        ? (smsConn?.metadata?.brandComplete === true || smsConn?.metadata?.a2pBrandComplete === true)
+        : null,
+    });
+
     const contractPresentation = contractBuilt
-      ? presentOperatingContract(contractBuilt.contract, contractBuilt.schema)
+      ? presentOperatingContract(contractBuilt.contract, contractBuilt.schema, readinessSnapshot)
       : null;
 
     const customAiChecklist = employee && isCustomAiEmployee(employee)
