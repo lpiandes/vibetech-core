@@ -39,6 +39,33 @@ function salesAssistantPath() {
   };
 }
 
+function receptionistPath() {
+  return {
+    version: 1,
+    customized: true,
+    steps: [
+      {
+        id: "step_pipeline",
+        type: PATH_STEP_TYPES.ADD_TO_PIPELINE,
+        enabled: true,
+        runMode: PATH_RUN_MODES.AUTO,
+        audience: PATH_AUDIENCES.SUBMITTER,
+        label: "Log caller in intake",
+      },
+      {
+        id: "step_email",
+        type: PATH_STEP_TYPES.SEND_EMAIL,
+        enabled: true,
+        runMode: PATH_RUN_MODES.MANUAL,
+        audience: PATH_AUDIENCES.SUBMITTER,
+        label: "Draft callback follow-up",
+        subject: "Following up on your call — {{businessName}}",
+        body: "Hi {{name}},\n\nThanks for calling. We have your note and will follow up shortly.\n\n— {{businessName}}",
+      },
+    ],
+  };
+}
+
 function leadFollowUpPath() {
   return {
     version: 1,
@@ -140,4 +167,49 @@ export function buildDefaultLeadFollowUpEmployee() {
       },
     },
   );
+}
+
+/**
+ * AI Receptionist default — phone inbound, not Meta/form lead capture.
+ */
+export function buildDefaultReceptionistEmployee() {
+  return withRunnableContract(
+    {
+      employeeId: "emp_receptionist_intake_default",
+      id: "emp_receptionist_intake_default",
+      archetypeId: "intake_specialist",
+      label: "Front Desk Follow-up",
+      displayName: "Front Desk Follow-up",
+      purpose: "On inbound calls, log the caller and draft approve-first follow-ups. Live answers run on Twilio Voice + Knowledge.",
+      communicationPermissions: { customerFacingRequiresApproval: true },
+      connectionDependencies: ["voice_channel"],
+    },
+    {
+      automationPath: receptionistPath(),
+      trigger: {
+        mode: "manual_or_events",
+        summary: "When an inbound phone call arrives",
+        eventTypes: ["INBOUND_VOICE_CALL", "NEW_INQUIRY", "SPECIALTY_JOB_REQUESTED"],
+      },
+    },
+  );
+}
+
+/**
+ * Rewrite installed receptionist workers that still carry lead/Meta form triggers.
+ */
+export function healReceptionistEmployeeIfNeeded(employee) {
+  const id = String(employee?.employeeId ?? employee?.id ?? "");
+  const label = String(employee?.label ?? employee?.displayName ?? "");
+  const isReceptionist =
+    id === "emp_receptionist_intake_default"
+    || /front.?desk|reception/i.test(label);
+  if (!isReceptionist) return employee;
+  const events = Array.isArray(employee?.operatingContract?.trigger?.eventTypes)
+    ? employee.operatingContract.trigger.eventTypes.map(String)
+    : [];
+  const hasLeadNoise = events.includes("META_LEAD") || events.includes("FORM_SUBMIT");
+  const missingVoice = !events.includes("INBOUND_VOICE_CALL");
+  if (!hasLeadNoise && !missingVoice) return employee;
+  return buildDefaultReceptionistEmployee();
 }

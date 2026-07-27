@@ -53,6 +53,7 @@ export function createAutomationEventSubscriber({
       "SPECIALTY_SCHEDULE_DUE",
       "PIPELINE_STAGE_ENTERED",
       "NEW_INQUIRY",
+      "INBOUND_VOICE_CALL",
       "FORM_SUBMIT",
       "META_LEAD",
       "PRACTICE_SCHEDULED",

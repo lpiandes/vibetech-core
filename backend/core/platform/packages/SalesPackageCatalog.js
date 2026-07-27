@@ -2,6 +2,7 @@ import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 import {
   buildDefaultLeadFollowUpEmployee,
   buildDefaultSalesAssistantEmployee,
+  buildDefaultReceptionistEmployee,
 } from "./thinSkuDefaultEmployees.js";
 
 /**
@@ -79,7 +80,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     label: "AI Receptionist",
     description: "Inbound phone answers from Knowledge; call notes in People. Booking requests create appointment Work and a calendar HOLD when Calendar is connected.",
     moduleIds: ["home", "knowledge", "integrations", "people", "settings", "work"],
-    canonicalNavIds: ["home", "needs_attention", "people", "work", "knowledge", "integrations", "settings"],
+    canonicalNavIds: ["home", "needs_attention", "people", "work", "knowledge", "automations", "integrations", "settings"],
     discoveryTopics: [
       "identity",
       "industry",
@@ -101,7 +102,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     label: "AI Inbound Call Agent",
     description: "Specialized inbound voice scripts (sales / support / scheduling intents).",
     moduleIds: ["home", "knowledge", "integrations", "people", "work", "settings"],
-    canonicalNavIds: ["home", "needs_attention", "people", "work", "knowledge", "integrations", "settings"],
+    canonicalNavIds: ["home", "needs_attention", "people", "work", "knowledge", "automations", "integrations", "settings"],
     discoveryTopics: ["identity", "industry", "communications", "integrations", "outcomes"],
     packageAskConnectionOptions: ["twilio_voice"],
     launchMissionIds: ["voice_calls", "knowledge_consult", "outbound_approvals"],
@@ -1249,28 +1250,18 @@ export function filterEmployeesForPurchasedPackages(employees = [], purchasedPac
     }
   }
 
-  // Receptionist SKU: guarantee a front-desk role when pack had none.
+  // Receptionist SKU: guarantee a front-desk voice worker (not Meta/form lead template).
   if (
     (packages.includes("ai_receptionist") || packages.includes("voice_inbound_agent"))
     && !kept.some((emp) => /reception|voice|front.?desk|phone/i.test(
       String(emp?.archetypeId ?? emp?.label ?? ""),
     ))
   ) {
-    // Prefer lead follow-up style coordinator as message taker if receptionist archetype missing.
-    const def = buildDefaultLeadFollowUpEmployee();
-    const key = "emp_receptionist_intake_default";
+    const def = buildDefaultReceptionistEmployee();
+    const key = String(def.employeeId);
     if (!seen.has(key)) {
       seen.add(key);
-      kept.push({
-        ...def,
-        employeeId: key,
-        id: key,
-        label: "Front Desk Follow-up",
-        displayName: "Front Desk Follow-up",
-        // Must match BusinessOSEmployeeArchetypes — unknown ids fail dry-run validation.
-        archetypeId: "intake_specialist",
-        purpose: "Capture caller/form requests into Work and draft approve-first follow-ups.",
-      });
+      kept.push(def);
     }
   }
 

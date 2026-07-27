@@ -15,6 +15,7 @@ import {
 } from "../../../../../../../../backend/core/crm/CrmStore.js";
 import { businessKnowledgeService } from "@/lib/server/compose";
 import { getSystemWorkspaceForBusiness } from "@/lib/platform/getSystemWorkspaceForBusiness";
+import { emitSpecialtyBusinessEvent } from "../../../../../../../../backend/core/ai-builder/specialty/emitSpecialtyBusinessEvent.js";
 
 async function loadWorkspaceService(businessId: string) {
   const { service } = await getSystemWorkspaceForBusiness(businessId);
@@ -134,6 +135,33 @@ export async function POST(
     } catch {
       /* best effort */
     }
+  }
+
+  // Fan-out to LIVE specialty automations listening for inbound voice (not Meta/form).
+  try {
+    const { service } = await getSystemWorkspaceForBusiness(businessId);
+    const freshInstallation = await platformStore.getBusinessOSInstallation(businessId).catch(() => installation);
+    await emitSpecialtyBusinessEvent({
+      installation: freshInstallation,
+      workRuntime: (service as any)?.connected?.workRuntime ?? (service as any)?.workRuntime,
+      automationRuntime: (service as any)?.connected?.automationRuntime ?? null,
+      approvalRuntime: (service as any)?.connected?.approvalRuntime ?? null,
+      businessId,
+      eventType: "INBOUND_VOICE_CALL",
+      brief: `Inbound call from ${from || "unknown"}: ${speech.slice(0, 240)}`,
+      payload: {
+        from,
+        callSid,
+        speech,
+        intent: turn.intent,
+        reply: turn.reply,
+      },
+      actorId: "voice_receptionist",
+      knowledgeDocuments: knowledgeSnippets,
+      platformStore,
+    });
+  } catch {
+    /* best effort — call answer must not fail if specialty fan-out errors */
   }
 
   if (turn.intent === "goodbye") {

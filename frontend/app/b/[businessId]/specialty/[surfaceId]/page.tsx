@@ -20,6 +20,7 @@ import {
   presentOperatingContract,
 } from "../../../../../../backend/core/ai-builder/operating-contract/buildOperatingContract.js";
 import { resolveOperatingIndustry } from "../../../../../../backend/core/ai-builder/mapPackAiRolesToSelectedEmployees.js";
+import { healReceptionistEmployeeIfNeeded } from "../../../../../../backend/core/platform/packages/thinSkuDefaultEmployees.js";
 
 /** Prefer installation employee records (runtime config) over frozen specification copies. */
 function mergeEmployeesPreferInstallation(
@@ -45,6 +46,56 @@ function mergeEmployeesPreferInstallation(
   return [...map.values()];
 }
 
+async function persistHealedReceptionistEmployees(
+  installation: any,
+  businessId: string,
+): Promise<any> {
+  if (!installation?.configuration) return installation;
+  const existing = Array.isArray(installation.configuration.employees)
+    ? installation.configuration.employees
+    : [];
+  let changed = false;
+  const employees = existing.map((entry: any) => {
+    const healed = healReceptionistEmployeeIfNeeded(entry);
+    if (healed !== entry) changed = true;
+    return healed;
+  });
+  if (!changed) return installation;
+  const nextConfiguration = {
+    ...(installation.configuration ?? {}),
+    employees,
+  };
+  try {
+    await platformStore.upsertBusinessOSInstallation({
+      id: installation.id ?? installation.installationId ?? `install_${businessId}`,
+      businessId,
+      specificationRowId: installation.specificationRowId ?? null,
+      specificationId: installation.specificationId,
+      specificationVersion: installation.specificationVersion ?? 1,
+      specificationContentHash: installation.specificationContentHash
+        ?? installation.contentHash
+        ?? "heal_receptionist_triggers",
+      planId: installation.planId ?? `plan_${businessId}`,
+      status: installation.status ?? "installed",
+      plan: installation.plan ?? {},
+      actionCheckpoints: installation.actionCheckpoints ?? [],
+      configuration: nextConfiguration,
+      history: [
+        ...(Array.isArray(installation.history) ? installation.history : []),
+        {
+          at: new Date().toISOString(),
+          action: "heal_receptionist_triggers",
+        },
+      ],
+      actorUserId: installation.actorUserId ?? null,
+      installedAt: installation.installedAt ?? null,
+    });
+  } catch {
+    /* best effort — still return healed in-memory for this render */
+  }
+  return { ...installation, configuration: nextConfiguration };
+}
+
 export default async function SpecialtySurfacePage({
   params,
 }: {
@@ -58,7 +109,10 @@ export default async function SpecialtySurfacePage({
     const knowledgeDocumentCount = await platformStore.countActiveKnowledgeDocuments(businessId);
     ctx.service.refreshOperationalState(knowledgeDocumentCount);
 
-    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    const installationRaw = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    const installation = installationRaw
+      ? await persistHealedReceptionistEmployees(installationRaw, businessId)
+      : null;
     let specification = null as any;
     if (installation?.specificationId) {
       try {

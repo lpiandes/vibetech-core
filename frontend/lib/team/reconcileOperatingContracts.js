@@ -2,9 +2,11 @@ import {
   ensureEmployeeOperatingContract,
 } from "../../../backend/core/ai-builder/operating-contract/buildOperatingContract.js";
 import { resolveOperatingIndustry } from "../../../backend/core/ai-builder/mapPackAiRolesToSelectedEmployees.js";
+import { healReceptionistEmployeeIfNeeded } from "../../../backend/core/platform/packages/thinSkuDefaultEmployees.js";
 
 /**
  * Seed operatingContract (+ automation stub) on every installed employee missing one.
+ * Also rewrites receptionist workers that still carry Meta/form lead triggers.
  */
 export async function reconcileOperatingContracts({
   platformStore,
@@ -44,6 +46,11 @@ export async function reconcileOperatingContracts({
 
   let updated = 0;
   const employees = existing.map((employee) => {
+    const receptionistHealed = healReceptionistEmployeeIfNeeded(employee);
+    if (receptionistHealed !== employee) {
+      updated += 1;
+      return receptionistHealed;
+    }
     if (employee?.operatingContract?.version && Array.isArray(employee?.automationDefinitions)
       && employee.automationDefinitions.length > 0) {
       return employee;

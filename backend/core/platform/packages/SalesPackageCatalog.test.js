@@ -325,6 +325,9 @@ test("thin SKU default employees use registered archetypes", () => {
   const receptionist = filterEmployeesForPurchasedPackages([], ["ai_receptionist"]);
   assert.equal(receptionist.length, 1);
   assert.equal(receptionist[0].archetypeId, "intake_specialist");
+  assert.ok(receptionist[0].operatingContract?.trigger?.eventTypes?.includes("INBOUND_VOICE_CALL"));
+  assert.equal(receptionist[0].operatingContract?.trigger?.eventTypes?.includes("META_LEAD"), false);
+  assert.equal(receptionist[0].operatingContract?.trigger?.eventTypes?.includes("FORM_SUBMIT"), false);
 
   const sales = filterEmployeesForPurchasedPackages([], ["sales_assistant"]);
   assert.equal(sales[0].archetypeId, "follow_up_specialist");

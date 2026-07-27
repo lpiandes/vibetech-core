@@ -10,6 +10,7 @@ export const SPECIALTY_EVENT_CATALOG = Object.freeze([
   { id: "EVENT_REMINDER_DUE", label: "Calendar reminder time reached" },
   { id: "ANNOUNCEMENT_REQUESTED", label: "Announcement requested" },
   { id: "NEW_INQUIRY", label: "New inquiry arrives" },
+  { id: "INBOUND_VOICE_CALL", label: "Inbound phone call" },
   { id: "FORM_SUBMIT", label: "Form submitted" },
   { id: "META_LEAD", label: "Meta / Facebook lead" },
   { id: "INTERACTION_OUTCOME_RECORDED", label: "Interaction recorded" },

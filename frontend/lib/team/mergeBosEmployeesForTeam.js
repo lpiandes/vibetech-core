@@ -3,6 +3,8 @@
  * Owner-added / specialty AIs often live on the specification while thin config
  * still has package employees — Team must union them, not take only config.
  */
+import { healReceptionistEmployeeIfNeeded } from "../../../backend/core/platform/packages/thinSkuDefaultEmployees.js";
+
 export function mergeBosEmployeesForTeam({
   configuration = null,
   specification = null,
@@ -11,22 +13,23 @@ export function mergeBosEmployeesForTeam({
 
   const push = (entry) => {
     if (!entry || typeof entry !== "object") return;
-    const id = String(entry.employeeId ?? entry.id ?? "").trim();
+    const healed = healReceptionistEmployeeIfNeeded(entry);
+    const id = String(healed.employeeId ?? healed.id ?? "").trim();
     if (!id) return;
     const prev = byId.get(id) ?? {};
     byId.set(id, {
       ...prev,
-      ...entry,
+      ...healed,
       employeeId: id,
       id,
-      label: entry.label ?? entry.name ?? prev.label ?? prev.name ?? id,
+      label: healed.label ?? healed.name ?? prev.label ?? prev.name ?? id,
       ownerAdded: Boolean(
-        entry.ownerAdded
+        healed.ownerAdded
         || prev.ownerAdded
-        || entry.customAiWork
+        || healed.customAiWork
         || prev.customAiWork
         || id.startsWith("owner_emp_")
-        || entry.surfaceKind === "ai_teammate"
+        || healed.surfaceKind === "ai_teammate"
         || prev.surfaceKind === "ai_teammate",
       ),
     });
