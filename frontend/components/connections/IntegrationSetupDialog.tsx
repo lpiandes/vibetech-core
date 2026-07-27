@@ -210,9 +210,13 @@ export default function IntegrationSetupDialog({
             ? growthForm
             : integration.id === "social_screening"
               ? {
-                serperApiKey: apiKeyForm.serperApiKey,
-                scrapingBeeApiKey: apiKeyForm.scrapingBeeApiKey,
                 usePlatformKeys: apiKeyForm.usePlatformKeys,
+                ...(apiKeyForm.usePlatformKeys
+                  ? {}
+                  : {
+                    serperApiKey: apiKeyForm.serperApiKey,
+                    scrapingBeeApiKey: apiKeyForm.scrapingBeeApiKey,
+                  }),
               }
               : integration.id === "sms_channel"
                 ? { ...apiKeyForm }

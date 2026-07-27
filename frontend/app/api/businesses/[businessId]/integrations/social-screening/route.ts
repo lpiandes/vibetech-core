@@ -21,17 +21,23 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const usePlatformKeys = Boolean(body.usePlatformKeys);
     const fromEnv = readSocialScreeningKeys({ env: process.env });
-    const serperApiKey = String(
-      body.serperApiKey ?? (usePlatformKeys ? fromEnv.serperApiKey : ""),
-    ).trim();
-    const scrapingBeeApiKey = String(
-      body.scrapingBeeApiKey ?? (usePlatformKeys ? fromEnv.scrapingBeeApiKey : ""),
-    ).trim();
+    // Empty strings from the form must not override platform env (`??` only skips null/undefined).
+    const bodySerper = String(body.serperApiKey ?? "").trim();
+    const bodyScrapingBee = String(body.scrapingBeeApiKey ?? "").trim();
+    const serperApiKey = usePlatformKeys
+      ? (fromEnv.serperApiKey || bodySerper)
+      : (bodySerper || fromEnv.serperApiKey);
+    const scrapingBeeApiKey = usePlatformKeys
+      ? (fromEnv.scrapingBeeApiKey || bodyScrapingBee)
+      : (bodyScrapingBee || fromEnv.scrapingBeeApiKey);
 
     if (!serperApiKey || !scrapingBeeApiKey) {
+      const error = usePlatformKeys && !fromEnv.ready
+        ? "Platform keys not found on the server. Set SERPER_API_KEY and SCRAPINGBEE_API_KEY in Vercel (Production), then redeploy."
+        : "Serper API key and ScrapingBee API key are required (or enable Use platform keys).";
       return NextResponse.json(
         {
-          error: "Serper API key and ScrapingBee API key are required (or enable Use platform keys).",
+          error,
           code: "MISSING_CREDENTIALS",
           platformKeysAvailable: fromEnv.ready,
         },
