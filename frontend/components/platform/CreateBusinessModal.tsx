@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import SimpleModal from "@/components/product/SimpleModal";
 import PrimaryButton from "@/components/product/PrimaryButton";
 import SecondaryButton from "@/components/product/SecondaryButton";
-import { spacing, typography, cockpitColors } from "@/design/tokens";
+import { typography, cockpitColors } from "@/design/tokens";
 import { listSellableSalesPackagesForAdmin } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
 type SalesPackageOption = {
@@ -16,6 +16,18 @@ type SalesPackageOption = {
   honestyNote: string | null;
   commercialStatus?: string;
   sellable?: boolean;
+};
+
+const fieldStyle = {
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: `1px solid ${cockpitColors.panelBorder}`,
+  fontSize: 15,
+  fontFamily: "inherit" as const,
+  color: cockpitColors.textPrimary,
+  background: "#fff",
+  width: "100%",
+  boxSizing: "border-box" as const,
 };
 
 export default function CreateBusinessModal({
@@ -67,7 +79,9 @@ export default function CreateBusinessModal({
       setError(data.error ?? "Could not create business.");
       return;
     }
-    setSuccess(`Created ${data.business.name}. Owner invitation ${data.invitation.emailSent ? "sent" : "recorded for development"}.`);
+    setSuccess(
+      `Created ${data.business.name}. Owner invitation ${data.invitation.emailSent ? "sent" : "recorded for development"}.`,
+    );
     onCreated();
   }
 
@@ -75,7 +89,7 @@ export default function CreateBusinessModal({
     <SimpleModal
       title="Create business"
       onClose={onClose}
-      maxWidth={560}
+      maxWidth={520}
       footer={
         success ? (
           <PrimaryButton onClick={onClose}>Done</PrimaryButton>
@@ -90,105 +104,100 @@ export default function CreateBusinessModal({
       {success ? (
         <p style={{ ...typography.body, color: cockpitColors.textSecondary, margin: 0 }}>{success}</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: spacing.md }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: spacing.xs }}>
-            <span style={{ fontWeight: 700, fontSize: typography.caption.fontSize }}>Business name</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              style={{
-                padding: `${spacing.sm} ${spacing.md}`,
-                borderRadius: 10,
-                border: `1px solid ${cockpitColors.panelBorder}`,
-                fontSize: 15,
-              }}
-            />
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontWeight: 600, fontSize: 13, color: cockpitColors.textPrimary }}>
+              Business name
+            </span>
+            <input value={name} onChange={(e) => setName(e.target.value)} style={fieldStyle} />
           </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: spacing.xs }}>
-            <span style={{ fontWeight: 700, fontSize: typography.caption.fontSize }}>Owner email</span>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontWeight: 600, fontSize: 13, color: cockpitColors.textPrimary }}>
+              Owner email
+            </span>
             <input
               type="email"
               value={ownerEmail}
               onChange={(e) => setOwnerEmail(e.target.value)}
-              style={{
-                padding: `${spacing.sm} ${spacing.md}`,
-                borderRadius: 10,
-                border: `1px solid ${cockpitColors.panelBorder}`,
-                fontSize: 15,
-              }}
+              style={fieldStyle}
             />
           </label>
-          <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
-            <div style={{ fontWeight: 700, fontSize: typography.caption.fontSize }}>Purchased packages</div>
-            <p style={{ fontSize: 13, color: cockpitColors.textSecondary, margin: 0, lineHeight: 1.45 }}>
-              Check what they bought on the sales sheet. Discovery and the workspace stay inside this scope.
-            </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: cockpitColors.textPrimary }}>
+                Purchased packages
+              </div>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: cockpitColors.textSecondary,
+                  margin: "4px 0 0",
+                  lineHeight: 1.4,
+                }}
+              >
+                Check what they bought. Hover a row for the short scope note.
+              </p>
+            </div>
             <div
               style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-                maxHeight: 320,
-                overflowY: "auto",
-                paddingRight: 4,
+                border: `1px solid ${cockpitColors.panelBorder}`,
+                borderRadius: 12,
+                overflow: "hidden",
+                background: "#fff",
               }}
             >
-              {packages.map((pkg) => {
+              {packages.map((pkg, index) => {
                 const checked = purchasedPackages.includes(pkg.id);
                 return (
                   <label
                     key={pkg.id}
+                    title={pkg.description}
                     style={{
                       display: "flex",
-                      gap: 12,
-                      alignItems: "flex-start",
+                      alignItems: "center",
+                      gap: 10,
+                      margin: 0,
+                      padding: "11px 14px",
                       cursor: "pointer",
-                      padding: "12px 14px",
-                      borderRadius: 12,
-                      border: `2px solid ${checked ? "rgba(15,118,110,0.45)" : cockpitColors.panelBorder}`,
-                      background: checked ? "rgba(15,118,110,0.06)" : "#fff",
-                      minHeight: 56,
+                      background: checked ? "rgba(15,118,110,0.07)" : "#fff",
+                      borderTop: index === 0 ? "none" : `1px solid ${cockpitColors.panelBorder}`,
+                      position: "relative",
+                      zIndex: 1,
                     }}
                   >
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={() => togglePackage(pkg.id)}
-                      style={{ marginTop: 3, flexShrink: 0, width: 16, height: 16 }}
+                      style={{
+                        width: 15,
+                        height: 15,
+                        flexShrink: 0,
+                        margin: 0,
+                        accentColor: "#0f766e",
+                      }}
                     />
-                    <span style={{ minWidth: 0, flex: 1 }}>
-                      <span
-                        style={{
-                          display: "block",
-                          fontWeight: 650,
-                          fontSize: 14,
-                          fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-                          color: cockpitColors.textPrimary,
-                          lineHeight: 1.35,
-                        }}
-                      >
-                        {pkg.label}
-                      </span>
-                      <span
-                        style={{
-                          display: "block",
-                          marginTop: 4,
-                          fontSize: 12,
-                          color: cockpitColors.textSecondary,
-                          lineHeight: 1.45,
-                          fontWeight: 400,
-                        }}
-                      >
-                        {pkg.description}
-                        {pkg.honestyNote ? ` ${pkg.honestyNote}` : ""}
-                      </span>
+                    <span
+                      style={{
+                        fontSize: 14,
+                        fontWeight: checked ? 600 : 500,
+                        lineHeight: 1.3,
+                        color: cockpitColors.textPrimary,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {pkg.label}
                     </span>
                   </label>
                 );
               })}
             </div>
           </div>
-          {error ? <p style={{ color: "#dc2626", margin: 0 }}>{error}</p> : null}
+          {error ? (
+            <p style={{ color: "#dc2626", margin: 0, fontSize: 13 }}>{error}</p>
+          ) : null}
         </div>
       )}
     </SimpleModal>
