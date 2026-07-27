@@ -7,7 +7,7 @@ import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
 import {
   PACKAGE_ASK_OPTION_TO_CONNECTION,
   resolvePackageAskConnectionOptions,
-} from "../../../../backend/core/platform/packages/SalesPackageCatalog.js";
+} from "../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
 /**
  * Owner Integrations surface — connections that can operate this business.

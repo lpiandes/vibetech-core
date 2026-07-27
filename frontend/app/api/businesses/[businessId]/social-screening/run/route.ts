@@ -3,9 +3,9 @@ import { NextResponse } from "next/server";
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
-import { JOB_TYPES } from "../../../../../../../../backend/core/platform/jobs/PlatformJobQueue.js";
-import { processSocialBackgroundScreenJob } from "../../../../../../../../backend/core/platform/jobs/processSocialBackgroundScreenJob.js";
-import { loadSpecialtyWorkerWorkspace } from "../../../../../../../../backend/core/platform/jobs/loadSpecialtyWorkerWorkspace.js";
+import { JOB_TYPES } from "../../../../../../../backend/core/platform/jobs/PlatformJobQueue.js";
+import { processSocialBackgroundScreenJob } from "../../../../../../../backend/core/platform/jobs/processSocialBackgroundScreenJob.js";
+import { loadSpecialtyWorkerWorkspace } from "../../../../../../../backend/core/platform/jobs/loadSpecialtyWorkerWorkspace.js";
 import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
 
 /**
