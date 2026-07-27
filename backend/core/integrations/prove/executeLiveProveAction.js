@@ -200,7 +200,7 @@ export async function executeLiveProveAction({
       if (mapped?.ok !== false && businessId) {
         try {
           const { publishSpecialtyPlatformEvent } = await import(
-            "../../../ai-builder/specialty/fireSpecialtyTrigger.js"
+            "../../ai-builder/specialty/fireSpecialtyTrigger.js"
           );
           publishSpecialtyPlatformEvent({
             businessId,

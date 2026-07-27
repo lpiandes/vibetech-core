@@ -68,9 +68,13 @@ export async function POST(request: Request) {
   }
 
   await platformStore.upsertBusinessOSInstallation({
-    id: installation.id ?? installation.installationId ?? `install_${businessId}`,
+    id: installation.id ?? `install_${businessId}`,
     businessId,
     specificationId: installation.specificationId,
+    specificationVersion: installation.specificationVersion ?? 1,
+    specificationContentHash: installation.specificationContentHash ?? "billing-update",
+    planId: installation.planId ?? `plan_${businessId}`,
+    status: installation.status ?? "ACTIVE",
     configuration: applied.packageConfiguration,
   });
 
