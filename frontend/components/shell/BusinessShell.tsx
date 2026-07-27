@@ -1,8 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 import PageContainer from "@/components/layout/PageContainer";
 import WorkspaceMainArea from "@/components/workspace/WorkspaceMainArea";
@@ -23,6 +23,7 @@ import { cockpitColors, spacing } from "@/design/tokens";
 export default function BusinessShell({ children }: { children: ReactNode }) {
   const scope = useBusinessScope();
   const pathname = usePathname() ?? "";
+  const router = useRouter();
   const isAskSurface = /\/architect(?:\/|$)/.test(pathname);
   const isHomeSurface = /\/home(?:\/|$|\?)/.test(pathname) || /\/b\/[^/]+\/?$/.test(pathname);
   const hasInstalledOs = Boolean(scope.installedBusinessOS?.drivenByBusinessOS);
@@ -30,6 +31,15 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
   // Pre-install setup + package Ask: full-bleed — hide business chrome (left nav + top bar).
   const isSetupBuilder = (!hasInstalledOs && (isAskSurface || isHomeSurface)) || packageAskBlocking;
   const [needsAttentionCount, setNeedsAttentionCount] = useState(0);
+  const refreshedAfterInstall = useRef(false);
+
+  // After client-side Architect install, Next can reuse a stale /b/[id] layout where
+  // installedBusinessOS is still null — Home renders live content but chrome stays hidden.
+  useEffect(() => {
+    if (hasInstalledOs || !isHomeSurface || refreshedAfterInstall.current) return;
+    refreshedAfterInstall.current = true;
+    router.refresh();
+  }, [hasInstalledOs, isHomeSurface, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +98,7 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
                 height: "100%",
                 backgroundColor: cockpitColors.sidebar,
                 borderRight: `1px solid ${cockpitColors.sidebarBorder}`,
-                display: "flex",
+                // Keep flex direction inlined; visibility is owned by .vt-desktop-only media query.
                 flexDirection: "column",
                 overflow: "hidden",
               }}

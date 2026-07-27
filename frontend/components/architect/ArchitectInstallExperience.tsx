@@ -54,8 +54,11 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
       }
       setResult(data);
       if (data.alreadyInstalled && data.openHref) {
-        // Session is already live — home has the prosper walkthrough.
-        setTimeout(() => router.push(data.openHref), 50);
+        // Session is already live — refresh layout so Home gets the nav chrome.
+        setTimeout(() => {
+          router.push(data.openHref);
+          router.refresh();
+        }, 50);
       }
     } catch (err) {
       setError(presentProductError(err));
@@ -162,7 +165,12 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
             </p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {result?.alreadyInstalled && result?.openHref ? (
-                <ArchitectButton onClick={() => router.push(String(result.openHref))}>
+                <ArchitectButton
+                  onClick={() => {
+                    router.push(String(result.openHref));
+                    router.refresh();
+                  }}
+                >
                   Open Home
                 </ArchitectButton>
               ) : (
@@ -291,7 +299,9 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
             proposal={proposal}
             openHref={openHref}
             onOpenPortal={() => {
-              if (openHref) router.push(openHref);
+              if (!openHref) return;
+              router.push(openHref);
+              router.refresh();
             }}
           />
         </ArchitectPanel>
