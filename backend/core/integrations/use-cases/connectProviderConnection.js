@@ -2,6 +2,17 @@ import { CONNECTION_STATUSES } from "../connections/ConnectionStatus.js";
 
 /**
  * Generic connect helper: register → configure → attach vault credential → verify.
+ * @param {{
+ *   integrationPlatform: object,
+ *   workspaceId?: string,
+ *   connectionType: string,
+ *   displayName?: string,
+ *   providerType: string,
+ *   credentialId: string,
+ *   credentialType?: string,
+ *   externalAccountReference?: string | null,
+ *   metadata?: Record<string, unknown>,
+ * }} options
  */
 export async function connectProviderConnection({
   integrationPlatform,
@@ -31,21 +42,17 @@ export async function connectProviderConnection({
     });
   }
 
-  if (
-    conn.status === CONNECTION_STATUSES.NOT_CONNECTED
-    || conn.status === CONNECTION_STATUSES.DISCONNECTED
-    || conn.providerType !== providerType
-  ) {
-    connectionService.startConfiguration({ connectionId: conn.id, providerType });
-    connectionService.attachProviderCredentials({
-      connectionId: conn.id,
-      providerType,
-      credentialId,
-      credentialType,
-      externalAccountReference: externalAccountReference ?? `${providerType}:${credentialId}`,
-      metadata,
-    });
-  }
+  // Always re-attach credentials on connect/reconnect so Fix connection after ERROR
+  // does not re-verify stale vault refs while skipping the new secrets.
+  connectionService.startConfiguration({ connectionId: conn.id, providerType });
+  connectionService.attachProviderCredentials({
+    connectionId: conn.id,
+    providerType,
+    credentialId,
+    credentialType,
+    externalAccountReference: externalAccountReference ?? `${providerType}:${credentialId}`,
+    metadata,
+  });
 
   await connectionService.verifyConnection({ connectionId: conn.id, credentialResolver });
   return connectionRuntime.getConnectionByType(connectionType);

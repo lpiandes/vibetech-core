@@ -23,7 +23,7 @@ const PATH_MAP: Record<string, string> = {
   "/setup": "home",
   "/request": "work",
   "/communications": "inbox",
-  "/automations": "integrations",
+  "/automations": "automations",
   "/capabilities": "settings",
 };
 

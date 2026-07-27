@@ -6,8 +6,17 @@ import { CapabilityGapDetector } from "./CapabilityGapDetector.js";
 import { createBuilderAssumption } from "./BuilderAssumption.js";
 import {
   extractOwnerRequestedEmployees,
-  toSelectedEmployeeRecommendations,
 } from "./extractOwnerRequestedEmployees.js";
+import { compileDesiredWorkflows } from "./compileDesiredWorkflows.js";
+import {
+  mergePackAndOwnerEmployeeRecommendations,
+  packEmployeesForIndustry,
+  resolveOperatingIndustry,
+} from "./mapPackAiRolesToSelectedEmployees.js";
+import {
+  filterWorkflowsForPurchasedPackages,
+  isFullOsPurchasedScope,
+} from "../platform/packages/SalesPackageCatalog.js";
 
 /**
  * Plans assembly from existing blueprints/components before any install.
@@ -29,32 +38,42 @@ export class BuilderAssemblyPlanner {
     if (!session) throw new Error("BuilderAssemblyPlanner: session required.");
     const businessSummary = session.businessSummary ?? {};
     const evidence = session.evidence ?? [];
+    const thinSku = !isFullOsPurchasedScope(businessSummary.purchasedPackages);
+    const industry = resolveOperatingIndustry({
+      industry: businessSummary.industry,
+      businessName: businessSummary.businessName,
+      allowNameHeuristics: !thinSku,
+    }) ?? String(businessSummary.industry ?? "").toLowerCase().replace(/\s+/g, "_");
 
     const blueprints = this.blueprintEngine.recommend({ businessSummary, evidence });
     const components = this.componentEngine.recommend({ businessSummary });
-    const employees = this.employeeEngine.recommend({ businessSummary });
     const ownerRequested = extractOwnerRequestedEmployees({
       answers: session.answers ?? [],
       conversation: session.conversation ?? [],
       businessSummary,
     });
-    const ownerEmployeeRecs = toSelectedEmployeeRecommendations(ownerRequested);
-
-    const ownerArchetypes = new Set(ownerRequested.map((entry) => entry.archetypeId));
-    const templateEmployees = employees.recommendations
-      .filter((entry) => entry.selected)
-      .filter((entry) => {
-        const archetype = String(
-          (entry.evidence ?? []).find((item) => String(item).startsWith("archetype:"))
-          ?? entry.payload?.employee?.archetypeId
-          ?? entry.payload?.archetype?.archetypeId
-          ?? "",
-        ).replace("archetype:", "");
-        return archetype && !ownerArchetypes.has(archetype);
-      });
-    const selectedEmployees = ownerEmployeeRecs.length
-      ? [...ownerEmployeeRecs, ...templateEmployees].slice(0, 8)
-      : employees.recommendations.filter((entry) => entry.selected);
+    const desiredWorkflows = filterWorkflowsForPurchasedPackages(
+      compileDesiredWorkflows({
+        answers: session.answers ?? [],
+        businessSummary,
+      }),
+      businessSummary.purchasedPackages ?? [],
+    );
+    const workflowEmployees = desiredWorkflows.map((workflow) => ({
+      archetypeId: workflow.archetypeId,
+      label: workflow.label,
+      purpose: workflow.purpose,
+      automationPath: workflow.automationPath,
+      trigger: workflow.trigger,
+      workflowText: workflow.workflowText,
+    }));
+    // Vertical packs install default AI workforce only for Full OS. Thin SKUs
+    // keep owner-requested / workflow employees (filtered later at assemble).
+    const packDefaults = thinSku ? [] : packEmployeesForIndustry(industry);
+    const selectedEmployees = mergePackAndOwnerEmployeeRecommendations({
+      industry: thinSku ? null : industry,
+      ownerRequested: [...ownerRequested, ...workflowEmployees],
+    });
 
     const gaps = this.gapDetector.detect({
       businessSummary,
@@ -77,36 +96,52 @@ export class BuilderAssemblyPlanner {
         confidence: 0.6,
         source: "blueprint",
       })),
+      ...(packDefaults.length
+        ? [createBuilderAssumption({
+          assumptionId: "assume_pack_workforce",
+          text: `This vertical installs a default AI team: ${packDefaults.map((entry) => entry.label).join(", ")}. You can edit or disable teammates after install.`,
+          confidence: 0.95,
+          source: "operating_pack",
+        })]
+        : []),
       ...(ownerRequested.length
         ? [createBuilderAssumption({
           assumptionId: "assume_owner_workforce",
-          text: `Digital Workforce prioritizes what you asked for: ${ownerRequested.map((entry) => entry.label).join(", ")}.`,
+          text: `Digital Workforce also includes what you asked for: ${ownerRequested.map((entry) => entry.label).join(", ")}.`,
           confidence: 0.9,
           source: "owner_request",
         })]
         : []),
+      ...(desiredWorkflows.length
+        ? [createBuilderAssumption({
+          assumptionId: "assume_owner_workflows",
+          text: `Automations from your processes: ${desiredWorkflows.map((entry) => entry.label).join(", ")}.`,
+          confidence: 0.92,
+          source: "owner_workflows",
+        })]
+        : []),
     ];
 
+    const packLabels = packDefaults.map((entry) => entry.label);
+    const ownerLabels = ownerRequested.map((entry) => entry.label);
+    const workflowLabels = desiredWorkflows.map((entry) => entry.label);
     return deepFreeze({
       ok: true,
       selectedBlueprints: blueprints.recommendations.filter((entry) => entry.selected),
       selectedComponents: components.recommendations.filter((entry) => entry.selected),
       selectedEmployees,
+      desiredWorkflows,
       capabilityGaps: [
         ...gaps.gaps,
-        ...(employees.gaps ?? []).map((gap, index) => ({
-          gapId: `emp_gap_${index}`,
-          ...gap,
-          status: "open",
-          evidence: [],
-        })),
       ],
       assumptions,
       explanation: {
         title: "What we recommend",
-        summary: ownerRequested.length
-          ? `We matched reusable blueprints and put your requested digital teammates first (${ownerRequested.map((entry) => entry.label).join(", ")}). Gaps stay visible — nothing unsupported will pretend to work.`
-          : "We matched reusable blueprints and components to what you described. Gaps stay visible — nothing unsupported will pretend to work.",
+        summary: packLabels.length
+          ? `We matched reusable blueprints and install the ${industry || "vertical"} AI team (${packLabels.join(", ")})${ownerLabels.length ? ` plus your extras (${ownerLabels.join(", ")})` : ""}${workflowLabels.length ? ` and process automations (${workflowLabels.join(", ")})` : ""}. Gaps stay visible — nothing unsupported will pretend to work.`
+          : ownerLabels.length || workflowLabels.length
+            ? `We matched reusable blueprints and put your requested digital teammates first (${[...ownerLabels, ...workflowLabels].join(", ")}). Gaps stay visible — nothing unsupported will pretend to work.`
+            : "We matched reusable blueprints and components to what you described. Gaps stay visible — nothing unsupported will pretend to work.",
       },
     });
   }

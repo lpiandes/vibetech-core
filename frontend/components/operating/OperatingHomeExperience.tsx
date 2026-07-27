@@ -1,33 +1,41 @@
 "use client";
 
-import { useContext } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useOptionalBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { MissionControlViewModelContext } from "@/components/mission-control/MissionControlContext";
-import {
-  HomeCanvas,
-  HomeHero,
-  MetricStrip,
-  DashGrid,
-  DashCard,
-  QueueRow,
-  ActivityItem,
-  WorkforceRow,
-  SituationRow,
-  CommRow,
-  EmptyLine,
-  QuietLink,
-} from "@/components/operating/home/EditorialHome";
+import { HomeCanvas, HomeHero } from "@/components/operating/home/EditorialHome";
 import {
   humanizeHomeDecisionTitle,
   resolveBusinessDisplayName,
   scrubInternalWording,
 } from "@/lib/operating/businessLanguage";
-import SetupChecklistBanner from "@/components/home/SetupChecklistBanner";
+import LaunchCenter, { type LaunchMission } from "@/components/home/LaunchCenter";
+import CrmReportingStrip from "@/components/home/CrmReportingStrip";
+import {
+  buildCuratedLaunchMissions,
+  resolveLaunchVertical,
+} from "../../../backend/core/platform/launch/buildCuratedLaunchMissions.js";
+import { presentLaunchPathLabel, resolveCanonicalNavIdsForPackages } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
+import { presentTeammateHomeGlance } from "../../../backend/core/operating-home/presentTeammateHomeGlance.js";
+import {
+  NextBanner,
+  SimpleEmptyLine,
+  SimpleMetrics,
+  SimplePanel,
+  SimplePanelLink,
+  SimpleRow,
+} from "@/components/product/SimpleUI";
+import { cockpitColors } from "@/design/tokens";
+
+type HomeViewMode = "setup" | "dashboard";
+
+function homeViewStorageKey(businessId: string) {
+  return `vt.homeView.${businessId}`;
+}
 
 /**
- * Operating Home — mockup-density dashboard from live supervision only.
- * Interactive chrome only when a real destination exists.
- * Ask lives in the shell (sidebar / top bar), not as a home composer.
+ * Operating Home — Setup (0/N) by default after install, with a toggle into the
+ * dense operating dashboard. Dashboard always shows remaining setup.
  */
 export default function OperatingHomeExperience() {
   const viewModel = useContext(MissionControlViewModelContext) as any;
@@ -44,26 +52,43 @@ export default function OperatingHomeExperience() {
     viewModel?.businessName,
   );
 
+  const [homeView, setHomeView] = useState<HomeViewMode>("setup");
+
+  useEffect(() => {
+    if (!businessId || typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(homeViewStorageKey(businessId));
+    if (stored === "dashboard" || stored === "setup") {
+      setHomeView(stored);
+    }
+  }, [businessId]);
+
+  function selectHomeView(next: HomeViewMode) {
+    setHomeView(next);
+    if (businessId && typeof window !== "undefined") {
+      window.localStorage.setItem(homeViewStorageKey(businessId), next);
+    }
+  }
+
   if (!supervision) {
     return (
       <HomeCanvas>
-        <HomeHero
-          greeting="Welcome."
-          subtitle="VIBETech is gathering live signals for this business."
-        />
+        <HomeHero greeting="Welcome." />
       </HomeCanvas>
     );
   }
 
   const decisions = supervision.needsDecision ?? { items: [], viewAllHref: null };
   const approvals = supervision.approvalsInbox ?? { items: [], viewAllHref: null, emptyTitle: "No outbound approvals waiting." };
-  // Same queue as Needs Attention (/intelligence) — never invent items from outcome titles.
   const waitingItems = (decisions.items ?? [])
     .map((item: any) => presentWaitingItem(item))
     .filter((item: { href?: string | null }) => Boolean(item.href));
   const approvalItems = Array.isArray(approvals.items) ? approvals.items : [];
   const workingNow = supervision.workingNow ?? [];
-  const workforce = supervision.digitalWorkforce ?? [];
+  const workforce = mergeHomeWorkforce(
+    supervision.digitalWorkforce ?? [],
+    viewModel?.bosEmployees ?? [],
+    businessId,
+  );
   const recentActivity = (supervision.recentActivity ?? []).slice(0, 8);
   const overview = supervision.businessOverview ?? [];
   const conversations = (supervision.conversations ?? []).slice(0, 6);
@@ -84,191 +109,477 @@ export default function OperatingHomeExperience() {
       inApp: Array.isArray(item.inApp) ? item.inApp.map(String) : [],
       external: Array.isArray(item.external) ? item.external.map(String) : [],
     }));
-  const subtitle = buildSubtitle({
+  const launch = buildCuratedLaunchMissions({
+    vertical: resolveVerticalFromScope(scope, viewModel, businessName),
+    businessId: businessId || null,
+    baseHref: base || null,
+    connectionStatuses: viewModel?.connectionStatuses ?? {},
+    proofRecords: viewModel?.proofRecords ?? {},
+    checklist: fullSetupChecklist,
+    connections: Array.isArray(viewModel?.connections) ? viewModel.connections : [],
+    knowledgeCount: Number(viewModel?.knowledgeCount ?? 0),
     businessName,
-    summary: supervision.operatingSummary,
-    waiting: waitingItems.length + approvalItems.length,
-    approvalCount: approvalItems.length
-      || workforce.filter((emp: any) => emp.status === "needs_approval").length,
-    platformIncomplete: setup.visible,
-    incompleteSetupCount: fullSetupChecklist.filter((item: any) => !item.complete).length,
-  });
+    smsSetup: viewModel?.smsSetup ?? null,
+    purchasedPackages: scope?.purchasedPackages ?? [],
+  } as any);
+  const launchMissions = launch.missions as LaunchMission[];
+  const entitledNavIds = resolveCanonicalNavIdsForPackages(scope?.purchasedPackages ?? []);
+  const navAllows = (id: string) => !entitledNavIds || entitledNavIds.has(id);
+  const isDeferred = (m: LaunchMission) =>
+    Boolean((m as { deferred?: boolean }).deferred) || String(m.status ?? "") === "deferred";
+  const isHardBlocked = (m: LaunchMission) => Boolean(m.blocked) && !isDeferred(m);
+  const setupIncomplete = Boolean(setup.visible) || launchMissions.some((m) => !m.complete && !isHardBlocked(m));
+  const completeCount = launchMissions.filter((m) => m.complete && !isHardBlocked(m)).length;
+  const actionableTotal = launchMissions.filter((m) => !isHardBlocked(m)).length || launchMissions.length;
+  const remainingSetup = Math.max(0, actionableTotal - completeCount);
 
+  const needsCount = waitingItems.length + approvalItems.length;
+  const nextSetup = fullSetupChecklist.find((item: any) => !item.complete)
+    ?? launchMissions.find((m) => !m.complete && !isHardBlocked(m) && !isDeferred(m))
+    ?? null;
+  const nextLabel = nextSetup
+    ? String((nextSetup as any).title ?? "")
+      .replace(/^Choose |^Connect |^Set up |^Add /i, "")
+      .replace(/ \(.*\)$/, "")
+    : null;
   const metrics = buildMetricCards({
     overview,
-    waiting: waitingItems.length + approvalItems.length,
+    waiting: needsCount,
     working: workingNow.length,
     wins: outcomes.length,
     team: workforce.length,
     base,
   });
 
+  const showSetupFirst = setupIncomplete && homeView !== "dashboard";
+
+  if (showSetupFirst) {
+    return (
+      <HomeCanvas>
+        <HomeHero greeting={greeting} />
+        <HomeViewToggle
+          mode="setup"
+          remainingSetup={remainingSetup}
+          totalSetup={actionableTotal}
+          onSelect={selectHomeView}
+        />
+        <LaunchCenter
+          businessName={businessName}
+          businessId={businessId || undefined}
+          missions={launchMissions}
+          verticalLabel={presentLaunchPathLabel({
+            purchasedPackages: scope?.purchasedPackages ?? [],
+            industry: resolveIndustryLabelFromScope(scope, viewModel),
+          }) ?? undefined}
+          liveFlags={viewModel?.liveFlags ?? {
+            business_email: true,
+            calendar: true,
+            sms_channel: true,
+            voice_channel: true,
+            meta_lead_ads: true,
+          }}
+        />
+      </HomeCanvas>
+    );
+  }
+
   return (
     <HomeCanvas>
-      <HomeHero greeting={greeting} subtitle={subtitle} />
+      <HomeHero greeting={greeting} />
 
-      {fullSetupChecklist.length ? (
-        <SetupChecklistBanner
-          businessName={businessName}
-          checklist={fullSetupChecklist}
+      <HomeViewToggle
+        mode="dashboard"
+        remainingSetup={remainingSetup}
+        totalSetup={actionableTotal}
+        onSelect={selectHomeView}
+        setupAvailable={setupIncomplete}
+      />
+
+      {businessId ? (
+        <CrmReportingStrip
+          businessId={businessId}
+          inboxHref={`${base}/inbox`}
+          calendarHref={`${base}/calendar`}
+          pipelinesHref={`${base}/pipelines`}
+          automationsHref={`${base}/automations`}
+          showCalendar={navAllows("calendar")}
+          showPipelines={navAllows("pipelines")}
+          showAutomations={navAllows("automations")}
         />
       ) : null}
 
-      <MetricStrip metrics={metrics} />
+      {setupIncomplete ? (
+        <SetupRemainingStrip
+          complete={completeCount}
+          total={actionableTotal}
+          remaining={remainingSetup}
+          nextLabel={nextLabel}
+          onBackToSetup={() => selectHomeView("setup")}
+        />
+      ) : nextSetup && nextLabel ? (
+        <NextBanner label={nextLabel} href={String((nextSetup as any).href ?? "#")} />
+      ) : null}
 
-      <DashGrid>
-        <DashCard title="What changed">
-          {!recentActivity.length ? (
-            <EmptyLine>Activity will show here as VIBETech works.</EmptyLine>
+      <SimpleMetrics
+        maxColumns={5}
+        items={metrics.map((metric) => ({
+          id: metric.id,
+          label: metric.label,
+          value: metric.value,
+        }))}
+      />
+
+      <div className="vt-home-panel-grid">
+        <SimplePanel
+          title="Needs you"
+          count={needsCount || null}
+          action={
+            needsCount && decisions.viewAllHref
+              ? <SimplePanelLink href={decisions.viewAllHref}>View all</SimplePanelLink>
+              : null
+          }
+        >
+          {!needsCount ? (
+            <SimpleEmptyLine>All clear.</SimpleEmptyLine>
           ) : (
-            recentActivity.map((entry: any, index: number) => (
-              <ActivityItem
+            <>
+              {approvalItems.slice(0, 4).map((item: any) => (
+                <SimpleRow
+                  key={item.id}
+                  title={item.title}
+                  meta={item.auditSummary || item.why || null}
+                  href={item.workHref || (item.actions?.[0]?.href ?? null)}
+                  trailing={rowAction("Review")}
+                />
+              ))}
+              {waitingItems.slice(0, 4).map((item: any) => (
+                <SimpleRow
+                  key={item.id}
+                  title={item.title}
+                  meta={item.detail}
+                  href={item.href}
+                  trailing={rowAction(item.actionLabel ?? "Open")}
+                />
+              ))}
+            </>
+          )}
+        </SimplePanel>
+
+        <SimplePanel
+          title="AI workforce"
+          count={workforce.length || null}
+          action={base ? <SimplePanelLink href={`${base}/team`}>Team</SimplePanelLink> : null}
+        >
+          {!workforce.length ? (
+            <SimpleEmptyLine>No AI teammates yet.</SimpleEmptyLine>
+          ) : (
+            workforce.slice(0, 6).map((emp: any) => (
+              <SimpleRow
+                key={emp.id}
+                title={emp.name}
+                meta={teammateAssignment(emp) || emp.responsibility || emp.role || null}
+                href={
+                  emp.specialtyHref
+                  || emp.detailHref
+                  || emp.runJobHref
+                  || (base ? `${base}/team` : null)
+                }
+                trailing={
+                  <span style={{ fontSize: 13, fontWeight: 700, color: teammateStatusColor(emp), whiteSpace: "nowrap" }}>
+                    {scrubInternalWording(emp.statusLabel || emp.status || "Active")}
+                  </span>
+                }
+              />
+            ))
+          )}
+        </SimplePanel>
+
+        <SimplePanel
+          title="Work queue"
+          count={workingNow.length || null}
+          action={base ? <SimplePanelLink href={`${base}/work`}>Work</SimplePanelLink> : null}
+        >
+          {!workingNow.length ? (
+            <SimpleEmptyLine>Nothing live — finish a launch mission to create work.</SimpleEmptyLine>
+          ) : (
+            workingNow.slice(0, 5).map((episode: any) => (
+              <SimpleRow
+                key={episode.id}
+                title={humanizeHomeDecisionTitle(episode.title)}
+                meta={[episode.relatedLabel, episode.currentStep].filter(Boolean).join(" · ") || null}
+                href={episode.openWorkHref}
+                trailing={episode.openWorkHref ? rowAction("Open") : null}
+              />
+            ))
+          )}
+        </SimplePanel>
+      </div>
+
+      {recentActivity.length || conversations.length || outcomes.length ? (
+        <div className="vt-home-panel-grid">
+          <SimplePanel title="What changed">
+            {(recentActivity.length ? recentActivity : outcomes).slice(0, 6).map((entry: any) => (
+              <SimpleRow
                 key={entry.id}
-                index={index}
                 title={humanizeHomeDecisionTitle(entry.title)}
                 meta={[entry.actorLabel, formatWhen(entry.timestamp)].filter(Boolean).join(" · ") || null}
                 href={entry.href}
+                trailing={entry.href ? rowAction("Open") : null}
               />
-            ))
-          )}
-        </DashCard>
-
-        <DashCard
-          title="Approvals"
-          count={approvalItems.length || null}
-          accent={approvalItems.length > 0}
-          action={
-            approvalItems.length && approvals.viewAllHref
-              ? <QuietLink href={approvals.viewAllHref}>View all</QuietLink>
-              : null
-          }
-        >
-          {!approvalItems.length ? (
-            <EmptyLine>{approvals.emptyTitle ?? "No outbound approvals waiting."}</EmptyLine>
-          ) : (
-            approvalItems.slice(0, 7).map((item: any) => (
-              <QueueRow
-                key={item.id}
-                title={item.title}
-                detail={item.auditSummary || item.why}
-                priority="critical"
-                when={item.requestedAt}
-                href={item.workHref || (item.actions?.[0]?.href ?? null)}
-                actionLabel="Review"
-              />
-            ))
-          )}
-        </DashCard>
-
-        <DashCard
-          title="Needs you"
-          count={waitingItems.length || null}
-          accent={waitingItems.length > 0}
-          action={
-            waitingItems.length && decisions.viewAllHref
-              ? <QuietLink href={decisions.viewAllHref}>View all</QuietLink>
-              : null
-          }
-        >
-          {!waitingItems.length ? (
-            <EmptyLine>Nothing needs your judgment right now.</EmptyLine>
-          ) : (
-            waitingItems.slice(0, 7).map((item) => (
-              <QueueRow
-                key={item.id}
-                title={item.title}
-                detail={item.detail}
-                priority={item.priority}
-                when={item.when}
-                href={item.href}
-                actionLabel={item.actionLabel}
-              />
-            ))
-          )}
-        </DashCard>
-
-        <DashCard
-          title="AI team"
-          count={workforce.length || null}
-          action={base ? <QuietLink href={`${base}/team`}>Open team</QuietLink> : null}
-        >
-          {!workforce.length ? (
-            <EmptyLine>AI teammates appear as work is assigned.</EmptyLine>
-          ) : (
-            workforce.slice(0, 6).map((emp: any) => (
-              <WorkforceRow
-                key={emp.id}
-                name={emp.name}
-                role={emp.responsibility || emp.role || null}
-                status={emp.statusLabel || emp.status || null}
-                statusId={emp.status}
-                assignment={teammateAssignment(emp)}
-                href={emp.askHref}
-                actionLabel={teammateActionLabel(emp)}
-              />
-            ))
-          )}
-        </DashCard>
-      </DashGrid>
-
-      <DashGrid>
-        <DashCard
-          title="In motion"
-          action={base ? <QuietLink href={`${base}/work`}>Open Work</QuietLink> : null}
-        >
-          {!workingNow.length ? (
-            <EmptyLine>No live situations right now.</EmptyLine>
-          ) : (
-            workingNow.slice(0, 6).map((episode: any) => (
-              <SituationRow
-                key={episode.id}
-                title={humanizeHomeDecisionTitle(episode.title)}
-                detail={[episode.relatedLabel, episode.currentStep].filter(Boolean).join(" · ") || null}
-                next={episode.nextStep}
-                href={episode.openWorkHref}
-                actionLabel={episode.openWorkHref ? "Open" : null}
-              />
-            ))
-          )}
-        </DashCard>
-
-        <DashCard
-          title="Conversations"
-          action={base ? <QuietLink href={`${base}/inbox`}>Open Inbox</QuietLink> : null}
-        >
-          {!conversations.length ? (
-            <EmptyLine>Recent conversations will appear here.</EmptyLine>
-          ) : (
-            conversations.map((entry: any) => (
-              <CommRow
-                key={entry.id}
-                title={humanizeHomeDecisionTitle(entry.person ?? entry.title ?? "Conversation")}
-                detail={entry.context ?? entry.direction ?? null}
-                status={entry.state ?? entry.direction ?? null}
-                when={null}
-                href={entry.href}
-                actionLabel={entry.actionNeeded || (entry.href ? "Open" : null)}
-              />
-            ))
-          )}
-        </DashCard>
-
-        <DashCard title="Today">
-          {!outcomes.length ? (
-            <EmptyLine>Wins land here as VIBETech finishes work.</EmptyLine>
-          ) : (
-            outcomes.map((item: any) => (
-              <ActivityItem
-                key={item.id}
-                title={humanizeHomeDecisionTitle(item.title)}
-                meta={[cleanResult(item.result), item.who].filter(Boolean).join(" · ") || null}
-                href={item.href}
-              />
-            ))
-          )}
-        </DashCard>
-      </DashGrid>
+            ))}
+          </SimplePanel>
+          {conversations.length ? (
+            <SimplePanel
+              title="Conversations"
+              action={base ? <SimplePanelLink href={`${base}/people`}>People</SimplePanelLink> : null}
+            >
+              {conversations.slice(0, 5).map((entry: any) => (
+                <SimpleRow
+                  key={entry.id ?? entry.title}
+                  title={humanizeHomeDecisionTitle(entry.title ?? entry.subject ?? "Conversation")}
+                  meta={entry.channel || entry.summary || null}
+                  href={entry.href ?? null}
+                  trailing={entry.href ? rowAction("Open") : null}
+                />
+              ))}
+            </SimplePanel>
+          ) : null}
+        </div>
+      ) : null}
     </HomeCanvas>
+  );
+}
+
+function HomeViewToggle({
+  mode,
+  remainingSetup,
+  totalSetup,
+  onSelect,
+  setupAvailable = true,
+}: {
+  mode: HomeViewMode;
+  remainingSetup: number;
+  totalSetup: number;
+  onSelect: (mode: HomeViewMode) => void;
+  setupAvailable?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 10,
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
+      <div style={{ display: "inline-flex", gap: 6, padding: 4, borderRadius: 999, background: "#fff", border: "1px solid rgba(15,23,42,.08)" }}>
+        <ToggleChip
+          active={mode === "setup"}
+          label={totalSetup > 0 ? `Setup ${Math.max(0, totalSetup - remainingSetup)}/${totalSetup}` : "Setup"}
+          onClick={() => onSelect("setup")}
+          disabled={!setupAvailable && mode === "dashboard"}
+        />
+        <ToggleChip
+          active={mode === "dashboard"}
+          label="Operating dashboard"
+          onClick={() => onSelect("dashboard")}
+        />
+      </div>
+      {mode === "setup" ? (
+        <button
+          type="button"
+          onClick={() => onSelect("dashboard")}
+          style={{
+            border: "1px solid rgba(15,118,110,.35)",
+            background: "#0f766e",
+            color: "#fff",
+            borderRadius: 999,
+            padding: "8px 14px",
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: "pointer",
+          }}
+        >
+          View operating dashboard
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function ToggleChip({
+  active,
+  label,
+  onClick,
+  disabled = false,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        border: "none",
+        borderRadius: 999,
+        padding: "8px 14px",
+        fontWeight: 700,
+        fontSize: 13,
+        cursor: disabled ? "default" : "pointer",
+        background: active ? "#0f172a" : "transparent",
+        color: active ? "#fff" : "#475569",
+        opacity: disabled ? 0.45 : 1,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function SetupRemainingStrip({
+  complete,
+  total,
+  remaining,
+  nextLabel,
+  onBackToSetup,
+}: {
+  complete: number;
+  total: number;
+  remaining: number;
+  nextLabel: string | null;
+  onBackToSetup: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onBackToSetup}
+      style={{
+        display: "flex",
+        width: "100%",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        textAlign: "left",
+        border: "1px solid rgba(15,118,110,.22)",
+        background: "linear-gradient(135deg, rgba(15,118,110,.10), rgba(255,255,255,.95))",
+        borderRadius: 16,
+        padding: "14px 16px",
+        cursor: "pointer",
+      }}
+    >
+      <div style={{ display: "grid", gap: 4 }}>
+        <strong style={{ fontSize: 14, color: "#0f172a" }}>
+          {complete}/{total} setup complete — {remaining} left
+        </strong>
+        <span style={{ fontSize: 13, color: "#64748b" }}>
+          {nextLabel ? `Next: ${nextLabel}` : "Finish setup to operate fully."}
+          {" · "}
+          Back to setup
+        </span>
+      </div>
+      <span style={{ fontWeight: 800, color: cockpitColors.accent, whiteSpace: "nowrap" }}>Open →</span>
+    </button>
+  );
+}
+
+function mergeHomeWorkforce(liveWorkforce: any[] = [], bosEmployees: any[] = [], businessId = "") {
+  const byId = new Map<string, any>();
+  for (const emp of Array.isArray(liveWorkforce) ? liveWorkforce : []) {
+    const id = String(emp?.id ?? emp?.employeeId ?? "").trim();
+    if (!id) continue;
+    byId.set(id, {
+      ...emp,
+      responsibility: presentTeammateHomeGlance({
+        purpose: emp.purpose,
+        responsibility: emp.responsibility,
+        role: emp.role,
+        description: emp.description,
+      }),
+    });
+  }
+  const base = businessId ? `/b/${businessId}` : "";
+  for (const emp of Array.isArray(bosEmployees) ? bosEmployees : []) {
+    const id = String(emp?.employeeId ?? emp?.id ?? "").trim();
+    if (!id || byId.has(id)) continue;
+    const specialtyHref = base ? `${base}/specialty/${encodeURIComponent(id)}` : null;
+    const glance = presentTeammateHomeGlance({
+      purpose: emp.purpose,
+      responsibility: emp.responsibility,
+      role: emp.role,
+      description: emp.description,
+    });
+    byId.set(id, {
+      id,
+      employeeId: id,
+      name: String(emp.label ?? emp.name ?? id),
+      responsibility: glance,
+      role: glance,
+      status: emp.packDefault ? "READY" : (emp.status ?? "READY"),
+      statusLabel: emp.packDefault ? "Pack teammate" : "Active",
+      specialtyHref,
+      detailHref: specialtyHref ?? (base ? `${base}/team` : null),
+      runJobHref: specialtyHref,
+      // Ask VIBETech is separate (Architect) — never the primary teammate link.
+      askHref: base ? `${base}/architect?employeeId=${encodeURIComponent(id)}` : null,
+    });
+  }
+  return [...byId.values()];
+}
+
+function rowAction(label: string) {
+  return (
+    <span style={{ fontSize: 13, fontWeight: 700, color: cockpitColors.accent, whiteSpace: "nowrap" }}>
+      {label} →
+    </span>
+  );
+}
+
+function teammateStatusColor(emp: any) {
+  if (emp.status === "needs_approval" || /needs your approval/i.test(String(emp.statusLabel ?? ""))) {
+    return cockpitColors.warning;
+  }
+  if (emp.status === "idle" || /standing by|idle/i.test(String(emp.statusLabel ?? emp.status ?? ""))) {
+    return cockpitColors.textMuted;
+  }
+  return cockpitColors.handled;
+}
+
+function resolveVerticalFromScope(scope: any, viewModel: any, businessName = ""): string {
+  const installationResult = viewModel?.productContext?.installationResult;
+  const operatingPackId = String(
+    scope?.installedBusinessOS?.operatingPackId
+    ?? installationResult?.configuration?.metadata?.operatingPackId
+    ?? installationResult?.operatingPackId
+    ?? installationResult?.metadata?.operatingPackId
+    ?? "",
+  );
+  const industry = String(
+    scope?.industry
+    ?? viewModel?.productContext?.identity?.industry
+    ?? viewModel?.productContext?.identity?.industryPackageId
+    ?? installationResult?.configuration?.businessProfile?.industry
+    ?? installationResult?.specification?.businessProfile?.industry
+    ?? "",
+  );
+  return resolveLaunchVertical({
+    operatingPackId,
+    industry,
+    businessName: businessName || String(scope?.businessName ?? ""),
+  });
+}
+
+function resolveIndustryLabelFromScope(scope: any, viewModel: any): string {
+  return String(
+    scope?.industry
+    ?? viewModel?.productContext?.identity?.industry
+    ?? viewModel?.productContext?.identity?.industryDisplayName
+    ?? viewModel?.productContext?.installationResult?.configuration?.businessProfile?.industry
+    ?? "",
   );
 }
 

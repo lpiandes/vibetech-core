@@ -5,17 +5,15 @@ import { useMemo, useState } from "react";
 import { ChevronRight, Search } from "lucide-react";
 
 import PageHeader from "@/components/product/PageHeader";
+import { SimpleEmpty, SimplePanel, simplePageStyle } from "@/components/product/SimpleUI";
 import StatusBadge from "@/components/product/StatusBadge";
 import EntityAvatar from "@/components/shell/EntityAvatar";
-import ShellMetricStrip from "@/components/shell/ShellMetricStrip";
-import ShellPanel from "@/components/shell/ShellPanel";
 import RelationshipFollowUpQueue from "@/components/people/RelationshipFollowUpQueue";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { useWorkspaceNavigation } from "@/components/workspace/WorkspaceNavigationContext";
 import type { EngagementPartyIndexViewModel } from "@/lib/workspace/EngagementTypes";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 import {
-  activitySummary,
   contactLine,
   derivePeopleCounts,
   filterPeople,
@@ -28,21 +26,6 @@ import {
   type PeopleFilterDefinition,
   type PeopleIndexItem,
 } from "./peopleSemantics";
-
-function PanelEmpty({ description }: { description: string }) {
-  return (
-    <div
-      style={{
-        padding: spacing.md,
-        color: cockpitColors.textMuted,
-        fontSize: typography.caption.fontSize,
-        lineHeight: 1.5,
-      }}
-    >
-      {description}
-    </div>
-  );
-}
 
 function SubjectChip({ name, href }: { name: string; href: string | null }) {
   const chip = (
@@ -129,8 +112,10 @@ function PersonRow({
   const href = party.href ?? (party.partyId ? `/b/${businessId}/people/${party.partyId}` : null);
   const relationships = relationshipText(party);
   const contact = contactLine(party);
-  const summary = activitySummary(party);
-  const subjectHref = party.primarySubjectId ? `/b/${businessId}/properties/${party.primarySubjectId}` : null;
+  const meta = contact || relationships;
+  // A linked record might be a patient, player, team, or another business
+  // object. Do not send a universal People screen into the legacy property UI.
+  const subjectHref = null;
   const showAttention = needsAttention(party);
 
   const rowBody = (
@@ -146,19 +131,8 @@ function PersonRow({
               <SubjectChip name={String(party.primarySubjectName)} href={subjectHref} />
             ) : null}
           </div>
-          {contact ? (
-            <div style={{ marginTop: 2, fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary }}>{contact}</div>
-          ) : null}
-          {relationships ? (
-            <div style={{ marginTop: 2, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>{relationships}</div>
-          ) : null}
-          {party.nextActionTitle ? (
-            <div style={{ marginTop: 2, fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary }}>
-              Next: {party.nextActionTitle}
-            </div>
-          ) : null}
-          {summary ? (
-            <div style={{ marginTop: 2, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>{summary}</div>
+          {meta ? (
+            <div style={{ marginTop: 2, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>{meta}</div>
           ) : null}
         </div>
       </div>
@@ -215,16 +189,6 @@ export default function PeopleExecutiveLayout({ index }: { index: EngagementPart
 
   const counts = useMemo(() => derivePeopleCounts(index.parties, peopleFilters), [index.parties, peopleFilters]);
 
-  const metricStrip = useMemo(
-    () => [
-      { id: "total", label: "Total people", value: String(counts.totalPeople) },
-      { id: "prospects", label: "Prospects", value: String(counts.prospects) },
-      { id: "open_work", label: "With open work", value: String(counts.withOpenWork) },
-      { id: "property_interest", label: "With property interest", value: String(counts.withPropertyInterest) },
-    ],
-    [counts],
-  );
-
   const visiblePeople = useMemo(() => {
     const searched = searchPeople(index.parties, query);
     const filtered = filterPeople(searched, filter, peopleFilters);
@@ -233,19 +197,14 @@ export default function PeopleExecutiveLayout({ index }: { index: EngagementPart
 
   const activeFilterLabel = peopleFilters.find((entry) => entry.id === filter)?.label ?? "this filter";
   const emptyCopy = query
-    ? "No people match your search."
+    ? "No matches."
     : filter === "all"
-      ? "Residents, prospects, owners, and vendors will appear here as VIBETech tracks relationships."
-      : `No contacts match ${activeFilterLabel.toLowerCase()}.`;
+      ? "No people yet."
+      : `No ${activeFilterLabel.toLowerCase()}.`;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>
-      <PageHeader
-        title="People"
-        description="Contacts and relationships VIBETech is tracking for this business."
-      />
-
-      <ShellMetricStrip metrics={metricStrip} />
+    <div style={simplePageStyle}>
+      <PageHeader title="People" />
 
       <RelationshipFollowUpQueue
         businessId={businessId}
@@ -268,7 +227,7 @@ export default function PeopleExecutiveLayout({ index }: { index: EngagementPart
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search by name, contact, relationship, or property"
+          placeholder="Search people"
           aria-label="Search people"
           style={{
             width: "100%",
@@ -281,13 +240,12 @@ export default function PeopleExecutiveLayout({ index }: { index: EngagementPart
         />
       </div>
 
-      <ShellPanel
-        title="People and relationships"
-        subtitle={`${counts.totalPeople} contact${counts.totalPeople === 1 ? "" : "s"}`}
+      <SimplePanel
+        title="People"
         action={<FilterChips active={filter} counts={counts.filters} filters={peopleFilters} onSelect={setFilter} />}
       >
         {visiblePeople.length === 0 ? (
-          <PanelEmpty description={emptyCopy} />
+          <SimpleEmpty>{emptyCopy}</SimpleEmpty>
         ) : (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {visiblePeople.map((party) => (
@@ -300,7 +258,7 @@ export default function PeopleExecutiveLayout({ index }: { index: EngagementPart
             ))}
           </div>
         )}
-      </ShellPanel>
+      </SimplePanel>
     </div>
   );
 }

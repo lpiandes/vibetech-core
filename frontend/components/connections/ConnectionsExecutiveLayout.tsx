@@ -6,21 +6,19 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useConnectionsViewModel } from "./ConnectionsContext";
 import IntegrationSetupDialog from "./IntegrationSetupDialog";
 import { getIntegrationDisplay } from "./integrationDisplay";
-import { buildPathWithoutFocus, shouldOpenIntegrationFromFocus } from "@/lib/connections/integrationFocusRouting.js";
+import { buildPathWithoutFocus, resolveOAuthReturnPath, shouldOpenIntegrationFromFocus } from "@/lib/connections/integrationFocusRouting.js";
 import PageHeader from "@/components/product/PageHeader";
 import PrimaryButton from "@/components/product/PrimaryButton";
+import { NextBanner, SimpleEmpty, SimplePanel, simplePageStyle } from "@/components/product/SimpleUI";
 import StatusBadge from "@/components/product/StatusBadge";
-import ShellMetricStrip from "@/components/shell/ShellMetricStrip";
-import ShellPanel from "@/components/shell/ShellPanel";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
+import { useOptionalBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import {
   connectionStatusPresentation,
-  deriveIntegrationMetrics,
   hasRealConnectAction,
   mergeIntegrationDisplay,
   partitionIntegrationSections,
   primaryIntegrationAction,
-  requirementLevelLabel,
   setupBlockerSummary,
   type ConnectionViewRow,
   type IntegrationsPresentation,
@@ -31,36 +29,33 @@ function safeArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
-function PanelEmpty({ description }: { description: string }) {
-  return (
-    <div style={{ padding: spacing.md, color: cockpitColors.textMuted, fontSize: typography.caption.fontSize, lineHeight: 1.5 }}>
-      {description}
-    </div>
-  );
-}
-
 function IntegrationRow({
   conn,
   display,
   presentation,
+  businessId,
   onAction,
+  onProve,
+  proving,
 }: {
   conn: ConnectionViewRow;
   display: IntegrationDisplay;
   presentation: IntegrationsPresentation;
+  businessId?: string;
   onAction: (display: IntegrationDisplay) => void;
+  onProve?: (action: string, capabilityId: string) => void;
+  proving?: boolean;
 }) {
   const Icon = display.icon;
   const status = connectionStatusPresentation(String(conn.status ?? ""), presentation);
   const action = primaryIntegrationAction(conn, display);
   const blocker = setupBlockerSummary(conn, display);
-  const requirement = requirementLevelLabel(String(conn.requirementLevel ?? ""), presentation);
 
   return (
     <div
       style={{
         display: "flex",
-        alignItems: "flex-start",
+        alignItems: "center",
         gap: spacing.md,
         padding: spacing.md,
         borderBottom: `1px solid ${cockpitColors.panelBorder}`,
@@ -85,35 +80,18 @@ function IntegrationRow({
         <div style={{ display: "flex", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" }}>
           <div style={{ fontWeight: 650, color: cockpitColors.textPrimary }}>{display.title}</div>
           <StatusBadge label={status.label} tone={status.tone} />
-          {String(conn.requirementLevel ?? "").toLowerCase() === "required" ? (
-            <StatusBadge label={requirement} tone="warning" />
-          ) : null}
         </div>
-        <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, marginTop: 4, lineHeight: 1.45 }}>
-          {display.description}
-        </div>
-        {conn.unlockMessage ? (
-          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.accent, marginTop: 6 }}>
-            {conn.unlockMessage}
-          </div>
-        ) : display.unlocks ? (
-          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 6 }}>
-            Unlocks: {display.unlocks}
-          </div>
-        ) : null}
-        {conn.healthLabel || conn.healthDetail ? (
-          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, marginTop: 6 }}>
-            Health: {conn.healthLabel ?? conn.health?.level ?? "Unknown"}
-            {conn.healthDetail ? ` · ${conn.healthDetail}` : ""}
-          </div>
-        ) : null}
         {blocker ? (
-          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, marginTop: 6 }}>
+          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 4 }}>
             {blocker}
           </div>
         ) : null}
       </div>
-      {action ? (
+      {action?.kind === "prove" && onProve && businessId ? (
+        <PrimaryButton onClick={() => onProve(action.proveAction!, action.capabilityId!)} disabled={proving}>
+          {proving ? "Proving…" : action.label}
+        </PrimaryButton>
+      ) : action ? (
         <PrimaryButton onClick={() => onAction(display)}>
           {action.label}
         </PrimaryButton>
@@ -124,6 +102,8 @@ function IntegrationRow({
 
 export default function ConnectionsExecutiveLayout() {
   const vm = useConnectionsViewModel();
+  const scope = useOptionalBusinessScope();
+  const businessId = String(scope?.businessId ?? vm?.businessId ?? "");
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
@@ -134,10 +114,72 @@ export default function ConnectionsExecutiveLayout() {
   const liveFlags = (vm?.liveFlags ?? presentation.liveFlags ?? {}) as IntegrationsPresentation["liveFlags"];
   const presentationWithFlags: IntegrationsPresentation = { ...presentation, liveFlags };
   const [setupTarget, setSetupTarget] = useState<IntegrationDisplay | null>(null);
+  const [provingId, setProvingId] = useState<string | null>(null);
+  const [proveMessage, setProveMessage] = useState<string | null>(null);
   const consumedFocusRef = useRef<string | null>(null);
   const connectError = searchParams.get("error");
   const justConnected = searchParams.get("connected") === "1";
+  const connectErrorMessage = useMemo(() => {
+    if (!connectError) return null;
+    if (connectError === "access_denied") {
+      return null; // rendered as rich banner below
+    }
+    if (connectError === "missing_refresh_token") {
+      return "Google did not return a reusable connection. Try again, approve the requested access, and choose the intended customer inbox.";
+    }
+    return `Could not finish connecting: ${connectError}`;
+  }, [connectError]);
 
+  const [localConnecting, setLocalConnecting] = useState(false);
+
+  async function connectEmailLocally() {
+    if (!businessId) return;
+    setLocalConnecting(true);
+    try {
+      const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/integrations/business-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "dev" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setProveMessage(String(data.error ?? "Could not connect email locally."));
+        return;
+      }
+      router.replace(`/b/${businessId}/integrations?connected=1&focus=business_email`);
+      router.refresh();
+    } catch (err) {
+      setProveMessage(err instanceof Error ? err.message : "Local connect failed.");
+    } finally {
+      setLocalConnecting(false);
+    }
+  }
+
+  const runProve = useCallback(
+    async (action: string, capabilityId: string) => {
+      if (!businessId) return;
+      setProvingId(capabilityId);
+      setProveMessage(null);
+      try {
+        const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/integrations/prove`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, capabilityId, outboundApproved: true }),
+        });
+        const body = await res.json().catch(() => ({}));
+        const ok = Boolean(body?.result?.ok);
+        setProveMessage(ok ? (body?.result?.message ?? "Proven.") : (body?.result?.message ?? "Prove failed."));
+        if (ok) {
+          router.refresh();
+        }
+      } catch (err) {
+        setProveMessage(err instanceof Error ? err.message : "Prove failed.");
+      } finally {
+        setProvingId(null);
+      }
+    },
+    [businessId, router],
+  );
   const resolveDisplay = useCallback(
     (conn: ConnectionViewRow) =>
       mergeIntegrationDisplay(
@@ -153,9 +195,9 @@ export default function ConnectionsExecutiveLayout() {
     () => partitionIntegrationSections(connections, resolveDisplay, liveFlags ?? {}),
     [connections, resolveDisplay, liveFlags],
   );
-  const metrics = useMemo(
-    () => deriveIntegrationMetrics(connections, presentationWithFlags).metrics,
-    [connections, presentationWithFlags],
+  const nextRequired = useMemo(
+    () => sections.required.find(({ conn }) => connectionStatusPresentation(String(conn.status ?? ""), presentationWithFlags).label !== "Connected") ?? null,
+    [sections.required, presentationWithFlags],
   );
 
   const dismissSetupDialog = useCallback(() => {
@@ -164,6 +206,27 @@ export default function ConnectionsExecutiveLayout() {
       router.replace(buildPathWithoutFocus(pathname, searchParams), { scroll: false });
     }
   }, [pathname, router, searchParams]);
+
+  // After OAuth: never reopen the modal; send people back where they started (usually Home).
+  useEffect(() => {
+    if (!justConnected) return;
+    setSetupTarget(null);
+    const returnTo = searchParams.get("returnTo");
+    if (returnTo) {
+      const safe = resolveOAuthReturnPath(returnTo, "");
+      if (safe) {
+        const dest = `${safe}${safe.includes("?") ? "&" : "?"}connected=1`;
+        router.replace(dest);
+        return;
+      }
+    }
+    if (searchParams.get("focus")) {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("focus");
+      const query = next.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    }
+  }, [justConnected, pathname, router, searchParams]);
 
   useEffect(() => {
     const focus = searchParams.get("focus");
@@ -178,6 +241,7 @@ export default function ConnectionsExecutiveLayout() {
       setupTarget,
       consumedFocus: consumedFocusRef.current,
       primary,
+      justConnected,
       isConnected: (status: string) => connectionStatusPresentation(status, presentationWithFlags).label === "Connected",
     });
 
@@ -185,20 +249,40 @@ export default function ConnectionsExecutiveLayout() {
       consumedFocusRef.current = focus;
       setSetupTarget(display);
     }
-  }, [searchParams, sections.required, sections.available, setupTarget, presentationWithFlags]);
+  }, [searchParams, sections.required, sections.available, setupTarget, presentationWithFlags, justConnected]);
 
-  const emptyRequired = presentationWithFlags.emptyStates?.required;
-  const emptyConnected = presentationWithFlags.emptyStates?.connected;
-  const emptyAvailable = presentationWithFlags.emptyStates?.available;
+  const emptyRequired = presentationWithFlags.emptyStates?.required ?? "Nothing required yet.";
+  const emptyConnected = presentationWithFlags.emptyStates?.connected ?? "Nothing connected yet.";
+  const emptyAvailable = presentationWithFlags.emptyStates?.available ?? "Nothing available yet.";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>
-      <PageHeader
-        title="Connections"
-        description="Connect what you already pay for. Operate everything important here — credentials survive restart via durable vault."
-      />
+    <div style={simplePageStyle}>
+      <PageHeader title="Connections" />
 
-      {connectError ? (
+      {connectError === "access_denied" ? (
+        <div
+          style={{
+            padding: spacing.md,
+            borderRadius: radius.medium,
+            border: "1px solid #fcd34d",
+            backgroundColor: "#fffbeb",
+            color: "#92400e",
+            fontSize: typography.caption.fontSize,
+            lineHeight: 1.55,
+            display: "grid",
+            gap: spacing.sm,
+          }}
+        >
+          <div style={{ fontWeight: 750, fontSize: 15 }}>Google access denied</div>
+          <div>Add a test user in Google Cloud, or connect locally.</div>
+          <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap", alignItems: "center" }}>
+            <PrimaryButton onClick={() => void connectEmailLocally()} disabled={localConnecting}>
+              {localConnecting ? "…" : "Connect email here"}
+            </PrimaryButton>
+          </div>
+        </div>
+      ) : null}
+      {connectErrorMessage ? (
         <div
           style={{
             padding: spacing.md,
@@ -210,7 +294,7 @@ export default function ConnectionsExecutiveLayout() {
             lineHeight: 1.5,
           }}
         >
-          Could not finish connecting: {connectError}
+          {connectErrorMessage}
         </div>
       ) : null}
       {justConnected ? (
@@ -225,15 +309,36 @@ export default function ConnectionsExecutiveLayout() {
             lineHeight: 1.5,
           }}
         >
-          Connected. You can disconnect and reconnect anytime from this page.
+          Connected. Prove it works next.
+        </div>
+      ) : null}
+      {proveMessage ? (
+        <div
+          style={{
+            padding: spacing.md,
+            borderRadius: radius.medium,
+            border: `1px solid rgba(15,118,110,.25)`,
+            backgroundColor: "#f0fdfa",
+            color: "#0f766e",
+            fontSize: typography.caption.fontSize,
+            lineHeight: 1.5,
+          }}
+        >
+          {proveMessage}
         </div>
       ) : null}
 
-      <ShellMetricStrip metrics={metrics} />
+      {nextRequired ? (
+        <NextBanner
+          label={nextRequired.display.title}
+          onClick={() => setSetupTarget(nextRequired.display)}
+          actionLabel="Connect →"
+        />
+      ) : null}
 
-      <ShellPanel title="Required connections" subtitle={`${sections.required.length} required`}>
+      <SimplePanel title="Required">
         {sections.required.length === 0 ? (
-          <PanelEmpty description={emptyRequired ?? "Required connections will appear here once VIBETech knows what this business needs."} />
+          <SimpleEmpty>{emptyRequired}</SimpleEmpty>
         ) : (
           <div>
             {sections.required.map(({ conn, display }) => (
@@ -242,16 +347,19 @@ export default function ConnectionsExecutiveLayout() {
                 conn={conn}
                 display={display}
                 presentation={presentationWithFlags}
+                businessId={businessId}
                 onAction={setSetupTarget}
+                onProve={runProve}
+                proving={provingId === display.id || provingId != null && provingId.includes(display.id)}
               />
             ))}
           </div>
         )}
-      </ShellPanel>
+      </SimplePanel>
 
-      <ShellPanel title="Connected systems" subtitle={`${sections.connected.length} connected`}>
+      <SimplePanel title="Connected">
         {sections.connected.length === 0 ? (
-          <PanelEmpty description={emptyConnected ?? "Connected systems will appear here once setup is complete."} />
+          <SimpleEmpty>{emptyConnected}</SimpleEmpty>
         ) : (
           <div>
             {sections.connected.map(({ conn, display }) => (
@@ -260,16 +368,19 @@ export default function ConnectionsExecutiveLayout() {
                 conn={conn}
                 display={display}
                 presentation={presentationWithFlags}
+                businessId={businessId}
                 onAction={setSetupTarget}
+                onProve={runProve}
+                proving={Boolean(provingId)}
               />
             ))}
           </div>
         )}
-      </ShellPanel>
+      </SimplePanel>
 
-      <ShellPanel title="Available now" subtitle={`${sections.available.length} available`}>
+      <SimplePanel title="Available">
         {sections.available.length === 0 ? (
-          <PanelEmpty description={emptyAvailable ?? "Additional integrations will appear here when they can actually connect for this business."} />
+          <SimpleEmpty>{emptyAvailable}</SimpleEmpty>
         ) : (
           <div>
             {sections.available.map(({ conn, display }) => (
@@ -278,12 +389,15 @@ export default function ConnectionsExecutiveLayout() {
                 conn={conn}
                 display={display}
                 presentation={presentationWithFlags}
+                businessId={businessId}
                 onAction={setSetupTarget}
+                onProve={runProve}
+                proving={Boolean(provingId)}
               />
             ))}
           </div>
         )}
-      </ShellPanel>
+      </SimplePanel>
 
       {setupTarget ? (
         <IntegrationSetupDialog
@@ -292,6 +406,7 @@ export default function ConnectionsExecutiveLayout() {
             const match = [...sections.required, ...sections.available].find(({ display }) => display.id === setupTarget.id);
             return match ? hasRealConnectAction(match.conn, match.display) : false;
           })()}
+          returnTo={searchParams.get("returnTo")}
           onClose={dismissSetupDialog}
         />
       ) : null}

@@ -122,6 +122,21 @@ test("Architect recommendations include reason confidence evidence alternatives 
   assert.ok(result.integrations.every((entry) => Array.isArray(entry.benefits)));
 });
 
+test("planned growth channels stay selectable but cannot look connected", () => {
+  const result = new IntegrationHubEngine().recommendIntegrations({
+    businessSummary: { industry: "dental" },
+    businessId: "biz_dental",
+  });
+
+  for (const providerId of ["google_ads", "google_search_console", "meta_ads"]) {
+    const recommendation = result.recommendations.find((entry) => entry.payload?.provider?.providerId === providerId);
+    assert.ok(recommendation, providerId);
+    assert.equal(recommendation.selected, false, providerId);
+    assert.equal(recommendation.payload.provider.status, "planned", providerId);
+    assert.match(recommendation.reason, /not live until/i, providerId);
+  }
+});
+
 test("capability resolution prefers capabilities over provider-specific logic", () => {
   const result = new IntegrationHubEngine().recommendIntegrations({
     businessSummary: { industry: "default" },

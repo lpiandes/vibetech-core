@@ -4,6 +4,8 @@
  * map into Home / Needs Attention / People without competing in the main nav.
  */
 
+import { filterCanonicalNavForPurchasedPackages } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
+
 export type CanonicalNavItem = {
   id: string;
   label: string;
@@ -31,8 +33,12 @@ const CANONICAL_ORDER: Array<{
     permission: null,
     badgeKey: "needsAttention",
   },
+  { id: "calendar", label: "Calendar", path: "calendar", iconName: "calendar", permission: "people.view" },
   { id: "people", label: "People", path: "people", iconName: "users", permission: "people.view" },
+  { id: "pipelines", label: "Pipelines", path: "pipelines", iconName: "kanban", permission: "people.view" },
   { id: "work", label: "Work", path: "work", iconName: "inbox", permission: "work.view" },
+  { id: "inbox", label: "Inbox", path: "inbox", iconName: "mail", permission: "work.view" },
+  { id: "campaigns", label: "Campaigns", path: "campaigns", iconName: "mail", permission: "work.view" },
   {
     id: "subjects",
     label: "Properties",
@@ -42,6 +48,13 @@ const CANONICAL_ORDER: Array<{
   },
   { id: "knowledge", label: "Knowledge", path: "knowledge", iconName: "book", permission: null },
   { id: "team", label: "Team", path: "team", iconName: "users", permission: "team.manage" },
+  {
+    id: "automations",
+    label: "Automations",
+    path: "automations",
+    iconName: "zap",
+    permission: "team.manage",
+  },
   {
     id: "integrations",
     label: "Integrations",
@@ -87,11 +100,36 @@ export function getCanonicalBusinessNav(
   options?: {
     role?: string;
     subjectLabel?: string;
+    /**
+     * The installed Business OS is the source of truth for vertical-only
+     * surfaces.  In particular, a non-property business must never receive
+     * the property portfolio simply because it uses BusinessSubject records.
+     */
+    installedModuleIds?: string[] | null;
     specialtyModules?: SpecialtyNavSource[] | null;
+    /** Commercial SKUs — thin packages hide Calendar/Team/Automations etc. */
+    purchasedPackages?: string[] | null;
   },
 ): CanonicalNavItem[] {
   const base = `/b/${encodeURIComponent(businessId)}`;
-  const canonical = CANONICAL_ORDER.filter((item) => hasPermission(permissions ?? [], item.permission, options?.role)).map(
+  const installedModuleIds = Array.isArray(options?.installedModuleIds)
+    ? new Set(options!.installedModuleIds.map(String))
+    : null;
+  // Legacy property portfolios are opt-in only. A missing or incomplete
+  // installation must never make a new dental or sports workspace look like
+  // a property-management product.
+  const hasPropertyPortfolio = installedModuleIds?.has("properties") === true;
+  const permissionFiltered = CANONICAL_ORDER.filter((item) => (
+    hasPermission(permissions ?? [], item.permission, options?.role)
+    && (item.id !== "subjects" || hasPropertyPortfolio)
+  ));
+  const packageFiltered = filterCanonicalNavForPurchasedPackages(
+    permissionFiltered,
+    options?.purchasedPackages ?? [],
+  );
+  const allowSpecialtyTeammates = !options?.purchasedPackages?.length
+    || packageFiltered.some((item) => item.id === "team");
+  const canonical = packageFiltered.map(
     (item) => ({
       id: item.id,
       label: item.id === "subjects" ? options?.subjectLabel ?? "Properties" : item.label,
@@ -104,6 +142,7 @@ export function getCanonicalBusinessNav(
 
   const specialty = (Array.isArray(options?.specialtyModules) ? options!.specialtyModules! : [])
     .filter((module) => {
+      if (!allowSpecialtyTeammates) return false;
       if (module.primaryNavigationEligible === false) return false;
       const id = String(module.moduleId ?? "");
       const isSpecialty = Boolean(
@@ -173,4 +212,5 @@ export const CANONICAL_REDIRECTS: Record<string, string> = {
   performance: "home",
   analytics: "home",
   "digital-workforce": "team",
+  // Keep legacy automations→integrations redirect out — Automations is first-class now.
 };

@@ -9,7 +9,16 @@ export function isPublicPath(pathname: string): boolean {
     || pathname.startsWith("/favicon")
     || pathname.startsWith("/api/auth")
     || pathname === "/api/health"
+    // Cron / worker backup — authorized inside the route via CRON_SECRET.
+    || pathname === "/api/platform/jobs/tick"
   ) {
+    return true;
+  }
+  // Public intake surfaces (Meta signature / form rate-limit enforced in-route).
+  if (/^\/api\/businesses\/[^/]+\/integrations\/meta\/webhook\/?$/.test(pathname)) {
+    return true;
+  }
+  if (/^\/api\/businesses\/[^/]+\/forms\/submit\/?$/.test(pathname)) {
     return true;
   }
   if (pathname === "/login" || pathname.startsWith("/invite/") || pathname.startsWith("/api/invite/")) {
@@ -36,6 +45,7 @@ export function sanitizeCallbackUrl(value: string | null | undefined, fallback =
 }
 
 export function requiresPlatformAdmin(pathname: string): boolean {
+  if (pathname === "/api/platform/jobs/tick") return false;
   return pathname.startsWith("/admin") || pathname.startsWith("/platform") || pathname.startsWith("/api/admin")
     || pathname.startsWith("/api/platform") || pathname.startsWith("/api/dev/");
 }

@@ -6,6 +6,7 @@ import { isLikelyAutomatedTestBusiness } from "../../../../../backend/core/platf
 import { MEMBERSHIP_ROLES } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { requirePlatformAdminApi } from "@/lib/platform/requirePlatformAdmin";
 import { authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
+import { normalizePurchasedPackages } from "../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
 async function ownerInviteEmail(businessId: string) {
   const pending = await platformStore.listPendingInvitationsForBusiness(businessId);
@@ -16,7 +17,7 @@ async function ownerInviteEmail(businessId: string) {
 export async function GET() {
   try {
     await requirePlatformAdminApi();
-    const businesses = await platformStore.listBusinesses();
+    const businesses = await platformStore.listBusinesses({ includeArchived: false });
     const rows = await Promise.all(
       businesses.map(async (b: { id: string; name: string; kind: string }) => {
         const inviteEmail = await ownerInviteEmail(b.id);
@@ -48,14 +49,22 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const name = String(body?.name ?? "").trim();
     const ownerEmail = String(body?.ownerEmail ?? "").trim().toLowerCase();
+    const purchasedPackages = normalizePurchasedPackages(body?.purchasedPackages);
     if (!name || !ownerEmail) {
       return NextResponse.json({ error: "Business name and owner email are required." }, { status: 400 });
+    }
+    if (!purchasedPackages.length) {
+      return NextResponse.json(
+        { error: "Select at least one purchased package from the sales sheet." },
+        { status: 400 },
+      );
     }
 
     const result = await createBusinessWithOwnerInvite({
       name,
       ownerEmail,
       createdByUserId: admin.id,
+      purchasedPackages,
     });
 
     return NextResponse.json(

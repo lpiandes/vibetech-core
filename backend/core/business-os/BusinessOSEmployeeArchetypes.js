@@ -8,7 +8,7 @@ export const BUSINESS_OS_EMPLOYEE_ARCHETYPES = deepFreeze([
   { archetypeId: "coordinator", label: "Coordinator", purpose: "Coordinate intake and operating loops." },
   { archetypeId: "follow_up_specialist", label: "Follow-up specialist", purpose: "Drive relationship and operational follow-up." },
   { archetypeId: "intake_specialist", label: "Intake specialist", purpose: "Qualify and route incoming requests." },
-  { archetypeId: "ai_caller", label: "AI Caller", purpose: "Prepare and run call scripts for outreach and follow-up — owner approves outbound customer contact." },
+  { archetypeId: "ai_caller", label: "Voice Call Assistant", purpose: "Prepares approved call scripts and call work. Live conversations require a configured Twilio Voice agent." },
   { archetypeId: "facebook_lead_specialist", label: "Facebook Lead Generator", purpose: "Qualify and route Facebook / Meta leads into intake work for owner review." },
   { archetypeId: "researcher", label: "Researcher", purpose: "Gather and summarize evidence." },
   { archetypeId: "reviewer", label: "Reviewer", purpose: "Prepare reviewable drafts and checks." },

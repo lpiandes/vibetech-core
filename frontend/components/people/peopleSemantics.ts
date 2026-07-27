@@ -44,10 +44,8 @@ export type PeopleNextAction = {
 const LEGACY_FILTER_OPTIONS: PeopleFilterDefinition[] = [
   { id: "all", label: "All", predicate: { type: "all" } },
   { id: "prospects", label: "Prospects", predicate: { type: "hasActiveRelationship", types: ["PROSPECT"] } },
-  { id: "owners", label: "Owners", predicate: { type: "hasActiveRelationship", types: ["OWNER"] } },
-  { id: "residents", label: "Residents", predicate: { type: "hasActiveRelationship", types: ["RESIDENT"] } },
   { id: "with_open_work", label: "With open work", predicate: { type: "openWork" } },
-  { id: "with_property_interest", label: "With property interest", predicate: { type: "propertyInterest" } },
+  { id: "with_linked_records", label: "With linked records", predicate: { type: "subjectLink" } },
 ];
 
 function safeArray<T>(value: unknown): T[] {
@@ -100,7 +98,7 @@ export function evaluatePeopleFilterPredicate({
     return Number(partyRow.openWorkCount ?? 0) > 0;
   }
 
-  if (type === "propertyInterest") {
+  if (type === "subjectLink" || type === "propertyInterest") {
     return Number(partyRow.subjectCount ?? 0) > 0 || Boolean(partyRow.primarySubjectName);
   }
 
@@ -161,7 +159,7 @@ export function derivePeopleCounts(parties: unknown, peopleFilters: unknown) {
     totalPeople: rows.length,
     prospects: filterPeople(rows, "prospects", filters).length,
     withOpenWork: filterPeople(rows, "with_open_work", filters).length,
-    withPropertyInterest: filterPeople(rows, "with_property_interest", filters).length,
+    withLinkedRecords: filterPeople(rows, "with_linked_records", filters).length,
     filters: counts,
   };
 }

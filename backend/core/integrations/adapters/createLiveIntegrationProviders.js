@@ -1,8 +1,11 @@
 import { GmailIntegrationAdapter } from "./GmailIntegrationAdapter.js";
 import { GoogleCalendarIntegrationAdapter } from "./GoogleCalendarIntegrationAdapter.js";
+import { GoogleSearchConsoleIntegrationAdapter } from "./GoogleSearchConsoleIntegrationAdapter.js";
+import { GoogleAdsIntegrationAdapter } from "./GoogleAdsIntegrationAdapter.js";
 import { TwilioSmsIntegrationAdapter, isTwilioSmsConfigured } from "./TwilioSmsIntegrationAdapter.js";
 import { TwilioVoiceIntegrationAdapter, isTwilioVoiceConfigured } from "./TwilioVoiceIntegrationAdapter.js";
 import { MetaLeadAdsIntegrationAdapter, isMetaLeadAdsConfigured } from "./MetaLeadAdsIntegrationAdapter.js";
+import { MetaAdsIntegrationAdapter } from "./MetaAdsIntegrationAdapter.js";
 import { isGoogleOAuthAppConfigured } from "../oauth/GoogleOAuthClient.js";
 
 /**
@@ -19,11 +22,14 @@ export function createLiveIntegrationProviders({
   if (force || isGoogleOAuthAppConfigured()) {
     providers.push(new GmailIntegrationAdapter({ nowISO }));
     providers.push(new GoogleCalendarIntegrationAdapter({ nowISO }));
+    providers.push(new GoogleSearchConsoleIntegrationAdapter({ nowISO }));
   }
   // Always register Twilio / Meta — credentials come from vault on connect.
   providers.push(new TwilioSmsIntegrationAdapter({ nowISO }));
   providers.push(new TwilioVoiceIntegrationAdapter({ nowISO }));
   providers.push(new MetaLeadAdsIntegrationAdapter({ nowISO }));
+  providers.push(new MetaAdsIntegrationAdapter({ nowISO }));
+  providers.push(new GoogleAdsIntegrationAdapter({ nowISO }));
 
   return providers;
 }
@@ -35,6 +41,9 @@ export function liveIntegrationAvailability() {
     business_email: true,
     business_email_oauth: googleOAuth,
     calendar: googleOAuth,
+    google_search_console: googleOAuth,
+    google_ads: true,
+    meta_ads: true,
     sms_channel: true,
     voice_channel: true,
     meta_lead_ads: true,

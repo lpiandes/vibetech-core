@@ -20,6 +20,7 @@ describe("CustomAiWorkerCompiler", () => {
     assert.equal(employee.communicationPermissions.customerFacingRequiresApproval, true);
     assert.ok(employee.prohibitedActions.includes("autonomous_customer_send"));
     assert.equal(employee.automationDefinitions.length, 1);
+    assert.equal(employee.automationDefinitions[0].status, "ACTIVE");
     assert.equal(employee.automationDefinitions[0].actions[0].requiresApproval, false);
   });
 

@@ -15,24 +15,7 @@ export class ComponentRecommendationEngine {
       { id: "readiness", label: "Launch readiness", why: "Honest setup checklist." },
     ];
 
-    if (industry === "property_management") {
-      components.push(
-        { id: "subject_summaries", label: "Property demand", why: "Property/listing subjects." },
-        { id: "pipeline", label: "Relationship pipeline", why: "Prospect and owner follow-up." },
-      );
-    }
-    if (industry === "dental") {
-      components.push(
-        { id: "calendar_deadlines", label: "Appointments", why: "Scheduling setup surface." },
-        { id: "metric_cards", label: "Practice metrics", why: "Real counts only when data exists." },
-      );
-    }
-    if (industry === "sports") {
-      components.push(
-        { id: "calendar_deadlines", label: "Schedule", why: "Games and practices." },
-        { id: "subject_summaries", label: "Teams and players", why: "Club records via BusinessSubject." },
-      );
-    }
+    void industry;
 
     const registered = new Set(listDashboardComponentTypes());
     const recommendations = components

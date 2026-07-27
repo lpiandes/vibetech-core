@@ -14,6 +14,7 @@ export type DiscoveryQuestionRow = {
   why?: string;
   answerType?: string;
   options?: string[];
+  optionLabels?: Record<string, string>;
 };
 
 export type DiscoveryStep = {
@@ -24,6 +25,7 @@ export type DiscoveryStep = {
   isCurrent: boolean;
   answerType?: string;
   options?: string[];
+  optionLabels?: Record<string, string>;
 };
 
 const META_BY_ID = Object.fromEntries(
@@ -73,6 +75,7 @@ export function buildDiscoverySteps(
       isCurrent: true,
       answerType: nextQuestion.answerType ?? meta?.answerType,
       options: nextQuestion.options ?? meta?.options,
+      optionLabels: nextQuestion.optionLabels,
     });
   }
 

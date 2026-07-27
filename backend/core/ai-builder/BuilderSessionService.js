@@ -32,9 +32,11 @@ export class BuilderSessionService {
     businessName = null,
     websiteUrl = null,
     description = null,
+    purchasedPackages = null,
   } = {}) {
     const now = this.nowISO();
     const initial = this.discoveryEngine.initialPrompt();
+    const scopedPackages = Array.isArray(purchasedPackages) ? purchasedPackages : [];
     let session = createBuilderSession({
       mode,
       businessId,
@@ -43,6 +45,7 @@ export class BuilderSessionService {
       businessSummary: {
         businessName,
         description,
+        ...(scopedPackages.length ? { purchasedPackages: scopedPackages } : {}),
       },
       websiteUrls: websiteUrl ? [websiteUrl] : [],
       appearance: {
@@ -68,7 +71,7 @@ export class BuilderSessionService {
       updatedAt: now,
     });
 
-    if (description) {
+    if (description && String(description).trim()) {
       const applied = await this.discoveryEngine.applyAnswer(session, {
         questionId: "q_tell_us",
         answer: description,

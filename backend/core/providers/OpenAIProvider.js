@@ -1,81 +1,116 @@
 /**
  * OpenAIProvider
  *
- * First concrete LLM provider implementation.
- *
  * Modes:
- * 1) demo mode (default, free): deterministic fake draft output for local development.
- * 2) live mode (scaffold only): prepared for later OpenAI integration.
- *    No API calls are performed in this sprint.
- *
- * Live behavior constraint:
- * - We DO NOT make any live OpenAI API calls unless OPENAI_API_KEY is present
- *   AND mode is explicitly set to "live".
+ * 1) demo (default): deterministic placeholder for local/dev without a key
+ * 2) live: real Chat Completions when OPENAI_API_KEY is set
  */
 
 import crypto from "node:crypto";
 
 import { LLMProvider } from "./LLMProvider.js";
 
+const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
 export class OpenAIProvider extends LLMProvider {
   /**
    * @param {object} [params]
-   * @param {"demo"|"live"} [params.mode] - default is "demo"
+   * @param {"demo"|"live"} [params.mode]
+   * @param {string} [params.model]
+   * @param {typeof fetch} [params.fetchImpl]
    */
-  constructor({ mode = "demo" } = {}) {
+  constructor({ mode = "demo", model = DEFAULT_MODEL, fetchImpl = null } = {}) {
     super();
     this.mode = mode;
+    this.model = model;
+    this.fetchImpl = fetchImpl || globalThis.fetch?.bind(globalThis) || null;
   }
 
   /**
    * @param {string} prompt
+   * @param {object} [options]
+   * @param {boolean} [options.json]
+   * @param {number} [options.temperature]
    * @returns {Promise<string> | string}
    */
-  generate(prompt) {
+  async generate(prompt, options = {}) {
     const normalizedPrompt = String(prompt ?? "");
-
     if (this.mode === "demo") {
-      return this.#demoGenerate(normalizedPrompt);
+      return this.#demoGenerate(normalizedPrompt, options);
     }
 
-    // Live mode scaffold:
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return [
         "LIVE MODE REQUESTED, BUT OPENAI_API_KEY IS NOT SET.",
-        "Demo mode is required for free local development.",
+        "Fall back to demo/deterministic proposer.",
         "",
-        "Prompt hash (for traceability):",
-        this.#promptHash(normalizedPrompt),
+        `prompt_sha256: ${this.#promptHash(normalizedPrompt)}`,
       ].join("\n");
     }
 
-    // IMPORTANT: No live API call in this sprint.
-    // This string is a deterministic placeholder so downstream logic can
-    // be developed without wiring paid dependencies yet.
-    return [
-      "LIVE MODE SCAFFOLD (NO OPENAI CALL IN THIS SPRINT).",
-      "An OpenAI integration can be wired in a later roadmap step.",
-      "",
-      "Prompt hash (for traceability):",
-      this.#promptHash(normalizedPrompt),
-    ].join("\n");
+    if (typeof this.fetchImpl !== "function") {
+      throw new Error("OpenAIProvider: fetch is not available in this runtime");
+    }
+
+    const wantJson = Boolean(options.json);
+    const temperature = Number.isFinite(Number(options.temperature))
+      ? Number(options.temperature)
+      : 0.2;
+
+    const body = {
+      model: this.model,
+      temperature,
+      messages: [
+        {
+          role: "system",
+          content: wantJson
+            ? "You are a precise automation engineer. Reply with valid JSON only. No markdown."
+            : "You are a helpful business operating assistant.",
+        },
+        { role: "user", content: normalizedPrompt },
+      ],
+    };
+    if (wantJson) {
+      body.response_format = { type: "json_object" };
+    }
+
+    const res = await this.fetchImpl("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const detail = data?.error?.message || res.statusText || `HTTP ${res.status}`;
+      throw new Error(`OpenAI error: ${detail}`);
+    }
+
+    const text = data?.choices?.[0]?.message?.content;
+    if (text == null || String(text).trim() === "") {
+      throw new Error("OpenAI error: empty completion");
+    }
+    return String(text);
   }
 
-  #demoGenerate(prompt) {
+  #demoGenerate(prompt, options = {}) {
     const hash = this.#promptHash(prompt);
-
-    // Deterministic fake draft content:
-    // Keep it explicitly marked as a demo output so it never masquerades as real legal/AI output.
+    if (options.json) {
+      return JSON.stringify({
+        summary: "Demo mode — set OPENAI_API_KEY for live proposals",
+        notes: ["demo_placeholder"],
+        prompt_sha256: hash,
+      });
+    }
     return [
       "[DEMO DRAFT — deterministic placeholder]",
       "",
       "Draft Summary:",
       "This is a local-development placeholder draft produced by the demo LLM provider.",
-      "",
-      "What will happen next (later roadmap steps):",
-      "- PromptBuilder output will be sent to a real LLM provider in live mode (future).",
-      "- DraftGenerator will convert this into final business-ready artifacts (future).",
       "",
       "Trace:",
       `prompt_sha256: ${hash}`,
@@ -86,4 +121,3 @@ export class OpenAIProvider extends LLMProvider {
     return crypto.createHash("sha256").update(String(prompt)).digest("hex");
   }
 }
-

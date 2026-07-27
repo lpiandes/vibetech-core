@@ -7,7 +7,7 @@ import { createBuilderSession } from "./BuilderSession.js";
 import { validateBusinessOSSpecification } from "../business-os/BusinessOSSpecificationValidator.js";
 import { getDefaultBusinessOSCapabilityRegistry } from "../business-os/BusinessOSCapabilityRegistry.js";
 
-test("assembly planner prefers gold PM and reusable components", () => {
+test("assembly planner prefers universal core for unsupported property industry", () => {
   const planner = new BuilderAssemblyPlanner();
   const session = createBuilderSession({
     businessSummary: {
@@ -17,8 +17,8 @@ test("assembly planner prefers gold PM and reusable components", () => {
     },
   });
   const plan = planner.plan({ session });
-  assert.ok(plan.selectedBlueprints.some((entry) => entry.recommendationId === "rec_bp_pm_gold"));
-  assert.ok(plan.selectedComponents.length >= 3);
+  assert.ok(plan.selectedBlueprints.some((entry) => entry.recommendationId === "rec_bp_universal"));
+  assert.ok(plan.selectedComponents.length >= 1);
   assert.ok(plan.capabilityGaps.some((gap) => gap.kind === "deferred" || gap.label.includes("sms")));
 });
 
@@ -32,6 +32,7 @@ test("specification assembler builds dental universal OS without dental runtime"
       industry: "dental",
       services: ["cleanings", "exams"],
       customerTypes: ["patient"],
+      scheduling: "We schedule appointments every day.",
     },
   });
   const plan = planner.plan({ session });
@@ -40,6 +41,7 @@ test("specification assembler builds dental universal OS without dental runtime"
   assert.ok(assembled.specification.modules.some((module) => module.label === "Patients"));
   assert.ok(assembled.specification.modules.some((module) => module.moduleId === "appointments"));
   assert.ok(!JSON.stringify(assembled.specification).includes("PatientRuntime"));
+  assert.ok(assembled.specification.employeeDefinitions.length >= 2);
   const validation = validateBusinessOSSpecification(assembled.specification, {
     capabilityRegistry: getDefaultBusinessOSCapabilityRegistry(),
     allowUnresolved: true,
@@ -47,7 +49,7 @@ test("specification assembler builds dental universal OS without dental runtime"
   assert.equal(validation.ok, true, JSON.stringify(validation.errors));
 });
 
-test("hockey and McBride assembly reuse fixtures", () => {
+test("sports and property businesses use only the confirmed assembly path", () => {
   const planner = new BuilderAssemblyPlanner();
   const assembler = new BuilderSpecificationAssembler();
   const hockey = createBuilderSession({
@@ -55,13 +57,14 @@ test("hockey and McBride assembly reuse fixtures", () => {
   });
   const hockeyPlan = planner.plan({ session: hockey });
   const hockeySpec = assembler.assemble({ session: hockey, assemblyPlan: hockeyPlan });
-  assert.equal(hockeySpec.source, "rec_bp_hockey_fixture");
+  assert.equal(hockeySpec.source, "rec_bp_sports_club");
   assert.ok(hockeySpec.specification.modules.some((module) => module.moduleId === "teams"));
+  assert.ok(hockeySpec.specification.employeeDefinitions.length >= 3);
 
   const pm = createBuilderSession({
     businessSummary: { businessName: "McBride", industry: "property_management" },
   });
   const pmSpec = assembler.assemble({ session: pm, assemblyPlan: planner.plan({ session: pm }) });
-  assert.equal(pmSpec.source, "rec_bp_pm_gold");
-  assert.ok(pmSpec.specification.modules.some((module) => module.moduleId === "properties"));
+  assert.equal(pmSpec.source, "rec_bp_universal");
+  assert.ok(!pmSpec.specification.modules.some((module) => module.moduleId === "properties"));
 });

@@ -7,6 +7,33 @@ function safeString(v) {
   return v === null || v === undefined ? "" : String(v);
 }
 
+/** Owner-facing copy for common Twilio SMS failure codes. */
+export function humanizeTwilioSmsError({ errorCode, errorMessage, status } = {}) {
+  const code = safeString(errorCode).replace(/\D/g, "");
+  const msg = safeString(errorMessage).trim();
+  const st = safeString(status).toLowerCase();
+
+  if (code === "30034" || /unregistered number|a2p|10dlc/i.test(msg)) {
+    return "Twilio blocked the text: your From number isn’t registered for US A2P / 10DLC yet. In Twilio Console, finish Brand + Campaign registration and add this number to that Messaging Service — or use a Toll-Free Twilio number for testing.";
+  }
+  if (code === "21608" || /unverified|trial/i.test(msg)) {
+    return "Twilio trial can only text Verified Caller IDs. In Twilio Console → Phone Numbers → Verified Caller IDs, add your phone, then retry.";
+  }
+  if (code === "21211" || /invalid.*to/i.test(msg)) {
+    return "That destination phone number looks invalid. Use country code, e.g. +15551234567.";
+  }
+  if (code === "21606" || /not a valid.*from/i.test(msg)) {
+    return "The Twilio From number isn’t SMS-capable or doesn’t belong to this account. Check the From number in Twilio Console.";
+  }
+  if (st === "undelivered" || st === "failed") {
+    return msg || `Twilio could not deliver the text (${st}${code ? `, code ${code}` : ""}).`;
+  }
+  if (msg) return msg;
+  if (code) return `Twilio error ${code}. Check the message log in Twilio Console for details.`;
+  return "";
+}
+
+
 export function isTwilioSmsConfigured() {
   return Boolean(
     safeString(process.env.TWILIO_ACCOUNT_SID)
@@ -43,15 +70,20 @@ export class TwilioSmsIntegrationAdapter extends IntegrationProvider {
 
   getSetupGuidance() {
     return createProviderSetupGuidance({
-      title: "Connect Twilio SMS",
-      summary: "Send approved text messages through your Twilio number.",
-      estimatedTime: "10 minutes",
-      prerequisites: ["Twilio account", "Messaging-capable phone number"],
-      steps: ["Enter Account SID and Auth Token", "Confirm From number", "Verify with a test send"],
+      title: "Set up text messaging",
+      summary: "VIBETech provisions a Twilio number from your business details.",
+      estimatedTime: "5 minutes (carrier registration may take days)",
+      prerequisites: ["Legal business name and address"],
+      steps: [
+        "Enter business details in VIBETech",
+        "We buy and attach a Twilio number",
+        "Carrier A2P registration runs in the background",
+        "Prove with a test text when ready",
+      ],
       permissionsRequested: ["send_sms"],
       verificationMethod: "Credential resolve + Twilio account probe.",
-      commonProblems: ["Invalid auth token", "From number not SMS-capable"],
-      reconnectInstructions: "Update Twilio credentials and reconnect.",
+      commonProblems: ["Carrier A2P still pending", "Area code unavailable"],
+      reconnectInstructions: "Re-run texting setup or paste advanced Twilio credentials.",
       documentationReference: "https://www.twilio.com/docs/sms",
     });
   }
@@ -141,9 +173,14 @@ export class TwilioSmsIntegrationAdapter extends IntegrationProvider {
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        const human = humanizeTwilioSmsError({
+          errorCode: data?.code ?? data?.error_code,
+          errorMessage: data?.message ?? data?.error_message,
+        });
         return deepFreeze({
           status: "failed",
-          error: safeString(data?.message || `twilio_http_${res.status}`),
+          error: human || safeString(data?.message || `twilio_http_${res.status}`),
+          errorCode: safeString(data?.code ?? data?.error_code),
           retryable: res.status >= 500,
           completedAt: this._nowISO,
         });
@@ -152,7 +189,12 @@ export class TwilioSmsIntegrationAdapter extends IntegrationProvider {
         externalReference: safeString(data.sid),
         status: "completed",
         completedAt: this._nowISO,
-        metadata: deepFreeze({ provider: this.id, to, from: creds.fromNumber }),
+        metadata: deepFreeze({
+          provider: this.id,
+          to,
+          from: creds.fromNumber,
+          twilioStatus: safeString(data.status),
+        }),
       });
     } catch (err) {
       return deepFreeze({
@@ -161,6 +203,81 @@ export class TwilioSmsIntegrationAdapter extends IntegrationProvider {
         retryable: true,
         completedAt: this._nowISO,
       });
+    }
+  }
+
+  /**
+   * Poll Twilio message resource until delivered/sent or failed/undelivered.
+   * Queued acceptance alone is not enough for design-partner prove honesty.
+   */
+  async checkMessageStatus({
+    connection,
+    credentialResolver,
+    messageSid,
+    attempts = 6,
+    delayMs = 700,
+  } = {}) {
+    const sid = safeString(messageSid);
+    if (!sid) {
+      return { ok: false, reason: "missing_sid", message: "Twilio did not return a message SID." };
+    }
+    try {
+      const creds = this.#creds({ connection, credentialResolver });
+      const auth = Buffer.from(`${creds.accountSid}:${creds.authToken}`).toString("base64");
+      let lastStatus = "unknown";
+      let lastError = "";
+      for (let i = 0; i < attempts; i += 1) {
+        if (i > 0) await new Promise((r) => setTimeout(r, delayMs));
+        const res = await this._fetch(
+          `https://api.twilio.com/2010-04-01/Accounts/${creds.accountSid}/Messages/${sid}.json`,
+          { headers: { Authorization: `Basic ${auth}` } },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          return {
+            ok: false,
+            reason: "status_probe_failed",
+            message: safeString(data?.message || `Could not check Twilio message (${res.status}).`),
+            status: lastStatus,
+          };
+        }
+        lastStatus = safeString(data.status).toLowerCase();
+        const errorCode = data.error_code ?? data.code;
+        const errorMessage = data.error_message ?? data.message;
+        lastError = humanizeTwilioSmsError({
+          errorCode,
+          errorMessage,
+          status: lastStatus,
+        }) || safeString(errorMessage || errorCode);
+        if (lastStatus === "delivered" || lastStatus === "sent") {
+          return { ok: true, status: lastStatus, sid };
+        }
+        if (lastStatus === "failed" || lastStatus === "undelivered" || lastStatus === "canceled") {
+          return {
+            ok: false,
+            reason: "sms_not_delivered",
+            status: lastStatus,
+            errorCode: safeString(errorCode),
+            message: lastError
+              || `Twilio status: ${lastStatus}. Trial accounts can only text Verified Caller IDs; US long-code texts need A2P/10DLC.`,
+          };
+        }
+        // queued / accepted / sending — keep polling
+      }
+      // Still queued after polls — do not mark proven (carrier may still drop it).
+      return {
+        ok: false,
+        reason: "sms_not_confirmed",
+        status: lastStatus,
+        message: lastError
+          || `Twilio still reports “${lastStatus}” — text not confirmed delivered. For US long codes you usually need A2P/10DLC; for trial, verify your phone under Verified Caller IDs.`,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        reason: "status_probe_error",
+        message: String(err?.message ?? err),
+      };
     }
   }
 }

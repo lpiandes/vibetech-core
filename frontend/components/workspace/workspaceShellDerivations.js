@@ -124,6 +124,9 @@ export function getActiveModuleIdFromPathname(pathname) {
     if (segment === "for-you") return "command_center";
     if (segment === "work") return "work_queue";
     if (segment === "people") return "engagement";
+    if (segment === "calendar") return "calendar";
+    if (segment === "pipelines") return "pipelines";
+    if (segment === "automations") return "automations";
     if (segment === "properties") return "properties";
     if (segment === "inbox") return "communications";
     if (segment === "team") return "digital_workforce";

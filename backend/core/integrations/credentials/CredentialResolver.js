@@ -8,8 +8,9 @@ function fail(message) {
  * Never returns secrets to callers that publish events or view models.
  */
 export class CredentialResolver {
-  constructor({ resolvers } = {}) {
+  constructor({ resolvers, defaultResolver = null } = {}) {
     this._resolvers = new Map();
+    this._defaultResolver = typeof defaultResolver === "function" ? defaultResolver : null;
     if (resolvers && typeof resolvers === "object") {
       for (const [providerType, fn] of Object.entries(resolvers)) {
         this.register(providerType, fn);
@@ -26,7 +27,7 @@ export class CredentialResolver {
   resolve(credentialReference) {
     const ref = credentialReference ?? {};
     const providerType = String(ref.providerType ?? "");
-    const resolver = this._resolvers.get(providerType);
+    const resolver = this._resolvers.get(providerType) ?? this._defaultResolver;
     if (!resolver) fail(`no credential resolver for providerType: ${providerType}`);
     const resolved = resolver(ref);
     if (!resolved || typeof resolved !== "object") fail("resolver must return object.");

@@ -8,8 +8,10 @@ export function shouldOpenIntegrationFromFocus({
   consumedFocus,
   primary,
   isConnected,
+  justConnected = false,
 }) {
   if (!focus || setupTarget) return null;
+  if (justConnected) return null;
   if (consumedFocus === focus) return null;
 
   const match = primary.find(({ display }) => display.id === focus);
@@ -28,4 +30,14 @@ export function buildPathWithoutFocus(pathname, searchParams) {
   next.delete("focus");
   const query = next.toString();
   return query ? `${path}?${query}` : path;
+}
+
+/** Safe same-app path for OAuth return (blocks open redirects). */
+export function resolveOAuthReturnPath(returnTo, fallbackPath) {
+  const fallback = String(fallbackPath || "/");
+  const raw = returnTo == null ? "" : String(returnTo).trim();
+  if (!raw) return fallback;
+  if (!raw.startsWith("/")) return fallback;
+  if (raw.startsWith("//") || raw.startsWith("/\\") || raw.includes("://")) return fallback;
+  return raw;
 }

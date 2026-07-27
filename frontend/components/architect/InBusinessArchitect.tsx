@@ -47,6 +47,10 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
   const scope = useBusinessScope();
   const hasInstalledOs = Boolean(scope.installedBusinessOS?.drivenByBusinessOS);
   const sessionFromQuery = searchParams.get("sessionId");
+  const packageAskQuery = searchParams.get("packageAsk");
+  const newSetupQuery = searchParams.get("newSetup");
+  const promptQuery = searchParams.get("prompt");
+  const contextQueryKey = CONTEXT_KEYS.map((key) => `${key}:${searchParams.get(key) ?? ""}`).join("|");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [history, setHistory] = useState<AskHistoryItem[]>([]);
   const [error, setError] = useState<ProductErrorView | null>(null);
@@ -73,6 +77,8 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
       setError(null);
 
       const promptFromQuery = searchParams.get("prompt");
+      const forceNewSetup = searchParams.get("newSetup") === "1";
+      const packageAsk = searchParams.get("packageAsk") === "1";
       const context: Record<string, string> = {};
       for (const key of CONTEXT_KEYS) {
         const value = searchParams.get(key);
@@ -82,10 +88,69 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
       const hasPrompt = Boolean(promptFromQuery?.trim());
 
       try {
-        if (sessionFromQuery) {
+        // Admin added packages → blocking discovery Ask (not continuous chat).
+        if (packageAsk && hasInstalledOs) {
+          // URL already has a session from the previous mint — open it.
+          // Never call startPackageAsk again here or we loop: create → replace → boot → create…
+          if (sessionFromQuery) {
+            setSessionId(sessionFromQuery);
+            setSessionContinuous(false);
+            await refreshHistory(sessionFromQuery);
+            return;
+          }
+          const data = await startPackageAskSession(businessId);
+          if (!data.ok) {
+            // Nothing pending — return home.
+            router.replace(`/b/${encodeURIComponent(businessId)}/home`);
+            return;
+          }
+          const nextId = data.session?.sessionId as string | undefined;
+          if (!nextId) throw new Error("No package Ask session returned.");
+          if (cancelled) return;
+          if (data.journey?.readyForProposal) {
+            await fetch(`/api/businesses/${encodeURIComponent(businessId)}/builder/package-ask`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ action: "clear" }),
+            }).catch(() => null);
+            router.replace(`/b/${encodeURIComponent(businessId)}/home`);
+            return;
+          }
+          setSessionId(nextId);
+          setSessionContinuous(false);
+          await refreshHistory(nextId);
+          router.replace(
+            `/b/${encodeURIComponent(businessId)}/architect?packageAsk=1&sessionId=${encodeURIComponent(nextId)}`,
+          );
+          return;
+        }
+
+        if (sessionFromQuery && !forceNewSetup && !packageAsk) {
           // Always allow reopening a past thread (setup plan or continuous chat).
           setSessionId(sessionFromQuery);
           await refreshHistory(sessionFromQuery);
+          return;
+        }
+
+        // Pre-install "Talk to VIBETech" / Start over — always begin at question 1.
+        if (!hasInstalledOs && (forceNewSetup || (!sessionFromQuery && !hasPrompt && !hasContext))) {
+          const data = await startDiscoverySession({
+            businessId,
+            prompt: "",
+            businessName: scope.businessName,
+          });
+          if (!data.ok) {
+            throw Object.assign(new Error(data.error ?? data.reason ?? "Could not open business setup."), {
+              productError: data.productError ?? presentProductError(data.error ?? data.reason),
+            });
+          }
+          const nextId = data.session?.sessionId as string | undefined;
+          if (!nextId) throw new Error("No setup session returned.");
+          if (cancelled) return;
+          setSessionId(nextId);
+          setSessionContinuous(false);
+          await refreshHistory(nextId);
+          router.replace(`/b/${encodeURIComponent(businessId)}/architect?sessionId=${encodeURIComponent(nextId)}`);
           return;
         }
 
@@ -171,15 +236,20 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
     return () => {
       cancelled = true;
     };
+    // Primitives only — `searchParams` object identity churn re-boots forever
+    // (spam GET /api/builder/sessions while package Ask is open).
   }, [
     businessId,
     sessionFromQuery,
     router,
-    searchParams,
     hasInstalledOs,
     scope.businessName,
     refreshHistory,
     bootKey,
+    packageAskQuery,
+    newSetupQuery,
+    promptQuery,
+    contextQueryKey,
   ]);
 
   const [sessionContinuous, setSessionContinuous] = useState(hasInstalledOs);
@@ -213,6 +283,10 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
     }
   }, [businessId, hasInstalledOs, refreshHistory, router, scope.businessName]);
 
+  const onPackageAskComplete = useCallback(() => {
+    router.replace(`/b/${encodeURIComponent(businessId)}/home`);
+  }, [businessId, router]);
+
   useEffect(() => {
     function onAskNewChat() {
       void startNewChat();
@@ -225,6 +299,11 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
     if (!sessionId) return;
     let cancelled = false;
     void (async () => {
+      const packageAsk = searchParams.get("packageAsk") === "1" || Boolean(scope.pendingPackageAsk);
+      if (packageAsk) {
+        if (!cancelled) setSessionContinuous(false);
+        return;
+      }
       if (!hasInstalledOs) {
         if (!cancelled) setSessionContinuous(false);
         return;
@@ -244,7 +323,7 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
     return () => {
       cancelled = true;
     };
-  }, [sessionId, hasInstalledOs, history]);
+  }, [sessionId, hasInstalledOs, history, searchParams, scope.pendingPackageAsk]);
 
   async function removeChat(targetId: string) {
     setHistoryBusy(true);
@@ -304,7 +383,7 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
       <ArchitectShell maxWidth={1100} fullBleed={hasInstalledOs}>
         <ArchitectPanel style={{ display: "grid", gap: 14 }}>
           <div role="status" aria-live="polite">
-            <ThinkingDots label="Opening Ask VIBETech" />
+            <ThinkingDots label={hasInstalledOs ? "Opening Ask VIBETech" : "Opening business setup"} />
           </div>
           <ArchitectSkeleton height={28} width="40%" />
           <ArchitectSkeleton height={160} />
@@ -315,35 +394,43 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
 
   if (!sessionId) {
     return (
-      <ArchitectShell maxWidth={1280} fullBleed={hasInstalledOs}>
-        <div className="ask-history-layout">
-          <AskHistorySidebar
-            items={history}
-            activeSessionId={null}
-            busy={historyBusy || booting}
-            onNewChat={() => void startNewChat()}
-            onOpen={openPastChat}
-            onRemove={(id) => void removeChat(id)}
-          />
-          <ArchitectPanel style={{ display: "grid", gap: 18, padding: "32px 28px" }}>
-            <div>
-              <h1 style={{
-                margin: "0 0 8px",
-                fontFamily: architect.display,
-                fontSize: "clamp(1.6rem, 3vw, 2.1rem)",
-                letterSpacing: "-0.02em",
-              }}>
-                Ask VIBETech
-              </h1>
-              <p style={{ margin: 0, color: architect.inkMuted, lineHeight: 1.55 }}>
-                Tell VIBETech about your business. It will recommend how to run it — nothing goes live until you approve.
-                Past plans stay in Conversations so you can reopen them anytime.
-              </p>
-            </div>
-            <AskVibeTechPrompt businessId={businessId} large showSuggestions={false} />
-          </ArchitectPanel>
-        </div>
-        <style>{askHistoryLayoutCss}</style>
+      <ArchitectShell maxWidth={720} fullBleed={false}>
+        <ArchitectPanel style={{ display: "grid", gap: 18, padding: "32px 28px" }}>
+          <div>
+            <h1 style={{
+              margin: "0 0 8px",
+              fontFamily: architect.display,
+              fontSize: "clamp(1.6rem, 3vw, 2.1rem)",
+              letterSpacing: "-0.02em",
+            }}>
+              Set up your business
+            </h1>
+            <p style={{ margin: 0, color: architect.inkMuted, lineHeight: 1.55 }}>
+              Answer a few questions so VIBETech can recommend how to run this business. Nothing goes live until you approve.
+            </p>
+          </div>
+          <AskVibeTechPrompt businessId={businessId} large showSuggestions={false} />
+        </ArchitectPanel>
+      </ArchitectShell>
+    );
+  }
+
+  // Setup (pre-install) or package Ask (post-install SKU add): full-width discovery, no history rail.
+  const packageAskMode = searchParams.get("packageAsk") === "1" || Boolean(scope.pendingPackageAsk);
+  if ((!hasInstalledOs && !sessionContinuous) || packageAskMode) {
+    return (
+      <ArchitectShell maxWidth={720} fullBleed={false}>
+        <ArchitectWorkspace
+          key={sessionId}
+          sessionId={sessionId}
+          continuous={false}
+          businessId={businessId}
+          embedded
+          packageAsk={packageAskMode}
+          onStartOver={packageAskMode ? undefined : () => void startNewChat()}
+          onSessionMutated={undefined}
+          onPackageAskComplete={onPackageAskComplete}
+        />
       </ArchitectShell>
     );
   }
@@ -382,11 +469,19 @@ const askHistoryLayoutCss = `
     display: grid;
     grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
     gap: 12px;
-    align-items: start;
+    align-items: stretch;
+    min-height: calc(100vh - 120px);
+  }
+  .ask-history-layout > div:last-child {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
   @media (max-width: 860px) {
     .ask-history-layout {
       grid-template-columns: 1fr;
+      min-height: calc(100vh - 160px);
     }
   }
 `;
@@ -423,6 +518,18 @@ async function startContinuousSession({
   return response.json();
 }
 
+async function startPackageAskSession(businessId: string) {
+  const response = await fetch(
+    `/api/businesses/${encodeURIComponent(businessId)}/builder/package-ask`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    },
+  );
+  return response.json();
+}
+
 async function startDiscoverySession({
   businessId,
   prompt,
@@ -439,7 +546,7 @@ async function startDiscoverySession({
       mode: "new_business",
       businessId,
       businessName: businessName || null,
-      description: prompt,
+      description: prompt?.trim() ? prompt.trim() : null,
     }),
   });
   return response.json();

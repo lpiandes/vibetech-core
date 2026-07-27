@@ -282,6 +282,8 @@ function buildInstalledConfiguration({ specification, plan, actionResults }) {
     relationshipTypes: actions.filter((action) => typeOf(action) === "REGISTER_RELATIONSHIP_TYPE").map((action) => action.payload),
     requestTypes: actions.filter((action) => typeOf(action) === "REGISTER_REQUEST_TYPE").map((action) => action.payload),
     workTypes: actions.filter((action) => typeOf(action) === "REGISTER_WORK_TYPE").map((action) => action.payload),
+    pipelines: actions.filter((action) => typeOf(action) === "INSTALL_PIPELINE").map((action) => action.payload),
+    workflows: actions.filter((action) => typeOf(action) === "INSTALL_WORKFLOW").map((action) => action.payload),
     employees: actions.filter((action) => typeOf(action) === "INSTALL_EMPLOYEE").map((action) => action.payload),
     roles: actions.filter((action) => typeOf(action) === "INSTALL_ROLE").map((action) => action.payload),
     dashboards: actions.filter((action) => typeOf(action) === "INSTALL_DASHBOARD").map((action) => action.payload),

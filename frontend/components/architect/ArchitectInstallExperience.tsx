@@ -18,6 +18,7 @@ import {
   architectRoutes,
   humanInstallState,
   installStageProgress,
+  summarizeInstallProgress,
 } from "./architectSemantics";
 import ExecutiveBriefing from "./ExecutiveBriefing";
 import { presentProductError, type ProductErrorView } from "@/lib/platform/productErrors";
@@ -143,62 +144,14 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
             ) : null}
 
             {(checklist.setupWalkthrough ?? []).length ? (
-              <section style={{ display: "grid", gap: 14 }}>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <h3 style={{ margin: 0, fontSize: 18 }}>Your steps to make your business prosper</h3>
-                  <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.5 }}>
-                    Approve now — then finish these on Home and Settings → Setup after go-live. Each step covers VIBETech and the external platform (Twilio, Google, Meta, and more).
-                  </p>
-                </div>
-                {(checklist.setupWalkthrough as any[]).map((step, index) => (
-                  <article
-                    key={step.id}
-                    style={{
-                      ...walkCard,
-                      animation: `architectFadeUp .4s ease ${0.08 + Math.min(index, 10) * 0.05}s both`,
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
-                      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", minWidth: 0 }}>
-                        <div style={stepNumber}>{index + 1}</div>
-                        <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
-                          <div style={{ fontWeight: 760, fontSize: 16 }}>{step.title}</div>
-                          {step.whereInApp ? (
-                            <div style={{ color: architect.accentSecondary, fontSize: 12, fontWeight: 650 }}>
-                              In VIBETech: {step.whereInApp}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                      <ArchitectBadge tone="warning">Needs setup</ArchitectBadge>
-                    </div>
-                    {step.summary ? (
-                      <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.5 }}>{step.summary}</p>
-                    ) : null}
-                    {(step.inApp ?? []).length ? (
-                      <div style={{ display: "grid", gap: 6 }}>
-                        <div style={sectionEyebrow}>In the app</div>
-                        <ol style={stepList}>
-                          {(step.inApp as string[]).map((line) => <li key={line}>{line}</li>)}
-                        </ol>
-                      </div>
-                    ) : null}
-                    {(step.external ?? []).length ? (
-                      <div style={{ display: "grid", gap: 6 }}>
-                        <div style={sectionEyebrow}>On the external platform</div>
-                        <ol style={stepList}>
-                          {(step.external as string[]).map((line) => <li key={line}>{line}</li>)}
-                        </ol>
-                      </div>
-                    ) : null}
-                  </article>
-                ))}
-              </section>
+              <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.55 }}>
+                After you approve, finish email, calendar, SMS, and knowledge on <strong>Home</strong> (Setup missions). We do not walk those steps here.
+              </p>
             ) : null}
 
             <p style={{ color: architect.inkMuted, margin: 0, fontSize: 13 }}>
               {result?.alreadyInstalled
-                ? "This business is already live. Open Home to finish your prosper steps."
+                ? "This business is already live. Open Home to finish setup missions."
                 : "No live records were changed."}
             </p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -231,6 +184,8 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
   const [workspace, setWorkspace] = useState<any>(null);
   const [status, setStatus] = useState<"awaiting_approval" | "installing" | "installed" | "failed">("awaiting_approval");
   const [activeStep, setActiveStep] = useState(0);
+  const [percent, setPercent] = useState(0);
+  const [stageOverride, setStageOverride] = useState<ReturnType<typeof summarizeInstallProgress>["stages"] | null>(null);
   const [error, setError] = useState<ProductErrorView | null>(null);
   const [openHref, setOpenHref] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -246,6 +201,7 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
       if (stage === "installed" && businessId) {
         setStatus("installed");
         setActiveStep(ARCHITECT_INSTALL_STAGES.length - 1);
+        setPercent(100);
         setOpenHref(`/b/${businessId}/home`);
       } else if (stage === "failed") {
         setStatus("failed");
@@ -258,9 +214,13 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
     setError(null);
     setStatus("installing");
     setActiveStep(0);
+    setPercent(4);
+    setStageOverride(null);
+    // Soft motion while the server runs real install ops — cap below 90 until results arrive.
     const timer = setInterval(() => {
-      setActiveStep((current) => Math.min(current + 1, ARCHITECT_INSTALL_STAGES.length - 1));
-    }, 520);
+      setActiveStep((current) => Math.min(current + 1, ARCHITECT_INSTALL_STAGES.length - 2));
+      setPercent((current) => Math.min(88, current + 7));
+    }, 420);
     try {
       const response = await fetch(`/api/builder/sessions/${encodeURIComponent(sessionId)}`, {
         method: "POST",
@@ -273,12 +233,31 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
       const data = await response.json();
       if (!response.ok || !data.ok) {
         setStatus("failed");
+        const progress = summarizeInstallProgress(
+          data.actionResults
+          ?? data.installation?.actionResults
+          ?? data.installation?.installation?.actionCheckpoints
+          ?? data.installation?.actionCheckpoints
+          ?? [],
+        );
+        setStageOverride(progress.stages);
+        setActiveStep(progress.activeIndex);
+        setPercent(data.installProgress?.percent ?? progress.percent);
         setError(data.productError ?? presentProductError(data.error ?? data.reason ?? "install_failed"));
         return;
       }
       if (data.session) setWorkspace((prev: any) => ({ ...(prev ?? {}), session: data.session, proposal: prev?.proposal ?? data.proposal }));
-      setStatus("installed");
+      const progress = summarizeInstallProgress(
+        data.actionResults
+        ?? data.installation?.actionResults
+        ?? data.installation?.installation?.actionCheckpoints
+        ?? data.installation?.actionCheckpoints
+        ?? [],
+      );
+      setStageOverride(progress.stages);
       setActiveStep(ARCHITECT_INSTALL_STAGES.length - 1);
+      setPercent(data.installProgress?.percent ?? 100);
+      setStatus("installed");
       setOpenHref(data.openHref ?? (data.session?.businessId ? `/b/${data.session.businessId}/home` : null));
     } catch (err) {
       setStatus("failed");
@@ -291,7 +270,7 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
 
   const proposal = workspace?.proposal;
   const session = workspace?.session;
-  const stages = installStageProgress(activeStep, status);
+  const stages = stageOverride ?? installStageProgress(activeStep, status);
   const businessName = resolveBusinessDisplayName(
     proposal?.businessName,
     session?.businessSummary?.businessName,
@@ -307,18 +286,6 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
             openHref={openHref}
             onOpenPortal={() => {
               if (openHref) router.push(openHref);
-            }}
-            onInvite={() => {
-              if (openHref) router.push(`${openHref.replace(/\/home$/, "")}/team`);
-              else router.push(routes.session);
-            }}
-            onImprove={() => {
-              const bizId = session?.businessId;
-              if (bizId && !String(bizId).startsWith("draft_")) {
-                router.push(`/b/${encodeURIComponent(bizId)}/architect`);
-              } else {
-                router.push(routes.session);
-              }
             }}
           />
         </ArchitectPanel>
@@ -341,16 +308,46 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
       <ArchitectPanel style={{ display: "grid", gap: 18 }}>
         <h2 style={{ margin: 0 }}>{businessName}</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-          <SummaryTile label="Workspaces" value={proposal?.views?.navigation?.items?.length ?? "—"} />
-          <SummaryTile label="Your team" value={proposal?.views?.digitalWorkforce?.items?.length ?? "—"} />
-          <SummaryTile label="Who sees what" value={proposal?.views?.rolesAccess?.items?.length ?? "—"} />
-          <SummaryTile label="Connections" value={proposal?.views?.integrations?.items?.length ?? "—"} />
+          <SummaryTile label="Navigation areas" value={proposal?.views?.navigation?.items?.length ?? "—"} />
+          <SummaryTile label="AI teammates" value={proposal?.views?.digitalWorkforce?.items?.length ?? "—"} />
+          <SummaryTile label="Roles" value={proposal?.views?.rolesAccess?.items?.length ?? "—"} />
+          <SummaryTile label="Connections to set up" value={proposal?.views?.integrations?.items?.length ?? "—"} />
         </div>
 
         <div>
           <h3 style={{ marginTop: 0 }}>
             {status === "installing" ? HUMAN_COPY.installing : "What will be created"}
           </h3>
+          {(status === "installing" || status === "failed") ? (
+            <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: architect.inkMuted }}>
+                <span>{HUMAN_COPY.installing}</span>
+                <strong style={{ color: architect.ink }}>{percent}%</strong>
+              </div>
+              <div
+                role="progressbar"
+                aria-valuenow={percent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                style={{
+                  height: 10,
+                  borderRadius: 999,
+                  background: "rgba(148,163,184,.22)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${percent}%`,
+                    height: "100%",
+                    borderRadius: 999,
+                    background: `linear-gradient(90deg, ${architect.accent}, ${architect.accentSecondary ?? architect.accent})`,
+                    transition: "width .35s ease",
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
           <div style={{ display: "grid", gap: 10 }}>
             {stages.map((stage) => (
               <div key={stage.id} style={{
@@ -474,50 +471,3 @@ const chip = {
   background: "rgba(20,184,166,.12)",
   border: "1px solid rgba(20,184,166,.28)",
 };
-
-const walkCard = {
-  borderRadius: architect.radius,
-  border: `1px solid rgba(251,191,36,.28)`,
-  background: "linear-gradient(165deg, rgba(251,191,36,.08) 0%, rgba(15,23,42,.55) 42%)",
-  padding: "18px 16px",
-  display: "grid" as const,
-  gap: 12,
-};
-
-const indexBadge = {
-  width: 28,
-  height: 28,
-  borderRadius: 999,
-  display: "grid" as const,
-  placeItems: "center" as const,
-  fontSize: 12,
-  fontWeight: 760,
-  color: architect.ink,
-  background: "rgba(20,184,166,.18)",
-  border: `1px solid rgba(20,184,166,.35)`,
-  flex: "0 0 auto",
-};
-
-const stepNumber = {
-  ...indexBadge,
-  background: "rgba(251,191,36,.14)",
-  border: `1px solid rgba(251,191,36,.4)`,
-  color: architect.warning,
-};
-
-const stepList = {
-  margin: 0,
-  paddingLeft: 18,
-  color: architect.ink,
-  lineHeight: 1.6,
-  fontSize: 14,
-};
-
-const sectionEyebrow = {
-  fontSize: 11,
-  fontWeight: 750,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase" as const,
-  color: architect.inkMuted,
-};
-

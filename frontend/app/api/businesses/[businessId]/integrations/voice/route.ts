@@ -17,7 +17,9 @@ export async function POST(
     const accountSid = String(body.accountSid ?? process.env.TWILIO_ACCOUNT_SID ?? "").trim();
     const authToken = String(body.authToken ?? process.env.TWILIO_AUTH_TOKEN ?? "").trim();
     const fromNumber = String(body.fromNumber ?? process.env.TWILIO_VOICE_FROM ?? process.env.TWILIO_PHONE_NUMBER ?? "").trim();
-    const twimlUrl = String(body.twimlUrl ?? process.env.TWILIO_VOICE_TWIML_URL ?? "").trim();
+    const origin = new URL(request.url).origin;
+    const defaultTwiml = `${origin}/api/businesses/${encodeURIComponent(businessId)}/integrations/voice/inbound`;
+    const twimlUrl = String(body.twimlUrl ?? process.env.TWILIO_VOICE_TWIML_URL ?? defaultTwiml).trim() || defaultTwiml;
 
     if (!accountSid || !authToken || !fromNumber) {
       return NextResponse.json(
@@ -27,14 +29,22 @@ export async function POST(
     }
 
     const credentialId = `cred_twilio_voice_${businessId}`;
+    const vault =
+      (ctx.service as any)?.connected?.integrationPlatform?.credentialVault
+      ?? getSharedCredentialVault();
     await putDurableCredential({
       platformStore,
-      vault: getSharedCredentialVault(),
+      vault,
       workspaceId: businessId,
       credentialId,
       providerType: "twilio_voice",
       secrets: { accountSid, authToken, fromNumber, twimlUrl },
-      metadata: { fromNumber, twimlUrl },
+      metadata: {
+        fromNumber,
+        twimlUrl,
+        receptionist: true,
+        inboundUrl: defaultTwiml,
+      },
     });
 
     const knowledgeCount = await platformStore.countActiveKnowledgeDocuments(businessId);
@@ -47,6 +57,13 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       connection: { id: connection?.id, connectionType: connection?.connectionType, status: connection?.status },
+      twimlUrl,
+      inboundUrl: defaultTwiml,
+      nextSteps: [
+        `Point this Twilio number’s Voice webhook to: ${defaultTwiml}`,
+        "Inbound calls use the Knowledge-backed AI receptionist.",
+        "Outbound customer calls still require owner GRANT.",
+      ],
     });
   } catch (err) {
     return authorizationErrorResponse(err);

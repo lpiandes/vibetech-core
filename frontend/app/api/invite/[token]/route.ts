@@ -3,6 +3,16 @@ import { NextResponse } from "next/server";
 import { platformStore } from "@/lib/server/compose";
 import { validateInvitationForDisplay } from "@/lib/server/compose";
 import { MEMBERSHIP_ROLE_LABELS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
+import {
+  presentPurchasedPackages,
+  readPurchasedPackagesFromConfig,
+} from "../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
+
+function purchasedPackagesForBusiness(business: any) {
+  return presentPurchasedPackages(
+    readPurchasedPackagesFromConfig(business?.packageConfiguration),
+  );
+}
 
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
   try {
@@ -24,6 +34,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
         roleLabel: MEMBERSHIP_ROLE_LABELS[validation.invitation.role as keyof typeof MEMBERSHIP_ROLE_LABELS] ?? validation.invitation.role,
         businessId: validation.invitation.businessId,
         businessName: business?.name ?? "Business",
+        purchasedPackages: purchasedPackagesForBusiness(business),
       });
     }
 
@@ -44,6 +55,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
       roleLabel: MEMBERSHIP_ROLE_LABELS[validation.invitation!.role as keyof typeof MEMBERSHIP_ROLE_LABELS] ?? validation.invitation!.role,
       businessId: validation.invitation!.businessId,
       businessName: business?.name ?? "Business",
+      purchasedPackages: purchasedPackagesForBusiness(business),
       expiresAt: validation.invitation!.expiresAt,
     });
   } catch (err) {

@@ -3,6 +3,7 @@ import { getSharedCredentialVault } from "./CredentialVault.js";
 /**
  * Persist a vault credential to encrypted Postgres and keep the in-memory vault warm.
  */
+/** @param {{platformStore: any, vault?: any, workspaceId: string, credentialId: string, providerType: string, secrets: Record<string, unknown>, metadata?: Record<string, unknown>}} input */
 export async function putDurableCredential({
   platformStore,
   vault = getSharedCredentialVault(),
@@ -29,6 +30,7 @@ export async function putDurableCredential({
 /**
  * Load encrypted credentials for a workspace into the shared vault (idempotent).
  */
+/** @param {{platformStore: any, vault?: any, workspaceId: string}} input */
 export async function hydrateWorkspaceCredentials({
   platformStore,
   vault = getSharedCredentialVault(),

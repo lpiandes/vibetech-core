@@ -1,5 +1,6 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { createEntityRef, ENTITY_TYPES } from "../references/EntityRef.js";
+import { buildSpecialtyDraftGlance } from "../ai-builder/specialty/buildSpecialtyDraftGlance.js";
 
 function safeArray(v) {
   return Array.isArray(v) ? v : [];
@@ -99,8 +100,15 @@ export function projectOwnerAttention({
   }
 
   for (const approval of safeArray(approvalRuntime?.getRequests?.()).filter((a) => a.status === "PENDING")) {
+    const workIdFromApproval = String(
+      approval.relatedWorkId
+      ?? approval.workId
+      ?? approval.sourceReference?.workItemId
+      ?? approval.context?.workItemId
+      ?? "",
+    );
     const relatedWork = safeArray(workRuntime?.getWorkItems?.()).find(
-      (w) => String(w.id) === String(approval.relatedWorkId ?? approval.workId ?? ""),
+      (w) => String(w.id) === workIdFromApproval,
     );
     const relatedRequest = safeArray(requestRuntime?.getRequests?.()).find(
       (r) => String(r.id) === String(relatedWork?.requestId ?? approval.requestId ?? ""),
@@ -110,14 +118,42 @@ export function projectOwnerAttention({
     const subjectId = relatedRequest?.subjectRefs?.[0]?.entityId;
     const subject = subjectName(businessSubjectRuntime, subjectId);
     const approvalId = String(approval.id);
+    const glance = relatedWork?.metadata?.glance ?? (relatedWork ? buildSpecialtyDraftGlance({
+      employee: {
+        displayName: relatedWork.metadata?.employeeDisplayName
+          ?? relatedWork.metadata?.employeeName
+          ?? relatedWork.assigneeName
+          ?? null,
+      },
+      triggerLabel: relatedWork.metadata?.triggerLabel ?? null,
+      triggerEventType: relatedWork.metadata?.triggerEventType ?? null,
+      eventPayload: relatedWork.metadata?.eventPayload
+        ?? relatedWork.metadata?.personalization
+        ?? relatedWork.metadata?.contact
+        ?? null,
+      brief: relatedWork.metadata?.brief ?? relatedWork.description ?? "",
+      artifact: relatedWork.metadata?.artifact ?? null,
+      approvalIds: [approvalId],
+      businessId: presentation?.businessId ?? null,
+      workId: workIdFromApproval || null,
+    }) : null);
+    const bodyPreview = String(approval.context?.bodyPreview ?? "").trim();
+    const subjectLine = String(approval.context?.subject ?? "").trim();
 
     items.push({
       id: `attention_approval_${approvalId}`,
-      title: party ? `Approve send to ${party}` : `Approve: ${approval.title ?? "outbound message"}`,
-      summary: subject
-        ? `Owner approval for ${subject} — ${approval.description ?? approval.title ?? "authorization required"}`
-        : approval.description ?? `Customer-facing send needs your approval before it leaves the building.`,
-      reason: "Automation without silent outbound. Owners supervise; AI executes approved work.",
+      title: glance?.title
+        || (party
+          ? `Approve send to ${party}`
+          : `Approve: ${(approval.title ?? subjectLine) || "outbound message"}`),
+      summary: glance?.summary
+        || (bodyPreview
+          ? bodyPreview.slice(0, 120)
+          : subject
+            ? `Owner approval for ${subject} — ${approval.description ?? approval.title ?? "authorization required"}`
+            : approval.description ?? `Customer-facing send needs your approval before it leaves the building.`),
+      reason: glance?.whyNeedsYou
+        || "Automation without silent outbound. Owners supervise; AI executes approved work.",
       businessImpact: "Work cannot continue until approved.",
       priority: "critical",
       dueAt: approval.dueAt ?? null,
@@ -130,9 +166,10 @@ export function projectOwnerAttention({
       subjectName: subject,
       channel: approval.channel ?? approval.metadata?.channel ?? approval.capability ?? null,
       workId: relatedWork?.id ? String(relatedWork.id) : null,
-      workHref: relatedWork?.id && presentation?.businessId
-        ? `/b/${presentation.businessId}/work?workId=${encodeURIComponent(String(relatedWork.id))}`
-        : null,
+      workHref: glance?.workHref
+        || (relatedWork?.id && presentation?.businessId
+          ? `/b/${presentation.businessId}/work?workId=${encodeURIComponent(String(relatedWork.id))}`
+          : null),
       knowledgeCited: Array.isArray(approval.metadata?.knowledgeCited)
         ? approval.metadata.knowledgeCited.map(String)
         : Array.isArray(relatedWork?.metadata?.sourceRefs)
@@ -140,7 +177,8 @@ export function projectOwnerAttention({
           : [],
       requestedBy: approval.requestedBy ?? approval.requesterId ?? "AI teammate",
       requestedAt: approval.requestedAt ?? approval.createdAt ?? null,
-      recommendedAction: "Approve the prepared response if it aligns with your policies.",
+      recommendedAction: glance?.whyNeedsYou
+        || "Approve the prepared response if it aligns with your policies.",
       availableActions: [
         { id: "approve", label: "Approve", mutation: { type: "approval_decision", approvalId, decision: "GRANT" } },
         { id: "reject", label: "Reject", mutation: { type: "approval_decision", approvalId, decision: "REJECT" } },
@@ -161,6 +199,70 @@ export function projectOwnerAttention({
           : [],
         winClaim: "Every customer email/SMS/call has an approval event.",
       },
+    });
+  }
+
+  // Specialty automation drafts — generic glance cards for Home "Needs you".
+  const pendingApprovalWorkIds = new Set(
+    items
+      .filter((item) => item.sourceType === "approval" && item.workId)
+      .map((item) => String(item.workId)),
+  );
+  for (const work of safeArray(workRuntime?.getWorkItems?.())) {
+    const workType = String(work?.workType ?? "");
+    const isSpecialty = work?.metadata?.customAi === true || workType === "custom_ai_task";
+    if (!isSpecialty) continue;
+    if (work.status === "completed" || work.status === "cancelled") continue;
+    const workId = String(work.id ?? "");
+    if (!workId || pendingApprovalWorkIds.has(workId)) continue;
+    // Pure Auto runs stay out of Needs you.
+    if (work.metadata?.needsYou === false || work.metadata?.glance?.needsYou === false) continue;
+
+    const glance = work.metadata?.glance ?? buildSpecialtyDraftGlance({
+      employee: {
+        displayName: work.metadata?.employeeDisplayName
+          ?? work.metadata?.employeeName
+          ?? work.assigneeName
+          ?? null,
+      },
+      triggerLabel: work.metadata?.triggerLabel ?? null,
+      triggerEventType: work.metadata?.triggerEventType ?? null,
+      eventPayload: work.metadata?.eventPayload ?? work.metadata?.personalization ?? work.metadata?.contact ?? null,
+      brief: work.metadata?.brief ?? work.description ?? "",
+      artifact: work.metadata?.artifact ?? null,
+      approvalIds: Array.isArray(work.metadata?.approvalIds) ? work.metadata.approvalIds : [],
+      businessId: presentation?.businessId ?? null,
+      workId,
+    });
+    const waiting = hoursWaiting(work.createdAt ?? work.updatedAt, nowISO);
+    const title = glance?.title || String(work.title ?? "Draft ready for review");
+    const summary = glance?.summary
+      || String(work.metadata?.triggerLabel ?? work.metadata?.triggerEventType ?? "Automation drafted something for you");
+    const why = glance?.whyNeedsYou || "Review the draft, then continue.";
+    const href = glance?.workHref
+      || (presentation?.businessId
+        ? `/b/${presentation.businessId}/work?workId=${encodeURIComponent(workId)}`
+        : `/work?workId=${encodeURIComponent(workId)}`);
+
+    items.push({
+      id: `attention_specialty_draft_${workId}`,
+      title,
+      summary: waiting ? `${summary} · waiting ${waiting}` : summary,
+      reason: why,
+      businessImpact: why,
+      priority: "high",
+      dueAt: work.dueAt ?? null,
+      waitingDuration: waiting,
+      sourceType: "specialty_draft",
+      sourceId: workId,
+      workId,
+      workHref: href,
+      partyName: work.metadata?.contact?.name ?? work.metadata?.eventPayload?.name ?? null,
+      recommendedAction: why,
+      availableActions: [
+        { id: "review_draft", label: "Open draft", href },
+      ],
+      relatedObjects: [createEntityRef({ entityType: ENTITY_TYPES.WORK, entityId: workId })],
     });
   }
 

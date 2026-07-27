@@ -1,12 +1,15 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { createBuilderRecommendation } from "./BuilderRecommendation.js";
 import { getDefaultBlueprintRegistry } from "../blueprints/BlueprintRegistry.js";
+import { isFullOsPurchasedScope } from "../platform/packages/SalesPackageCatalog.js";
 
 /**
- * Prefer existing Gold / industry blueprints over custom generation.
- * Only select property Gold when industry is explicitly property_management —
- * never from weak evidence regex matches (that wrongly installs McBride for
- * marketing / other businesses).
+ * Prefer active operating packs over legacy fixtures. Historical blueprints
+ * remain readable for migrations and test coverage, but a new Builder session
+ * must never install one merely because the owner's wording resembles a demo.
+ *
+ * Thin purchased packages always assemble on universal core — sports/dental
+ * packs are Full OS accelerators only.
  */
 export class BlueprintRecommendationEngine {
   constructor({ registry = getDefaultBlueprintRegistry() } = {}) {
@@ -15,33 +18,34 @@ export class BlueprintRecommendationEngine {
 
   recommend({ businessSummary = {}, evidence = [] } = {}) {
     const industry = String(businessSummary.industry ?? "").toLowerCase().replace(/\s+/g, "_");
+    const purchasedPackages = businessSummary.purchasedPackages ?? [];
+    const thinSku = !isFullOsPurchasedScope(purchasedPackages);
     const recommendations = [];
     void evidence;
 
-    if (industry === "property_management" || industry === "property" || industry === "real_estate") {
-      const gold = this.registry.get("bp_gold_property_management_mcbride");
-      if (gold) {
-        recommendations.push(createBuilderRecommendation({
-          recommendationId: "rec_bp_pm_gold",
-          kind: "blueprint",
-          label: gold.name,
-          why: "Matches confirmed property management operations using the reusable property Gold blueprint.",
-          evidence: ["industry:property_management", "gold_blueprint"],
-          confidence: 0.92,
-          alternatives: ["bp_platform_universal_core"],
-          selected: true,
-          missingCapabilities: gold.optionalCapabilities ?? [],
-        }));
-      }
-    } else if (industry === "sports" || industry === "hockey") {
+    if (thinSku) {
+      const core = this.registry.get("bp_platform_universal_core");
       recommendations.push(createBuilderRecommendation({
-        recommendationId: "rec_bp_hockey_fixture",
+        recommendationId: "rec_bp_universal",
         kind: "blueprint",
-        label: "Hockey Travel Club fixture blueprint",
-        why: "Sports club signals match the reusable hockey travel club fixture on the universal runtime.",
+        label: core?.name ?? "Universal Core",
+        why: "Assemble only the modules entitled by purchased packages — industry wording does not unlock a full vertical pack.",
+        evidence: ["purchased_packages:thin", industry ? `industry:${industry}` : "fallback:universal"],
+        confidence: 0.8,
+        selected: true,
+        missingCapabilities: [],
+      }));
+      return deepFreeze({ ok: true, recommendations });
+    }
+
+    if (industry === "sports" || industry === "hockey") {
+      recommendations.push(createBuilderRecommendation({
+        recommendationId: "rec_bp_sports_club",
+        kind: "operating_pack",
+        label: "Sports club operating pack",
+        why: "Start with the Sports operating pack. Architect adds only the records, workflows, and AI teammates confirmed in your answers — never a prebuilt hockey tenant.",
         evidence: ["industry:sports"],
-        confidence: 0.88,
-        alternatives: ["bp_platform_universal_core"],
+        confidence: 0.82,
         selected: true,
       }));
     } else if (industry === "dental") {

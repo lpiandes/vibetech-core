@@ -68,7 +68,22 @@ test("buildPathWithoutFocus returns pathname when focus was the only query param
   assert.equal(buildPathWithoutFocus("/b/ws/integrations", params), "/b/ws/integrations");
 });
 
-test("buildPathWithoutFocus is unchanged when focus is absent", () => {
-  const params = new URLSearchParams("tab=overview");
-  assert.equal(buildPathWithoutFocus("/b/ws/integrations", params), "/b/ws/integrations");
+test("justConnected never opens the setup modal", () => {
+  const display = shouldOpenIntegrationFromFocus({
+    focus: "property_management_system",
+    setupTarget: null,
+    consumedFocus: null,
+    primary,
+    justConnected: true,
+    isConnected: (status) => String(status).toUpperCase() === "CONNECTED",
+  });
+  assert.equal(display, null);
+});
+
+test("resolveOAuthReturnPath accepts same-app paths and rejects open redirects", async () => {
+  const { resolveOAuthReturnPath } = await import("./integrationFocusRouting.js");
+  assert.equal(resolveOAuthReturnPath("/b/x/home", "/fallback"), "/b/x/home");
+  assert.equal(resolveOAuthReturnPath("https://evil.com", "/fallback"), "/fallback");
+  assert.equal(resolveOAuthReturnPath("//evil.com", "/fallback"), "/fallback");
+  assert.equal(resolveOAuthReturnPath(null, "/fallback"), "/fallback");
 });

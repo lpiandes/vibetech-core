@@ -1,5 +1,6 @@
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 import { compileSpecialtySurfacesOnSpecification } from "../specialty/SpecialtySurfaceCompiler.js";
+import { ensureEmployeeOperatingContract } from "../operating-contract/buildOperatingContract.js";
 
 export const CUSTOM_AI_CAPABILITY_ID = "custom_ai_work";
 export const CUSTOM_AI_WORK_TYPE = "custom_ai_task";
@@ -37,7 +38,7 @@ export function compileCustomAiEmployee(employee = {}, { ownerAdded = false } = 
     CUSTOM_AI_WORK_TYPE,
   ]);
 
-  return deepFreeze({
+  const compiled = {
     ...employee,
     employeeId,
     label,
@@ -71,6 +72,7 @@ export function compileCustomAiEmployee(employee = {}, { ownerAdded = false } = 
       {
         automationId: `auto_custom_${employeeId}`,
         name: `${label} — run specialty job`,
+        // Production default: Active so installed custom workers fire. Outbound stays approval-gated.
         status: "ACTIVE",
         employeeId,
         trigger: { type: "manual", eventType: "CUSTOM_AI_JOB_REQUESTED" },
@@ -95,7 +97,12 @@ export function compileCustomAiEmployee(employee = {}, { ownerAdded = false } = 
         metadata: { employeeId, customAi: true, packageId: CUSTOM_AI_PACKAGE_ID },
       },
     ],
+  };
+
+  const { _operatingContractMeta, ...withContract } = ensureEmployeeOperatingContract(compiled, {
+    industry: employee.industry ?? null,
   });
+  return deepFreeze(withContract);
 }
 
 /**

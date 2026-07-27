@@ -14,12 +14,13 @@ export default function BusinessOnboardingHome({
   businessId: string;
   businessName: string;
 }) {
-  const talkHref = `/b/${encodeURIComponent(businessId)}/architect`;
+  const talkHref = `/b/${encodeURIComponent(businessId)}/architect?newSetup=1`;
 
   return (
     <div
       style={{
-        minHeight: "70vh",
+        minHeight: "100%",
+        height: "100%",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

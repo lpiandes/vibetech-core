@@ -24,12 +24,13 @@ export async function GET() {
     });
   }
 
-  let adminDirectory: Array<{ id: string; name: string }> = [];
+  let adminDirectory: Array<{ id: string; name: string; status?: string }> = [];
   if (session.user.platformRole === PLATFORM_ROLES.PLATFORM_ADMIN) {
-    const all = await platformStore.listBusinesses();
-    adminDirectory = all.slice(0, 50).map((row: any) => ({
+    const all = await platformStore.listBusinesses({ includeArchived: false });
+    adminDirectory = all.map((row: any) => ({
       id: String(row.id),
       name: String(row.name ?? "Business"),
+      status: String(row.status ?? "ACTIVE"),
     }));
   }
 

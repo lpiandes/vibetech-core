@@ -85,7 +85,7 @@ export default function OsAssemblyCanvas({
                         : "Waiting — click the circle to see it work"}
                 </div>
               </div>
-              <StageStatusIcon ready={stage.ready} spinning={showSpin || (busy && !stage.ready)} delay={index * 0.12} />
+              <StageStatusIcon ready={Boolean(stage.ready)} spinning={Boolean(showSpin || (busy && !stage.ready))} delay={index * 0.12} />
             </button>
           );
         })}

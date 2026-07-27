@@ -2,7 +2,7 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight } from "lucide-react";
+import { Activity, ArrowRight, ArrowUpRight, BarChart3, BriefcaseBusiness, CheckCircle2, CircleAlert, ClipboardCheck, LoaderCircle, Mail, PlugZap, UsersRound } from "lucide-react";
 import { cockpitColors, spacing, radius } from "@/design/tokens";
 import { scrubInternalWording } from "@/lib/operating/businessLanguage";
 
@@ -34,6 +34,15 @@ export function HomeCanvas({ children }: { children: ReactNode }) {
         {children}
       </div>
       <style>{`
+        .vt-operating-status { display: grid; gap: 8px; padding: 13px 16px; background: #fff; border: 1px solid rgba(15, 23, 42, .07); border-radius: 16px; box-shadow: 0 8px 24px rgba(15,23,42,.035); }
+        .vt-operating-status-title { font-size: 11px; color: #64748b; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+        .vt-operating-status-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+        .vt-status-chip { min-width: 0; display: flex; align-items: flex-start; gap: 9px; padding: 9px; color: #334155; border-radius: 10px; background: #f8fafc; text-decoration: none; }
+        .vt-status-chip:hover { background: #f1f5f9; }
+        .vt-status-chip strong, .vt-status-chip small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vt-status-chip strong { font-size: 12px; color: #0f172a; line-height: 1.35; }
+        .vt-status-chip small { margin-top: 2px; font-size: 11px; color: #64748b; line-height: 1.35; }
+        .vt-status-good svg { color: #059669; } .vt-status-warning svg { color: #d97706; } .vt-status-default svg { color: #2563eb; }
         .vt-dash-grid-3 {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -43,13 +52,13 @@ export function HomeCanvas({ children }: { children: ReactNode }) {
         .vt-dash-metrics {
           display: grid;
           grid-template-columns: repeat(5, minmax(0, 1fr));
-          gap: 12px;
+          gap: 14px;
         }
         .vt-dash-card {
           background: #fff;
-          border: 1px solid rgba(15, 23, 42, 0.06);
-          border-radius: 16px;
-          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.04);
+          border: 1px solid #e8edf2;
+          border-radius: 14px;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035), 0 8px 22px rgba(15, 23, 42, 0.035);
         }
         .vt-dash-row-interactive { cursor: pointer; }
         .vt-dash-row-interactive:hover { background: rgba(15, 118, 110, 0.04); }
@@ -58,12 +67,26 @@ export function HomeCanvas({ children }: { children: ReactNode }) {
         @media (max-width: 1100px) {
           .vt-dash-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .vt-dash-grid-3 { grid-template-columns: 1fr 1fr; }
+          .vt-operating-status-grid { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 720px) {
-          .vt-dash-metrics, .vt-dash-grid-3 { grid-template-columns: 1fr; }
+          .vt-dash-metrics, .vt-dash-grid-3, .vt-operating-status-grid { grid-template-columns: 1fr; }
         }
         @media (prefers-reduced-motion: reduce) {
           .vt-dash-card { transition: none !important; }
+        }
+        .vt-simple-row-link:hover > div { background: rgba(15, 118, 110, 0.04); }
+        .vt-home-panel-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 16px;
+          align-items: start;
+        }
+        @media (max-width: 1100px) {
+          .vt-home-panel-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 720px) {
+          .vt-home-panel-grid { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>
@@ -75,26 +98,100 @@ export function HomeHero({
   subtitle,
 }: {
   greeting: string;
-  subtitle: string;
+  subtitle?: string;
 }) {
   return (
     <header style={{ display: "grid", gap: 6, paddingTop: 4 }}>
       <h1
         style={{
           margin: 0,
-          fontSize: "clamp(1.65rem, 2.8vw, 2rem)",
-          fontWeight: 700,
-          letterSpacing: "-0.025em",
+          fontSize: "1.75rem",
+          fontWeight: 800,
+          letterSpacing: "-0.03em",
+          lineHeight: 1.15,
           color: cockpitColors.textPrimary,
-          lineHeight: 1.2,
+          fontFamily: "inherit",
         }}
       >
         {scrubInternalWording(greeting)}
       </h1>
-      <p style={{ margin: 0, fontSize: "0.95rem", color: cockpitColors.textMuted, lineHeight: 1.45 }}>
-        {scrubInternalWording(subtitle)}
-      </p>
+      {subtitle ? (
+        <p style={{ margin: 0, fontSize: "0.95rem", color: cockpitColors.textMuted, lineHeight: 1.45 }}>
+          {scrubInternalWording(subtitle)}
+        </p>
+      ) : null}
     </header>
+  );
+}
+
+/** A truthful health readout: it only summarizes live setup, attention, and teammate state. */
+export function OperatingStatusBar({
+  setupComplete,
+  setupRemaining,
+  attentionCount,
+  workingCount,
+  workforce,
+  integrationsHref,
+  attentionHref,
+  teamHref,
+}: {
+  setupComplete: boolean;
+  setupRemaining: number;
+  attentionCount: number;
+  workingCount: number;
+  workforce: Array<{ status?: string | null }>;
+  integrationsHref?: string | null;
+  attentionHref?: string | null;
+  teamHref?: string | null;
+}) {
+  const blocked = workforce.filter((member) => /blocked|needs_setup|needs_approval/i.test(String(member.status ?? ""))).length;
+  const chips = [
+    {
+      id: "setup",
+      label: setupComplete ? "Platform connected" : `${setupRemaining} setup step${setupRemaining === 1 ? "" : "s"} remaining`,
+      detail: setupComplete ? "Connections are ready" : "Some tools cannot run yet",
+      tone: setupComplete ? "good" : "warning",
+      href: integrationsHref,
+      icon: setupComplete ? CheckCircle2 : PlugZap,
+    },
+    {
+      id: "attention",
+      label: attentionCount ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} need you` : "Nothing needs your decision",
+      detail: attentionCount ? "Review before work can continue" : "You are all caught up",
+      tone: attentionCount ? "warning" : "good",
+      href: attentionHref,
+      icon: attentionCount ? CircleAlert : CheckCircle2,
+    },
+    {
+      id: "work",
+      label: workingCount ? `${workingCount} item${workingCount === 1 ? "" : "s"} in progress` : "No active work right now",
+      detail: workingCount ? "VIBETech is working from live records" : "New work will appear here",
+      tone: "default",
+      href: null,
+      icon: LoaderCircle,
+    },
+    {
+      id: "team",
+      label: blocked ? `${blocked} teammate${blocked === 1 ? "" : "s"} need setup` : `${workforce.length} AI teammate${workforce.length === 1 ? "" : "s"} monitored`,
+      detail: blocked ? "Open the team to see what is blocked" : "Status is based on current assignments",
+      tone: blocked ? "warning" : "default",
+      href: teamHref,
+      icon: UsersRound,
+    },
+  ];
+  return (
+    <section aria-label="Operating status" className="vt-operating-status">
+      <div className="vt-operating-status-title">Operating status</div>
+      <div className="vt-operating-status-grid">
+        {chips.map((chip) => {
+          const Icon = chip.icon;
+          const body = <><Icon size={17} aria-hidden /><span><strong>{chip.label}</strong><small>{chip.detail}</small></span></>;
+          return chip.href
+            ? <Link key={chip.id} href={chip.href} className={`vt-status-chip vt-status-${chip.tone}`}>{body}</Link>
+            : <div key={chip.id} className={`vt-status-chip vt-status-${chip.tone}`}>{body}</div>;
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -114,28 +211,22 @@ export function MetricStrip({
   return (
     <div className="vt-dash-metrics" aria-label="Business snapshot">
       {metrics.map((metric) => {
+        const visual = metricVisual(metric.label, metric.tone);
+        const Icon = visual.icon;
         const body = (
           <>
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: cockpitColors.textMuted,
-                lineHeight: 1.3,
-              }}
-            >
-              {scrubInternalWording(metric.label)}
-            </div>
-            <div
-              style={{
-                fontSize: "1.65rem",
-                fontWeight: 750,
-                letterSpacing: "-0.03em",
-                color: cockpitColors.textPrimary,
-                lineHeight: 1.1,
-              }}
-            >
-              {metric.value}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 11 }}>
+              <span aria-hidden style={{ width: 40, height: 40, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 11, color: visual.color, background: visual.background, flexShrink: 0 }}>
+                <Icon size={20} strokeWidth={2.2} />
+              </span>
+              <div style={{ minWidth: 0, paddingTop: 2 }}>
+                <div style={{ fontSize: 12, fontWeight: 650, color: cockpitColors.textMuted, lineHeight: 1.3 }}>
+                  {scrubInternalWording(metric.label)}
+                </div>
+                <div style={{ marginTop: 5, fontSize: "1.7rem", fontWeight: 760, letterSpacing: "-0.04em", color: cockpitColors.textPrimary, lineHeight: 1.05 }}>
+                  {metric.value}
+                </div>
+              </div>
             </div>
             {metric.detail ? (
               <div
@@ -161,7 +252,7 @@ export function MetricStrip({
               key={metric.id}
               href={metric.href}
               className="vt-dash-card vt-dash-metric-interactive"
-              style={{ padding: "14px 16px" }}
+              style={{ padding: "16px", minHeight: 126 }}
             >
               {body}
             </Link>
@@ -171,7 +262,7 @@ export function MetricStrip({
           <div
             key={metric.id}
             className="vt-dash-card"
-            style={{ padding: "14px 16px", display: "grid", gap: 6 }}
+            style={{ padding: "16px", display: "grid", gap: 9, minHeight: 126 }}
           >
             {body}
           </div>
@@ -179,6 +270,16 @@ export function MetricStrip({
       })}
     </div>
   );
+}
+
+function metricVisual(label: string, tone?: "default" | "attention" | "good") {
+  const normalized = String(label).toLowerCase();
+  if (tone === "attention" || /need|attention|waiting|approval/.test(normalized)) return { icon: CircleAlert, color: "#b45309", background: "#fff3dd" };
+  if (/team|teammate|employee/.test(normalized)) return { icon: UsersRound, color: "#7c3aed", background: "#f1eaff" };
+  if (/work|motion|active|deal|showing/.test(normalized)) return { icon: BriefcaseBusiness, color: "#047857", background: "#e5f7ef" };
+  if (/inquir|lead|people|conversation|message/.test(normalized)) return { icon: Mail, color: "#2563eb", background: "#e8f1ff" };
+  if (tone === "good" || /complete|win|outcome/.test(normalized)) return { icon: ClipboardCheck, color: "#059669", background: "#e5f7ef" };
+  return { icon: BarChart3, color: "#0f766e", background: "#e4f7f3" };
 }
 
 export function DashGrid({ children }: { children: ReactNode }) {
@@ -376,8 +477,15 @@ export function ActivityItem({
   href?: string | null;
   index?: number;
 }) {
-  const colors = ["#2563eb", "#d97706", "#059669", "#7c3aed", "#dc2626"];
-  const dot = colors[index % colors.length];
+  const visuals = [
+    { icon: Activity, color: "#2563eb", background: "#e8f1ff" },
+    { icon: ClipboardCheck, color: "#d97706", background: "#fff3dd" },
+    { icon: CheckCircle2, color: "#059669", background: "#e5f7ef" },
+    { icon: UsersRound, color: "#7c3aed", background: "#f1eaff" },
+    { icon: Mail, color: "#dc2626", background: "#ffe9e8" },
+  ];
+  const visual = visuals[index % visuals.length];
+  const Icon = visual.icon;
   const interactive = Boolean(href);
   const body = (
     <div
@@ -390,17 +498,7 @@ export function ActivityItem({
         borderRadius: 10,
       }}
     >
-      <span
-        aria-hidden
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 999,
-          background: dot,
-          marginTop: 5,
-          flexShrink: 0,
-        }}
-      />
+      <span aria-hidden style={{ width: 31, height: 31, borderRadius: 10, background: visual.background, color: visual.color, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon size={16} /></span>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: cockpitColors.textPrimary, lineHeight: 1.35 }}>
           {scrubInternalWording(title)}
@@ -449,6 +547,7 @@ export function WorkforceRow({
     : standingBy
       ? cockpitColors.textMuted
       : cockpitColors.handled;
+  const initials = scrubInternalWording(name).split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "AI";
 
   const body = (
     <div
@@ -459,19 +558,25 @@ export function WorkforceRow({
         borderBottom: interactive ? undefined : `1px solid ${cockpitColors.panelBorder}`,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: cockpitColors.textPrimary }}>
-          {scrubInternalWording(name)}
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+        <div style={{ display: "flex", gap: 9, minWidth: 0 }}>
+          <span aria-hidden style={{ width: 30, height: 30, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 999, background: "linear-gradient(135deg, #0f766e, #155e75)", color: "#fff", fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{initials}</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: cockpitColors.textPrimary }}>
+              {scrubInternalWording(name)}
+            </div>
+            {role ? (
+              <div style={{ marginTop: 2, fontSize: 12, color: cockpitColors.textMuted }}>
+                {scrubInternalWording(role)}
+              </div>
+            ) : null}
+          </div>
         </div>
-        <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, whiteSpace: "nowrap" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: statusColor, whiteSpace: "nowrap" }}>
+          <span aria-hidden style={{ width: 6, height: 6, borderRadius: 999, background: statusColor }} />
           {scrubInternalWording(status ?? (standingBy ? "Standing by" : "Active"))}
         </span>
       </div>
-      {role ? (
-        <div style={{ marginTop: 2, fontSize: 12, color: cockpitColors.textMuted }}>
-          {scrubInternalWording(role)}
-        </div>
-      ) : null}
       {assignment ? (
         <div style={{ marginTop: 6, fontSize: 12, color: cockpitColors.textSecondary, lineHeight: 1.4 }}>
           {scrubInternalWording(assignment)}

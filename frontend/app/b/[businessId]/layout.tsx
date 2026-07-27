@@ -9,6 +9,7 @@ import RememberBusinessCookie from "@/components/platform/RememberBusinessCookie
 import { AuthorizationError, platformStore } from "@/lib/server/compose";
 import { composePortalModel } from "@/lib/portal-renderer/composePortalModel.js";
 import { sanitizeCallbackUrl } from "@/lib/platform/routeProtection";
+import { readPurchasedPackagesFromConfig, readPendingPackageAsk } from "../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
 export default async function BusinessScopedLayout({
   children,
@@ -45,6 +46,16 @@ export default async function BusinessScopedLayout({
 
   const permissions = Array.from(ctx.permissions).map(String);
   const businessName = ctx.authz.business.name;
+  const packageConfiguration = ctx.authz.business.packageConfiguration ?? {};
+  const purchasedPackages = readPurchasedPackagesFromConfig(packageConfiguration);
+  const pendingPackageAsk = readPendingPackageAsk(packageConfiguration);
+
+  const headerStore = await headers();
+  const pathname = headerStore.get("x-pathname") ?? "";
+  const onArchitect = /\/b\/[^/]+\/architect/.test(pathname);
+  if (pendingPackageAsk && !onArchitect) {
+    redirect(`/b/${encodeURIComponent(businessId)}/architect?packageAsk=1`);
+  }
 
   let installedNavigation = null as any;
   let installedBusinessOS = null as any;
@@ -90,6 +101,8 @@ export default async function BusinessScopedLayout({
         role: String(ctx.role),
         permissions,
         businessName,
+        purchasedPackages,
+        pendingPackageAsk,
         installedNavigation,
         installedBusinessOS,
         supportAccess: ctx.authz.supportAccess ?? null,

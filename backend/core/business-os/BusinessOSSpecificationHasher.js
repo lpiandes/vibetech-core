@@ -35,6 +35,7 @@ export function extractHashableSpecificationContent(specification) {
     relationshipDefinitions: specification.relationshipDefinitions,
     requestDefinitions: specification.requestDefinitions,
     workDefinitions: specification.workDefinitions,
+    pipelineDefinitions: specification.pipelineDefinitions,
     workflowDefinitions: specification.workflowDefinitions,
     employeeDefinitions: specification.employeeDefinitions,
     dashboardDefinitions: specification.dashboardDefinitions,

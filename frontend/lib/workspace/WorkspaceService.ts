@@ -222,8 +222,9 @@ function enrichDigitalEmployeesForTeam(
     role?: string;
     name?: string;
     ownerAdded?: boolean;
+    customAiWork?: boolean;
     assistedMode?: boolean;
-    canCurrently?: { askAssisted?: boolean };
+    canCurrently?: { askAssisted?: boolean; customAiJobs?: boolean };
   }>();
   for (const raw of Array.isArray(rawEmployees) ? rawEmployees : []) {
     const entry = raw as {
@@ -233,8 +234,9 @@ function enrichDigitalEmployeesForTeam(
       role?: string;
       name?: string;
       ownerAdded?: boolean;
+      customAiWork?: boolean;
       assistedMode?: boolean;
-      canCurrently?: { askAssisted?: boolean };
+      canCurrently?: { askAssisted?: boolean; customAiJobs?: boolean };
     };
     rawById.set(String(entry.employeeId), entry);
   }
@@ -255,7 +257,7 @@ function enrichDigitalEmployeesForTeam(
     const canRunJobs = Boolean(raw.canCurrently?.customAiJobs || (ownerAdded && ready));
     const askAssisted = Boolean(raw.canCurrently?.askAssisted || ownerAdded);
     const statusLabel = ready
-      ? (ownerAdded ? "Ready to work" : statusLabels[statusKey] ?? "Ready")
+      ? (ownerAdded ? "Needs first test" : statusLabels[statusKey] ?? "Ready")
       : (statusLabels[statusKey] ?? statusKey.replace(/_/g, " ").toLowerCase());
 
     return {
@@ -280,9 +282,10 @@ function enrichDigitalEmployeesForTeam(
       detailHref: businessId && (ownerAdded || canRunJobs)
         ? `/b/${businessId}/specialty/${encodeURIComponent(employeeId)}`
         : (businessId ? `/b/${businessId}/team/${encodeURIComponent(employeeId)}` : null),
-      askHref: businessId
-        ? `/b/${encodeURIComponent(businessId)}/architect?employeeId=${encodeURIComponent(employeeId)}`
-        : null,
+      // Primary teammate destination is specialty — not Architect improve.
+      askHref: businessId && (ownerAdded || canRunJobs)
+        ? `/b/${businessId}/specialty/${encodeURIComponent(employeeId)}`
+        : (businessId ? `/b/${encodeURIComponent(businessId)}/team/${encodeURIComponent(employeeId)}` : null),
       runJobHref: businessId && (ownerAdded || canRunJobs)
         ? `/b/${businessId}/specialty/${encodeURIComponent(employeeId)}`
         : null,
@@ -1047,12 +1050,14 @@ export class WorkspaceService {
     return deriveRequiredSetupStepsFromIntegrations(this.resolveBusinessOsIntegrations() ?? []);
   }
 
-  loadAutomationCenterViewModel() {
+  async loadAutomationCenterViewModel() {
     const adapter = new AutomationCenterViewAdapter();
+    const installation = await platformStore.getBusinessOSInstallation(this.workspaceId).catch(() => null);
     const base = adapter.translate({
       identity: this.connected.identityViewModel,
       installationResult: this.connected.installationResult,
       automationRuntime: this.connected.ctx.automationRuntime,
+      installation,
     });
     return attachProductContext(
       {
@@ -1102,16 +1107,293 @@ export class WorkspaceService {
 
   async setAutomationsStatusForEmployee(employeeId: string, status: "ACTIVE" | "INACTIVE") {
     const runtime = this.connected.ctx.automationRuntime;
+    if (!runtime?.applyEvent || !runtime?.getAutomations) {
+      throw new Error("Automations are not available for this workspace.");
+    }
     const empId = String(employeeId ?? "");
-    const automations = (runtime?.getAutomations?.() ?? []).filter((auto: { id?: string; metadata?: { employeeId?: string }; assignedEmployeeId?: string }) => {
+    const next = String(status ?? "").toUpperCase() as "ACTIVE" | "INACTIVE";
+    if (next !== "ACTIVE" && next !== "INACTIVE") {
+      throw new Error("status must be ACTIVE or INACTIVE");
+    }
+
+    const { ensureEmployeeOperatingAutomationRegistered } = await import(
+      "../../../backend/core/ai-builder/specialty/registerEmployeeOperatingAutomation.js"
+    );
+    const {
+      enqueueSpecialtyScheduleJob,
+      resolveEmployeeSpecialtySchedule,
+    } = await import(
+      "../../../backend/core/ai-builder/specialty/specialtyScheduleEngine.js"
+    );
+
+    const installation = await platformStore.getBusinessOSInstallation(this.workspaceId).catch(() => null);
+    const employees = Array.isArray(installation?.configuration?.employees)
+      ? [...installation.configuration.employees]
+      : [];
+    const empIndex = employees.findIndex(
+      (entry: { employeeId?: string; id?: string }) =>
+        String(entry.employeeId ?? entry.id) === empId,
+    );
+    const employee = empIndex >= 0
+      ? employees[empIndex]
+      : { employeeId: empId, label: empId };
+
+    const registered = ensureEmployeeOperatingAutomationRegistered({
+      automationRuntime: runtime,
+      employee,
+      nowISO: NOW_ISO,
+    });
+
+    let automations = (runtime.getAutomations?.() ?? []).filter((auto: { id?: string; metadata?: { employeeId?: string }; assignedEmployeeId?: string }) => {
       const linked = String(auto?.metadata?.employeeId ?? auto?.assignedEmployeeId ?? "");
       return linked === empId || String(auto?.id ?? "").includes(empId);
     });
+    if (!automations.length && registered?.automationId) {
+      const one = runtime.getAutomationById?.(registered.automationId);
+      if (one) automations = [one];
+    }
+
     const results = [];
     for (const auto of automations) {
-      results.push(await this.setAutomationStatus(String(auto.id), status));
+      results.push(await this.setAutomationStatus(String(auto.id), next));
     }
-    return { ok: true, employeeId: empId, status, results };
+
+    // Mirror status onto installation stubs.
+    let scheduleResult: Record<string, unknown> | null = null;
+    if (installation && empIndex >= 0) {
+      const current = employees[empIndex];
+      const autosDef = Array.isArray(current.automationDefinitions)
+        ? current.automationDefinitions.map((auto: { automationId?: string; id?: string; status?: string }) => ({
+          ...auto,
+          status: next,
+        }))
+        : [];
+      if (!autosDef.length) {
+        autosDef.push({
+          automationId: registered.automationId,
+          employeeId: empId,
+          status: next,
+          metadata: { fromOperatingContract: true, employeeId: empId },
+        } as any);
+      }
+      employees[empIndex] = {
+        ...current,
+        automationDefinitions: autosDef,
+      };
+      await platformStore.upsertBusinessOSInstallation({
+        id: installation.id ?? installation.installationId ?? `install_${this.workspaceId}`,
+        businessId: this.workspaceId,
+        specificationRowId: installation.specificationRowId ?? null,
+        specificationId: installation.specificationId,
+        specificationVersion: installation.specificationVersion ?? 1,
+        specificationContentHash: installation.specificationContentHash
+          ?? installation.contentHash
+          ?? "specialty_automation_status",
+        planId: installation.planId ?? `plan_${this.workspaceId}`,
+        status: installation.status ?? "installed",
+        plan: installation.plan ?? {},
+        actionCheckpoints: installation.actionCheckpoints ?? [],
+        configuration: {
+          ...(installation.configuration ?? {}),
+          employees,
+        },
+        history: [
+          ...(Array.isArray(installation.history) ? installation.history : []),
+          {
+            at: NOW_ISO,
+            action: "set_employee_automation_status",
+            employeeId: empId,
+            status: next,
+          },
+        ],
+        actorUserId: installation.actorUserId ?? null,
+        installedAt: installation.installedAt ?? null,
+      });
+    }
+
+    if (next === "ACTIVE") {
+      try {
+        const { PostgresPlatformJobQueue } = await import(
+          "../../../backend/core/platform/jobs/PostgresPlatformJobQueue.js"
+        );
+        const { withClient } = await import("@/lib/server/compose");
+        const queue = new PostgresPlatformJobQueue({ withClient });
+        const schedule = resolveEmployeeSpecialtySchedule(employee);
+        if (schedule) {
+          scheduleResult = await enqueueSpecialtyScheduleJob({
+            queue,
+            businessId: this.workspaceId,
+            employeeId: empId,
+            schedule,
+            whenText: String(
+              (employee as { operatingContract?: { scope?: { answers?: { when?: { value?: string } } } } })
+                ?.operatingContract?.scope?.answers?.when?.value ?? "",
+            ),
+          }) as Record<string, unknown>;
+        }
+      } catch {
+        scheduleResult = { ok: false, reason: "schedule_enqueue_failed" };
+      }
+    }
+
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack ?? this.connected.ctx,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.AUTOMATION],
+    });
+
+    const refreshed = (runtime.getAutomations?.() ?? []).filter((auto: { id?: string; metadata?: { employeeId?: string } }) => {
+      const linked = String(auto?.metadata?.employeeId ?? "");
+      return linked === empId || String(auto?.id ?? "").includes(empId);
+    });
+    const active = refreshed.some((a: { status?: string }) => String(a.status).toUpperCase() === "ACTIVE");
+
+    return {
+      ok: true,
+      employeeId: empId,
+      status: next,
+      active,
+      results,
+      registered: registered.registered,
+      automationId: registered.automationId,
+      schedule: scheduleResult,
+      automations: refreshed.map((a: { id?: string; name?: string; status?: string }) => ({
+        id: String(a.id),
+        name: String(a.name ?? ""),
+        status: String(a.status ?? "INACTIVE"),
+      })),
+    };
+  }
+
+  async fireSpecialtyEmployeeTrigger({
+    employeeId,
+    eventType = "SPECIALTY_JOB_REQUESTED",
+    brief = "",
+    forceManual = false,
+    actorId = "owner",
+    eventPayload = {},
+  }: {
+    employeeId: string;
+    eventType?: string;
+    brief?: string;
+    forceManual?: boolean;
+    actorId?: string;
+    eventPayload?: Record<string, unknown>;
+  }) {
+    const { fireSpecialtyTrigger, publishSpecialtyPlatformEvent } = await import(
+      "../../../backend/core/ai-builder/specialty/fireSpecialtyTrigger.js"
+    );
+    const installation = await platformStore.getBusinessOSInstallation(this.workspaceId).catch(() => null);
+    const employees = Array.isArray(installation?.configuration?.employees)
+      ? installation.configuration.employees
+      : [];
+    const employee = employees.find(
+      (entry: { employeeId?: string; id?: string }) =>
+        String(entry.employeeId ?? entry.id) === String(employeeId),
+    ) ?? { employeeId, label: employeeId };
+
+    let knowledgeDocuments: Array<Record<string, unknown>> = [];
+    try {
+      knowledgeDocuments = await businessKnowledgeService.listOperationalDocuments(this.workspaceId);
+    } catch {
+      knowledgeDocuments = [];
+    }
+
+    publishSpecialtyPlatformEvent({
+      platformEventBus: (this.connected.operatingStack as { bus?: unknown } | undefined)?.bus
+        ?? (this.connected.ctx as { bus?: unknown })?.bus
+        ?? null,
+      platformEventStore: this.connected.ctx.platformEventStore ?? null,
+      businessId: this.workspaceId,
+      employeeId,
+      eventType,
+      payload: eventPayload,
+      nowISO: NOW_ISO,
+    });
+
+    const result = await fireSpecialtyTrigger({
+      workRuntime: this.workRuntime,
+      automationRuntime: this.connected.ctx.automationRuntime,
+      approvalRuntime: this.connected.ctx.approvalRuntime,
+      employee,
+      brief,
+      actorId,
+      businessId: this.workspaceId,
+      knowledgeDocuments,
+      eventType,
+      forceManual,
+      nowISO: () => NOW_ISO,
+      fetchImpl: typeof fetch === "function" ? fetch.bind(globalThis) : null,
+      eventPayload,
+      installation,
+      platformStore,
+    });
+
+    if (result.ok) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack: this.connected.operatingStack ?? this.connected.ctx,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: [RUNTIME_SNAPSHOT_KINDS.WORK],
+      });
+    }
+    return result;
+  }
+
+  async emitSpecialtyBusinessEvent({
+    eventType,
+    brief = "",
+    forceManual = false,
+    actorId = "owner",
+    eventPayload = {},
+  }: {
+    eventType: string;
+    brief?: string;
+    forceManual?: boolean;
+    actorId?: string;
+    eventPayload?: Record<string, unknown>;
+  }) {
+    const { emitSpecialtyBusinessEvent } = await import(
+      "../../../backend/core/ai-builder/specialty/emitSpecialtyBusinessEvent.js"
+    );
+    const installation = await platformStore.getBusinessOSInstallation(this.workspaceId).catch(() => null);
+    let knowledgeDocuments: Array<Record<string, unknown>> = [];
+    try {
+      knowledgeDocuments = await businessKnowledgeService.listOperationalDocuments(this.workspaceId);
+    } catch {
+      knowledgeDocuments = [];
+    }
+
+    const result = await emitSpecialtyBusinessEvent({
+      installation,
+      workRuntime: this.workRuntime,
+      automationRuntime: this.connected.ctx.automationRuntime,
+      approvalRuntime: this.connected.ctx.approvalRuntime,
+      businessId: this.workspaceId,
+      eventType,
+      brief,
+      payload: eventPayload,
+      actorId,
+      knowledgeDocuments,
+      forceManual,
+      fetchImpl: typeof fetch === "function" ? fetch.bind(globalThis) : null,
+      platformEventBus: (this.connected.operatingStack as { bus?: unknown } | undefined)?.bus
+        ?? (this.connected.ctx as { bus?: unknown })?.bus
+        ?? null,
+      platformEventStore: this.connected.ctx.platformEventStore ?? null,
+      platformStore,
+    });
+
+    if (result.firedCount > 0) {
+      await persistAffectedRuntimes({
+        workspaceId: this.workspaceId,
+        stack: this.connected.operatingStack ?? this.connected.ctx,
+        integrationPlatform: this.connected.integrationPlatform,
+        kinds: [RUNTIME_SNAPSHOT_KINDS.WORK],
+      });
+    }
+    return result;
   }
 
   async runCustomAiJob({
@@ -1123,8 +1405,8 @@ export class WorkspaceService {
     brief?: string;
     actorId?: string;
   }) {
-    const { CustomAiWorkerService } = await import(
-      "../../../backend/core/ai-builder/custom-ai/CustomAiWorkerService.js"
+    const { runSpecialtyDraftJob } = await import(
+      "../../../backend/core/ai-builder/specialty/runSpecialtyDraftJob.js"
     );
     let knowledgeDocuments: Array<Record<string, unknown>> = [];
     try {
@@ -1132,17 +1414,32 @@ export class WorkspaceService {
     } catch {
       knowledgeDocuments = [];
     }
-    const worker = new CustomAiWorkerService({
-      nowISO: () => NOW_ISO,
-      fetchImpl: typeof fetch === "function" ? fetch.bind(globalThis) : null,
-    });
-    const result = await worker.runJob({
+    // Prefer installation employee (has operatingContract + messageTemplate).
+    let resolvedEmployee = employee;
+    try {
+      const installation = await platformStore.getBusinessOSInstallation(this.workspaceId).catch(() => null);
+      const empId = String(employee?.employeeId ?? employee?.id ?? "");
+      const found = Array.isArray(installation?.configuration?.employees)
+        ? installation.configuration.employees.find(
+          (entry: { employeeId?: string; id?: string }) =>
+            String(entry.employeeId ?? entry.id) === empId,
+        )
+        : null;
+      if (found) resolvedEmployee = { ...found, ...employee, operatingContract: found.operatingContract ?? employee.operatingContract };
+    } catch {
+      /* keep employee */
+    }
+    const result = await runSpecialtyDraftJob({
       workRuntime: this.workRuntime,
-      employee,
+      employee: resolvedEmployee,
       brief,
       actorId,
       businessId: this.workspaceId,
       knowledgeDocuments,
+      triggerEventType: "SPECIALTY_JOB_REQUESTED",
+      triggerLabel: "Manual mission",
+      nowISO: () => NOW_ISO,
+      fetchImpl: typeof fetch === "function" ? fetch.bind(globalThis) : null,
     });
     if (result.ok) {
       await persistAffectedRuntimes({
@@ -1569,6 +1866,48 @@ export class WorkspaceService {
     };
   }
 
+  /**
+   * Campaign-lite: save audience + template for approve-first email/SMS batches.
+   */
+  async createCampaignLiteTemplate(input: {
+    name?: string;
+    channel?: string;
+    subjectLine?: string;
+    body?: string;
+    audience?: Record<string, unknown>;
+    approvalRequired?: boolean;
+    actorId?: string | null;
+  } = {}) {
+    const channel = String(input.channel ?? "email") === "sms" ? "sms" : "email";
+    const body = String(input.body ?? "").trim();
+    return businessCampaignTemplateService.saveTemplate({
+      businessId: this.workspaceId,
+      name: String(input.name ?? "").trim() || (channel === "sms" ? "SMS campaign" : "Email campaign"),
+      purpose: "campaign_lite",
+      channel,
+      audience: input.audience && typeof input.audience === "object"
+        ? input.audience
+        : { type: "all_marketable_contacts" },
+      subjectLine: channel === "email" ? String(input.subjectLine ?? "").trim() : "",
+      previewText: null,
+      cta: null,
+      guardrails: ["approval_required_before_send"],
+      sections: [
+        {
+          id: "sec_body",
+          type: "custom_text",
+          order: 0,
+          fields: {
+            heading: channel === "sms" ? "SMS" : "Message",
+            body: body || String(input.subjectLine ?? "").trim() || "Draft message",
+          },
+        },
+      ],
+      approvalRequired: input.approvalRequired !== false,
+      actorUserId: input.actorId ?? null,
+    } as any);
+  }
+
   async saveCampaignAsTemplate(workId: string, input: { name?: string; templateId?: string | null; actorId?: string } = {}) {
     const stack = this.connected.operatingStack;
     if (!stack) throw new Error("Campaign studio is not available for this workspace.");
@@ -1830,7 +2169,7 @@ export class WorkspaceService {
 
   refreshOperationalState(
     platformActiveKnowledgeCount = 0,
-    options: { bosEmployeeDefinitions?: unknown[] | null } = {},
+    options: { bosEmployeeDefinitions?: object[] | null } = {},
   ) {
     const count = Number(platformActiveKnowledgeCount ?? 0);
     const refreshed = recomputeWorkspaceOperationalState({
@@ -1940,14 +2279,42 @@ export class WorkspaceService {
     return connection;
   }
 
+  async connectGoogleSearchConsole({
+    credentialId,
+    senderEmail,
+    platformActiveKnowledgeCount,
+  }: {
+    credentialId: string;
+    senderEmail?: string | null;
+    platformActiveKnowledgeCount?: number;
+  }) {
+    if (!this.connected.integrationPlatform) throw new Error("Integrations are not available for this workspace.");
+    const connection = await connectProviderConnection({
+      integrationPlatform: this.connected.integrationPlatform,
+      workspaceId: this.workspaceId,
+      connectionType: "google_search_console",
+      displayName: "Google Search Console",
+      providerType: "google_search_console",
+      credentialId,
+      credentialType: "oauth2",
+      externalAccountReference: senderEmail ? `gsc:${senderEmail}` : `gsc:${credentialId}`,
+      metadata: { senderEmail: senderEmail ?? null },
+    });
+    this.refreshOperationalState(platformActiveKnowledgeCount ?? this.connected.platformKnowledgeCoverage?.activeDocumentCount ?? 0);
+    await persistAffectedRuntimes({ workspaceId: this.workspaceId, stack: this.connected.operatingStack, integrationPlatform: this.connected.integrationPlatform, kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION] });
+    return connection;
+  }
+
   async connectTwilioSms({
     credentialId,
     fromNumber,
     platformActiveKnowledgeCount,
+    provisionMeta,
   }: {
     credentialId: string;
     fromNumber?: string | null;
     platformActiveKnowledgeCount?: number;
+    provisionMeta?: Record<string, unknown> | null;
   }) {
     if (!this.connected.integrationPlatform) {
       throw new Error("Integrations are not available for this workspace.");
@@ -1961,13 +2328,17 @@ export class WorkspaceService {
       credentialId,
       credentialType: "api_key",
       externalAccountReference: fromNumber ? `twilio_sms:${fromNumber}` : `twilio_sms:${credentialId}`,
-      metadata: { fromNumber: fromNumber ?? null },
+      metadata: { fromNumber: fromNumber ?? null, ...(provisionMeta ?? {}) },
     });
     const smsConn = this.connected.integrationPlatform.connectionRuntime.getConnectionByType?.("sms_channel");
     if (smsConn?.id) {
       this.connected.integrationPlatform.connectionService.updateMetadata({
         connectionId: smsConn.id,
-        metadata: { a2pRegistrationStatus: "pending", fromNumber: fromNumber ?? null },
+        metadata: {
+          a2pRegistrationStatus: String(provisionMeta?.a2pRegistrationStatus ?? "pending"),
+          fromNumber: fromNumber ?? null,
+          ...(provisionMeta ?? {}),
+        },
       });
     }
     const knowledgeCount =
@@ -2058,16 +2429,40 @@ export class WorkspaceService {
     return connection;
   }
 
-  async markSmsA2pRegistrationComplete(platformActiveKnowledgeCount?: number) {
+  async connectGrowthChannel({
+    connectionType, displayName, providerType, credentialId, externalAccountReference, metadata = {}, platformActiveKnowledgeCount,
+  }: { connectionType: string; displayName: string; providerType: string; credentialId: string; externalAccountReference: string; metadata?: Record<string, unknown>; platformActiveKnowledgeCount?: number }) {
+    if (!this.connected.integrationPlatform) throw new Error("Integrations are not available for this workspace.");
+    const connection = await connectProviderConnection({ integrationPlatform: this.connected.integrationPlatform, workspaceId: this.workspaceId, connectionType, displayName, providerType, credentialId, credentialType: "api_key", externalAccountReference, metadata });
+    this.refreshOperationalState(platformActiveKnowledgeCount ?? this.connected.platformKnowledgeCoverage?.activeDocumentCount ?? 0);
+    await persistAffectedRuntimes({ workspaceId: this.workspaceId, stack: this.connected.operatingStack, integrationPlatform: this.connected.integrationPlatform, kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION] });
+    return connection;
+  }
+
+  async markSmsA2pRegistrationComplete(
+    platformActiveKnowledgeCount?: number,
+    opts: { status?: string; forced?: boolean } = {},
+  ) {
     const platform = this.connected.integrationPlatform;
     if (!platform?.connectionService || !platform?.connectionRuntime) {
       throw new Error("Integrations are not available for this workspace.");
     }
     const conn = platform.connectionRuntime.getConnectionByType?.("sms_channel");
     if (!conn) throw new Error("SMS connection not found.");
+    const statusRaw = String(opts.status ?? "approved").toLowerCase();
+    const a2pRegistrationStatus =
+      statusRaw === "complete" || statusRaw === "approved"
+        ? "approved"
+        : statusRaw === "failed"
+          ? "failed"
+          : "pending";
     platform.connectionService.updateMetadata({
       connectionId: conn.id,
-      metadata: { a2pRegistrationStatus: "complete" },
+      metadata: {
+        a2pRegistrationStatus,
+        a2pForced: opts.forced === true,
+        a2pUpdatedAt: new Date().toISOString(),
+      },
     });
     const knowledgeCount =
       platformActiveKnowledgeCount ??

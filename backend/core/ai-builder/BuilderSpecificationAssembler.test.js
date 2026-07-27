@@ -42,14 +42,15 @@ test("reconciler versions upgrades against installed specification", () => {
   assert.ok(reconciled.diff.addedModules.includes("referrals"));
 });
 
-test("assembler selects Gold/fixture only via blueprint recommendation id", () => {
+test("assembler keeps legacy Gold fixtures out of new Builder recommendations", () => {
   const assembler = new BuilderSpecificationAssembler();
   const pm = createBuilderSession({
     businessSummary: { businessName: "PM Co", industry: "property_management" },
   });
   const pmPlan = new BuilderAssemblyPlanner().plan({ session: pm });
   const pmAssembled = assembler.assemble({ session: pm, assemblyPlan: pmPlan });
-  assert.equal(pmAssembled.source, "rec_bp_pm_gold");
+  assert.equal(pmAssembled.source, "rec_bp_universal");
+  assert.ok(!pmAssembled.specification.modules.some((module) => module.moduleId === "properties"));
 
   const sportsWithoutBlueprint = createBuilderSession({
     businessSummary: { businessName: "Club", industry: "sports" },
@@ -68,4 +69,28 @@ test("assembler selects Gold/fixture only via blueprint recommendation id", () =
   const dentalAssembled = assembler.assemble({ session: dental, assemblyPlan: dentalPlan });
   assert.equal(dentalAssembled.source, "rec_bp_dental_universal");
   assert.ok(dentalAssembled.specification.modules.some((m) => m.label === "Patients"));
+});
+
+test("thin SKU sports industry assembles universal modules without teams/schedule AI team", () => {
+  const session = createBuilderSession({
+    businessSummary: {
+      businessName: "Leo's Whalers",
+      industry: "sports",
+      purchasedPackages: ["ai_receptionist", "crm_automation"],
+      integrationNeeds: ["business_email", "voice_channel", "meta_lead_ads"],
+    },
+  });
+  const plan = new BuilderAssemblyPlanner().plan({ session });
+  assert.equal(plan.selectedBlueprints?.[0]?.recommendationId, "rec_bp_universal");
+  const { specification, source } = new BuilderSpecificationAssembler().assemble({ session, assemblyPlan: plan });
+  assert.equal(source, "rec_bp_universal");
+  const moduleIds = specification.modules.map((m) => m.moduleId);
+  assert.ok(moduleIds.includes("people"));
+  assert.ok(moduleIds.includes("integrations"));
+  assert.ok(moduleIds.includes("pipelines"));
+  assert.equal(moduleIds.includes("teams"), false);
+  assert.equal(moduleIds.includes("schedule"), false);
+  assert.equal(moduleIds.includes("digital_workforce"), false);
+  assert.ok(!(specification.metadata?.requiredSetupSteps ?? []).includes("meta_lead_ads"));
+  assert.ok((specification.metadata?.requiredSetupSteps ?? []).includes("voice"));
 });

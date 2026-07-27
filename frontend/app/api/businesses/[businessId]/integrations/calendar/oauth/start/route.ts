@@ -10,11 +10,12 @@ import {
   isGoogleOAuthAppConfigured,
   getGoogleOAuthAppConfig,
 } from "@/lib/server/liveIntegrations";
+import { resolveOAuthReturnPath } from "@/lib/connections/integrationFocusRouting.js";
 
 const OAUTH_STATE_COOKIE = "vt_google_oauth_state";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ businessId: string }> },
 ) {
   try {
@@ -28,12 +29,18 @@ export async function POST(
       );
     }
 
+    const body = await request.json().catch(() => ({}));
+    const redirectPath = resolveOAuthReturnPath(
+      body?.returnTo,
+      `/b/${businessId}/integrations`,
+    );
+
     const config = getGoogleOAuthAppConfig();
     const state = getSharedOAuthStateStore().create({
       businessId,
       connectionType: "calendar",
       providerType: "google_calendar",
-      redirectPath: `/b/${businessId}/integrations?focus=calendar`,
+      redirectPath,
     });
 
     const cookieStore = await cookies();
@@ -44,7 +51,7 @@ export async function POST(
         businessId,
         connectionType: "calendar",
         providerType: "google_calendar",
-        redirectPath: `/b/${businessId}/integrations?focus=calendar`,
+        redirectPath,
       }),
       httpOnly: true,
       sameSite: "lax",

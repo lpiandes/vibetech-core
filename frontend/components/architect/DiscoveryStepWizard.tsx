@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type DragEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import {
   buildDiscoverySteps,
   type DiscoveryAnswerRow,
@@ -16,6 +16,8 @@ type Props = {
   nextQuestion?: DiscoveryQuestionRow | null;
   busy?: boolean;
   thinking?: boolean;
+  /** Overrides the default "Saving your answer" dots label. */
+  thinkingLabel?: string;
   websiteUrl: string;
   setWebsiteUrl: (value: string) => void;
   onResearch: () => void;
@@ -25,11 +27,10 @@ type Props = {
   dragOver?: boolean;
   setDragOver?: (value: boolean) => void;
   onAnswer: (input: { questionId: string; answer: string }) => Promise<void> | void;
-  minRequiredAnswers?: number;
-  requiredTotal?: number;
-  answeredCount?: number;
   /** Called when the last question is finished or discovery is complete. */
   onFinish?: () => void;
+  /** Admin package-add Ask — primary action is Save, finish returns Home. */
+  packageAsk?: boolean;
 };
 
 const INDUSTRY_LABELS: Record<string, string> = {
@@ -56,8 +57,10 @@ const INTEGRATION_LABELS: Record<string, string> = {
   gmail: "Gmail",
   google_calendar: "Google Calendar",
   twilio_sms: "Text messaging (Twilio)",
-  twilio_voice: "Phone (Twilio)",
-  facebook_lead_ads: "Facebook Lead Ads",
+  twilio_voice: "Voice calling (Twilio)",
+  google_ads: "Google Ads",
+  google_search_console: "Google Search Console / SEO",
+  meta_platform: "Meta (Facebook & Instagram ads + lead forms)",
   none_yet: "None yet",
 };
 
@@ -69,6 +72,7 @@ export default function DiscoveryStepWizard({
   nextQuestion = null,
   busy,
   thinking,
+  thinkingLabel = "Saving your answer",
   websiteUrl,
   setWebsiteUrl,
   onResearch,
@@ -78,10 +82,8 @@ export default function DiscoveryStepWizard({
   dragOver,
   setDragOver,
   onAnswer,
-  minRequiredAnswers = 16,
-  requiredTotal,
-  answeredCount,
   onFinish,
+  packageAsk = false,
 }: Props) {
   const steps = buildDiscoverySteps(answers, nextQuestion);
   const [stepIndex, setStepIndex] = useState(() => Math.max(0, steps.length - 1));
@@ -91,9 +93,10 @@ export default function DiscoveryStepWizard({
   const [urlError, setUrlError] = useState<string | null>(null);
 
   const safeIndex = Math.min(stepIndex, Math.max(0, steps.length - 1));
-  const step = steps[safeIndex] ?? null;
-  const isLast = safeIndex >= steps.length - 1;
   const discoveryComplete = !nextQuestion;
+  // Never re-render the last answered step as a "new Question 1" — answered
+  // rows are rebuilt from the generic bank and lose package-Ask specialization.
+  const step = discoveryComplete ? null : (steps[safeIndex] ?? null);
   const askingWebsite = step?.questionId === "q_website";
   const askingDocuments = step?.questionId === "q_documents";
   const isChoice = step?.answerType === "choice";
@@ -109,31 +112,29 @@ export default function DiscoveryStepWizard({
         : draft;
   const canNext = Boolean(String(draftValue ?? "").trim())
     || (askingDocuments && uploads.length > 0);
-  const answered = typeof answeredCount === "number"
-    ? answeredCount
-    : answers.filter((entry) => !entry.skipped && !entry.unknown && String(entry.answer ?? "").trim()).length;
-  // Exact total for this session: required for industry pack, never less than questions already taken.
-  const totalQuestions = Math.max(
-    Number(requiredTotal) || Number(minRequiredAnswers) || 1,
-    discoveryComplete ? answered : answered + (step?.isCurrent ? 1 : 0),
-    steps.length,
-  );
-  const questionNumber = discoveryComplete
-    ? Math.min(Math.max(safeIndex + 1, answered), totalQuestions)
-    : Math.min(
-      step?.isCurrent ? answered + 1 : safeIndex + 1,
-      totalQuestions,
-    );
+  // The interview grows or shrinks as package scope, industry, and answers
+  // become known. Avoid promising a fixed total that can change mid-session.
+  const questionNumber = Math.max(safeIndex + 1, 1);
   const primaryLabel = discoveryComplete
-    ? "See recommendation"
-    : isLast && step?.isCurrent
-      ? "Continue"
-      : "Next";
+    ? (packageAsk ? "Save" : "See recommendation")
+    : (packageAsk ? "Save" : "Next");
 
   useEffect(() => {
     setStepIndex(Math.max(0, steps.length - 1));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the unanswered question changes
   }, [nextQuestion?.questionId]);
+
+  // Package-Ask: once there is nothing left to ask, finish without forcing another Save click
+  // on a stale generic bank question.
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
+  const finishOnceRef = useRef(false);
+  useEffect(() => {
+    if (!packageAsk || !discoveryComplete || busy || thinking) return;
+    if (finishOnceRef.current) return;
+    finishOnceRef.current = true;
+    onFinishRef.current?.();
+  }, [packageAsk, discoveryComplete, busy, thinking]);
 
   useEffect(() => {
     if (!step) {
@@ -201,7 +202,7 @@ export default function DiscoveryStepWizard({
 
     const editingPast = !step.isCurrent;
     if (editingPast && answer === step.answer) {
-      if (isLast) {
+      if (safeIndex >= steps.length - 1) {
         onFinish?.();
         return;
       }
@@ -213,7 +214,6 @@ export default function DiscoveryStepWizard({
       && /\./.test(answer)
       && !/^(i\s*don'?t\s*have|no\s*website|none|n\/a|na)\b/i.test(answer);
 
-    const finishingLast = Boolean(step.isCurrent && isLast);
     await onAnswer({ questionId: step.questionId, answer });
     if (shouldResearchWebsite) {
       onResearch();
@@ -221,13 +221,11 @@ export default function DiscoveryStepWizard({
     setDraft("");
     setSelectedChoices([]);
     if (editingPast) {
-      if (isLast) {
+      if (safeIndex >= steps.length - 1) {
         onFinish?.();
         return;
       }
       setStepIndex((index) => Math.min(index + 1, steps.length - 1));
-    } else if (finishingLast) {
-      onFinish?.();
     }
   }
 
@@ -259,11 +257,15 @@ export default function DiscoveryStepWizard({
     return (
       <div style={{ display: "grid", gap: 16 }}>
         <div style={{ color: architect.inkMuted, lineHeight: 1.55 }}>
-          {thinking ? <ThinkingDots label="Preparing the next question" /> : "You’re ready for a recommendation."}
+          {thinking
+            ? <ThinkingDots label="Preparing the next question" />
+            : packageAsk
+              ? "That’s everything for the new packages."
+              : "You’re ready for a recommendation."}
         </div>
         {!thinking && onFinish ? (
           <ArchitectButton type="button" disabled={busy} onClick={() => onFinish()}>
-            See recommendation
+            {packageAsk ? "Save" : "See recommendation"}
           </ArchitectButton>
         ) : null}
       </div>
@@ -273,7 +275,7 @@ export default function DiscoveryStepWizard({
   return (
     <form onSubmit={(event) => void goNext(event)} style={{ display: "grid", gap: 20 }}>
       <div style={{ color: architect.inkMuted, fontSize: 13 }}>
-        Question {questionNumber} of {totalQuestions}
+        {packageAsk ? `Question ${questionNumber}` : `Question ${questionNumber} · Tailored as we learn`}
       </div>
 
       <div style={{ display: "grid", gap: 8 }}>
@@ -293,7 +295,7 @@ export default function DiscoveryStepWizard({
         ) : null}
       </div>
 
-      {thinking ? <ThinkingDots label="Saving your answer" /> : null}
+      {thinking ? <ThinkingDots label={thinkingLabel} /> : null}
 
       {askingWebsite ? (
         <input
@@ -412,11 +414,11 @@ export default function DiscoveryStepWizard({
                   color: architect.ink,
                 }}
               >
-                {formatChoiceLabel(step.questionId, option)}
+                {formatChoiceLabel(step.questionId, option, step.optionLabels)}
               </button>
             );
           })}
-          {isMultiChoice ? (
+          {isMultiChoice && !packageAsk ? (
             <p style={{ margin: 0, color: architect.inkMuted, fontSize: 13 }}>
               Select all that apply. You will sign into each account in Integrations after you approve the plan.
             </p>
@@ -429,7 +431,13 @@ export default function DiscoveryStepWizard({
             setNameError(null);
             setDraft(event.target.value);
           }}
-          placeholder="Type your answer…"
+          placeholder={
+            step.questionId === "q_desired_workflows"
+              ? "e.g. FB lead comes in → email → SMS → update pipeline"
+              : step.questionId === "q_industry"
+                ? "e.g. youth hockey club, dental practice, landscaping…"
+                : "Type your answer…"
+          }
           rows={4}
           style={inputStyle}
           autoFocus
@@ -468,7 +476,12 @@ export default function DiscoveryStepWizard({
   );
 }
 
-function formatChoiceLabel(questionId: string, option: string) {
+function formatChoiceLabel(
+  questionId: string,
+  option: string,
+  optionLabels?: Record<string, string>,
+) {
+  if (optionLabels?.[option]) return optionLabels[option];
   if (questionId === "q_industry") {
     return INDUSTRY_LABELS[option] ?? option.replace(/_/g, " ");
   }

@@ -1,9 +1,9 @@
 import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
 import { getAdminPlatformService } from "@/lib/admin/getAdminServices";
-import { PageHeader } from "@/components/product";
-import ShellPanel from "@/components/shell/ShellPanel";
+import AdminVtPage from "@/components/admin/AdminVtPage";
+import AdminDataTable from "@/components/admin/AdminDataTable";
 import StatusBadge from "@/components/product/StatusBadge";
-import { cockpitColors, spacing } from "@/design/tokens";
+import { VtDockLink } from "@/components/product/VtChrome";
 
 export default async function AdminInstallationsPage() {
   const user = await requirePlatformAdmin();
@@ -12,44 +12,34 @@ export default async function AdminInstallationsPage() {
     platformRole: user.platformRole,
   });
 
+  const rows = (result.installations ?? []).map((entry: any) => [
+    entry.businessName,
+    entry.specificationVersion ?? "—",
+    <span key="h" style={{ fontFamily: "monospace", fontSize: 12 }}>
+      {entry.planHash ? String(entry.planHash).slice(0, 12) : "—"}
+    </span>,
+    entry.actorUserId ?? "—",
+    entry.startedAt ?? "—",
+    entry.endedAt ?? "—",
+    <StatusBadge
+      key="s"
+      label={String(entry.status ?? "unknown")}
+      tone={entry.partialFailureVisible ? "warning" : "neutral"}
+    />,
+    (entry.warnings ?? []).length,
+  ]);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: spacing.lg }}>
-      <PageHeader title="Install history" description="Partial failures stay visible" />
-      <ShellPanel title="Installations" subtitle="Specification, plan hash, actor, and outcome">
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead>
-              <tr>
-                {["Business", "Spec version", "Plan hash", "Actor", "Started", "Ended", "Status", "Warnings"].map((label) => (
-                  <th key={label} style={{ textAlign: "left", padding: 8, borderBottom: `1px solid ${cockpitColors.panelBorder}` }}>{label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(result.installations ?? []).map((entry: any) => (
-                <tr key={`${entry.businessId}-${entry.specificationId ?? entry.planId}`}>
-                  <td style={{ padding: 8 }}>{entry.businessName}</td>
-                  <td style={{ padding: 8 }}>{entry.specificationVersion ?? "—"}</td>
-                  <td style={{ padding: 8, fontFamily: "monospace", fontSize: 12 }}>{entry.planHash ? String(entry.planHash).slice(0, 12) : "—"}</td>
-                  <td style={{ padding: 8 }}>{entry.actorUserId ?? "—"}</td>
-                  <td style={{ padding: 8 }}>{entry.startedAt ?? "—"}</td>
-                  <td style={{ padding: 8 }}>{entry.endedAt ?? "—"}</td>
-                  <td style={{ padding: 8 }}>
-                    <StatusBadge
-                      label={String(entry.status ?? "unknown")}
-                      tone={entry.partialFailureVisible ? "warning" : "neutral"}
-                    />
-                  </td>
-                  <td style={{ padding: 8 }}>{(entry.warnings ?? []).length}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!result.installations?.length ? (
-            <div style={{ color: cockpitColors.textMuted, padding: spacing.md }}>No installations recorded.</div>
-          ) : null}
-        </div>
-      </ShellPanel>
-    </div>
+    <AdminVtPage
+      title="Install history"
+      dock={<VtDockLink href="/admin">Dashboard</VtDockLink>}
+    >
+      <AdminDataTable
+        title="Installations"
+        headers={["Business", "Spec version", "Plan hash", "Actor", "Started", "Ended", "Status", "Warnings"]}
+        rows={rows}
+        emptyLabel="No installations recorded."
+      />
+    </AdminVtPage>
   );
 }

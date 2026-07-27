@@ -3,20 +3,22 @@ import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceServic
 import { PERMISSIONS, MEMBERSHIP_ROLE_LABELS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { platformStore } from "@/lib/server/compose";
 import SettingsScreen from "@/components/settings/SettingsScreen";
+import { readPurchasedPackagesFromConfig } from "../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
 export default async function SettingsPage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   const session = await auth();
   const ctx = await getAuthorizedWorkspace(businessId);
   const canManageSettings = ctx.permissions.has(PERMISSIONS.SETTINGS_MANAGE);
-  // Any member can open Settings for access requests + account; management panels stay permissioned.
 
   const knowledgeDocumentCount = await platformStore.countActiveKnowledgeDocuments(businessId);
   ctx.service.refreshOperationalState(knowledgeDocumentCount);
 
   let installedSpecification: Record<string, unknown> | null = null;
+  let purchasedPackages: string[] = [];
   try {
     const installation = await platformStore.getBusinessOSInstallation(businessId);
+    purchasedPackages = readPurchasedPackagesFromConfig(installation?.configuration ?? {});
     if (installation?.specificationId) {
       const specRow = await platformStore.getBusinessOSSpecification({
         businessId,
@@ -47,6 +49,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ busin
       canManageTeam={canManageSettings && (ctx.permissions.has(PERMISSIONS.TEAM_INVITE) || ctx.permissions.has(PERMISSIONS.TEAM_MANAGE))}
       canManageIntegrations={canManageSettings && ctx.permissions.has(PERMISSIONS.INTEGRATIONS_MANAGE)}
       canManageKnowledge={canManageSettings && ctx.permissions.has(PERMISSIONS.KNOWLEDGE_MANAGE)}
+      purchasedPackages={purchasedPackages}
       setupChecklist={canManageSettings ? homeState.checklist : []}
       checklistComplete={homeState.checklistComplete}
     />

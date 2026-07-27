@@ -165,7 +165,7 @@ export function primaryIntegrationAction(conn: ConnectionViewRow, display: Integ
   if (display.listed === false) return null;
 
   const healthLevel = String(conn.health?.level ?? "").toUpperCase();
-  const reconnectAction = safeArray(conn.availableActions).find(
+  const reconnectAction = safeArray<{ id: string; label: string; supported: boolean }>(conn.availableActions).find(
     (action) => String(action.id) === "reconnect" && action.supported !== false,
   );
   const needsReconnect =
@@ -178,6 +178,8 @@ export function primaryIntegrationAction(conn: ConnectionViewRow, display: Integ
     if (needsReconnect && (display.setupMode === "oauth" || display.setupMode === "api_key" || display.setupMode === "dev_connect")) {
       return { kind: "connect" as const, label: reconnectAction?.label ?? "Reconnect" };
     }
+    const prove = proveActionForConnection(String(conn.id));
+    if (prove) return { kind: "prove" as const, label: "Prove it works", proveAction: prove.action, capabilityId: prove.capabilityId };
     return null;
   }
 
@@ -195,11 +197,25 @@ export function primaryIntegrationAction(conn: ConnectionViewRow, display: Integ
     return { kind: "connect" as const, label };
   }
 
+  if (display.setupMode === "manual") {
+    return { kind: "connect" as const, label: "How it works" };
+  }
+
   if (display.id === "business_email") {
     return { kind: "connect" as const, label: "Connect" };
   }
 
   return { kind: "manual" as const, label: "We'll set this up with you" };
+}
+
+export function proveActionForConnection(connectionId: string): { action: string; capabilityId: string } | null {
+  const map: Record<string, { action: string; capabilityId: string }> = {
+    business_email: { action: "send_test_email", capabilityId: "customer_email_send" },
+    calendar: { action: "create_test_event", capabilityId: "calendar_scheduling" },
+    sms_channel: { action: "send_test_sms", capabilityId: "sms_send" },
+    meta_lead_ads: { action: "ingest_test_lead", capabilityId: "meta_lead_intake" },
+  };
+  return map[String(connectionId)] ?? null;
 }
 
 export function hasRealConnectAction(conn: ConnectionViewRow, display: IntegrationDisplay) {

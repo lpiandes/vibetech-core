@@ -82,8 +82,6 @@ export const ARCHITECT_PREVIEW_ROLES = [
 
 export const ARCHITECT_COMPLETION_ACTIONS = [
   { id: "open_portal", label: "Open your business" },
-  { id: "invite", label: "Invite your team" },
-  { id: "improve", label: "Keep improving" },
 ] as const;
 
 export const ARCHITECT_DNA_RINGS = [
@@ -124,8 +122,8 @@ export const HUMAN_COPY = {
   approveLaunch: "Approve",
   recordApproval: "Confirm approval",
   approved: "Approved",
-  installing: "Bringing your operating system online…",
-  launchComplete: "Your business is live",
+  installing: "Building your workspace…",
+  launchComplete: "Open your business",
   rethink: "VIBETech is thinking",
   shareWebsite: "Share a website",
   addDocuments: "Add documents",
@@ -202,6 +200,109 @@ export function installStageProgress(activeIndex: number, status: string) {
       stateLabel: humanInstallState(state),
     };
   });
+}
+
+const INSTALL_OP_STAGE: Record<string, string> = {
+  INSTALL_MODULE: "core",
+  INSTALL_NAVIGATION: "core",
+  INSTALL_ROLE: "core",
+  INSTALL_PIPELINE: "blueprint",
+  INSTALL_WORKFLOW: "blueprint",
+  INSTALL_WORK_TYPE: "capabilities",
+  INSTALL_REQUEST_TYPE: "capabilities",
+  INSTALL_DASHBOARD: "capabilities",
+  INSTALL_EMPLOYEE: "employees",
+  INSTALL_KNOWLEDGE_SCOPE: "knowledge",
+  REQUIRE_SETUP: "integrations",
+  REQUIRE_PLATFORM_CAPABILITY: "integrations",
+  INSTALL_INTEGRATION_REQUIREMENT: "integrations",
+};
+
+/**
+ * Map real install action checkpoints → stage completion + 0–100% progress.
+ */
+export function summarizeInstallProgress(actionResults: Array<{
+  type?: string;
+  status?: string;
+}> | null | undefined = []) {
+  const results = Array.isArray(actionResults) ? actionResults : [];
+  const stageIds = ARCHITECT_INSTALL_STAGES.map((stage) => stage.id);
+  const stageStats = Object.fromEntries(stageIds.map((id) => [id, { total: 0, done: 0, failed: 0 }]));
+
+  // Always seed structural stages so empty plans still show a path.
+  stageStats.business.total = 1;
+  stageStats.finalizing.total = 1;
+
+  for (const result of results) {
+    const type = String(result?.type ?? "");
+    const stageId = INSTALL_OP_STAGE[type] ?? "capabilities";
+    if (!stageStats[stageId]) continue;
+    stageStats[stageId].total += 1;
+    const status = String(result?.status ?? "");
+    if (status === "failed") stageStats[stageId].failed += 1;
+    else if (["applied", "noop", "deferred", "requires_setup", "recorded_gap"].includes(status)) {
+      stageStats[stageId].done += 1;
+    }
+  }
+
+  const completedOps = results.filter((result) => {
+    const status = String(result?.status ?? "");
+    return ["applied", "noop", "deferred", "requires_setup", "recorded_gap"].includes(status);
+  }).length;
+  const failedOps = results.filter((result) => String(result?.status ?? "") === "failed").length;
+  const totalOps = Math.max(results.length, 1);
+
+  let activeIndex = 0;
+  const stages = ARCHITECT_INSTALL_STAGES.map((stage, index) => {
+    const stats = stageStats[stage.id] ?? { total: 0, done: 0, failed: 0 };
+    let state: "done" | "active" | "failed" | "pending" = "pending";
+    if (stage.id === "business") {
+      state = failedOps && !completedOps ? "failed" : "done";
+    } else if (stage.id === "finalizing") {
+      state = failedOps && completedOps < totalOps ? "pending" : (failedOps ? "failed" : "done");
+    } else if (stats.failed > 0 && stats.done === 0) {
+      state = "failed";
+    } else if (stats.total > 0 && stats.done >= stats.total) {
+      state = "done";
+    } else if (stats.done > 0 || (stats.total > 0 && completedOps > 0)) {
+      state = stats.failed > 0 ? "failed" : "active";
+    }
+    if (state === "active" || state === "failed") activeIndex = index;
+    else if (state === "done") activeIndex = Math.max(activeIndex, index);
+    return {
+      ...stage,
+      state,
+      stateLabel: humanInstallState(state),
+      done: stats.done,
+      total: stats.total,
+    };
+  });
+
+  // Mark trailing finalizing done when install succeeded overall.
+  const allApplied = failedOps === 0 && completedOps === results.length;
+  if (allApplied) {
+    for (const stage of stages) {
+      if (stage.state !== "failed") {
+        stage.state = "done";
+        stage.stateLabel = humanInstallState("done");
+      }
+    }
+    activeIndex = stages.length - 1;
+  }
+
+  const percent = Math.max(
+    0,
+    Math.min(100, Math.round((completedOps / totalOps) * 100)),
+  );
+
+  return {
+    percent: allApplied ? 100 : percent,
+    completedOps,
+    failedOps,
+    totalOps: results.length,
+    activeIndex,
+    stages,
+  };
 }
 
 export function humanInstallState(state: string) {
@@ -591,17 +692,16 @@ export function executiveBriefing(proposal: {
   const views = proposal?.views ?? {};
   const businessName = resolveBusinessDisplayName(proposal?.businessName);
   const highlights = [
-    { id: "workspaces", label: "Workspaces", value: views.navigation?.items?.length ?? 0 },
-    { id: "team", label: "Team roles", value: views.digitalWorkforce?.items?.length ?? 0 },
-    { id: "homes", label: "Home screens", value: views.dashboard?.items?.length ?? views.dashboard?.cards?.length ?? 0 },
-    { id: "connections", label: "Connections planned", value: views.integrations?.items?.length ?? 0 },
+    { id: "navigation", label: "Navigation areas", value: views.navigation?.items?.length ?? 0 },
+    { id: "workforce", label: "AI teammates", value: views.digitalWorkforce?.items?.length ?? 0 },
+    { id: "roles", label: "Roles", value: views.rolesAccess?.items?.length ?? 0 },
+    { id: "connections", label: "Connections to set up", value: views.integrations?.items?.length ?? 0 },
   ];
   const rawSummary = String(proposal?.explanation?.summary ?? "").trim();
-  const summary = rawSummary
-    ? rawSummary.replace(/^(ok|okay|yes|Your business)\b/i, businessName)
-    : `${businessName} is ready to run on VIBETech — tailored to how you work.`;
+  void rawSummary;
+  const summary = `${businessName} is ready. Open Home to connect channels and prove each capability.`;
   return {
-    headline: "Your business is live",
+    headline: "Open your business",
     businessName,
     summary,
     highlights,

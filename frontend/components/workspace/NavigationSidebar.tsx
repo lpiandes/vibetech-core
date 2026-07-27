@@ -59,6 +59,7 @@ export default function NavigationSidebar({ variant = "dark" }: { variant?: "lig
   const { displayPath, beginNavigation } = useWorkspaceNavigation();
   const grouped = getModuleDrivenNavSections(scope.businessId, scope.permissions, {
     role: scope.role,
+    purchasedPackages: scope.purchasedPackages ?? [],
     installed: {
       ...(scope.installedNavigation ?? {}),
       modules: scope.installedBusinessOS?.modules ?? scope.installedNavigation?.modules,

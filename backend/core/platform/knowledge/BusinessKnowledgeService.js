@@ -116,6 +116,7 @@ export class BusinessKnowledgeService {
   /**
    * Owner search over titles, filenames, and category tags (no free invent).
    */
+  /** @param {string} businessId @param {string} query @param {{categoryId?: string | null}} options */
   async searchDocuments(businessId, query, { categoryId = null } = {}) {
     const q = String(query ?? "").trim().toLowerCase();
     const cat = categoryId ? String(categoryId).trim().toUpperCase() : null;

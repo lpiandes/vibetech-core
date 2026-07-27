@@ -12,7 +12,15 @@ type InviteErrorReason = "not_found" | "expired" | "revoked" | "accepted" | "ser
 
 type InviteLoadState =
   | { status: "loading" }
-  | { status: "ready"; valid: true; email: string; businessName: string; roleLabel?: string; businessId: string }
+  | {
+      status: "ready";
+      valid: true;
+      email: string;
+      businessName: string;
+      roleLabel?: string;
+      businessId: string;
+      purchasedPackages: Array<{ id: string; label: string; description: string }>;
+    }
   | {
       status: "error";
       reason: InviteErrorReason;
@@ -70,6 +78,16 @@ async function fetchInvitation(token: string): Promise<InviteLoadState> {
         businessName: String(data.businessName ?? "Business"),
         roleLabel: data.roleLabel ? String(data.roleLabel) : undefined,
         businessId: String(data.businessId ?? ""),
+        purchasedPackages: Array.isArray(data.purchasedPackages)
+          ? data.purchasedPackages
+              .filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"))
+              .map((row) => ({
+                id: String(row.id ?? ""),
+                label: String(row.label ?? ""),
+                description: String(row.description ?? ""),
+              }))
+              .filter((row) => row.id && row.label)
+          : [],
       };
     }
 
@@ -263,6 +281,23 @@ export default function InviteAcceptPage() {
           <>
             <div style={{ marginTop: spacing.sm, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>Role</div>
             <div>{state.roleLabel}</div>
+          </>
+        ) : null}
+        {state.purchasedPackages.length ? (
+          <>
+            <div style={{ marginTop: spacing.md, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>
+              Your VIBETech package{state.purchasedPackages.length === 1 ? "" : "s"}
+            </div>
+            <div style={{ display: "grid", gap: spacing.sm, marginTop: spacing.xs }}>
+              {state.purchasedPackages.map((pkg) => (
+                <div key={pkg.id}>
+                  <div style={{ fontWeight: 600 }}>{pkg.label}</div>
+                  <div style={{ color: cockpitColors.textSecondary, fontSize: typography.caption.fontSize, lineHeight: 1.45 }}>
+                    {pkg.description}
+                  </div>
+                </div>
+              ))}
+            </div>
           </>
         ) : null}
       </div>

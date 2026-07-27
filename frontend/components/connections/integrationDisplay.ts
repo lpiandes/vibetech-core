@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Building2, Calendar, Calculator, FileText, Mail, MessageSquare, Phone, Share2 } from "lucide-react";
+import { Building2, Calendar, Calculator, FileText, Mail, MessageSquare, Phone, Search, Share2, Target, Video } from "lucide-react";
 
 import type { StatusBadgeTone } from "@/components/product/StatusBadge";
 
@@ -21,49 +21,87 @@ export type IntegrationDisplay = {
 };
 
 const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
+  property_management_system: {
+    title: "Property management software",
+    description: "Sync properties, residents, leases, and work (property-management installs only)",
+    tier: "live",
+    icon: Building2,
+    setupMode: "manual",
+    listed: false, // quarantined — only shown when workspaceGate / liveFlags.property_management
+  },
   business_email: {
-    title: "Business email",
-    description: "Send and receive email through your Gmail account",
+    title: "Send approved customer email",
+    description: "Draft freely; send only after approval. Not a full inbound inbox reader yet.",
     tier: "live",
     icon: Mail,
     setupMode: "oauth",
     listed: true,
-  },
-  property_management_system: {
-    title: "Property management software",
-    description: "Sync properties, residents, leases, and work",
-    tier: "live",
-    icon: Building2,
-    setupMode: "manual",
-    listed: true,
+    unlocks: "Teammates can draft/send approved email",
   },
   calendar: {
-    title: "Calendar",
-    description: "Create and update appointments on Google Calendar",
+    title: "Google Calendar",
+    description: "Sync your business calendar. Add a Google Meet link when you choose Meet on an event.",
     tier: "live",
     icon: Calendar,
     setupMode: "oauth",
     listed: false, // promoted when Google OAuth app is configured (see isIntegrationListed)
+    unlocks: "Org calendar sync + optional Meet links",
+  },
+  zoom: {
+    title: "Zoom",
+    description: "Paste Zoom join links on events today. Auto-create meetings when Zoom OAuth ships.",
+    tier: "live",
+    icon: Video,
+    setupMode: "manual",
+    listed: true,
+    unlocks: "Zoom links on calendar events",
   },
   sms_channel: {
     title: "Text messaging",
-    description: "Send approved text messages through Twilio",
+    description: "Enter business + A2P details — VIBETech provisions a number. Carrier brand/campaign approval is pending until registration finishes (can take days).",
     tier: "live",
     icon: MessageSquare,
     setupMode: "api_key",
     listed: false,
+    unlocks: "Approved SMS after carrier registration",
   },
   voice_channel: {
     title: "Phone",
-    description: "Place approved calls through Twilio Voice",
+    description: "Inbound AI receptionist via Twilio. Prove with a live test call from Launch.",
     tier: "live",
     icon: Phone,
     setupMode: "api_key",
     listed: false,
+    unlocks: "Answered calls → Knowledge + People notes",
   },
   meta_lead_ads: {
-    title: "Facebook Lead Ads",
-    description: "Ingest Facebook lead form submissions into intake",
+    title: "Meta Lead Forms",
+    description: "Connect your Facebook Page. New Lead Ad submissions land in People and fire intake automations.",
+    tier: "live",
+    icon: Share2,
+    setupMode: "api_key",
+    listed: false,
+    unlocks: "Lead → People → pipeline + META_LEAD automations",
+  },
+  google_search_console: {
+    title: "Google Search Console",
+    description: "Read verified website search performance and SEO opportunities",
+    tier: "live",
+    icon: Search,
+    setupMode: "oauth",
+    listed: false,
+  },
+  google_ads: {
+    title: "Google Ads",
+    description: "Read ad performance and create approved campaign drafts",
+    tier: "live",
+    icon: Target,
+    setupMode: "api_key",
+    listed: false,
+  },
+  meta_ads: {
+    title: "Meta Ads (campaigns)",
+    description: "Read ad performance and create approved paused campaigns",
     tier: "live",
     icon: Share2,
     setupMode: "api_key",
@@ -93,6 +131,11 @@ export type LiveIntegrationFlags = {
   sms_channel?: boolean;
   voice_channel?: boolean;
   meta_lead_ads?: boolean;
+  google_search_console?: boolean;
+  google_ads?: boolean;
+  meta_ads?: boolean;
+  property_management?: boolean;
+  property_management_system?: boolean;
   _googleOAuth?: boolean;
 };
 
@@ -100,12 +143,18 @@ export function isIntegrationListed(connectionId: string, liveFlags: LiveIntegra
   const id = String(connectionId);
   const config = INTEGRATION_CONFIG[id];
   if (!config) return true; // unknown required connections still surface
+  if (id === "property_management_system") {
+    return Boolean(liveFlags.property_management || liveFlags.property_management_system);
+  }
   if (config.listed === false) {
     // Promote when the matching live provider app is configured.
     if (id === "calendar" || id === "business_email") return Boolean(liveFlags.business_email || liveFlags.calendar);
     if (id === "sms_channel") return Boolean(liveFlags.sms_channel);
     if (id === "voice_channel") return Boolean(liveFlags.voice_channel);
     if (id === "meta_lead_ads") return Boolean(liveFlags.meta_lead_ads);
+    if (id === "google_search_console") return Boolean(liveFlags.google_search_console);
+    if (id === "google_ads") return Boolean(liveFlags.google_ads);
+    if (id === "meta_ads") return Boolean(liveFlags.meta_ads);
     return false;
   }
   // business_email: always list (oauth when configured, else dev_connect when allowed)
@@ -128,6 +177,9 @@ export function getIntegrationDisplay(
     if (id === "sms_channel" && liveFlags.sms_channel) setupMode = "api_key";
     if (id === "voice_channel" && liveFlags.voice_channel) setupMode = "api_key";
     if (id === "meta_lead_ads" && liveFlags.meta_lead_ads) setupMode = "api_key";
+    if (id === "google_search_console" && liveFlags.google_search_console) setupMode = "oauth";
+    if (id === "google_ads" && liveFlags.google_ads) setupMode = "api_key";
+    if (id === "meta_ads" && liveFlags.meta_ads) setupMode = "api_key";
     return {
       id,
       ...config,

@@ -230,3 +230,37 @@ test("connection attention links resolve into the business integrations route", 
   assert.equal(item.actions[0].href, "/b/biz_mm/integrations");
   assert.match(item.actions[0].label, /connections|Connect/i);
 });
+
+test("specialty draft attention surfaces on Home needsDecision with Open draft href", () => {
+  const supervision = composeOperatingHomeSupervision({
+    experience: {
+      waitingOnYou: [{
+        id: "attention_specialty_draft_w1",
+        title: "Intake specialist: Jane Lead",
+        summary: "Meta / Facebook lead · Jane Lead",
+        reason: "Open the draft and decide what happens next.",
+        priority: "high",
+        sourceType: "specialty_draft",
+        sourceId: "w1",
+        workId: "w1",
+        workHref: "/b/biz_1/work?workId=w1",
+        availableActions: [{ id: "review_draft", label: "Open draft", href: "/b/biz_1/work?workId=w1" }],
+      }],
+      activeBusinessEpisodes: [],
+      aiWorkforceActivity: { digitalEmployees: [], handledByVibeTech: [] },
+      businessTimeline: [],
+      recentlyImproved: [],
+      recentCommunications: [],
+      criticalMetrics: [],
+    },
+    businessId: "biz_1",
+  });
+  assert.equal(supervision.approvalsInbox.items.length, 0);
+  assert.equal(supervision.needsDecision.items.length, 1);
+  const item = supervision.needsDecision.items[0];
+  assert.equal(item.title, "Intake specialist: Jane Lead");
+  assert.match(item.why, /Meta \/ Facebook lead/);
+  assert.match(item.why, /Open the draft/);
+  assert.equal(item.actions[0].href, "/b/biz_1/work?workId=w1");
+  assert.match(item.actions[0].label, /Open draft/i);
+});

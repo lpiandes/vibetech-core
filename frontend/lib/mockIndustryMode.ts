@@ -5,11 +5,11 @@ export function getMockIndustryMode(): MockIndustryMode {
   if (envValue === "property") return "property";
   if (envValue === "standard") return "standard";
 
-  // Default to property to match the Property Interest Coordinator sprint demo.
-  return "property";
+  // Demo data must be explicitly selected; never let a legacy property demo
+  // shape the default experience for a real business.
+  return "standard";
 }
 
 export function isPropertyMode(): boolean {
   return getMockIndustryMode() === "property";
 }
-

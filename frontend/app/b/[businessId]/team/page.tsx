@@ -10,6 +10,8 @@ import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
 import { mergeBosEmployeesForTeam } from "@/lib/team/mergeBosEmployeesForTeam.js";
 import { ensureSpecialtyDigitalEmployees } from "@/lib/team/ensureSpecialtyDigitalEmployees.js";
+import { reconcilePackWorkforce } from "@/lib/team/reconcilePackWorkforce.js";
+import { reconcileOperatingContracts } from "@/lib/team/reconcileOperatingContracts.js";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -44,8 +46,61 @@ export default async function TeamPage({ params }: { params: Promise<{ businessI
       }
     }
 
+    const businessName = String(
+      (ctx as any).authz?.business?.name
+      ?? specification?.businessProfile?.businessName
+      ?? "",
+    );
+    const industry = String(
+      (ctx as any).authz?.business?.industry
+      ?? (ctx as any).service?.businessProfile?.industry
+      ?? specification?.businessProfile?.industry
+      ?? "",
+    );
+
+    const reconciled = await reconcilePackWorkforce({
+      platformStore,
+      businessId,
+      installation,
+      specification,
+      industry,
+      businessName,
+      operatingPackId: String(
+        specification?.operatingPackId
+        ?? installation?.configuration?.operatingPackId
+        ?? "",
+      ),
+    });
+
+    const installationAfterPack = reconciled.healed
+      ? await platformStore.getBusinessOSInstallation(businessId).catch(() => installation)
+      : installation;
+
+    const contractReconcile = await reconcileOperatingContracts({
+      platformStore,
+      businessId,
+      installation: {
+        ...(installationAfterPack ?? installation ?? {}),
+        configuration: {
+          ...(installationAfterPack?.configuration ?? installation?.configuration ?? {}),
+          employees: Array.isArray(reconciled.employees) ? reconciled.employees : [],
+        },
+      },
+      specification,
+      industry: reconciled.industry ?? industry,
+      businessName,
+    });
+
+    // Always prefer reconciled employees (includes pack heal even when industry was blank).
+    const configurationWithPack = {
+      ...(installationAfterPack?.configuration ?? installation?.configuration ?? {}),
+      employees: Array.isArray(contractReconcile.employees) && contractReconcile.employees.length
+        ? contractReconcile.employees
+        : (Array.isArray(reconciled.employees) ? reconciled.employees : []),
+    };
+
     const bosEmployees = mergeBosEmployeesForTeam({
-      configuration: installation?.configuration ?? null,
+      configuration: configurationWithPack,
       specification,
     });
 
@@ -53,15 +108,16 @@ export default async function TeamPage({ params }: { params: Promise<{ businessI
       bosEmployeeDefinitions: bosEmployees.length ? bosEmployees : null,
     });
     const loaded = ctx.service.loadTeamViewModel() as Record<string, unknown>;
+    // Bulletproof: project every BOS employee onto Team, even if readiness missed them.
     const digitalEmployees = ensureSpecialtyDigitalEmployees({
       digitalEmployees: Array.isArray(loaded.digitalEmployees) ? loaded.digitalEmployees : [],
       bosEmployees,
       businessId,
+      knowledgeCount: knowledgeDocumentCount,
     });
-    // Prefer specialty / owner-added teammates at the top of the roster.
-    digitalEmployees.sort((a: { ownerAdded?: boolean; customAiWork?: boolean; name?: string }, b: { ownerAdded?: boolean; customAiWork?: boolean; name?: string }) => {
-      const aScore = a.ownerAdded || a.customAiWork ? 0 : 1;
-      const bScore = b.ownerAdded || b.customAiWork ? 0 : 1;
+    digitalEmployees.sort((a: { ownerAdded?: boolean; customAiWork?: boolean; packDefault?: boolean; name?: string }, b: { ownerAdded?: boolean; customAiWork?: boolean; packDefault?: boolean; name?: string }) => {
+      const aScore = a.ownerAdded || a.customAiWork ? 0 : a.packDefault ? 1 : 2;
+      const bScore = b.ownerAdded || b.customAiWork ? 0 : b.packDefault ? 1 : 2;
       if (aScore !== bScore) return aScore - bScore;
       return String(a.name ?? "").localeCompare(String(b.name ?? ""));
     });
@@ -78,17 +134,14 @@ export default async function TeamPage({ params }: { params: Promise<{ businessI
       roleLabel: MEMBERSHIP_ROLE_LABELS[m.role as keyof typeof MEMBERSHIP_ROLE_LABELS] ?? m.role,
     }));
 
-    let configuration = installation?.configuration
-      ? { ...installation.configuration, employees: bosEmployees }
+    let configuration: any = installation?.configuration
+      ? { ...configurationWithPack, employees: bosEmployees }
       : { employees: bosEmployees };
     let workforceOrganization = null;
     try {
       if (!configuration?.employees?.length) {
-        const industry = (ctx as any).authz?.business?.industry
-          ?? (ctx as any).service?.businessProfile?.industry
-          ?? "default";
         const recommended = new WorkforceEngine().recommendOrganization({
-          businessSummary: { industry },
+          businessSummary: { industry: industry || "default" },
         });
         workforceOrganization = recommended.organization;
         if (!configuration) {

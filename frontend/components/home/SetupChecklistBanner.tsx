@@ -26,10 +26,12 @@ export default function SetupChecklistBanner({
   businessName,
   checklist,
   compact = false,
+  checklistHref,
 }: {
   businessName: string;
   checklist: ChecklistItem[];
   compact?: boolean;
+  checklistHref?: string | null;
 }) {
   if (!checklist.length) return null;
 
@@ -43,31 +45,54 @@ export default function SetupChecklistBanner({
   if (compact) {
     if (allDone) return null;
     const nextItem = incomplete[0];
+    const nextStepNumber = Math.max(1, checklist.findIndex((item) => item.id === nextItem?.id) + 1);
+    const level = progress >= 100 ? "Live" : progress >= 66 ? "Finishing line" : progress >= 33 ? "Building momentum" : "Getting started";
     return (
       <div
         style={{
-          marginBottom: spacing.md,
-          padding: `${spacing.sm} ${spacing.md}`,
-          borderRadius: radius.large,
-          border: `1px solid ${cockpitColors.panelBorder}`,
-          backgroundColor: cockpitColors.panel,
+          marginBottom: spacing.xs,
+          padding: "16px 18px",
+          borderRadius: 16,
+          border: "1px solid rgba(15,118,110,.18)",
+          background: "linear-gradient(110deg, #f0fdfa 0%, #ffffff 48%, #eff6ff 100%)",
+          boxShadow: "0 8px 22px rgba(15,118,110,.07)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: spacing.md, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontWeight: 650, fontSize: typography.body.fontSize, color: cockpitColors.textPrimary }}>
-              Your steps to make your business prosper
-            </div>
-            <div style={{ marginTop: 4, fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary }}>
-              {completeCount} of {total} complete · {incomplete.map((item) => item.title).join(" · ")}
+        <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: 18, alignItems: "center" }}>
+          <div style={{ width: 72, height: 72, borderRadius: 18, background: "linear-gradient(135deg, #0f766e, #0d9488)", color: "#fff", display: "grid", placeItems: "center", boxShadow: "0 8px 18px rgba(13,148,136,.22)", flexShrink: 0 }}>
+            <div style={{ textAlign: "center", lineHeight: 1 }}>
+              <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-.06em" }}>{completeCount}/{total}</div>
+              <div style={{ marginTop: 5, fontSize: 9, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", opacity: .82 }}>complete</div>
             </div>
           </div>
-          {nextItem ? (
-            <Link href={nextItem.href} style={actionLinkStyle}>
-              {nextItem.actionLabel}
-              <ChevronRight size={14} />
-            </Link>
-          ) : null}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", color: cockpitColors.accent, textTransform: "uppercase" }}>Launch path</span>
+              <span style={{ padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, color: "#0f766e", background: "rgba(13,148,136,.10)" }}>{level}</span>
+            </div>
+            <div style={{ marginTop: 4, fontWeight: 750, fontSize: "1rem", color: cockpitColors.textPrimary }}>
+              Mission {nextStepNumber}: {nextItem?.title}
+            </div>
+            <div style={{ marginTop: 3, fontSize: 12, color: cockpitColors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {nextItem?.summary ?? "Complete this mission to unlock more of your operating system."}
+            </div>
+            <div aria-label={`${completeCount} of ${total} launch steps complete`} style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 12, overflow: "hidden" }}>
+              {checklist.map((item, index) => {
+                const done = item.complete;
+                const current = item.id === nextItem?.id;
+                return <span key={item.id} title={`Mission ${index + 1}: ${item.title}`} style={{ width: current ? 22 : 14, height: 14, borderRadius: 999, background: done ? "#10b981" : current ? "#0f766e" : "#dbe4ea", border: current ? "3px solid #99f6e4" : "none", boxSizing: "border-box", flexShrink: 0 }} />;
+              })}
+            </div>
+          </div>
+          <div style={{ display: "grid", justifyItems: "end", gap: 9 }}>
+            {checklistHref ? <Link href={checklistHref} style={viewAllLinkStyle}>View all missions</Link> : null}
+            {nextItem ? (
+              <Link href={nextItem.href} style={actionLinkStyle}>
+                Start mission
+                <ChevronRight size={14} />
+              </Link>
+            ) : null}
+          </div>
         </div>
       </div>
     );
@@ -253,6 +278,14 @@ const actionLinkStyle: CSSProperties = {
   fontWeight: 600,
   flexShrink: 0,
   background: "#fff",
+};
+
+const viewAllLinkStyle: CSSProperties = {
+  color: cockpitColors.accent,
+  textDecoration: "none",
+  fontSize: typography.caption.fontSize,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
 };
 
 const eyebrow: CSSProperties = {

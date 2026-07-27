@@ -99,6 +99,25 @@ test("employee archetype resolution and capability classification", () => {
   assert.equal(registry.classifyRequirement({ capabilityId: "quantum_billing" }).proposalRequired, true);
 });
 
+test("owner-requested digital teammates validate without inventing a runtime archetype", () => {
+  const spec = createBusinessOSSpecification({
+    specificationId: "bos_owner_defined_employee",
+    modules: [{ moduleId: "work", label: "Work", moduleType: "operations" }],
+    employeeDefinitions: [{
+      employeeId: "emp_parent_comms",
+      label: "Parent Communications Assistant",
+      archetypeId: "owner_defined_parent_communications",
+      purpose: "Prepares parent-message drafts for human approval.",
+      applicableModules: ["work"],
+      prohibitedActions: ["autonomous_customer_send"],
+      approvalRequirements: ["human_approval"],
+    }],
+  });
+
+  const result = validateBusinessOSSpecification(spec);
+  assert.equal(result.ok, true, JSON.stringify(result.errors, null, 2));
+});
+
 test("McBride gold blueprint exports a valid specification", () => {
   const registry = getDefaultBusinessOSCapabilityRegistry();
   const spec = exportMcBrideBusinessOSSpecification();

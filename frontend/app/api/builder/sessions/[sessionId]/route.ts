@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { connectedConnectionIdsFromWorkspace } from "@/lib/builder/connectedConnectionIdsFromWorkspace";
 import { getAiBuilderService } from "@/lib/builder/getAiBuilderService";
 import { requireArchitectActor, architectApiError } from "@/lib/builder/requireArchitectActor";
+import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
 import { presentProductError } from "@/lib/platform/productErrors";
 
 type Params = { params: Promise<{ sessionId: string }> };
@@ -10,7 +12,18 @@ export async function GET(_request: Request, { params }: Params) {
     await requireArchitectActor();
     const { sessionId } = await params;
     const service = getAiBuilderService();
-    return NextResponse.json(await service.getWorkspace(sessionId));
+    const existing = await service.getSession?.(sessionId);
+    const businessId = existing?.businessId ? String(existing.businessId) : "";
+    let connectedConnectionIds: string[] = [];
+    if (businessId && !businessId.startsWith("draft_")) {
+      try {
+        const { service: workspace } = await getAuthorizedWorkspace(businessId, "business.manage");
+        connectedConnectionIds = connectedConnectionIdsFromWorkspace(workspace);
+      } catch {
+        /* credentials-only fallback inside getWorkspace */
+      }
+    }
+    return NextResponse.json(await service.getWorkspace(sessionId, { connectedConnectionIds }));
   } catch (error) {
     const mapped = architectApiError(error);
     return NextResponse.json(mapped.body, { status: mapped.status === 403 ? 403 : 404 });
@@ -36,7 +49,15 @@ export async function POST(request: Request, { params }: Params) {
       }));
     }
     if (action === "chat") {
-      return NextResponse.json(await service.chat({ sessionId, text: body.text }));
+      const result = await service.chat({
+        sessionId,
+        text: body.text,
+        actorId: user.id ?? actorId,
+      });
+      if (result?.reason === "quota_exceeded") {
+        return NextResponse.json(result, { status: 429 });
+      }
+      return NextResponse.json(result);
     }
     if (action === "upload") {
       return NextResponse.json(await service.upload({

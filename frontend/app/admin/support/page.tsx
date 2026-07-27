@@ -1,9 +1,9 @@
 import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
 import { getAdminPlatformService, getAdminSupportService } from "@/lib/admin/getAdminServices";
-import { PageHeader } from "@/components/product";
-import ShellPanel from "@/components/shell/ShellPanel";
+import AdminVtPage from "@/components/admin/AdminVtPage";
 import SupportEnterForm from "@/components/admin/SupportEnterForm";
-import { cockpitColors, spacing } from "@/design/tokens";
+import { VtCard, VtDockLink, VtEmpty, VtPanel } from "@/components/product/VtChrome";
+import { cockpitColors } from "@/design/tokens";
 
 export default async function AdminSupportPage({
   searchParams,
@@ -32,67 +32,90 @@ export default async function AdminSupportPage({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: spacing.lg }}>
-      <PageHeader
-        title="Support access"
-        description="Reason required · actor identity retained · no permanent membership"
-      />
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: spacing.md }}>
-        <ShellPanel title="Choose business" subtitle="Then enter with a reason">
-          <div style={{ display: "flex", flexDirection: "column", gap: spacing.xs }}>
+    <AdminVtPage
+      title="Support access"
+      statusLabel={selected ? selected.name : "Select business"}
+      statusTone={activeSession ? "warn" : "neutral"}
+      dock={(
+        <>
+          <VtDockLink href="/admin/businesses">Businesses</VtDockLink>
+          <VtDockLink href="/admin">Dashboard</VtDockLink>
+        </>
+      )}
+    >
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+        <VtPanel title="Choose business">
+          <div style={{ display: "grid", gap: 6 }}>
             {(businesses.businesses ?? []).slice(0, 40).map((business: any) => (
               <a
                 key={business.id}
                 href={`/admin/support?businessId=${business.id}`}
                 style={{
-                  padding: spacing.sm,
-                  borderRadius: 8,
-                  background: selected?.id === business.id ? "rgba(15,23,42,0.06)" : "transparent",
                   textDecoration: "none",
-                  color: cockpitColors.textPrimary,
+                  color: "inherit",
                 }}
               >
-                {business.name}
+                <VtCard
+                  padding={12}
+                  accent={selected?.id === business.id}
+                >
+                  <span style={{ fontWeight: selected?.id === business.id ? 800 : 600 }}>
+                    {business.name}
+                  </span>
+                </VtCard>
               </a>
             ))}
             {!businesses.businesses?.length ? (
-              <div style={{ color: cockpitColors.textMuted }}>No businesses available.</div>
+              <VtEmpty label="No businesses available." />
             ) : null}
           </div>
-        </ShellPanel>
+        </VtPanel>
 
-        <ShellPanel title="Enter support session" subtitle="Read-only or elevated per policy">
+        <VtPanel title="Enter support session">
           {selected ? (
             <>
               <SupportEnterForm businessId={selected.id} businessName={selected.name} />
               {activeSession ? (
-                <div style={{ marginTop: spacing.md, color: cockpitColors.textMuted, fontSize: 13 }}>
+                <div style={{ marginTop: 12, color: cockpitColors.textMuted, fontSize: 13 }}>
                   Active: {activeSession.mode} · {activeSession.reason}
                 </div>
               ) : null}
             </>
           ) : (
-            <div style={{ color: cockpitColors.textMuted }}>Select a business first.</div>
+            <VtEmpty label="Select a business first." />
           )}
-        </ShellPanel>
+        </VtPanel>
 
-        <ShellPanel title="Active support sessions" subtitle="Platform-wide">
-          {(dash.activeSupportSessions ?? []).length ? dash.activeSupportSessions.map((session: any) => (
-            <div key={session.sessionId} style={{ padding: `${spacing.xs}px 0`, fontSize: 13 }}>
-              {session.businessId} · {session.mode} · {session.reason}
+        <VtPanel title="Active support sessions">
+          {(dash.activeSupportSessions ?? []).length ? (
+            <div style={{ display: "grid", gap: 8 }}>
+              {dash.activeSupportSessions.map((session: any) => (
+                <VtCard key={session.sessionId} padding={12}>
+                  <div style={{ fontSize: 13 }}>
+                    {session.businessId} · {session.mode} · {session.reason}
+                  </div>
+                </VtCard>
+              ))}
             </div>
-          )) : <div style={{ color: cockpitColors.textMuted }}>No active sessions.</div>}
-        </ShellPanel>
+          ) : (
+            <VtEmpty label="No active sessions." />
+          )}
+        </VtPanel>
 
-        <ShellPanel title="Recent audit activity" subtitle="Support and admin actions">
-          {(dash.recentAudits ?? []).slice(0, 12).map((event: any) => (
-            <div key={event.id} style={{ padding: `${spacing.xs}px 0`, color: cockpitColors.textMuted, fontSize: 12 }}>
-              {event.action} · {event.createdAt}
+        <VtPanel title="Recent audit activity">
+          {(dash.recentAudits ?? []).length ? (
+            <div style={{ display: "grid", gap: 6 }}>
+              {(dash.recentAudits ?? []).slice(0, 12).map((event: any) => (
+                <div key={event.id} style={{ color: cockpitColors.textMuted, fontSize: 12 }}>
+                  {event.action} · {event.createdAt}
+                </div>
+              ))}
             </div>
-          ))}
-        </ShellPanel>
+          ) : (
+            <VtEmpty label="No recent audits." />
+          )}
+        </VtPanel>
       </div>
-    </div>
+    </AdminVtPage>
   );
 }

@@ -13,7 +13,7 @@ import { resolveEmployeeDefinitionsForReadiness } from "../workforce/normalizeBo
  *   integrationPlatform: object,
  *   activation?: object | null,
  *   platformActiveKnowledgeCount?: number,
- *   bosEmployeeDefinitions?: object[],
+ *   bosEmployeeDefinitions?: object[] | null,
  * }} params
  */
 export function refreshWorkspaceOperationalState({
@@ -24,7 +24,7 @@ export function refreshWorkspaceOperationalState({
   platformActiveKnowledgeCount = 0,
   bosEmployeeDefinitions = null,
 } = {}) {
-  if (!ctx || !installationResult || !integrationPlatform) {
+  if (!ctx || !integrationPlatform) {
     return {};
   }
 
@@ -47,26 +47,30 @@ export function refreshWorkspaceOperationalState({
   const platformKnowledgeCoverage = buildPmProspectCoordinatorPlatformCoverage(platformActiveKnowledgeCount);
 
   const connectedSystemsSnapshot = buildConnectedSystemsSnapshot({
-    installationResult,
+    installationResult: installationResult ?? { connectedSystemRequirements: [] },
     connectionRuntime: integrationPlatform.connectionRuntime,
   });
 
-  const connectionDependencyProjection = buildConnectionDependencyProjection({
-    installationResult,
-    connectionRuntime: integrationPlatform.connectionRuntime,
-    employeeDefinitions,
-    automationConfigurations: industryPackage?.automationConfigurations,
-  });
+  const connectionDependencyProjection = installationResult
+    ? buildConnectionDependencyProjection({
+      installationResult,
+      connectionRuntime: integrationPlatform.connectionRuntime,
+      employeeDefinitions,
+      automationConfigurations: industryPackage?.automationConfigurations,
+    })
+    : null;
 
-  const employeeReadinessReport = buildDigitalEmployeeReadinessReport({
-    employeeDefinitions,
-    capabilityRuntime: ctx.capabilityRuntime,
-    companyRuntime: ctx.companyRuntime,
-    connectedSystemsSnapshot,
-    connectionRuntime: integrationPlatform.connectionRuntime,
-    teamRuntime: ctx.teamRuntime,
-    platformKnowledgeCoverage,
-  });
+  const employeeReadinessReport = installationResult
+    ? buildDigitalEmployeeReadinessReport({
+      employeeDefinitions,
+      capabilityRuntime: ctx.capabilityRuntime,
+      companyRuntime: ctx.companyRuntime,
+      connectedSystemsSnapshot,
+      connectionRuntime: integrationPlatform.connectionRuntime,
+      teamRuntime: ctx.teamRuntime,
+      platformKnowledgeCoverage,
+    })
+    : null;
 
   return {
     connectedSystemsSnapshot,

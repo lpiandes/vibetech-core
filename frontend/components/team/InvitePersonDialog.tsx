@@ -13,18 +13,20 @@ import { formatProductErrorMessage } from "@/lib/platform/productErrors";
 const INVITE_ROLES = [
   { value: "ADMIN", label: "Administrator" },
   { value: "MANAGER", label: "Manager" },
-  { value: "EMPLOYEE", label: "Team member" },
+  { value: "EMPLOYEE", label: "Staff member" },
   { value: "VIEWER", label: "View only" },
 ];
 
 export default function InvitePersonDialog({
   businessId,
   showDevInviteLinks = false,
+  audienceLabel = "teammate",
   onClose,
   onSent,
 }: {
   businessId: string;
   showDevInviteLinks?: boolean;
+  audienceLabel?: string;
   onClose: () => void;
   onSent: () => void;
 }) {
@@ -74,7 +76,7 @@ export default function InvitePersonDialog({
 
   return (
     <SimpleModal
-      title="Invite teammate"
+      title={`Invite ${audienceLabel}`}
       onClose={onClose}
       footer={
         devLink ? (
@@ -105,7 +107,7 @@ export default function InvitePersonDialog({
             </p>
           ) : (
             <p style={{ ...typography.caption, color: cockpitColors.textSecondary, margin: 0, lineHeight: 1.5 }}>
-              They will receive an email with instructions to join your team.
+              They will receive an email with instructions to join your staff workspace.
             </p>
           )}
         </div>
@@ -121,6 +123,9 @@ export default function InvitePersonDialog({
               style={{ padding: `${spacing.sm} ${spacing.md}`, borderRadius: 8, border: `1px solid ${cockpitColors.panelBorder}` }}
             />
           </label>
+          <p style={{ ...typography.caption, color: cockpitColors.textMuted, margin: 0, lineHeight: 1.5 }}>
+            This grants access to the business for staff, coaches, or administrators. It does not add a player or family to a sports roster.
+          </p>
           <label style={{ display: "flex", flexDirection: "column", gap: spacing.xs }}>
             <span style={{ fontWeight: 600, fontSize: typography.caption.fontSize }}>Role</span>
             <select

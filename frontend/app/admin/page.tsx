@@ -1,14 +1,21 @@
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
 import { getAdminPlatformService } from "@/lib/admin/getAdminServices";
+import AdminVtPage from "@/components/admin/AdminVtPage";
 import StatusBadge from "@/components/product/StatusBadge";
-import { PageHeader } from "@/components/product";
-import { cockpitColors, radius, typography } from "@/design/tokens";
+import {
+  VtCard,
+  VtDockLink,
+  VtEmpty,
+  VtMetricStrip,
+  VtPanel,
+} from "@/components/product/VtChrome";
+import { cockpitColors } from "@/design/tokens";
 
 /**
- * Platform admin home — sparse, evidence-only, one row per business.
+ * Platform admin home — VtChrome cards, operator queue first.
  */
 export default async function AdminDashboardPage() {
   const user = await requirePlatformAdmin();
@@ -21,252 +28,225 @@ export default async function AdminDashboardPage() {
     return <div>Unauthorized</div>;
   }
 
-  const metrics = [
-    { id: "total", label: "Businesses", value: dash.metrics.totalBusinesses, href: "/admin/businesses" },
-    { id: "attention", label: "Needs you", value: dash.metrics.needingAttention, href: "/admin/businesses" },
-    { id: "installs", label: "Live installs", value: dash.metrics.installations ?? dash.metrics.recentInstallations, href: "/admin/installations" },
-    { id: "support", label: "Support open", value: dash.metrics.activeSupportSessions, href: "/admin/support" },
-  ];
+  const operatorActions = Array.isArray((dash as any).operatorActions) ? (dash as any).operatorActions : [];
+  const needingYou = Number(dash.metrics.needingAttention ?? operatorActions.length ?? 0);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 28, maxWidth: 1080 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
-        <PageHeader
-          title="Admin"
-          description="Real businesses only — pilot and script noise stays out."
-        />
-        <div style={{ display: "flex", gap: 10 }}>
-          <AdminLink href="/admin/businesses" primary>
-            Businesses
-          </AdminLink>
-          <AdminLink href="/platform">Create & invite</AdminLink>
-        </div>
-      </div>
+    <AdminVtPage
+      title="Platform control"
+      eyebrow="Admin"
+      statusLabel={needingYou > 0 ? `${needingYou} needs you` : "Clear"}
+      statusTone={needingYou > 0 ? "warn" : "live"}
+      dock={(
+        <>
+          <VtDockLink href="/platform">Create & invite</VtDockLink>
+          <VtDockLink href="/admin/health">Health</VtDockLink>
+          <VtDockLink href="/admin/businesses">Businesses</VtDockLink>
+          <VtDockLink href="/admin/support">Support</VtDockLink>
+        </>
+      )}
+    >
+      <VtMetricStrip
+        items={[
+          { label: "Businesses", value: dash.metrics.totalBusinesses, hint: "Live directory" },
+          { label: "Needs you", value: needingYou, hint: "Platform exceptions" },
+          {
+            label: "Live installs",
+            value: dash.metrics.installations ?? dash.metrics.recentInstallations,
+            hint: "Installed OS",
+          },
+          { label: "Support open", value: dash.metrics.activeSupportSessions, hint: "Active sessions" },
+        ]}
+      />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
-        {metrics.map((metric) => (
-          <Link
-            key={metric.id}
-            href={metric.href}
-            style={{
-              textDecoration: "none",
-              color: "inherit",
-              background: cockpitColors.panel,
-              border: `1px solid ${cockpitColors.panelBorder}`,
-              borderRadius: radius.medium,
-              padding: "16px 18px",
-            }}
-          >
-            <div style={{ fontSize: 12, color: cockpitColors.textMuted, marginBottom: 6 }}>{metric.label}</div>
-            <div style={{ fontSize: 28, fontWeight: 650, letterSpacing: "-0.03em", color: cockpitColors.textPrimary }}>
-              {metric.value}
-            </div>
-          </Link>
-        ))}
-      </div>
-
-      {dash.platformAlerts.length ? (
-        <section style={sectionStyle}>
-          <SectionTitle title="Alerts" />
-          <div style={{ display: "grid", gap: 8 }}>
-            {dash.platformAlerts.map((alert: any) => (
-              <div key={alert.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                <span style={{ color: cockpitColors.textPrimary }}>{alert.label}</span>
-                <StatusBadge label={alert.level} tone="warning" />
-              </div>
+      <VtPanel
+        title="Platform exceptions — fix these now"
+        right={operatorActions.length ? <StatusBadge label={`${operatorActions.length} open`} tone="warning" /> : null}
+      >
+        {operatorActions.length ? (
+          <div style={{ display: "grid", gap: 12 }}>
+            {operatorActions.map((action: any) => (
+              <VtCard key={action.id} padding={16} accent={String(action.urgency) === "critical"}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: 16, color: cockpitColors.textPrimary }}>{action.title}</div>
+                    <div style={{ marginTop: 4, fontSize: 13, color: cockpitColors.textSecondary, lineHeight: 1.45 }}>
+                      {action.summary}
+                    </div>
+                  </div>
+                  <StatusBadge label={String(action.urgency ?? "high")} tone="warning" />
+                </div>
+                <ol style={{ margin: "12px 0 0", paddingLeft: 18, color: cockpitColors.textPrimary, fontSize: 13, lineHeight: 1.55 }}>
+                  {(action.steps ?? []).map((step: string) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+                {action.payload ? (
+                  <details style={{ marginTop: 10 }}>
+                    <summary style={{ cursor: "pointer", fontWeight: 800, fontSize: 13, color: cockpitColors.accent }}>
+                      All info you need (copy this)
+                    </summary>
+                    <pre style={{
+                      marginTop: 8,
+                      padding: 12,
+                      borderRadius: 12,
+                      background: cockpitColors.inset,
+                      overflow: "auto",
+                      fontSize: 12,
+                      lineHeight: 1.45,
+                    }}
+                    >
+                      {JSON.stringify(action.payload, null, 2)}
+                    </pre>
+                  </details>
+                ) : null}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                  <Link href={action.href} style={ctaPrimary}>Open in Admin</Link>
+                  {action.workspaceHref ? (
+                    <Link href={action.workspaceHref} style={ctaSecondary}>Open workspace</Link>
+                  ) : null}
+                </div>
+              </VtCard>
             ))}
           </div>
-        </section>
+        ) : (
+          <VtEmpty label="Nothing waiting on you. A2P, failed installs, and similar work land here with exact steps." />
+        )}
+      </VtPanel>
+
+      {dash.platformAlerts.length ? (
+        <VtPanel title="Alerts">
+          <div style={{ display: "grid", gap: 8 }}>
+            {dash.platformAlerts.map((alert: any) => (
+              <VtCard key={alert.id} padding={12}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                  <span style={{ color: cockpitColors.textPrimary, fontWeight: 700 }}>{alert.label}</span>
+                  <StatusBadge label={alert.level} tone="warning" />
+                </div>
+              </VtCard>
+            ))}
+          </div>
+        </VtPanel>
       ) : null}
 
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 16 }}>
-        <section style={sectionStyle}>
-          <SectionTitle title="Businesses" action={<QuietHref href="/admin/businesses">View all</QuietHref>} />
+        <VtPanel title="Businesses" right={<QuietHref href="/admin/businesses">View all</QuietHref>}>
           {dash.businesses?.length ? (
-            <div style={{ display: "grid", gap: 0 }}>
+            <div style={{ display: "grid", gap: 8 }}>
               {dash.businesses.map((business: any) => (
-                <Link
-                  key={business.id}
-                  href={business.href}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    padding: "12px 0",
-                    borderBottom: `1px solid ${cockpitColors.panelBorder}`,
-                    textDecoration: "none",
-                    color: "inherit",
-                  }}
-                >
-                  <span style={{ fontWeight: 600 }}>{business.name}</span>
-                  <span style={{ color: cockpitColors.textMuted, fontSize: 13 }}>{humanStatus(business.status)}</span>
+                <Link key={business.id} href={business.href} style={{ textDecoration: "none" }}>
+                  <VtCard padding={12}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span style={{ fontWeight: 800, color: cockpitColors.textPrimary }}>{business.name}</span>
+                      <span style={{ color: cockpitColors.textMuted, fontSize: 13 }}>{humanStatus(business.status)}</span>
+                    </div>
+                  </VtCard>
                 </Link>
               ))}
             </div>
           ) : (
-            <Empty>No live businesses yet. Create one and invite an owner.</Empty>
+            <VtEmpty label="No live businesses yet. Create one and invite an owner." />
           )}
-        </section>
+        </VtPanel>
 
-        <section style={sectionStyle}>
-          <SectionTitle title="Latest Ask activity" action={<QuietHref href="/admin/architect">Sessions</QuietHref>} />
+        <VtPanel title="Latest Ask activity" right={<QuietHref href="/admin/architect">Sessions</QuietHref>}>
           {dash.recentSessions.length ? (
-            <div style={{ display: "grid", gap: 0 }}>
+            <div style={{ display: "grid", gap: 8 }}>
               {dash.recentSessions.map((session: any) => (
                 <Link
                   key={session.sessionId}
                   href={session.href || `/architect/${session.sessionId}`}
-                  style={{
-                    display: "grid",
-                    gap: 2,
-                    padding: "12px 0",
-                    borderBottom: `1px solid ${cockpitColors.panelBorder}`,
-                    textDecoration: "none",
-                    color: "inherit",
-                  }}
+                  style={{ textDecoration: "none" }}
                 >
-                  <span style={{ fontWeight: 600 }}>{session.businessName || "Untitled business"}</span>
-                  <span style={{ color: cockpitColors.textMuted, fontSize: 13 }}>
-                    {session.stageLabel || session.stage || "In progress"}
-                  </span>
+                  <VtCard padding={12}>
+                    <div style={{ fontWeight: 800, color: cockpitColors.textPrimary }}>
+                      {session.businessName || "Untitled business"}
+                    </div>
+                    <div style={{ color: cockpitColors.textMuted, fontSize: 13, marginTop: 2 }}>
+                      {session.stageLabel || session.stage || "In progress"}
+                    </div>
+                  </VtCard>
                 </Link>
               ))}
             </div>
           ) : (
-            <Empty>No Ask activity yet.</Empty>
+            <VtEmpty label="No Ask activity yet." />
           )}
-        </section>
+        </VtPanel>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <section style={sectionStyle}>
-          <SectionTitle title="Installs" />
+        <VtPanel title="Installs" right={<QuietHref href="/admin/installations">All</QuietHref>}>
           {dash.recentInstallations.length ? (
-            <div style={{ display: "grid", gap: 0 }}>
+            <div style={{ display: "grid", gap: 8 }}>
               {dash.recentInstallations.map((entry: any) => (
-                <div
-                  key={`${entry.businessId}-${entry.specificationId}`}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    padding: "12px 0",
-                    borderBottom: `1px solid ${cockpitColors.panelBorder}`,
-                  }}
-                >
-                  <span style={{ fontWeight: 600 }}>{entry.businessName}</span>
-                  <span style={{ color: cockpitColors.textMuted, fontSize: 13 }}>{humanStatus(entry.status)}</span>
-                </div>
+                <VtCard key={`${entry.businessId}-${entry.specificationId}`} padding={12}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                    <span style={{ fontWeight: 800 }}>{entry.businessName}</span>
+                    <span style={{ color: cockpitColors.textMuted, fontSize: 13 }}>{humanStatus(entry.status)}</span>
+                  </div>
+                </VtCard>
               ))}
             </div>
           ) : (
-            <Empty>No installations yet.</Empty>
+            <VtEmpty label="No installations yet." />
           )}
-        </section>
+        </VtPanel>
 
-        <section style={sectionStyle}>
-          <SectionTitle title="Recent activity" />
+        <VtPanel title="Recent activity">
           {dash.recentAudits.length ? (
-            <div style={{ display: "grid", gap: 0 }}>
+            <div style={{ display: "grid", gap: 8 }}>
               {dash.recentAudits.map((event: any) => (
-                <div
-                  key={event.id}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    padding: "12px 0",
-                    borderBottom: `1px solid ${cockpitColors.panelBorder}`,
-                  }}
-                >
-                  <span>{event.label || event.action}</span>
-                  <span style={{ color: cockpitColors.textMuted, fontSize: 13, whiteSpace: "nowrap" }}>
-                    {event.when || ""}
-                  </span>
-                </div>
+                <VtCard key={event.id} padding={12}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                    <span>{event.label || event.action}</span>
+                    <span style={{ color: cockpitColors.textMuted, fontSize: 13, whiteSpace: "nowrap" }}>
+                      {event.when || ""}
+                    </span>
+                  </div>
+                </VtCard>
               ))}
             </div>
           ) : (
-            <Empty>Quiet for now.</Empty>
+            <VtEmpty label="Quiet for now." />
           )}
-        </section>
+        </VtPanel>
       </div>
 
       {dash.capabilityGaps.length ? (
-        <section style={sectionStyle}>
-          <SectionTitle title="Common gaps" />
+        <VtPanel title="Common gaps">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {dash.capabilityGaps.slice(0, 6).map((gap: any) => (
+            {dash.capabilityGaps.slice(0, 8).map((gap: any) => (
               <span
                 key={gap.label}
                 style={{
-                  border: `1px solid ${cockpitColors.panelBorder}`,
+                  border: `2px solid ${cockpitColors.panelBorder}`,
                   borderRadius: 999,
-                  padding: "6px 12px",
-                  fontSize: 13,
+                  padding: "8px 12px",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
                   color: cockpitColors.textSecondary,
+                  background: "#fff",
                 }}
               >
                 {String(gap.label).replace(/_/g, " ")} · {gap.count}
               </span>
             ))}
           </div>
-        </section>
+        </VtPanel>
       ) : null}
-    </div>
-  );
-}
-
-function SectionTitle({ title, action = null }: { title: string; action?: ReactNode }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-      <h2 style={{ margin: 0, fontSize: 15, fontWeight: 650, letterSpacing: "-0.01em" }}>{title}</h2>
-      {action}
-    </div>
+    </AdminVtPage>
   );
 }
 
 function QuietHref({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Link href={href} style={{ color: cockpitColors.accent, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>
+    <Link href={href} style={{ color: cockpitColors.accent, textDecoration: "none", fontSize: 12, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase" }}>
       {children}
     </Link>
   );
-}
-
-function AdminLink({
-  href,
-  children,
-  primary = false,
-}: {
-  href: string;
-  children: ReactNode;
-  primary?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      style={{
-        textDecoration: "none",
-        display: "inline-flex",
-        alignItems: "center",
-        height: 36,
-        padding: "0 14px",
-        borderRadius: radius.medium,
-        background: primary ? cockpitColors.accent : cockpitColors.panel,
-        color: primary ? "#fff" : cockpitColors.textPrimary,
-        border: primary ? "none" : `1px solid ${cockpitColors.panelBorder}`,
-        fontWeight: 650,
-        fontSize: typography.button.fontSize,
-      }}
-    >
-      {children}
-    </Link>
-  );
-}
-
-function Empty({ children }: { children: ReactNode }) {
-  return <div style={{ color: cockpitColors.textMuted, fontSize: 14, padding: "8px 0" }}>{children}</div>;
 }
 
 function humanStatus(value: string | null | undefined) {
@@ -277,9 +257,23 @@ function humanStatus(value: string | null | undefined) {
   return key.replace(/_/g, " ");
 }
 
-const sectionStyle: CSSProperties = {
-  background: cockpitColors.panel,
-  border: `1px solid ${cockpitColors.panelBorder}`,
-  borderRadius: 18,
-  padding: 20,
+const ctaPrimary = {
+  textDecoration: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "10px 14px",
+  borderRadius: 12,
+  background: cockpitColors.accent,
+  color: "#fff",
+  fontWeight: 900,
+  fontSize: 12,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase" as const,
+};
+
+const ctaSecondary = {
+  ...ctaPrimary,
+  background: "#fff",
+  color: cockpitColors.textPrimary,
+  border: `2px solid ${cockpitColors.panelBorder}`,
 };

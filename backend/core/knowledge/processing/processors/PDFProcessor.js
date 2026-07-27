@@ -1,5 +1,3 @@
-import { PDFParse } from "pdf-parse";
-
 function cleanText(text) {
   return String(text ?? "")
     .replace(/[ \t]+/g, " ")
@@ -26,6 +24,10 @@ export class PDFProcessor {
   async process({ id, filename, content, processingTimeMs } = {}) {
     const buffer = Buffer.isBuffer(content) ? content : Buffer.from(String(content ?? ""));
     try {
+      // pdf-parse (and pdfjs) must not be evaluated while the Next.js server
+      // compiles the application. Load it only when an uploaded PDF is
+      // actually processed.
+      const { PDFParse } = await import("pdf-parse");
       const parser = new PDFParse({ data: buffer });
       const parsed = await parser.getText();
       await parser.destroy();
@@ -72,4 +74,3 @@ export class PDFProcessor {
     }
   }
 }
-

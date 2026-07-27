@@ -7,14 +7,14 @@ import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 export const OWNER_REQUESTED_EMPLOYEE_PATTERNS = Object.freeze([
   {
     archetypeId: "ai_caller",
-    label: "AI Caller",
-    purpose: "Prepare call scripts and follow-up queues for owner approval. Live outbound calling is not available yet — drafts and work stay email/approval-gated until voice ships.",
+    label: "Voice Call Assistant",
+    purpose: "Prepare approved call scripts and follow-up work. Live conversations require a configured Twilio Voice agent.",
     patterns: [/\bai\s*caller\b/i, /\bcall(?:ing)?\s+agent\b/i, /\bphone\s+caller\b/i, /\boutbound\s+call/i],
   },
   {
     archetypeId: "facebook_lead_specialist",
-    label: "Facebook Lead Generator",
-    purpose: "Qualify and route inbound leads into intake work for owner review. Meta/Facebook ads sync is not live yet — use email/web form intake until it ships.",
+    label: "Meta Lead Specialist",
+    purpose: "Qualify and route Meta lead-form submissions into intake work for owner review.",
     patterns: [/\bfb\s*lead/i, /\bfacebook\s+lead/i, /\bmeta\s+lead/i, /\blead\s+gen(?:eration)?\b/i],
   },
   {
@@ -26,7 +26,7 @@ export const OWNER_REQUESTED_EMPLOYEE_PATTERNS = Object.freeze([
   {
     archetypeId: "scheduler",
     label: "Scheduler",
-    purpose: "Coordinate scheduling and availability for owner review (in-app schedule — calendar sync not live yet).",
+    purpose: "Coordinate scheduling and availability for owner review. Connect Google Calendar before approved events sync externally.",
     patterns: [/\bschedule(?:r|ing)?\b/i, /\bappointment\b/i],
   },
   {
@@ -42,26 +42,31 @@ export function extractOwnerRequestedEmployees({
   conversation = [],
   businessSummary = {},
 } = {}) {
-  const corpus = [
-    ...answers.map((entry) => String(entry?.answer ?? "")),
-    ...conversation.map((entry) => String(entry?.text ?? "")),
-    String(businessSummary?.description ?? ""),
-    String(businessSummary?.desiredWorkforce ?? ""),
-    ...(Array.isArray(businessSummary?.requestedEmployees) ? businessSummary.requestedEmployees : []),
-    ...(Array.isArray(businessSummary?.goals) ? businessSummary.goals : []),
-    ...(Array.isArray(businessSummary?.painPoints) ? businessSummary.painPoints : []),
-  ].join("\n");
+  void conversation;
+  const workforceAnswer = answers.find((entry) => entry?.questionId === "q_digital_workforce");
+  const raw = String(
+    workforceAnswer?.answer
+    ?? businessSummary?.desiredWorkforce
+    ?? "",
+  ).trim();
+  if (!raw) return deepFreeze([]);
 
-  const matched = [];
-  for (const entry of OWNER_REQUESTED_EMPLOYEE_PATTERNS) {
-    if (entry.patterns.some((pattern) => pattern.test(corpus))) {
-      matched.push({
-        archetypeId: entry.archetypeId,
-        label: entry.label,
-        purpose: entry.purpose,
-      });
-    }
-  }
+  const requested = raw
+    .split(/[\n,;]+/)
+    .map((entry) => entry.replace(/^[-•\s]+/, "").replace(/^(?:and|&|also)\s+/i, "").trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  const matched = requested.map((label, index) => {
+    const archetype = OWNER_REQUESTED_EMPLOYEE_PATTERNS.find((entry) => (
+      entry.patterns.some((pattern) => pattern.test(label))
+    ));
+    return {
+      archetypeId: archetype?.archetypeId ?? `owner_defined_${index + 1}`,
+      label: archetype?.label ?? label,
+      purpose: archetype?.purpose
+        ?? "Owner-requested AI teammate. It prepares work for review and never sends or changes anything without approval.",
+    };
+  });
   return deepFreeze(matched);
 }
 

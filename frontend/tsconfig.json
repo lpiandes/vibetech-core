@@ -15,6 +15,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
     "jsx": "preserve",
     "incremental": true,
     "plugins": [
@@ -29,15 +30,16 @@
     }
   },
   "include": [
-    "next-env.d.ts",
+    "**/*.mts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    ".next-dev/types/**/*.ts",
     ".next-dev/dev/types/**/*.ts",
+    ".next-dev/types/**/*.ts",
     ".next-prod/types/**/*.ts",
-    "**/*.mts"
+    ".next/dev/types/**/*.ts",
+    ".next/types/**/*.ts",
+    "next-env.d.ts",
+    ".next-smoke/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

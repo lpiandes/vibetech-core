@@ -2,6 +2,7 @@
 
 import ShellMetricStrip from "@/components/shell/ShellMetricStrip";
 import ShellPanel from "@/components/shell/ShellPanel";
+import { SimpleEmpty } from "@/components/product/SimpleUI";
 import StatusBadge from "@/components/product/StatusBadge";
 import EntityAvatar from "@/components/shell/EntityAvatar";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
@@ -35,17 +36,20 @@ type OrgView = {
 };
 
 /**
- * Organization workspace — departments, teams, humans, AI employees, reporting, coverage.
+ * Organization workspace — staff structure, humans, AI employees, reporting, coverage.
  * Uses universal components; no industry-specific UI.
  */
-export default function OrganizationWorkspace({ organization }: { organization: OrgView }) {
+export default function OrganizationWorkspace({
+  organization,
+  canManageTeam = false,
+}: {
+  organization: OrgView;
+  canManageTeam?: boolean;
+}) {
   if (!organization?.hasOrganization) {
     return (
-      <ShellPanel title="Organization" subtitle="Workforce structure">
-        <div style={{ padding: spacing.md, color: cockpitColors.textMuted, lineHeight: 1.5 }}>
-          Architect will recommend departments, roles, and reusable AI employees when a Business OS is designed.
-          Invite humans anytime — AI positions appear after install.
-        </div>
+      <ShellPanel title="Organization">
+        <SimpleEmpty>Nothing yet.</SimpleEmpty>
       </ShellPanel>
     );
   }
@@ -76,19 +80,19 @@ export default function OrganizationWorkspace({ organization }: { organization: 
         gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
         gap: spacing.md,
       }}>
-        <ShellPanel title="Departments" subtitle="How the business is organized">
+        <ShellPanel title="Departments">
           {organization.departments.length ? organization.departments.map((department) => (
             <Row key={department.id} title={department.label} detail={department.purpose} badge="Department" />
-          )) : <Empty text="No departments yet." />}
+          )) : <Empty text="None yet." />}
         </ShellPanel>
 
-        <ShellPanel title="Teams" subtitle="Operating groups">
+        <ShellPanel title="Staff groups">
           {organization.teams.length ? organization.teams.map((team) => (
             <Row key={team.id} title={team.label} detail={team.departmentId ? `Dept: ${team.departmentId}` : ""} badge="Team" />
-          )) : <Empty text="No teams yet." />}
+          )) : <Empty text="None yet." />}
         </ShellPanel>
 
-        <ShellPanel title="Coverage" subtitle="Absence and fallback">
+        <ShellPanel title="Coverage">
           {organization.coverageRules.length ? organization.coverageRules.map((rule, index) => (
             <Row
               key={String(rule.when ?? index)}
@@ -96,7 +100,7 @@ export default function OrganizationWorkspace({ organization }: { organization: 
               detail={`Fallback: ${String(rule.fallback ?? "—")}`}
               badge="Rule"
             />
-          )) : <Empty text="No coverage rules yet." />}
+          )) : <Empty text="None yet." />}
         </ShellPanel>
       </div>
 
@@ -107,7 +111,7 @@ export default function OrganizationWorkspace({ organization }: { organization: 
       }}>
         <TeamDirectory
           title="Humans"
-          subtitle="People in the business"
+          permissions={canManageTeam ? ["team.manage"] : []}
           items={organization.humans.map((human) => ({
             id: human.id,
             name: human.label,
@@ -115,12 +119,12 @@ export default function OrganizationWorkspace({ organization }: { organization: 
             email: human.email,
             kind: "Human",
           }))}
-          emptyTitle="No humans yet"
-          emptyDescription="Invite teammates to fill human positions."
+          emptyTitle="No staff"
+          emptyDescription="None yet."
         />
         <EmployeeCards
           title="AI employees"
-          subtitle="Reusable archetypes on duty"
+          permissions={canManageTeam ? ["team.manage"] : []}
           items={organization.aiEmployees.map((employee) => ({
             id: employee.id,
             name: employee.label,
@@ -129,16 +133,16 @@ export default function OrganizationWorkspace({ organization }: { organization: 
             statusLabel: employee.archetypeId ? String(employee.archetypeId).replace(/_/g, " ") : "AI",
           }))}
           emptyTitle="No AI employees"
-          emptyDescription="Architect will recommend reusable AI archetypes for this business."
+          emptyDescription="None yet."
         />
       </div>
 
       <OrganizationChart
-        title="Reporting lines"
-        subtitle="Humans and AI employees"
+        title="Reporting"
+        permissions={canManageTeam ? ["team.manage"] : []}
         items={chartItems}
-        emptyTitle="No reporting structure"
-        emptyDescription="Reporting lines appear when Architect designs the workforce."
+        emptyTitle="No reporting"
+        emptyDescription="None yet."
       />
 
       <div style={{
@@ -146,7 +150,7 @@ export default function OrganizationWorkspace({ organization }: { organization: 
         gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
         gap: spacing.md,
       }}>
-        <ShellPanel title="Responsibilities" subtitle="Who owns what">
+        <ShellPanel title="Responsibilities">
           {organization.responsibilities.length ? organization.responsibilities.slice(0, 12).map((item, index) => (
             <Row
               key={`${item.ownerId}-${index}`}
@@ -161,11 +165,11 @@ export default function OrganizationWorkspace({ organization }: { organization: 
             )
           )}
           {!organization.responsibilities.length && !organization.aiEmployees.some((e) => e.responsibilities?.length) ? (
-            <Empty text="Responsibilities appear with the workforce design." />
+            <Empty text="None yet." />
           ) : null}
         </ShellPanel>
 
-        <ShellPanel title="Approvals & escalations" subtitle="Human-in-the-loop">
+        <ShellPanel title="Approvals">
           {organization.approvals.length ? organization.approvals.slice(0, 10).map((item, index) => (
             <Row
               key={`${item.ownerId}-${index}`}
@@ -173,10 +177,10 @@ export default function OrganizationWorkspace({ organization }: { organization: 
               detail={`Escalate to ${String(item.escalateTo ?? "manager")}`}
               badge="Approval"
             />
-          )) : <Empty text="Approval chains appear with AI employee design." />}
+          )) : <Empty text="None yet." />}
         </ShellPanel>
 
-        <ShellPanel title="KPI ownership" subtitle="Measured outcomes">
+        <ShellPanel title="KPIs">
           {organization.kpis.length ? organization.kpis.slice(0, 10).map((item, index) => (
             <Row
               key={`${item.ownerId}-${index}`}
@@ -184,10 +188,10 @@ export default function OrganizationWorkspace({ organization }: { organization: 
               detail={`${String(item.ownerKind ?? "")}: ${String(item.ownerId ?? "")}`}
               badge="KPI"
             />
-          )) : <Empty text="KPI ownership appears with the workforce design." />}
+          )) : <Empty text="None yet." />}
         </ShellPanel>
 
-        <ShellPanel title="Knowledge ownership" subtitle="Who keeps truth current">
+        <ShellPanel title="Knowledge">
           {organization.knowledgeOwnership.length ? organization.knowledgeOwnership.slice(0, 10).map((item, index) => (
             <Row
               key={`${item.ownerId}-${index}`}
@@ -195,7 +199,7 @@ export default function OrganizationWorkspace({ organization }: { organization: 
               detail={`Owner: ${String(item.ownerId ?? "")}`}
               badge="Knowledge"
             />
-          )) : <Empty text="Knowledge ownership appears with AI positions." />}
+          )) : <Empty text="None yet." />}
         </ShellPanel>
       </div>
     </div>

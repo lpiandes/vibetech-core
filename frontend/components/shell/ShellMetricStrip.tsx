@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Activity, CheckCircle2, CircleAlert, FileText, ListChecks, PlugZap, UsersRound } from "lucide-react";
 
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 
@@ -15,20 +16,29 @@ export default function ShellMetricStrip({ metrics }: { metrics: ShellMetric[] }
   if (!metrics.length) return null;
 
   return (
-    <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: spacing.sm }}>
       {metrics.slice(0, 5).map((metric) => {
+        const visual = metricVisual(metric.label);
+        const Icon = visual.icon;
         const content = (
           <div
             style={{
-              padding: `${spacing.xs} ${spacing.sm}`,
-              borderRadius: radius.medium,
-              backgroundColor: cockpitColors.panelElevated,
-              border: `1px solid ${cockpitColors.panelBorder}`,
-              minWidth: 88,
+              minHeight: 92,
+              padding: spacing.md,
+              borderRadius: 14,
+              backgroundColor: cockpitColors.panel,
+              border: "1px solid #e8edf2",
+              boxShadow: "0 6px 16px rgba(15,23,42,.035)",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
             }}
           >
-            <div style={{ fontSize: "0.65rem", color: cockpitColors.textMuted, lineHeight: 1.2 }}>{metric.label}</div>
-            <div style={{ fontSize: "1.1rem", fontWeight: 650, color: cockpitColors.textPrimary }}>{metric.value}</div>
+            <span aria-hidden style={{ width: 36, height: 36, borderRadius: 10, display: "inline-flex", alignItems: "center", justifyContent: "center", background: visual.background, color: visual.color, flexShrink: 0 }}><Icon size={18} /></span>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: cockpitColors.textMuted, lineHeight: 1.2 }}>{metric.label}</span>
+              <span style={{ display: "block", marginTop: 6, fontSize: "1.45rem", fontWeight: 750, letterSpacing: "-.035em", color: cockpitColors.textPrimary }}>{metric.value}</span>
+            </span>
           </div>
         );
 
@@ -42,4 +52,15 @@ export default function ShellMetricStrip({ metrics }: { metrics: ShellMetric[] }
       })}
     </div>
   );
+}
+
+function metricVisual(label: string) {
+  const value = label.toLowerCase();
+  if (/need|blocked|overdue|attention|setup/.test(value)) return { icon: CircleAlert, color: "#c2410c", background: "#fff0df" };
+  if (/ready|connected|complete|sent|working/.test(value)) return { icon: CheckCircle2, color: "#047857", background: "#e5f7ef" };
+  if (/team|people|employee/.test(value)) return { icon: UsersRound, color: "#7c3aed", background: "#f1eaff" };
+  if (/knowledge|document/.test(value)) return { icon: FileText, color: "#2563eb", background: "#e8f1ff" };
+  if (/connection|integration/.test(value)) return { icon: PlugZap, color: "#0f766e", background: "#e4f7f3" };
+  if (/work|queue|open/.test(value)) return { icon: ListChecks, color: "#2563eb", background: "#e8f1ff" };
+  return { icon: Activity, color: "#0f766e", background: "#e4f7f3" };
 }

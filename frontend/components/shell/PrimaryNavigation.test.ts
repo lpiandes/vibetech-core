@@ -40,7 +40,7 @@ function expandSpecialtyPathAliases(pathValue: string): string[] {
     const emp = id.slice("specialty_ai_".length);
     aliases.add(`${prefix}${encodeURIComponent(emp)}`);
     aliases.add(`${prefix}${emp}`);
-  } else if (id.startsWith("owner_emp_")) {
+  } else {
     aliases.add(`${prefix}${encodeURIComponent(`specialty_ai_${id}`)}`);
     aliases.add(`${prefix}specialty_ai_${id}`);
   }
@@ -64,7 +64,12 @@ function findActiveNavHref(pathname: string, businessId: string, hrefs: string[]
     if (!matches) continue;
     if (!best || target.length > best.length) best = href;
   }
-  return best;
+  if (best) return best;
+  if (/\/specialty\//.test(pathName)) {
+    const automations = hrefs.find((href) => href.replace(/\/$/, "").endsWith("/automations"));
+    if (automations) return automations;
+  }
+  return null;
 }
 
 const businessId = "biz_1";
@@ -76,6 +81,7 @@ const hrefs = [
   `/b/${businessId}/properties`,
   `/b/${businessId}/knowledge`,
   `/b/${businessId}/team`,
+  `/b/${businessId}/automations`,
   `/b/${businessId}/integrations`,
   `/b/${businessId}/settings`,
 ];
@@ -143,5 +149,31 @@ test("specialty AI employee and specialty_ai module urls share active nav", () =
       withSpecialty,
     ),
     `/b/${businessId}/specialty/owner_emp_create_daily_workout_and_practic`,
+  );
+});
+
+test("specialty surface without its own nav item keeps Automations highlighted", () => {
+  assert.equal(
+    findActiveNavHref(
+      `/b/${businessId}/specialty/emp_0_intake_specialist`,
+      businessId,
+      hrefs,
+    ),
+    `/b/${businessId}/automations`,
+  );
+});
+
+test("emp_ id and specialty_ai_emp_ id share active nav", () => {
+  const withSpecialty = [
+    ...hrefs,
+    `/b/${businessId}/specialty/emp_0_intake_specialist`,
+  ];
+  assert.equal(
+    findActiveNavHref(
+      `/b/${businessId}/specialty/specialty_ai_emp_0_intake_specialist`,
+      businessId,
+      withSpecialty,
+    ),
+    `/b/${businessId}/specialty/emp_0_intake_specialist`,
   );
 });

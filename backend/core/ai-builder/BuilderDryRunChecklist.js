@@ -193,7 +193,18 @@ function guideFromLabel(label) {
 }
 
 function labelsFromSpec(values = []) {
-  return [...new Set((values ?? []).map((entry) => String(entry ?? "").trim()).filter(Boolean))];
+  return [...new Set((values ?? []).map(presentOwnerLabel).filter(Boolean))];
+}
+
+// Existing builder sessions retain their approved recommendation. Present old
+// labels safely so a historic "AI Caller" never implies a live voice agent.
+function presentOwnerLabel(value) {
+  const label = String(value ?? "")
+    .replace(/^(?:and|&|also)\s+/i, "")
+    .trim();
+  if (/^ai caller$/i.test(label)) return "Voice Call Assistant";
+  if (/^facebook lead generator$/i.test(label)) return "Meta Lead Specialist";
+  return label;
 }
 
 function labelsFromOps(operations = [], typePattern) {

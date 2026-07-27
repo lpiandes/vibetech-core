@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { cockpitColors, spacing, radius, typography } from "@/design/tokens";
+import PrimaryButton from "@/components/product/PrimaryButton";
+import { cockpitColors } from "@/design/tokens";
 import { formatProductErrorMessage } from "@/lib/platform/productErrors";
 
 /**
@@ -55,25 +56,10 @@ export default function OpenBusinessAsAdminButton({
   }
 
   return (
-    <div style={{ display: "grid", gap: spacing.sm }}>
-      <button
-        type="button"
-        onClick={() => void openWorkspace()}
-        disabled={busy}
-        style={{
-          border: "none",
-          cursor: busy ? "wait" : "pointer",
-          background: cockpitColors.accent,
-          color: "#fff",
-          borderRadius: radius.medium,
-          height: 44,
-          padding: `0 ${spacing.lg}`,
-          fontWeight: 700,
-          fontSize: typography.button.fontSize,
-        }}
-      >
+    <div style={{ display: "grid", gap: 10 }}>
+      <PrimaryButton onClick={() => void openWorkspace()} disabled={busy}>
         {busy ? "Opening…" : alreadyActive ? "Continue to business" : "Open business"}
-      </button>
+      </PrimaryButton>
       {error ? <div style={{ color: "#b91c1c", fontSize: 13 }}>{error}</div> : null}
       <div style={{ color: cockpitColors.textMuted, fontSize: 13, lineHeight: 1.45 }}>
         Opens their real Home with an <strong>Admin view</strong> banner. Full edit, audited — you are not made a permanent owner.

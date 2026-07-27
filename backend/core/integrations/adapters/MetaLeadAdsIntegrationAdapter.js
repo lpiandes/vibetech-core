@@ -16,7 +16,8 @@ export function isMetaLeadAdsConfigured() {
 }
 
 /**
- * Meta Lead Ads adapter — ingest Facebook lead form submissions via webhook.
+ * Meta lead-forms adapter — ingest Facebook and Instagram lead-form
+ * submissions via the connected Meta Business account.
  */
 export class MetaLeadAdsIntegrationAdapter extends IntegrationProvider {
   constructor({ fetchImpl = globalThis.fetch, nowISO = "2026-07-01T00:00:00.000Z" } = {}) {
@@ -30,7 +31,7 @@ export class MetaLeadAdsIntegrationAdapter extends IntegrationProvider {
   }
 
   get displayName() {
-    return "Facebook Lead Ads";
+    return "Meta Lead Forms";
   }
 
   get supportedConnectionTypes() {
@@ -47,8 +48,8 @@ export class MetaLeadAdsIntegrationAdapter extends IntegrationProvider {
 
   getSetupGuidance() {
     return createProviderSetupGuidance({
-      title: "Connect Facebook Lead Ads",
-      summary: "Ingest Facebook lead form submissions into your intake queue.",
+      title: "Connect Meta Lead Forms",
+      summary: "Ingest Facebook and Instagram lead-form submissions into your intake queue.",
       estimatedTime: "20 minutes",
       prerequisites: ["Meta app", "Facebook Page", "Lead Ads form"],
       steps: ["Authorize Meta app", "Select Page", "Configure lead webhook", "Verify test lead"],

@@ -98,7 +98,7 @@ export default function EmployeeWorkerCard({
       {askHref ? (
         <div>
           <ActionButton href={askHref} variant="ghost">
-            Ask about this teammate
+            Open teammate
           </ActionButton>
         </div>
       ) : null}

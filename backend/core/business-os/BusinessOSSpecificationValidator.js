@@ -15,6 +15,14 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+// Architect can create declarative, owner-requested digital teammates. They
+// are not new executable code paths: every custom teammate remains inside the
+// standard workforce runtime and approval policy. Keep the namespace narrow so
+// arbitrary archetype typos still fail validation.
+function isOwnerDefinedEmployeeArchetype(archetypeId) {
+  return /^owner_defined_[a-z0-9_-]+$/i.test(String(archetypeId ?? ""));
+}
+
 /**
  * Validates Business OS specifications against schema and registry references.
  * Does not mutate state.
@@ -87,7 +95,10 @@ export function validateBusinessOSSpecification(specification, {
   }
 
   const maxPrimary = Number(specification.navigation?.maximumPrimaryItems ?? 8);
-  if (primaryItems.filter((item) => item?.moduleId !== "more").length > maxPrimary) {
+  if (
+    primaryItems.filter((item) => item?.moduleId !== "more").length > maxPrimary
+    && String(specification.navigation?.overflowBehavior ?? "more") !== "more"
+  ) {
     warnings.push(issue(
       "warning",
       "primary_nav_overflow",
@@ -128,7 +139,11 @@ export function validateBusinessOSSpecification(specification, {
       errors.push(issue("error", "employee_label_required", "Employee label is required.", `employeeDefinitions[${index}].label`));
     }
     const archetypeId = employee?.archetypeId;
-    if (archetypeId && !knownArchetypes.has(String(archetypeId))) {
+    if (
+      archetypeId
+      && !knownArchetypes.has(String(archetypeId))
+      && !isOwnerDefinedEmployeeArchetype(archetypeId)
+    ) {
       errors.push(issue(
         "error",
         "unknown_employee_archetype",

@@ -8,6 +8,8 @@ export const MEMBERSHIP_ROLES = {
   MANAGER: "MANAGER",
   EMPLOYEE: "EMPLOYEE",
   VIEWER: "VIEWER",
+  /** External client / guardian / patient portal — limited self-service access */
+  CLIENT: "CLIENT",
 };
 
 export const MEMBERSHIP_ROLE_LABELS = {
@@ -16,6 +18,7 @@ export const MEMBERSHIP_ROLE_LABELS = {
   MANAGER: "Manager",
   EMPLOYEE: "Team member",
   VIEWER: "View only",
+  CLIENT: "Client",
 };
 
 export const BUSINESS_KINDS = {
@@ -79,6 +82,11 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.PEOPLE_VIEW,
     PERMISSIONS.PERFORMANCE_VIEW,
   ],
+  // Clients see their own work/inbox surfaces; never manage team, integrations, or settings.
+  CLIENT: [
+    PERMISSIONS.WORK_VIEW,
+    PERMISSIONS.INBOX_VIEW,
+  ],
 };
 
 export function permissionsForRole(role) {
@@ -96,6 +104,13 @@ export function canInviteRole(inviterRole, targetRole) {
   if (!hasPermission(inviter, PERMISSIONS.TEAM_INVITE)) return false;
   if (target === MEMBERSHIP_ROLES.ADMIN) {
     return inviter === MEMBERSHIP_ROLES.OWNER || inviter === MEMBERSHIP_ROLES.ADMIN;
+  }
+  if (target === MEMBERSHIP_ROLES.CLIENT) {
+    return (
+      inviter === MEMBERSHIP_ROLES.OWNER
+      || inviter === MEMBERSHIP_ROLES.ADMIN
+      || inviter === MEMBERSHIP_ROLES.MANAGER
+    );
   }
   return true;
 }

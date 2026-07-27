@@ -45,6 +45,38 @@ export default function KnowledgeAddDialog({
     setCategoryIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
+  async function skipForLater() {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/integrations/prove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "upload_and_cite",
+          capabilityId: "knowledge_consult",
+          defer: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok && !data?.result?.deferred) {
+        setError(String(data.error ?? "Could not skip. Try again."));
+        setBusy(false);
+        submittingRef.current = false;
+        return;
+      }
+      onClose();
+      router.push(`/b/${encodeURIComponent(businessId)}/home`);
+      router.refresh();
+    } catch {
+      setError("Could not skip. Try again.");
+      setBusy(false);
+      submittingRef.current = false;
+    }
+  }
+
   async function upload() {
     if (!file || submittingRef.current) return;
     submittingRef.current = true;
@@ -84,6 +116,9 @@ export default function KnowledgeAddDialog({
       onClose={onClose}
       footer={
         <>
+          <SecondaryButton onClick={() => void skipForLater()} disabled={busy}>
+            I’ll do this later
+          </SecondaryButton>
           <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
           <PrimaryButton onClick={() => void upload()} disabled={busy || !file}>
             {busy ? "Uploading…" : "Upload"}
@@ -92,7 +127,7 @@ export default function KnowledgeAddDialog({
       }
     >
       <p style={{ ...typography.caption, color: cockpitColors.textSecondary, margin: `0 0 ${spacing.md}`, lineHeight: 1.45 }}>
-        Tag documents so AI teammates know what they can cite. Untagged uploads stay searchable but do not count toward category readiness.
+        Tag documents so AI teammates know what they can cite. Untagged uploads stay searchable but do not count toward category readiness. No files yet? Skip and keep proving other capabilities.
       </p>
       <div
         style={{

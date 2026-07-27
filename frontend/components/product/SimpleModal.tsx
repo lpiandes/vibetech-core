@@ -11,11 +11,13 @@ export default function SimpleModal({
   children,
   onClose,
   footer,
+  maxWidth = 440,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
+  maxWidth?: number;
 }) {
   return (
     <div
@@ -36,7 +38,9 @@ export default function SimpleModal({
         aria-modal="true"
         style={{
           width: "100%",
-          maxWidth: 440,
+          maxWidth,
+          maxHeight: "90vh",
+          overflow: "auto",
           borderRadius: radius.large,
           backgroundColor: cockpitColors.panel,
           border: `1px solid ${cockpitColors.panelBorder}`,

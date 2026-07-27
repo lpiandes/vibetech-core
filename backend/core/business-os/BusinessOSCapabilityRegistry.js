@@ -38,7 +38,7 @@ const BUILTIN_CAPABILITIES = deepFreeze([
   { capabilityId: "appfolio_api_sync", label: "AppFolio API sync", availability: "deferred", packageFeatureIds: ["appfolio_api_sync"] },
   { capabilityId: "website_form_automation", label: "Website form automation", availability: "deferred", packageFeatureIds: ["website_form_automation"] },
   { capabilityId: "missed_call_automation", label: "Missed-call automation", availability: "supported_with_configuration", packageFeatureIds: ["phone_and_missed_call_automation", "pkg.phone_voice"], setupRequirements: ["voice_channel"] },
-  { capabilityId: "meta_lead_ads", label: "Facebook Lead Ads ingest", availability: "supported_with_configuration", packageFeatureIds: ["pkg.facebook_leads"], setupRequirements: ["meta_lead_ads"] },
+  { capabilityId: "meta_lead_ads", label: "Meta Lead Forms intake", availability: "supported_with_configuration", packageFeatureIds: ["pkg.facebook_leads"], setupRequirements: ["meta_lead_ads"] },
   { capabilityId: "autonomous_customer_send", label: "Autonomous customer communication without approval", availability: "prohibited", packageFeatureIds: ["pkg.autonomous_customer_email"] },
   { capabilityId: "arbitrary_codegen", label: "Per-customer source code generation", availability: "prohibited", packageFeatureIds: [] },
   { capabilityId: "vertical_core_runtime", label: "Vertical-specific core runtime tables", availability: "prohibited", packageFeatureIds: [] },

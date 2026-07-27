@@ -24,6 +24,11 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
   const scope = useBusinessScope();
   const pathname = usePathname() ?? "";
   const isAskSurface = /\/architect(?:\/|$)/.test(pathname);
+  const isHomeSurface = /\/home(?:\/|$|\?)/.test(pathname) || /\/b\/[^/]+\/?$/.test(pathname);
+  const hasInstalledOs = Boolean(scope.installedBusinessOS?.drivenByBusinessOS);
+  const packageAskBlocking = Boolean(scope.pendingPackageAsk) && isAskSurface;
+  // Pre-install setup + package Ask: full-bleed — hide business chrome (left nav + top bar).
+  const isSetupBuilder = (!hasInstalledOs && (isAskSurface || isHomeSurface)) || packageAskBlocking;
   const [needsAttentionCount, setNeedsAttentionCount] = useState(0);
 
   useEffect(() => {
@@ -58,42 +63,50 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
     <WorkspaceNavigationProvider>
       <div
         style={{
-          minHeight: "100vh",
+          height: "100dvh",
+          maxHeight: "100dvh",
           width: "100%",
           backgroundColor: cockpitColors.background,
           color: cockpitColors.textPrimary,
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
         }}
       >
-        <MobileNavigationDrawer needsAttentionCount={needsAttentionCount} />
+        {!isSetupBuilder ? (
+          <MobileNavigationDrawer needsAttentionCount={needsAttentionCount} />
+        ) : null}
 
-        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-          <aside
-            aria-label="Business navigation"
-            className="vt-desktop-only"
-            style={{
-              width: 280,
-              flexShrink: 0,
-              backgroundColor: cockpitColors.sidebar,
-              borderRight: `1px solid ${cockpitColors.sidebarBorder}`,
-              display: "flex",
-              flexDirection: "column",
-              minHeight: 0,
-            }}
-          >
-            <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-              <PrimaryNavigation needsAttentionCount={needsAttentionCount} />
-            </div>
-            <div
+        <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+          {!isSetupBuilder ? (
+            <aside
+              aria-label="Business navigation"
+              className="vt-desktop-only"
               style={{
-                padding: spacing.md,
-                borderTop: `1px solid ${cockpitColors.sidebarBorder}`,
+                width: 280,
+                flexShrink: 0,
+                height: "100%",
+                backgroundColor: cockpitColors.sidebar,
+                borderRight: `1px solid ${cockpitColors.sidebarBorder}`,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
               }}
             >
-              <AccountMenu variant="dark" />
-            </div>
-          </aside>
+              <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                <PrimaryNavigation needsAttentionCount={needsAttentionCount} />
+              </div>
+              <div
+                style={{
+                  padding: spacing.md,
+                  borderTop: `1px solid ${cockpitColors.sidebarBorder}`,
+                  flexShrink: 0,
+                }}
+              >
+                <AccountMenu variant="dark" />
+              </div>
+            </aside>
+          ) : null}
 
       <div
         style={{
@@ -101,21 +114,24 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
           minWidth: 0,
           flex: 1,
           flexDirection: "column",
+          minHeight: 0,
+          overflow: "hidden",
           backgroundColor: isAskSurface ? "#070c10" : undefined,
         }}
       >
-            <ShellTopBar attentionCount={needsAttentionCount} />
+            {!isSetupBuilder ? <ShellTopBar attentionCount={needsAttentionCount} /> : null}
             <main
               id="main-content"
               className="vt-shell-main"
               style={{
                 flex: 1,
+                minHeight: 0,
                 overflow: "auto",
                 // Ask fills the content column — no cream PageContainer frame around it.
                 backgroundColor: isAskSurface ? "#070c10" : undefined,
               }}
             >
-              {isAskSurface ? (
+              {isAskSurface || isSetupBuilder ? (
                 <WorkspaceMainArea>{children}</WorkspaceMainArea>
               ) : (
                 <PageContainer>

@@ -98,13 +98,23 @@ export default function AutomationsExecutiveLayout() {
           })}
 
           <ExecutiveCard>
-            <ExecutiveHeader title="Recent Runs" subtitle="Automation history" />
+            <ExecutiveHeader title="Recent Runs" subtitle="What fired and why" />
             <div style={{ marginTop: spacing.md, display: "flex", flexDirection: "column", gap: spacing.sm }}>
-              {safeArray(vm.recentRuns).map((run: any) => (
-                <div key={String(run.id)} style={{ color: semanticColors.textPrimary }}>
-                  {String(run.automationId)} — {String(run.status)} — {String(run.startedAt)}
-                </div>
-              ))}
+              {safeArray(vm.recentRuns).length === 0 ? (
+                <div style={{ color: semanticColors.textSecondary }}>No automation fires yet.</div>
+              ) : (
+                safeArray(vm.recentRuns).map((run: any) => (
+                  <div key={String(run.id)} style={{ color: semanticColors.textPrimary, lineHeight: 1.4 }}>
+                    <div style={{ fontWeight: 650 }}>
+                      {String(run.source === "specialty" ? "Specialty" : "Rule")} · {String(run.status)}
+                      {run.startedAt ? ` · ${String(run.startedAt)}` : ""}
+                    </div>
+                    <div style={{ fontSize: 13, opacity: 0.85 }}>
+                      {String(run.explanation ?? run.automationId ?? "")}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </ExecutiveCard>
         </ExecutiveStack>

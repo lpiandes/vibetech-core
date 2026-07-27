@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  BusinessDiscoveryQuestionPlanner,
   DISCOVERY_QUESTION_BANK,
   estimateDiscoveryQuestionCount,
 } from "./BusinessDiscoveryQuestionPlanner.js";
@@ -23,6 +24,7 @@ test("question bank snapshot lists every question with required and industry gat
 
   assert.ok(snapshot.length >= 40, "expected expanded discovery bank");
   assert.ok(snapshot.some((entry) => entry.questionId === "q_value_promise"));
+  assert.ok(snapshot.some((entry) => entry.questionId === "q_desired_workflows"));
   assert.ok(snapshot.some((entry) => entry.questionId === "q_bottlenecks"));
   assert.ok(snapshot.some((entry) => entry.questionId === "q_campaign_race_type"));
   assert.ok(snapshot.some((entry) => entry.questionId === "q_dental_pms"));
@@ -30,6 +32,14 @@ test("question bank snapshot lists every question with required and industry gat
   assert.deepEqual(
     snapshot.find((entry) => entry.questionId === "q_industry")?.whenIndustry,
     null,
+  );
+  assert.equal(
+    snapshot.find((entry) => entry.questionId === "q_industry")?.answerType,
+    "text",
+  );
+  assert.deepEqual(
+    snapshot.find((entry) => entry.questionId === "q_industry")?.options ?? [],
+    [],
   );
 
   const universalRequired = snapshot.filter((entry) => entry.required && !entry.whenIndustry);
@@ -53,6 +63,36 @@ test("completeness requires full required core before propose", () => {
   });
   assert.equal(partial.readyForProposal, false);
   assert.ok(partial.requiredMissing.length > 0);
+});
+
+test("purchased packages narrow discovery topics and completeness", () => {
+  const planner = new BusinessDiscoveryQuestionPlanner();
+  const completeness = new BusinessDiscoveryCompleteness();
+  const businessSummary = {
+    businessName: "Front Desk Co",
+    industry: "other",
+    description: "We need an AI phone receptionist",
+    purchasedPackages: ["ai_receptionist"],
+  };
+  const planned = planner.plan({
+    answers: [
+      { questionId: "q_tell_us", answer: "We need an AI phone receptionist" },
+    ],
+    businessSummary,
+    limit: 12,
+  });
+  assert.ok(planned.every((question) => question.topic !== "team"));
+  assert.ok(planned.some((question) => question.topic === "identity" || question.topic === "industry" || question.topic === "services"));
+
+  const thin = completeness.evaluate({
+    answers: [
+      { questionId: "q_tell_us", answer: "We need an AI phone receptionist" },
+      { questionId: "q_company_name", answer: "Front Desk Co" },
+    ],
+    businessSummary,
+  });
+  assert.equal(thin.fullOsScope, false);
+  assert.ok(thin.requiredTotal < 17);
 });
 
 test("required setup steps include a2p when sms is selected", () => {
@@ -114,9 +154,11 @@ test("platform setup checklist marks a2p incomplete until owner confirms", () =>
   assert.equal(completeChecklist.find((entry) => entry.id === "a2p_registration")?.complete, true);
 });
 
-test("estimated discovery depth grows with industry pack", () => {
+test("estimated discovery depth includes the chosen operating pack", () => {
   const dental = estimateDiscoveryQuestionCount({ industry: "dental" });
   const other = estimateDiscoveryQuestionCount({ industry: "other" });
   assert.ok(dental.estimatedTotal > dental.coreRequired);
-  assert.ok(other.packRequired >= 3);
+  assert.equal(other.estimatedTotal, other.coreRequired);
+  assert.ok(dental.packRequired > 0);
+  assert.equal(other.packRequired, 0);
 });

@@ -4,7 +4,7 @@ import type { ReactNode, MouseEvent } from "react";
 import Link from "next/link";
 
 import { useOptionalWorkspaceNavigation } from "@/components/workspace/WorkspaceNavigationContext";
-import { cockpitColors, typography, radius } from "@/design/tokens";
+import { cockpitColors, radius } from "@/design/tokens";
 
 const baseStyle = {
   display: "inline-flex",
@@ -12,15 +12,16 @@ const baseStyle = {
   justifyContent: "center",
   gap: 6,
   borderRadius: radius.medium,
-  border: `1px solid ${cockpitColors.panelBorder}`,
-  backgroundColor: cockpitColors.panel,
+  border: `2px solid rgba(28,25,23,0.22)`,
+  backgroundColor: "#fff",
   color: cockpitColors.textPrimary,
-  fontSize: typography.caption.fontSize,
-  fontWeight: 600,
-  padding: "8px 14px",
+  fontSize: 14,
+  fontWeight: 800,
+  padding: "10px 16px",
   cursor: "pointer",
   textDecoration: "none",
   lineHeight: 1.2,
+  boxShadow: "0 3px 10px rgba(28,25,23,0.1)",
 } as const;
 
 export default function SecondaryButton({

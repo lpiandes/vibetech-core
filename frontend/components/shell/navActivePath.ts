@@ -41,7 +41,15 @@ export function findActiveNavHref(
     if (!matches) continue;
     if (!best || target.length > best.length) best = href;
   }
-  return best;
+  if (best) return best;
+
+  // Thin-SKU workspaces often have no per-employee specialty nav item — those
+  // surfaces are reached from Automations, so keep Automations highlighted.
+  if (/\/specialty\//.test(path)) {
+    const automations = hrefs.find((href) => href.replace(/\/$/, "").endsWith("/automations"));
+    if (automations) return automations;
+  }
+  return null;
 }
 
 function expandSpecialtyPathAliases(path: string): string[] {
@@ -55,7 +63,7 @@ function expandSpecialtyPathAliases(path: string): string[] {
     const emp = id.slice("specialty_ai_".length);
     aliases.add(`${prefix}${encodeURIComponent(emp)}`);
     aliases.add(`${prefix}${emp}`);
-  } else if (id.startsWith("owner_emp_")) {
+  } else {
     aliases.add(`${prefix}${encodeURIComponent(`specialty_ai_${id}`)}`);
     aliases.add(`${prefix}specialty_ai_${id}`);
   }

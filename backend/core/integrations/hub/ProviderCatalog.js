@@ -21,6 +21,9 @@ export const HUB_CAPABILITIES = deepFreeze({
   crm_records: { capabilityId: "crm_records", label: "CRM Records", platform: INTEGRATION_CAPABILITIES.READ_EXTERNAL_RECORD },
   ecommerce: { capabilityId: "ecommerce", label: "E-Commerce", platform: INTEGRATION_CAPABILITIES.READ_EXTERNAL_RECORD },
   scheduling: { capabilityId: "scheduling", label: "Scheduling", platform: INTEGRATION_CAPABILITIES.READ_CALENDAR_AVAILABILITY },
+  create_ad_campaign: { capabilityId: "create_ad_campaign", label: "Create ad campaign", platform: INTEGRATION_CAPABILITIES.CREATE_AD_CAMPAIGN },
+  read_ad_performance: { capabilityId: "read_ad_performance", label: "Read ad performance", platform: INTEGRATION_CAPABILITIES.READ_AD_PERFORMANCE },
+  read_search_performance: { capabilityId: "read_search_performance", label: "Read search performance", platform: INTEGRATION_CAPABILITIES.READ_SEARCH_PERFORMANCE },
 });
 
 export const AUTH_METHODS = deepFreeze({
@@ -44,7 +47,7 @@ function provider(def) {
     rateLimitPerMinute: def.rateLimitPerMinute ?? 60,
     setupGuide: def.setupGuide ?? `Connect ${def.label} to enable ${def.capabilities.join(", ")}.`,
     scopes: def.scopes ?? [],
-    status: "available",
+    status: def.status ?? "available",
   });
 }
 
@@ -247,6 +250,41 @@ export const PROVIDER_CATALOG = deepFreeze({
     connectionType: "calendar",
     capabilities: ["scheduling", "calendar_read", "webhooks"],
   }),
+  // Growth channels are visible to every pack. They remain intentionally
+  // non-live until their OAuth/webhook adapters and live verification ship.
+  google_ads: provider({
+    providerId: "google_ads",
+    label: "Google Ads",
+    category: "advertising",
+    authMethod: "oauth2",
+    connectionType: "google_ads",
+    capabilities: ["create_ad_campaign", "read_ad_performance"],
+    scopes: ["https://www.googleapis.com/auth/adwords"],
+    status: "planned",
+    setupGuide: "Google Ads connection is planned. Do not treat campaigns as live until the account connection and first test campaign are verified.",
+  }),
+  google_search_console: provider({
+    providerId: "google_search_console",
+    label: "Google Search Console",
+    category: "seo",
+    authMethod: "oauth2",
+    connectionType: "google_search_console",
+    capabilities: ["read_search_performance"],
+    scopes: ["https://www.googleapis.com/auth/webmasters.readonly"],
+    status: "planned",
+    setupGuide: "Search Console connection is planned. It will report search performance; it does not claim to create rankings.",
+  }),
+  meta_ads: provider({
+    providerId: "meta_ads",
+    label: "Meta Ads",
+    category: "advertising",
+    authMethod: "oauth2",
+    connectionType: "meta_ads",
+    capabilities: ["create_ad_campaign", "read_ad_performance"],
+    scopes: ["ads_management", "ads_read"],
+    status: "planned",
+    setupGuide: "Meta Ads connection is planned. Do not treat campaigns as live until account connection, permissions, and a test campaign are verified.",
+  }),
   // Generic
   rest_api: provider({
     providerId: "rest_api",
@@ -288,10 +326,10 @@ export const INTEGRATION_TEMPLATES = deepFreeze({
     recommendedProviderIds: ["gmail", "google_calendar", "twilio", "quickbooks_online", "stripe", "google_drive"],
   },
   dental: {
-    recommendedProviderIds: ["gmail", "outlook", "google_calendar", "stripe", "twilio", "dropbox"],
+    recommendedProviderIds: ["gmail", "outlook", "google_calendar", "stripe", "twilio", "dropbox", "google_ads", "google_search_console", "meta_ads"],
   },
   sports: {
-    recommendedProviderIds: ["gmail", "google_calendar", "slack", "stripe", "google_drive", "calendly"],
+    recommendedProviderIds: ["gmail", "google_calendar", "slack", "stripe", "google_drive", "calendly", "google_ads", "google_search_console", "meta_ads"],
   },
   default: {
     recommendedProviderIds: ["gmail", "google_calendar", "stripe", "hubspot", "slack", "google_drive"],

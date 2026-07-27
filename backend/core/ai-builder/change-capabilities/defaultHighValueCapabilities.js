@@ -769,7 +769,7 @@ export const HIGH_VALUE_ARCHITECT_CHANGE_CAPABILITIES = [
         {
           operationType: "enableEmployeeDefinition",
           targetType: "employee_definition",
-          payload: { label: "AI Caller", purpose: "Draft outbound call scripts for owner approval.", archetypeId: "ai_caller" },
+          payload: { label: "Voice Call Assistant", purpose: "Prepare approved call scripts and call work; live conversations need a configured Twilio Voice agent.", archetypeId: "ai_caller" },
           requiredPermission: "business.manage",
           affectedRuntimeKinds: ["employees", "workforce"],
           allowsExternalCommunication: false,

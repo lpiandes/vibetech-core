@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import PrimaryButton from "@/components/product/PrimaryButton";
+import SecondaryButton from "@/components/product/SecondaryButton";
+import { vtInputStyle } from "@/components/product/VtChrome";
 import { cockpitColors, spacing } from "@/design/tokens";
 import { formatProductErrorMessage } from "@/lib/platform/productErrors";
 
@@ -59,30 +61,24 @@ export default function SupportEnterForm({
         onChange={(event) => setReason(event.target.value)}
         placeholder="Reason for support access (required)"
         rows={3}
-        style={{
-          width: "100%",
-          borderRadius: 8,
-          border: `1px solid ${cockpitColors.panelBorder}`,
-          padding: spacing.sm,
-          fontFamily: "inherit",
-        }}
+        style={{ ...vtInputStyle, fontFamily: "inherit", fontWeight: 500, resize: "vertical" }}
       />
       <select
         value={mode}
         onChange={(event) => setMode(event.target.value as "read_only" | "elevated")}
-        style={{ padding: spacing.sm, borderRadius: 8, border: `1px solid ${cockpitColors.panelBorder}` }}
+        style={{ ...vtInputStyle, fontWeight: 600 }}
       >
         <option value="elevated">Full edit (audited)</option>
         <option value="read_only">Read-only</option>
       </select>
       {error ? <div style={{ color: "#b91c1c" }}>{error}</div> : null}
-      <div style={{ display: "flex", gap: spacing.sm }}>
+      <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
         <PrimaryButton onClick={enter} disabled={busy || !reason.trim()}>
           Enter with custom reason
         </PrimaryButton>
-        <button type="button" onClick={exit} disabled={busy} style={{ padding: "8px 12px" }}>
+        <SecondaryButton onClick={exit} disabled={busy}>
           Exit support
-        </button>
+        </SecondaryButton>
       </div>
     </div>
   );

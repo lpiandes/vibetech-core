@@ -74,7 +74,7 @@ test("completeness requires identity and industry before proposal readiness", ()
     businessSummary: {},
   });
   assert.equal(early.readyForProposal, false);
-  assert.equal(early.minRequiredAnswers, 16);
+  assert.equal(early.minRequiredAnswers, 17);
 
   const session = createBuilderSession({
     businessSummary: { businessName: "Bright Smile Dental", industry: "dental" },

@@ -1,6 +1,15 @@
 "use client";
 
-import type { CSSProperties, DragEvent, FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  type CSSProperties,
+  type DragEvent,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
+import { ArrowUp, Paperclip } from "lucide-react";
+
 import { architect } from "./architectTheme";
 import { ArchitectButton, ThinkingDots } from "./ArchitectPrimitives";
 import { HUMAN_COPY, detectUploadHint, researchFindingCards } from "./architectSemantics";
@@ -31,7 +40,7 @@ type Props = {
 };
 
 /**
- * Single-focus conversation — one question, one reply, Continue / Skip / I'm not sure.
+ * Single-focus conversation — discovery wizard answers, or ChatGPT-style Ask chat.
  */
 export default function ConversationRail({
   conversation,
@@ -68,6 +77,14 @@ export default function ConversationRail({
       ? Boolean(message.trim() || uploads.length)
       : Boolean(message.trim());
 
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (mode !== "chat") return;
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [mode, conversation?.length, thinking, conversation?.[conversation.length - 1]?.text]);
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (askingWebsite) {
@@ -87,7 +104,220 @@ export default function ConversationRail({
     onSubmit();
   }
 
+  function onChatKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (!busy && message.trim()) onSubmit();
+    }
+  }
+
   const hasThread = (conversation ?? []).length > 0 || Boolean(thinking);
+
+  if (mode === "chat") {
+    return (
+      <div
+        className="ask-chat-rail"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          height: "100%",
+          gap: 0,
+        }}
+      >
+        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+          {liveStatus}
+        </div>
+
+        <div
+          role="log"
+          aria-label="Conversation"
+          style={{
+            flex: "1 1 auto",
+            minHeight: 0,
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+            padding: "4px 4px 18px",
+          }}
+        >
+          {!hasThread ? (
+            <div
+              style={{
+                margin: "auto 0",
+                textAlign: "center",
+                color: architect.inkMuted,
+                fontSize: 15,
+                lineHeight: 1.55,
+                padding: "24px 12px",
+              }}
+            >
+              Ask anything about this business. Nothing changes until you approve.
+            </div>
+          ) : null}
+
+          {(conversation ?? []).map((entry, index) => {
+            const mine = entry.role === "user";
+            return (
+              <div
+                key={entry.messageId ?? `${entry.role}-${index}`}
+                style={{
+                  alignSelf: mine ? "flex-end" : "flex-start",
+                  maxWidth: "min(92%, 640px)",
+                  borderRadius: 16,
+                  padding: "12px 14px",
+                  background: mine ? architect.accentSoft : "rgba(15,23,42,.55)",
+                  border: `1px solid ${mine ? "rgba(20,184,166,.28)" : architect.border}`,
+                  color: architect.ink,
+                  lineHeight: 1.55,
+                  fontSize: 15,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                <div style={{ fontSize: 11, color: architect.inkMuted, marginBottom: 4, fontWeight: 650 }}>
+                  {mine ? "You" : "VIBETech"}
+                </div>
+                {entry.text}
+              </div>
+            );
+          })}
+          {thinking ? <ThinkingDots label={HUMAN_COPY.rethink} /> : null}
+          <div ref={bottomRef} aria-hidden style={{ height: 1 }} />
+        </div>
+
+        {uploads.length ? (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "0 2px 8px" }}>
+            {uploads.slice(-4).map((upload, index) => {
+              const hint = detectUploadHint(String(upload.filename ?? ""), upload.classification);
+              return (
+                <div
+                  key={`${upload.filename}-${index}`}
+                  style={{
+                    ...softCard,
+                    padding: "6px 10px",
+                    fontSize: 12,
+                    maxWidth: 180,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={`${upload.filename} — ${hint.label}`}
+                >
+                  {upload.filename}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {quickReplies.length ? (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "0 2px 10px" }}>
+            {quickReplies.map((reply) => (
+              <button
+                key={reply}
+                type="button"
+                disabled={busy}
+                onClick={() => onQuickReply(reply)}
+                style={{
+                  borderRadius: 999,
+                  border: `1px solid ${architect.border}`,
+                  background: "transparent",
+                  color: architect.inkMuted,
+                  padding: "7px 12px",
+                  cursor: "pointer",
+                  fontSize: 13,
+                }}
+              >
+                {reply}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <form
+          onSubmit={handleSubmit}
+          onDragOver={(event: DragEvent) => {
+            event.preventDefault();
+            setDragOver?.(true);
+          }}
+          onDragLeave={() => setDragOver?.(false)}
+          onDrop={(event: DragEvent) => {
+            event.preventDefault();
+            setDragOver?.(false);
+            onUploadFiles?.(event.dataTransfer.files);
+          }}
+          style={{
+            flex: "0 0 auto",
+            borderRadius: 18,
+            border: `1px solid ${dragOver ? architect.accent : architect.border}`,
+            background: "rgba(2,6,23,.55)",
+            padding: "10px 12px",
+            display: "grid",
+            gap: 8,
+            boxShadow: "0 12px 40px rgba(0,0,0,.22)",
+          }}
+        >
+          <textarea
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            onKeyDown={onChatKeyDown}
+            placeholder="Ask anything…"
+            rows={1}
+            disabled={busy}
+            style={{
+              ...inputStyle,
+              minHeight: 44,
+              maxHeight: 160,
+              resize: "none",
+              border: "none",
+              background: "transparent",
+              padding: "6px 4px",
+            }}
+            autoFocus
+          />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(event) => {
+                onUploadFiles?.(event.target.files);
+                event.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              aria-label="Upload files"
+              disabled={busy}
+              onClick={() => fileInputRef.current?.click()}
+              style={iconButtonStyle}
+              title="Upload"
+            >
+              <Paperclip size={18} aria-hidden />
+            </button>
+            <button
+              type="submit"
+              aria-label="Send"
+              disabled={busy || !canContinue}
+              style={{
+                ...iconButtonStyle,
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                background: canContinue && !busy ? architect.accent : "rgba(148,163,184,.18)",
+                color: canContinue && !busy ? "#042F2E" : architect.inkMuted,
+                opacity: busy ? 0.55 : 1,
+              }}
+            >
+              <ArrowUp size={18} aria-hidden />
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "grid", gap: hasThread ? 14 : 10 }}>
@@ -96,59 +326,60 @@ export default function ConversationRail({
       </div>
 
       {hasThread || mode === "discovery" ? (
-      <div
-        role="log"
-        aria-label="Conversation"
-        style={{
-          display: "grid",
-          gap: 12,
-          maxHeight: mode === "chat" ? 280 : 420,
-          overflowY: "auto",
-          paddingRight: 4,
-          minHeight: mode === "chat" ? undefined : 120,
-        }}
-      >
-        {!(conversation ?? []).length && !thinking && mode === "discovery" ? (
-          <div
-            style={{
-              borderRadius: 16,
-              padding: "16px 16px",
-              background: "rgba(15,23,42,.35)",
-              border: `1px solid ${architect.border}`,
-              color: architect.inkMuted,
-              lineHeight: 1.55,
-              fontSize: 15,
-            }}
-          >
-            Answer one question at a time. VIBETech will guide the rest.
-          </div>
-        ) : null}
-        {(conversation ?? []).map((entry, index) => {
-          const mine = entry.role === "user";
-          return (
+        <div
+          role="log"
+          aria-label="Conversation"
+          style={{
+            display: "grid",
+            gap: 12,
+            maxHeight: 420,
+            overflowY: "auto",
+            paddingRight: 4,
+            minHeight: 120,
+          }}
+        >
+          {!(conversation ?? []).length && !thinking ? (
             <div
-              key={entry.messageId ?? `${entry.role}-${index}`}
               style={{
-                justifySelf: mine ? "end" : "start",
-                maxWidth: "92%",
                 borderRadius: 16,
-                padding: "12px 14px",
-                background: mine ? architect.accentSoft : "rgba(15,23,42,.55)",
-                border: `1px solid ${mine ? "rgba(20,184,166,.28)" : architect.border}`,
-                color: architect.ink,
+                padding: "16px 16px",
+                background: "rgba(15,23,42,.35)",
+                border: `1px solid ${architect.border}`,
+                color: architect.inkMuted,
                 lineHeight: 1.55,
                 fontSize: 15,
               }}
             >
-              <div style={{ fontSize: 11, color: architect.inkMuted, marginBottom: 4, fontWeight: 650 }}>
-                {mine ? "You" : "VIBETech"}
-              </div>
-              {entry.text}
+              Answer one question at a time. VIBETech will guide the rest.
             </div>
-          );
-        })}
-        {thinking ? <ThinkingDots label={HUMAN_COPY.rethink} /> : null}
-      </div>
+          ) : null}
+          {(conversation ?? []).map((entry, index) => {
+            const mine = entry.role === "user";
+            return (
+              <div
+                key={entry.messageId ?? `${entry.role}-${index}`}
+                style={{
+                  justifySelf: mine ? "end" : "start",
+                  maxWidth: "92%",
+                  borderRadius: 16,
+                  padding: "12px 14px",
+                  background: mine ? architect.accentSoft : "rgba(15,23,42,.55)",
+                  border: `1px solid ${mine ? "rgba(20,184,166,.28)" : architect.border}`,
+                  color: architect.ink,
+                  lineHeight: 1.55,
+                  fontSize: 15,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                <div style={{ fontSize: 11, color: architect.inkMuted, marginBottom: 4, fontWeight: 650 }}>
+                  {mine ? "You" : "VIBETech"}
+                </div>
+                {entry.text}
+              </div>
+            );
+          })}
+          {thinking ? <ThinkingDots label={HUMAN_COPY.rethink} /> : null}
+        </div>
       ) : null}
 
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 10 }}>
@@ -218,8 +449,12 @@ export default function ConversationRail({
           <textarea
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            placeholder={mode === "chat" ? "Ask anything…" : "Type your answer…"}
-            rows={mode === "chat" ? 2 : 3}
+            placeholder={
+              questionId === "q_desired_workflows"
+                ? "e.g. FB lead comes in → email → SMS → update pipeline"
+                : "Type your answer…"
+            }
+            rows={3}
             style={inputStyle}
             autoFocus
           />
@@ -227,12 +462,12 @@ export default function ConversationRail({
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <ArchitectButton type="submit" disabled={busy || !canContinue}>
-            {mode === "chat" ? "Send" : "Continue"}
+            Continue
           </ArchitectButton>
-          {mode === "discovery" && onSkip ? (
+          {onSkip ? (
             <ArchitectButton type="button" variant="ghost" disabled={busy} onClick={onSkip}>Skip</ArchitectButton>
           ) : null}
-          {mode === "discovery" && onUnknown ? (
+          {onUnknown ? (
             <ArchitectButton type="button" variant="ghost" disabled={busy} onClick={onUnknown}>I&apos;m not sure</ArchitectButton>
           ) : null}
         </div>
@@ -298,4 +533,18 @@ const softCard: CSSProperties = {
   border: `1px solid ${architect.border}`,
   background: "rgba(15,23,42,.45)",
   padding: 12,
+};
+
+const iconButtonStyle: CSSProperties = {
+  width: 36,
+  height: 36,
+  borderRadius: 10,
+  border: "none",
+  background: "transparent",
+  color: architect.inkMuted,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  flex: "0 0 auto",
 };

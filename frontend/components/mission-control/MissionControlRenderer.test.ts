@@ -62,9 +62,9 @@ test("operating Home is mockup-density dashboard from live supervision, not indu
   assert.ok(!home.includes("AskCard"));
   assert.match(home, /Needs you/);
   assert.match(home, /AI team/);
-  assert.match(home, /MetricStrip/);
-  assert.match(home, /DashGrid/);
-  assert.match(home, /What changed/);
+  assert.match(home, /SimpleMetrics/);
+  assert.match(home, /SimplePanel/);
+  assert.match(home, /Today/);
   assert.match(home, /buildMetricCards/);
   assert.match(home, /Same queue as Needs Attention/);
   assert.match(home, /teammateActionLabel/);

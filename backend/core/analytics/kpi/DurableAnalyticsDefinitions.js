@@ -75,10 +75,11 @@ function extractApprovals(service, workVm) {
   }
 
   try {
-    const automation = typeof service?.loadAutomationCenterViewModel === "function"
-      ? service.loadAutomationCenterViewModel()
-      : null;
-    const pending = Number(automation?.summary?.pendingApprovals ?? 0);
+    // Prefer sync runtimes; async loadAutomationCenterViewModel is for the Automations UI.
+    const runs = service?.connected?.ctx?.automationRuntime?.getRuns?.() ?? [];
+    const pending = Array.isArray(runs)
+      ? runs.filter((r) => String(r.status) === "WAITING_FOR_APPROVAL").length
+      : 0;
     if (pending > 0) {
       return Array.from({ length: pending }, (_, index) => ({
         id: `auto_approval_${index}`,
@@ -86,7 +87,7 @@ function extractApprovals(service, workVm) {
         status: "pending",
       }));
     }
-    if (automation?.summary && "pendingApprovals" in automation.summary) {
+    if (Array.isArray(runs)) {
       return [];
     }
   } catch {

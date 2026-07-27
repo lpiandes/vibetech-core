@@ -185,8 +185,16 @@ test("Google Calendar create event with injected client", async () => {
   const calendarClient = {
     calendarList: { list: async () => ({ data: { items: [] } }) },
     events: {
-      insert: async ({ requestBody }) => ({
-        data: { id: "evt_1", htmlLink: "https://calendar.google.com/event", summary: requestBody.summary },
+      insert: async ({ requestBody, conferenceDataVersion }) => ({
+        data: {
+          id: "evt_1",
+          htmlLink: "https://calendar.google.com/event",
+          summary: requestBody.summary,
+          hangoutLink: conferenceDataVersion === 1 ? "https://meet.google.com/abc-defg-hij" : null,
+          conferenceData: conferenceDataVersion === 1
+            ? { entryPoints: [{ entryPointType: "video", uri: "https://meet.google.com/abc-defg-hij" }] }
+            : undefined,
+        },
       }),
     },
   };
@@ -225,6 +233,25 @@ test("Google Calendar create event with injected client", async () => {
   });
   assert.equal(result.status, "completed");
   assert.equal(result.externalReference, "evt_1");
+
+  const withMeet = await platform.providerRegistry.getProvider("google_calendar").executeAction({
+    actionRequest: {
+      id: "cal_meet",
+      capability: "CREATE_CALENDAR_EVENT",
+      parameters: {
+        summary: "Parent call",
+        description: "Agenda: tryout details",
+        createGoogleMeet: true,
+        start: { dateTime: "2026-07-02T16:00:00Z" },
+        end: { dateTime: "2026-07-02T16:30:00Z" },
+      },
+    },
+    connection,
+    credentialResolver: platform.credentialResolver,
+  });
+  assert.equal(withMeet.status, "completed");
+  assert.equal(withMeet.metadata.conferenceType, "google_meet");
+  assert.match(String(withMeet.metadata.conferenceUrl), /meet\.google\.com/);
 });
 
 test("Meta lead webhook normalize + ingest", async () => {

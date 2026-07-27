@@ -15,6 +15,7 @@ import { consultSpecialtySources } from "../specialty/consultSpecialtySources.js
  * Session content must come from consulted Knowledge + authority packs.
  */
 export class CustomAiWorkerService {
+  /** @param {{workCreationService?: any, nowISO?: (() => string) | string, fetchImpl?: typeof fetch | null, packFixtures?: object | null}} options */
   constructor({
     workCreationService = new WorkCreationService(),
     nowISO = () => new Date().toISOString(),

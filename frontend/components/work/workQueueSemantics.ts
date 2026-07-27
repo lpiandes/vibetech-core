@@ -204,7 +204,8 @@ export function resolveWorkRowHref(
   if (display?.rowHref) return String(display.rowHref);
   if (bid && workId) return `/b/${bid}/work?workId=${encodeURIComponent(String(workId))}`;
   if (display?.personHref && bid) return String(display.personHref);
-  if (display?.subjectId && bid) return `/b/${bid}/properties/${display.subjectId}`;
+  // Generic work must not assume that a subject is a property. Vertical
+  // surfaces supply rowHref when a patient, player, or other record is openable.
   if (bid) return null;
   if (display?.engagementHref) return String(display.engagementHref);
   return null;

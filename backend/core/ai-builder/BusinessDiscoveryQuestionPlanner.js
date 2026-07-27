@@ -1,5 +1,6 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { createBuilderQuestion } from "./BuilderQuestion.js";
+import { questionMatchesPackageAsk, specializePackageAskQuestion } from "../platform/packages/SalesPackageCatalog.js";
 
 /**
  * Deterministic adaptive question planner.
@@ -59,8 +60,8 @@ export const OTHER_INDUSTRY_SIGNAL_QUESTIONS = Object.freeze({
 export const DISCOVERY_QUESTION_BANK = Object.freeze([
   createBuilderQuestion({
     questionId: "q_tell_us",
-    prompt: "In a few sentences, what does your business do?",
-    why: "This is how Architect starts designing your operating system.",
+    prompt: "Describe your business and what you want or need from VIBETech.",
+    why: "We tailor every follow-up from what you do and what success looks like for you.",
     required: true,
     topic: "identity",
   }),
@@ -81,30 +82,9 @@ export const DISCOVERY_QUESTION_BANK = Object.freeze([
   createBuilderQuestion({
     questionId: "q_industry",
     prompt: "What industry are you in?",
-    why: "Pick a common match or type your own — any business works.",
+    why: "Type it in your own words — youth hockey, dental practice, landscaping, church, agency, anything. We’ll tailor follow-ups from what you write.",
     required: true,
     topic: "industry",
-    // Suggestions only; owners can always type a custom industry.
-    answerType: "choice_or_text",
-    options: [
-      "property_management",
-      "dental",
-      "sports",
-      "professional_services",
-      "political_campaigns",
-      "home_services",
-      "retail",
-      "restaurant_hospitality",
-      "healthcare",
-      "education",
-      "nonprofit",
-      "construction",
-      "manufacturing",
-      "ecommerce",
-      "real_estate_brokerage",
-      "marketing_agency",
-      "other",
-    ],
   }),
   createBuilderQuestion({
     questionId: "q_services",
@@ -150,15 +130,22 @@ export const DISCOVERY_QUESTION_BANK = Object.freeze([
   }),
   createBuilderQuestion({
     questionId: "q_software",
-    prompt: "What software do you already use day to day (email, calendar, CRM, property software, Facebook ads)?",
-    why: "We map these to Connections you will sign into yourself — VIBETech never installs accounts for you.",
-    required: false,
+    prompt: "List all the software you already use day to day. Examples: Google Calendar, Google Meet, Outlook, Dentrix, Open Dental, QuickBooks, AppFolio, Slack, Facebook Ads — include anything your team lives in.",
+    why: "We map these to Connections you can sign into, note what stays external, and avoid promising sync we do not support yet.",
+    required: true,
     topic: "software",
   }),
   createBuilderQuestion({
     questionId: "q_repetitive_work",
     prompt: "What work do people repeat every week?",
     why: "That is where VIBETech can take load first.",
+    required: true,
+    topic: "operations",
+  }),
+  createBuilderQuestion({
+    questionId: "q_desired_workflows",
+    prompt: "What processes do you want automated? List everything, specifically.",
+    why: "Each process becomes an automation path — for example: FB lead comes in → email → SMS → update pipeline.",
     required: true,
     topic: "operations",
   }),
@@ -186,7 +173,7 @@ export const DISCOVERY_QUESTION_BANK = Object.freeze([
   createBuilderQuestion({
     questionId: "q_scheduling",
     prompt: "Do you schedule appointments, jobs, practices, or visits?",
-    why: "Scheduling needs become calendar work — and a Google Calendar connect if you want events created for you.",
+    why: "Scheduling needs become calendar work in VIBETech. Google Calendar sync is available today; other calendar apps stay external until we add them.",
     required: true,
     topic: "operations",
   }),
@@ -244,7 +231,9 @@ export const DISCOVERY_QUESTION_BANK = Object.freeze([
       "google_calendar",
       "twilio_sms",
       "twilio_voice",
-      "facebook_lead_ads",
+      "google_ads",
+      "google_search_console",
+      "meta_platform",
       "none_yet",
     ],
   }),
@@ -264,9 +253,9 @@ export const DISCOVERY_QUESTION_BANK = Object.freeze([
   }),
   createBuilderQuestion({
     questionId: "q_digital_workforce",
-    prompt: "Which digital teammates do you want first? For example: intake, AI caller, Facebook lead generation.",
-    why: "Your answer shapes the Digital Workforce we recommend — named roles you asked for come first.",
-    required: true,
+    prompt: "Any specific AI roles you want by name? (optional — otherwise we build from your processes)",
+    why: "Skip if your process list already covers it. Pack defaults and your automations still install.",
+    required: false,
     topic: "team",
   }),
   createBuilderQuestion({
@@ -687,15 +676,26 @@ export class BusinessDiscoveryQuestionPlanner {
     );
     const industry = resolveDiscoveryIndustry({ answers, businessSummary });
     const packIndustry = resolvePackIndustry(industry);
-    const otherSignal = packIndustry === "other"
-      ? detectOtherIndustrySignal({ answers, businessSummary })
-      : null;
-    const activeOtherQuestionIds = packIndustry === "other"
-      ? new Set(OTHER_INDUSTRY_SIGNAL_QUESTIONS[otherSignal] ?? OTHER_INDUSTRY_SIGNAL_QUESTIONS.default)
-      : null;
+    // Do not infer a third vertical from loose words such as "team" or
+    // "patient." Until its operating pack exists, every other industry stays
+    // on the universal diagnosis and universal core.
+    const activeOtherQuestionIds = null;
 
+    const purchasedPackages = businessSummary?.purchasedPackages ?? [];
+    const packageAsk = Boolean(businessSummary?.packageAsk);
+    const packageAskPackages = businessSummary?.packageAskPackages ?? null;
+    const matchesScope = (question) => questionMatchesPackageAsk(question, purchasedPackages, {
+      packageAsk,
+      packageAskPackages,
+    });
+    // Every owner answers the shared operating questions first. Once they
+    // deliberately choose a supported operating pack, add only that pack's
+    // questions. Purchased sales packages further narrow topics (thin SKUs).
+    // Package-add Ask uses catalog focus question IDs only.
     const requiredQuestions = DISCOVERY_QUESTION_BANK.filter((question) => (
-      question.required && questionMatchesIndustry(question, packIndustry, activeOtherQuestionIds)
+      question.required
+      && questionMatchesIndustry(question, packIndustry, activeOtherQuestionIds)
+      && matchesScope(question)
     ));
     const requiredComplete = requiredQuestions.length > 0
       && requiredQuestions.every((question) => answered.has(question.questionId));
@@ -711,8 +711,9 @@ export class BusinessDiscoveryQuestionPlanner {
 
     const remaining = DISCOVERY_QUESTION_BANK.filter((question) => !answered.has(question.questionId))
       .filter((question) => questionMatchesIndustry(question, packIndustry, activeOtherQuestionIds))
+      .filter((question) => matchesScope(question))
       // Prefer required; skip optionals while required remain so the count stays honest.
-      .filter((question) => question.required || requiredComplete)
+      .filter((question) => question.required || requiredComplete || packageAsk)
       .filter((question) => {
         if (!question.required && knownTopics.has(question.topic)) return false;
         return true;
@@ -722,8 +723,24 @@ export class BusinessDiscoveryQuestionPlanner {
         return DISCOVERY_TOPIC_ORDER.indexOf(a.topic) - DISCOVERY_TOPIC_ORDER.indexOf(b.topic);
       });
 
-    return deepFreeze(remaining.slice(0, Math.max(1, Number(limit) || 3)));
+    const sliced = remaining.slice(0, Math.max(1, Number(limit) || 3));
+    if (!packageAsk) return deepFreeze(sliced);
+    const connectedConnectionIds = businessSummary?.connectedConnectionIds ?? [];
+    return deepFreeze(
+      sliced
+        .map((question) => specializePackageAskQuestion(question, {
+          packageAsk: true,
+          packageAskPackages: packageAskPackages ?? purchasedPackages,
+          connectedConnectionIds,
+        }))
+        .filter((question) => !question?.skipBecauseConnected),
+    );
   }
+}
+
+/** Questions shown to every business, regardless of its industry. */
+export function isUniversalDiscoveryQuestion(question) {
+  return !Array.isArray(question?.whenIndustry) || question.whenIndustry.length === 0;
 }
 
 export function questionMatchesIndustry(question, industry, activeOtherQuestionIds = null) {
@@ -762,12 +779,8 @@ export function resolveDiscoveryIndustry({ answers = [], businessSummary = {} } 
 
 /** Industries with dedicated packs. Everything else uses adaptive "other" follow-ups. */
 export const DISCOVERY_PACK_INDUSTRIES = Object.freeze([
-  "property_management",
   "dental",
   "sports",
-  "professional_services",
-  "political_campaigns",
-  "other",
 ]);
 
 export function resolvePackIndustry(industry) {
@@ -779,20 +792,19 @@ export function resolvePackIndustry(industry) {
 
 export function estimateDiscoveryQuestionCount({ industry = null } = {}) {
   const coreRequired = DISCOVERY_QUESTION_BANK.filter((question) => (
-    question.required && !Array.isArray(question.whenIndustry)
+    question.required && isUniversalDiscoveryQuestion(question)
   )).length;
+  const packIndustry = resolvePackIndustry(industry);
+  const activeOtherQuestionIds = null;
   const packRequired = DISCOVERY_QUESTION_BANK.filter((question) => (
     question.required
-    && Array.isArray(question.whenIndustry)
-    && industry
-    && question.whenIndustry.includes(String(industry))
-    && industry !== "other"
+    && !isUniversalDiscoveryQuestion(question)
+    && questionMatchesIndustry(question, packIndustry, activeOtherQuestionIds)
   )).length;
-  const otherPack = industry === "other" ? 3 : 0;
-  const total = coreRequired + packRequired + otherPack;
+  const total = coreRequired + packRequired;
   return deepFreeze({
     coreRequired,
-    packRequired: packRequired || otherPack,
+    packRequired,
     estimatedTotal: Math.min(28, total),
     progressLabel: `Question N of about ${Math.max(coreRequired, total - 2)}–${Math.min(28, total + 2)}`,
   });

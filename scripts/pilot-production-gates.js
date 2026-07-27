@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Production pilot gates for app.vtechdevelopment.com (or PILOT_BASE_URL).
+ * Production gates for the hosted app (or PILOT_BASE_URL / PRODUCTION_BASE_URL).
  * Does not mutate production data. Exits non-zero on blockers.
  */
 import dotenv from "dotenv";
@@ -12,7 +12,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 dotenv.config({ path: path.join(root, "frontend/.env.local") });
 dotenv.config({ path: path.join(root, "frontend/.env.production.local") });
 
-const BASE = String(process.env.PILOT_BASE_URL ?? "https://app.vtechdevelopment.com").replace(/\/$/, "");
+const BASE = String(
+  process.env.PRODUCTION_BASE_URL ?? process.env.PILOT_BASE_URL ?? "https://app.vtechdevelopment.com",
+).replace(/\/$/, "");
 const host = new URL(BASE).hostname;
 
 const results = [];
@@ -27,7 +29,6 @@ function isLocalHost(hostname) {
 }
 
 async function main() {
-  // Static composition-boundary guard (Next must not import backend infra singletons).
   try {
     const { spawnSync } = await import("node:child_process");
     const guard = spawnSync(process.execPath, ["--test", path.join(root, "scripts/assert-frontend-composition-boundary.js")], {
@@ -50,7 +51,7 @@ async function main() {
   try {
     const res = await fetch(`${BASE}/api/health`, { redirect: "manual" });
     const body = await res.json().catch(() => ({}));
-    const ok = res.status === 200 && body.ok === true && body.database === "ok";
+    const ok = res.status === 200 && body.ok === true && body.database === "ok" && body.status === "healthy";
     record("health", ok, `HTTP ${res.status} ${JSON.stringify(body)}`);
   } catch (err) {
     record("health", false, err instanceof Error ? err.message : String(err));
@@ -93,14 +94,41 @@ async function main() {
     process.env.KNOWLEDGE_STORAGE_ROOT || process.env.OBJECT_STORAGE_ROOT || "using default .dev path (not prod)",
   );
 
+  const trustHubOk = Boolean(
+    String(process.env.TWILIO_A2P_CUSTOMER_PROFILE_SID || "").trim()
+    && String(process.env.TWILIO_A2P_PROFILE_BUNDLE_SID || "").trim(),
+  );
+  record(
+    "env_twilio_a2p_trust_hub",
+    trustHubOk,
+    trustHubOk ? "Trust Hub SIDs set" : "missing TWILIO_A2P_CUSTOMER_PROFILE_SID / TWILIO_A2P_PROFILE_BUNDLE_SID",
+  );
+
+  try {
+    const res = await fetch(`${BASE}/api/health`, { redirect: "manual" });
+    const body = await res.json().catch(() => ({}));
+    const jobsOk = body.jobsSchema === "ok";
+    record("jobs_schema", jobsOk, `jobsSchema=${body.jobsSchema ?? "unknown"}`);
+    const workerRequired = process.env.REQUIRE_WORKER !== "0" && process.env.PILOT_REQUIRE_WORKER !== "0";
+    const workerOk = body.worker === "ok";
+    record(
+      "worker_heartbeat",
+      workerRequired ? workerOk : true,
+      `worker=${body.worker ?? "unknown"}${workerRequired ? "" : " (REQUIRE_WORKER=0)"}`,
+    );
+  } catch (err) {
+    record("jobs_schema", false, err instanceof Error ? err.message : String(err));
+    record("worker_heartbeat", false, err instanceof Error ? err.message : String(err));
+  }
+
   const failed = results.filter((r) => !r.ok);
   console.log("");
   if (failed.length) {
-    console.error(`Pilot gates failed: ${failed.length} blocker(s).`);
+    console.error(`Production gates failed: ${failed.length} blocker(s).`);
     console.error(failed.map((f) => `- ${f.name}: ${f.detail}`).join("\n"));
     process.exit(1);
   }
-  console.log("Pilot gates passed.");
+  console.log("Production gates passed.");
 }
 
 main().catch((err) => {

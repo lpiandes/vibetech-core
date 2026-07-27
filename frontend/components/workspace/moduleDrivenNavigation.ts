@@ -5,6 +5,7 @@ import {
 } from "../../../backend/core/business-os/BusinessOSSafeRoutes.js";
 import { resolveRoleAccess as resolveRoleAccessRaw } from "../../../backend/core/business-os/BusinessOSRoleAccess.js";
 import { applyTerminology, sectionIdForModuleType } from "../../lib/portal-renderer/composePortalModel.js";
+import { filterModulesForPurchasedPackages } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
 const buildBusinessOSNavigation = buildBusinessOSNavigationRaw as (input: Record<string, unknown>) => {
   primaryItems: Array<{
@@ -64,19 +65,29 @@ type InstalledNavigationInput = {
   terminology?: Record<string, unknown> | null;
 };
 
-const DEFAULT_MCBRIDE_MODULES: ModuleLike[] = [
+/** Universal OS defaults — never inject PM Properties for empty sports/dental installs. */
+const DEFAULT_UNIVERSAL_MODULES: ModuleLike[] = [
   { moduleId: "home", label: "Mission Control", moduleType: "operations", navigationPriority: 1, iconName: "home", roleVisibility: [] },
   { moduleId: "for_you", label: "For you", moduleType: "operations", navigationPriority: 2, iconName: "home", roleVisibility: ["work.view"] },
   { moduleId: "work", label: "Work", moduleType: "operations", navigationPriority: 3, iconName: "inbox", roleVisibility: ["work.view"] },
   { moduleId: "people", label: "People", moduleType: "records", navigationPriority: 4, iconName: "users", roleVisibility: ["people.view"] },
+  { moduleId: "inbox", label: "Inbox", moduleType: "communications", navigationPriority: 5, iconName: "message-square", roleVisibility: ["inbox.view"] },
+  { moduleId: "digital_workforce", label: "Team", moduleType: "workforce", navigationPriority: 6, iconName: "users", roleVisibility: ["team.manage"] },
+  { moduleId: "knowledge", label: "Knowledge", moduleType: "knowledge", navigationPriority: 7, iconName: "book", roleVisibility: [] },
+  { moduleId: "performance", label: "Performance", moduleType: "analytics", navigationPriority: 8, iconName: "chart", roleVisibility: ["performance.view"] },
+  { moduleId: "intelligence", label: "Intelligence", moduleType: "analytics", navigationPriority: 9, iconName: "chart", roleVisibility: ["performance.view"] },
+  { moduleId: "integrations", label: "Integrations", moduleType: "configuration", navigationPriority: 10, iconName: "link", roleVisibility: ["integrations.manage"] },
+  { moduleId: "settings", label: "Settings", moduleType: "configuration", navigationPriority: 11, iconName: "settings", roleVisibility: ["settings.manage"] },
+];
+
+/** @deprecated Use DEFAULT_UNIVERSAL_MODULES — kept alias so PM-only callers can opt in explicitly. */
+const DEFAULT_MCBRIDE_MODULES: ModuleLike[] = [
+  ...DEFAULT_UNIVERSAL_MODULES.slice(0, 4),
   { moduleId: "properties", label: "Properties", moduleType: "records", navigationPriority: 5, iconName: "home", roleVisibility: ["people.view"] },
-  { moduleId: "inbox", label: "Inbox", moduleType: "communications", navigationPriority: 6, iconName: "message-square", roleVisibility: ["inbox.view"] },
-  { moduleId: "digital_workforce", label: "Team", moduleType: "workforce", navigationPriority: 7, iconName: "users", roleVisibility: ["team.manage"] },
-  { moduleId: "knowledge", label: "Knowledge", moduleType: "knowledge", navigationPriority: 8, iconName: "book", roleVisibility: [] },
-  { moduleId: "performance", label: "Performance", moduleType: "analytics", navigationPriority: 9, iconName: "chart", roleVisibility: ["performance.view"] },
-  { moduleId: "intelligence", label: "Intelligence", moduleType: "analytics", navigationPriority: 10, iconName: "chart", roleVisibility: ["performance.view"] },
-  { moduleId: "integrations", label: "Integrations", moduleType: "configuration", navigationPriority: 11, iconName: "link", roleVisibility: ["integrations.manage"] },
-  { moduleId: "settings", label: "Settings", moduleType: "configuration", navigationPriority: 12, iconName: "settings", roleVisibility: ["settings.manage"] },
+  ...DEFAULT_UNIVERSAL_MODULES.slice(4).map((mod, index) => ({
+    ...mod,
+    navigationPriority: 6 + index,
+  })),
 ];
 
 const ICON_BY_MODULE: Record<string, string> = {
@@ -113,13 +124,16 @@ export function getModuleDrivenNavSections(
     role?: string;
     installed?: InstalledNavigationInput | null;
     maximumPrimaryItems?: number;
+    purchasedPackages?: string[];
   },
 ): NavSection[] {
   const permSet = permissions instanceof Set ? permissions : new Set(permissions ?? []);
   const installed = options?.installed ?? null;
   const terminology = installed?.terminology ?? null;
-  const modules = (installed?.modules?.length ? installed.modules : DEFAULT_MCBRIDE_MODULES)
-    .filter((module) => isSafeModuleRoute(module.moduleId) || module.moduleId === "for_you");
+  const modules = filterModulesForPurchasedPackages(
+    (installed?.modules?.length ? installed.modules : DEFAULT_UNIVERSAL_MODULES),
+    options?.purchasedPackages ?? [],
+  ).filter((module) => isSafeModuleRoute(module.moduleId) || module.moduleId === "for_you");
 
   const moduleTypeById = new Map(modules.map((module) => [module.moduleId, module.moduleType ?? "operations"]));
 

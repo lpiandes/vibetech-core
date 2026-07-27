@@ -10,7 +10,9 @@ const distDir = process.env.NEXT_DIST_DIR ?? ".next";
 const nextConfig: NextConfig = {
   distDir,
   outputFileTracingRoot: repoRoot,
-  serverExternalPackages: ["pg", "bcryptjs"],
+  // Knowledge extraction uses Node-only packages. Externalize them so the
+  // server compiler does not try to bundle pdfjs/browser internals into RSC.
+  serverExternalPackages: ["pg", "bcryptjs", "mammoth", "pdf-parse"],
   experimental: {
     // Enables next/navigation forbidden() + unauthorized() for clean 403/401 UX.
     authInterrupts: true,

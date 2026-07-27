@@ -14,6 +14,7 @@ export {
   exchangeGoogleAuthorizationCode,
   GMAIL_OAUTH_SCOPES,
   GOOGLE_CALENDAR_OAUTH_SCOPES,
+  GOOGLE_SEARCH_CONSOLE_OAUTH_SCOPES,
   isGoogleOAuthAppConfigured,
   getGoogleOAuthAppConfig,
 } from "../../../backend/core/integrations/oauth/GoogleOAuthClient.js";

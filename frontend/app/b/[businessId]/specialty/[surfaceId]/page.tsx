@@ -1,5 +1,3 @@
-import { notFound } from "next/navigation";
-
 import SpecialtySurfaceExperience from "@/components/specialty/SpecialtySurfaceExperience";
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
@@ -13,6 +11,39 @@ import {
 } from "../../../../../../backend/core/ai-builder/specialty/SpecialtySurfaceCompiler.js";
 import { hydrateSpecialtyArtifact } from "../../../../../../backend/core/ai-builder/specialty/SpecialtyArtifactComposer.js";
 import { getDigitalEmployeeReadinessEntry } from "../../../../../../backend/core/industries/employees/digitalEmployeeReadinessHelpers.js";
+import {
+  buildCustomAiReadyChecklist,
+  resolveCustomAiPublicStatus,
+} from "../../../../../../backend/core/ai-builder/custom-ai/buildCustomAiReadyChecklist.js";
+import {
+  buildOperatingContract,
+  presentOperatingContract,
+} from "../../../../../../backend/core/ai-builder/operating-contract/buildOperatingContract.js";
+import { resolveOperatingIndustry } from "../../../../../../backend/core/ai-builder/mapPackAiRolesToSelectedEmployees.js";
+
+/** Prefer installation employee records (runtime config) over frozen specification copies. */
+function mergeEmployeesPreferInstallation(
+  specEmployees: unknown,
+  installEmployees: unknown,
+) {
+  const map = new Map<string, Record<string, unknown>>();
+  for (const entry of Array.isArray(specEmployees) ? specEmployees : []) {
+    const id = String((entry as { employeeId?: string; id?: string })?.employeeId
+      ?? (entry as { id?: string })?.id
+      ?? "").trim();
+    if (!id) continue;
+    map.set(id, entry as Record<string, unknown>);
+  }
+  for (const entry of Array.isArray(installEmployees) ? installEmployees : []) {
+    const id = String((entry as { employeeId?: string; id?: string })?.employeeId
+      ?? (entry as { id?: string })?.id
+      ?? "").trim();
+    if (!id) continue;
+    const prior = map.get(id);
+    map.set(id, prior ? { ...prior, ...(entry as object) } : (entry as Record<string, unknown>));
+  }
+  return [...map.values()];
+}
 
 export default async function SpecialtySurfacePage({
   params,
@@ -51,14 +82,12 @@ export default async function SpecialtySurfacePage({
             ? installation.configuration.modules
             : []),
         ],
-        employeeDefinitions: [
-          ...(Array.isArray(specification?.employeeDefinitions)
-            ? specification.employeeDefinitions
-            : []),
-          ...(Array.isArray(installation?.configuration?.employees)
-            ? installation.configuration.employees
-            : []),
-        ],
+        // Installation employees win over specification copies — operating contracts
+        // and automation stubs are persisted on the installation, not the frozen spec.
+        employeeDefinitions: mergeEmployeesPreferInstallation(
+          specification?.employeeDefinitions,
+          installation?.configuration?.employees,
+        ),
         businessId,
       },
       { businessId },
@@ -69,10 +98,19 @@ export default async function SpecialtySurfacePage({
 
     let module = modules.find((entry: { moduleId?: string }) => String(entry.moduleId) === surfaceId)
       ?? null;
-    let employee = employees.find(
-      (entry: { employeeId?: string; id?: string }) =>
-        String(entry.employeeId ?? entry.id) === surfaceId,
-    ) ?? null;
+    // Prefer the installation-backed employee (has saved operating contract).
+    const installEmployee = Array.isArray(installation?.configuration?.employees)
+      ? installation.configuration.employees.find(
+        (entry: { employeeId?: string; id?: string }) =>
+          String(entry.employeeId ?? entry.id) === surfaceId,
+      )
+      : null;
+    let employee = installEmployee
+      ?? employees.find(
+        (entry: { employeeId?: string; id?: string }) =>
+          String(entry.employeeId ?? entry.id) === surfaceId,
+      )
+      ?? null;
 
     if (!employee && module?.employeeId) {
       employee = employees.find(
@@ -94,7 +132,25 @@ export default async function SpecialtySurfacePage({
     }
 
     if (!module && !employee) {
-      notFound();
+      // Allow opening any teammate id from Team/Home even before specialty compile caught up.
+      employee = {
+        employeeId: surfaceId,
+        label: surfaceId.replace(/^emp_(pack_)?/, "").replace(/_/g, " "),
+        purpose: "AI teammate. Prepares work for your review and never sends without approval.",
+        packDefault: String(surfaceId).startsWith("emp_pack_"),
+        approvalRequirements: ["human_approval"],
+        prohibitedActions: ["autonomous_customer_send"],
+        communicationPermissions: { customerFacingRequiresApproval: true },
+        connectionDependencies: ["business_email"],
+      };
+      module = {
+        moduleId: specialtyAiModuleId(surfaceId),
+        label: employee.label,
+        surfaceKind: "ai_teammate",
+        blocks: AI_SURFACE_BLOCKS,
+        employeeId: surfaceId,
+        purpose: employee.purpose,
+      };
     }
 
     const surfaceKind = String(
@@ -153,7 +209,9 @@ export default async function SpecialtySurfacePage({
       : [];
     const automationsActive = linked.length
       ? linked.some((auto: any) => String(auto.status).toUpperCase() === "ACTIVE")
-      : null;
+      : Array.isArray(employee?.automationDefinitions)
+        ? employee.automationDefinitions.some((auto: any) => String(auto.status).toUpperCase() === "ACTIVE")
+        : null;
 
     const readinessEntry = employeeId
       ? getDigitalEmployeeReadinessEntry(
@@ -175,6 +233,68 @@ export default async function SpecialtySurfacePage({
       ? readinessEntry.blockers.map((b: any) => String(b.message ?? b.type ?? "Setup needed")).join(" · ")
       : null;
 
+    const industry = resolveOperatingIndustry({
+      industry: installation?.configuration?.businessProfile?.industry
+        ?? specification?.businessProfile?.industry,
+      businessName: installation?.configuration?.businessProfile?.businessName
+        ?? specification?.businessProfile?.businessName,
+      operatingPackId: installation?.configuration?.operatingPackId
+        ?? specification?.operatingPackId,
+      configuration: installation?.configuration,
+      specification,
+    });
+
+    const contractBuilt = surfaceKind === "ai_teammate" && employee
+      ? buildOperatingContract({
+        employee,
+        industry,
+        discoverySummary: installation?.configuration?.businessSummary
+          ?? specification?.businessProfile
+          ?? null,
+      })
+      : null;
+    const contractPresentation = contractBuilt
+      ? presentOperatingContract(contractBuilt.contract, contractBuilt.schema)
+      : null;
+
+    const customAiChecklist = employee && isCustomAiEmployee(employee)
+      ? buildCustomAiReadyChecklist(employee, {
+        knowledgeCount: knowledgeDocumentCount,
+        hasRunProve: workItems.length > 0,
+      })
+      : null;
+    const customAiStatus = customAiChecklist
+      ? resolveCustomAiPublicStatus(employee, {
+        knowledgeCount: knowledgeDocumentCount,
+        hasRunProve: workItems.length > 0,
+      })
+      : null;
+
+    const contractIncomplete = contractBuilt && !contractBuilt.completeness.complete;
+    const statusLabel = contractIncomplete
+      ? contractPresentation?.statusLabel ?? "Needs setup"
+      : customAiStatus
+        ? customAiStatus.statusLabel
+        : readinessReady === false
+          ? "Needs Knowledge or Connections"
+          : surfaceKind === "ai_teammate"
+            ? workItems.length > 0
+              ? "Operational — review recent work"
+              : "Needs first test"
+            : "Specialty workspace";
+
+    const linkedAutomationRows = linked.map((auto: any) => ({
+      id: String(auto.id ?? auto.automationId ?? ""),
+      name: String(auto.name ?? "Automation"),
+      status: String(auto.status ?? "INACTIVE"),
+      triggerSummary: String(
+        auto.metadata?.triggerSummary
+        ?? contractBuilt?.contract?.trigger?.summary
+        ?? auto.trigger?.eventType
+        ?? "Linked automation",
+      ),
+    }));
+
     return (
       <SpecialtySurfaceExperience
         model={{
@@ -185,29 +305,64 @@ export default async function SpecialtySurfacePage({
           purpose,
           blocks,
           employeeId,
-          statusLabel: readinessReady === false
-            ? "Needs Knowledge or Connections"
-            : surfaceKind === "ai_teammate"
-              ? "Ready to work"
-              : "Specialty workspace",
-          askHref: employeeId
-            ? `/b/${encodeURIComponent(businessId)}/architect?employeeId=${encodeURIComponent(employeeId)}`
-            : `/b/${encodeURIComponent(businessId)}/architect`,
+          statusLabel,
+          askHref: `/b/${encodeURIComponent(businessId)}/team`,
           workHref: `/b/${businessId}/work`,
           knowledgeHref: `/b/${businessId}/knowledge`,
           integrationsHref: `/b/${businessId}/integrations`,
           teamHref: `/b/${businessId}/team`,
           workItems,
           automationsActive,
-          linkedAutomationCount: linked.length,
+          linkedAutomationCount: linked.length || (employee?.automationDefinitions?.length ?? 0),
+          nextScheduleAt: employee?.operatingContract?.trigger?.schedule?.nextRunAt
+            ?? null,
+          linkedAutomations: linkedAutomationRows.length
+            ? linkedAutomationRows
+            : (Array.isArray(employee?.automationDefinitions)
+              ? employee.automationDefinitions.map((auto: any) => ({
+                id: String(auto.automationId ?? auto.id ?? ""),
+                name: String(auto.name ?? "Automation"),
+                status: String(auto.status ?? "INACTIVE"),
+                triggerSummary: String(
+                  auto.metadata?.triggerSummary
+                  ?? contractBuilt?.contract?.trigger?.summary
+                  ?? "From operating contract",
+                ),
+              }))
+              : []),
+          readyChecklist: customAiChecklist,
+          operatingContract: contractPresentation,
+          contractComplete: contractBuilt ? contractBuilt.completeness.complete : null,
           readiness: readinessEntry
             ? {
-              ready: readinessReady !== false,
+              ready: readinessReady !== false
+                && (customAiStatus ? customAiStatus.isReady : true)
+                && !contractIncomplete,
               missingKnowledge,
               missingConnections,
-              blockerSummary,
+              blockerSummary: contractIncomplete
+                ? contractPresentation?.statusLabel
+                : blockerSummary,
             }
-            : null,
+            : customAiChecklist
+              ? {
+                ready: customAiChecklist.ready && !contractIncomplete,
+                missingKnowledge: [],
+                missingConnections: [],
+                blockerSummary: contractIncomplete
+                  ? contractPresentation?.statusLabel
+                  : (customAiChecklist.ready
+                    ? null
+                    : "Finish the ready checklist before this custom AI is Live."),
+              }
+              : contractIncomplete
+                ? {
+                  ready: false,
+                  missingKnowledge: [],
+                  missingConnections: [],
+                  blockerSummary: contractPresentation?.statusLabel ?? null,
+                }
+                : null,
         }}
       />
     );

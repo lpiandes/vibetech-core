@@ -8,14 +8,10 @@ export default function ExecutiveBriefing({
   proposal,
   openHref,
   onOpenPortal,
-  onInvite,
-  onImprove,
 }: {
   proposal?: any;
   openHref?: string | null;
   onOpenPortal: () => void;
-  onInvite: () => void;
-  onImprove: () => void;
 }) {
   const briefing = executiveBriefing(proposal);
 
@@ -27,9 +23,9 @@ export default function ExecutiveBriefing({
       animation: "architectFadeUp .55s ease",
     }}>
       <div style={{ display: "grid", gap: 10 }}>
-        <ArchitectBadge tone="success">Live</ArchitectBadge>
+        <ArchitectBadge tone="success">Ready</ArchitectBadge>
         <h1 style={{ margin: 0, fontFamily: architect.display, fontSize: "clamp(2rem, 4vw, 3rem)", lineHeight: 1.08 }}>
-          {briefing.headline}
+          {briefing.businessName}
         </h1>
         <p style={{ margin: 0, color: architect.inkMuted, fontSize: 17, lineHeight: 1.55, maxWidth: 640 }}>
           {briefing.summary}
@@ -50,22 +46,10 @@ export default function ExecutiveBriefing({
         ))}
       </div>
 
-      <div style={{
-        borderRadius: architect.radius,
-        border: `1px solid rgba(20,184,166,.3)`,
-        background: "rgba(20,184,166,.08)",
-        padding: 18,
-        color: architect.inkMuted,
-        lineHeight: 1.55,
-      }}>
-        Your operating system is ready. Invite the team, walk the home screen, and keep refining with Ask VIBETech —
-        Architect already knows this business.
-      </div>
-
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <ArchitectButton onClick={onOpenPortal}>Open your business</ArchitectButton>
-        <ArchitectButton variant="secondary" onClick={onInvite}>Invite your team</ArchitectButton>
-        <ArchitectButton variant="ghost" onClick={onImprove}>Keep improving</ArchitectButton>
+        <ArchitectButton onClick={onOpenPortal} disabled={!openHref}>
+          Open your business
+        </ArchitectButton>
       </div>
       {!openHref ? (
         <div style={{ color: architect.inkMuted, fontSize: 13 }}>Portal link will appear once launch finishes.</div>

@@ -8,6 +8,7 @@ import { createBuilderEvidence } from "./BuilderEvidence.js";
  * Fixture/manual fallback when live fetch is unavailable.
  */
 export class BusinessWebsiteResearchService {
+  /** @param {{fetchImpl?: typeof fetch | null, policy?: object, fixtures?: Map<string, any>}} options */
   constructor({
     fetchImpl = null,
     policy = createWebsiteFetchPolicy(),

@@ -22,6 +22,7 @@ export function specialtyAiModuleId(employeeId) {
   return `specialty_ai_${String(employeeId)}`;
 }
 
+/** @param {string} surfaceId @param {{businessId?: string | null}} options */
 export function buildSpecialtyHref(surfaceId, { businessId = null } = {}) {
   const id = encodeURIComponent(String(surfaceId));
   if (businessId) return `/b/${encodeURIComponent(String(businessId))}/specialty/${id}`;
@@ -49,6 +50,7 @@ export function isCustomAiEmployee(employee = {}) {
   );
 }
 
+/** @param {Record<string, any>} module @param {{businessId?: string | null}} options */
 export function compileSpecialtyModule(module = {}, { businessId = null } = {}) {
   const moduleId = String(module.moduleId ?? module.id ?? "").trim();
   if (!moduleId) return null;
@@ -91,6 +93,7 @@ export function compileSpecialtyModule(module = {}, { businessId = null } = {}) 
   });
 }
 
+/** @param {Record<string, any>} employee @param {{businessId?: string | null}} options */
 export function compileSpecialtyEmployee(employee = {}, { businessId = null } = {}) {
   const employeeId = String(employee.employeeId ?? employee.id ?? "").trim();
   if (!employeeId || !isCustomAiEmployee(employee)) {
@@ -116,6 +119,7 @@ export function compileSpecialtyEmployee(employee = {}, { businessId = null } = 
 /**
  * Fold specialty surfaces onto modules + custom AI employees for nav + host pages.
  */
+/** @param {Record<string, any>} specification @param {{businessId?: string | null}} options */
 export function compileSpecialtySurfacesOnSpecification(specification = {}, { businessId = null } = {}) {
   if (!specification || typeof specification !== "object") return specification;
 

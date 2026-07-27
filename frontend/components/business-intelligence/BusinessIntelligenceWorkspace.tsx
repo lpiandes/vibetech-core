@@ -88,20 +88,20 @@ type IntelligenceCandidateCard = {
 };
 
 const SECTIONS = [
-  { id: "attention", label: "Waiting on you" },
-  { id: "more", label: "More insights" },
+  { id: "attention", label: "Waiting" },
+  { id: "more", label: "Insights" },
 ] as const;
 
 const INSIGHT_SECTIONS = [
-  { id: "executive", label: "What changed" },
-  { id: "recommendations", label: "Recommendations" },
+  { id: "executive", label: "Changes" },
+  { id: "recommendations", label: "Ideas" },
   { id: "opportunities", label: "Opportunities" },
-  { id: "health", label: "Business health" },
+  { id: "health", label: "Health" },
   { id: "risks", label: "Risks" },
   { id: "capacity", label: "Capacity" },
   { id: "ai", label: "Suggestions" },
-  { id: "improvements", label: "Recent improvements" },
-  { id: "roadmap", label: "What's next" },
+  { id: "improvements", label: "Recent" },
+  { id: "roadmap", label: "Next" },
 ] as const;
 
 /**
@@ -227,27 +227,26 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
   return (
     <div style={{ display: "grid", gap: spacing.xl, padding: `${spacing.lg} ${spacing.md}`, maxWidth: 880, margin: "0 auto" }}>
       <PageHeader
-        eyebrow="Needs Attention"
         title={
           candidates.length === 0
-            ? "Nothing needs your decision"
+            ? "All clear"
             : candidates.length === 1
-              ? "One decision is waiting"
-              : `${candidates.length} decisions are waiting`
-        }
-        description={
-          candidates.length === 0
-            ? "VIBETech will notify you when a decision is required. Recommendations always include why and what happens next."
-            : "Review each item, understand the impact, then approve Work or a change. Nothing changes silently."
+              ? "1 decision"
+              : `${candidates.length} decisions`
         }
         actions={
           <>
             <ActionButton variant="secondary" disabled={busyId === "refresh"} onClick={() => void refreshIntelligence()}>
-              {busyId === "refresh" ? "Checking…" : "Check again"}
+              {busyId === "refresh" ? "…" : "Refresh"}
             </ActionButton>
           </>
         }
       />
+
+      <section style={{ display: "flex", flexWrap: "wrap", gap: 10 }} aria-label="Decision status">
+        <StatusSummaryCard label="Waiting" value={String(candidates.length)} detail="" tone={candidates.length ? "warning" : "good"} />
+        <StatusSummaryCard label="Ideas" value={String((view.recommendations ?? []).length)} detail="" tone="info" />
+      </section>
 
       <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }} aria-label="Needs Attention sections">
         {SECTIONS.map((entry) => (
@@ -280,7 +279,7 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
         <div style={{ display: "grid", gap: 12 }}>
           {candidates.length === 0 ? (
             <div style={{ ...panelStyle, color: cockpitColors.textSecondary }}>
-              Nothing needs your judgment right now. VIBETech will surface the next decision when it matters.
+              Nothing waiting.
             </div>
           ) : (
             candidates.map((candidate) => (
@@ -334,8 +333,8 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
 
           {insightSection === "improvements" ? (
             <SimpleList
-              title="Recent improvements"
-              empty="Improvements you approve and install will appear here."
+              title="Recent"
+              empty="Nothing yet."
               items={(view.recentImprovements ?? []).map((item) => ({ id: item.id, label: item.label, detail: item.at }))}
             />
           ) : null}
@@ -348,7 +347,7 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
             <div style={{ display: "grid", gap: 12 }}>
               {listForSection().length === 0 ? (
                 <div style={{ ...panelStyle, color: cockpitColors.textSecondary }}>
-                  Nothing in this section right now — evidence is still forming.
+                  Nothing here yet.
                 </div>
               ) : (
                 listForSection().map((recommendation) => (
@@ -369,6 +368,15 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
       ) : null}
     </div>
   );
+}
+
+function StatusSummaryCard({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: "good" | "warning" | "info" }) {
+  const colors = tone === "warning" ? { fg: "#c2410c", bg: "#fff7ed" } : tone === "good" ? { fg: "#047857", bg: "#ecfdf5" } : { fg: "#2563eb", bg: "#eff6ff" };
+  return <div style={{ padding: 14, borderRadius: 14, border: "1px solid #e8edf2", background: colors.bg, minWidth: 180, flex: "1 1 180px" }}>
+    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".07em", textTransform: "uppercase", color: colors.fg }}>{label}</div>
+    <div style={{ marginTop: 6, fontSize: "1.15rem", fontWeight: 780, letterSpacing: "-.03em", color: cockpitColors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
+    <div style={{ marginTop: 4, fontSize: 11, color: cockpitColors.textSecondary, lineHeight: 1.35 }}>{detail}</div>
+  </div>;
 }
 
 function IntelligenceCandidateCardView({
@@ -393,7 +401,7 @@ function IntelligenceCandidateCardView({
   const [showTechnical, setShowTechnical] = useState(false);
   const recommended =
     candidate.recommendedActions?.[0]?.label
-    ?? "Review and choose Work or a change";
+    ?? "Review";
   const why = candidate.whyItMatters ?? candidate.explanation ?? candidate.summary ?? "";
   const impact = candidate.whatHappened ?? candidate.summary ?? null;
 
@@ -479,11 +487,10 @@ function ExecutiveBriefingPanel({
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div style={panelStyle}>
-        <h2 style={{ margin: "0 0 8px", fontSize: "1.25rem" }}>{briefing?.headline ?? "Executive briefing"}</h2>
-        <p style={{ margin: 0, color: cockpitColors.textSecondary, lineHeight: 1.55 }}>{briefing?.summary}</p>
-        <div style={{ marginTop: 12, color: cockpitColors.textSecondary, fontSize: typography.caption.fontSize }}>
-          {briefing?.nextHumanStep}
-        </div>
+        <h2 style={{ margin: "0 0 8px", fontSize: "1.25rem" }}>{briefing?.headline ?? "Briefing"}</h2>
+        {briefing?.summary ? (
+          <p style={{ margin: 0, color: cockpitColors.textSecondary, lineHeight: 1.55 }}>{briefing.summary}</p>
+        ) : null}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 }}>
         <Stat label="Findings" value={counts?.findings ?? 0} />
@@ -492,17 +499,17 @@ function ExecutiveBriefingPanel({
         <Stat label="Trend" value={humanize(health?.overallTrend ?? "—")} />
       </div>
       <TwoColumn
-        leftTitle="What needs attention"
+        leftTitle="Attention"
         leftItems={briefing?.whatNeedsAttention ?? []}
-        rightTitle="What changed"
+        rightTitle="Changes"
         rightItems={briefing?.whatChanged ?? []}
       />
       {briefing?.topRecommendation ? (
         <div style={panelStyle}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: cockpitColors.accent, textTransform: "uppercase" }}>Top recommendation</div>
-          <div style={{ fontWeight: 700, marginTop: 6 }}>{briefing.topRecommendation.title}</div>
-          <div style={{ color: cockpitColors.textSecondary, marginTop: 4 }}>{briefing.topRecommendation.reason}</div>
-          <div style={{ marginTop: 8, fontSize: 13 }}>Confidence: {briefing.topRecommendation.confidence}</div>
+          <div style={{ fontWeight: 700 }}>{briefing.topRecommendation.title}</div>
+          {briefing.topRecommendation.reason ? (
+            <div style={{ color: cockpitColors.textSecondary, marginTop: 4 }}>{briefing.topRecommendation.reason}</div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -511,13 +518,15 @@ function ExecutiveBriefingPanel({
 
 function HealthPanel({ health }: { health?: BIView["businessHealth"] }) {
   if (!health) {
-    return <div style={panelStyle}>Business health is not available yet.</div>;
+    return <div style={panelStyle}>Not available yet.</div>;
   }
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div style={panelStyle}>
-        <h2 style={{ margin: "0 0 8px" }}>Business Health</h2>
-        <p style={{ margin: 0, color: cockpitColors.textSecondary }}>{health.explanation}</p>
+        <h2 style={{ margin: "0 0 8px" }}>Health</h2>
+        {health.explanation ? (
+          <p style={{ margin: 0, color: cockpitColors.textSecondary }}>{health.explanation}</p>
+        ) : null}
         <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
           <span style={chipStyle}>Status: {health.overallStatus}</span>
           <span style={chipStyle}>Score: {health.overallScore ?? "—"}</span>
@@ -528,12 +537,12 @@ function HealthPanel({ health }: { health?: BIView["businessHealth"] }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <SimpleList
           title="Strengths"
-          empty="No strengths recorded yet."
+          empty="None yet."
           items={(health.strengths ?? []).map((item) => ({ id: item.id, label: item.label, detail: item.reason }))}
         />
         <SimpleList
-          title="Health risks"
-          empty="No health risks recorded."
+          title="Risks"
+          empty="None yet."
           items={(health.risks ?? []).map((item) => ({ id: item.id, label: item.label, detail: item.reason }))}
         />
       </div>
@@ -585,7 +594,7 @@ function RecommendationCard({
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
           <button type="button" onClick={onToggle} style={ghostButton}>
-            {expanded ? "Hide details" : "Why this"}
+            {expanded ? "Less" : "More"}
           </button>
           <button type="button" onClick={onImprove} disabled={busy} style={primaryButton}>
             {busy ? "Opening…" : "Ask VIBETech"}
@@ -611,7 +620,7 @@ function RecommendationCard({
             </ul>
           </div>
           <div style={{ fontSize: 13, color: cockpitColors.textSecondary }}>
-            Next: {humanize(recommendation.nextStep ?? "explain")} — never installs without approval.
+            Next: {humanize(recommendation.nextStep ?? "explain")}
           </div>
         </div>
       ) : null}
@@ -690,8 +699,8 @@ function TwoColumn({
 }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-      <SimpleList title={leftTitle} empty="Nothing urgent." items={leftItems.map((label, index) => ({ id: `${index}`, label }))} />
-      <SimpleList title={rightTitle} empty="No material changes detected." items={rightItems.map((label, index) => ({ id: `${index}`, label }))} />
+      <SimpleList title={leftTitle} empty="None." items={leftItems.map((label, index) => ({ id: `${index}`, label }))} />
+      <SimpleList title={rightTitle} empty="None." items={rightItems.map((label, index) => ({ id: `${index}`, label }))} />
     </div>
   );
 }

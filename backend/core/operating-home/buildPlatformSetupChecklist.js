@@ -7,30 +7,31 @@ const CONNECTION_BY_STEP = Object.freeze({
   sms: "sms_channel",
   voice: "voice_channel",
   meta_lead_ads: "meta_lead_ads",
+  google_search_console: "google_search_console",
+  google_ads: "google_ads",
+  meta_ads: "meta_ads",
 });
 
 const STEP_LABELS = Object.freeze({
-  team: { title: "Invite your team", actionLabel: "Invite teammate", path: "team" },
+  team: { title: "Invite your staff", actionLabel: "Invite staff member", path: "team" },
   knowledge: { title: "Add business knowledge", actionLabel: "Add document", path: "knowledge?add=1" },
-  email: { title: "Connect business email", actionLabel: "Connect", path: "integrations?focus=business_email" },
-  calendar: { title: "Connect Google Calendar", actionLabel: "Connect", path: "integrations?focus=calendar" },
+  email: { title: "Choose customer email inbox", actionLabel: "Choose inbox", path: "integrations?focus=business_email" },
+  calendar: { title: "Set up scheduling & Google Calendar", actionLabel: "Connect calendar", path: "integrations?focus=calendar" },
   sms: { title: "Connect text messaging (Twilio)", actionLabel: "Connect", path: "integrations?focus=sms_channel" },
-  voice: { title: "Connect phone (Twilio)", actionLabel: "Connect", path: "integrations?focus=voice_channel" },
+  voice: { title: "Set up Voice Calling (Twilio)", actionLabel: "Set up", path: "integrations?focus=voice_channel" },
   a2p_registration: {
     title: "Complete Twilio A2P / 10DLC registration",
     actionLabel: "Finish A2P",
     path: "integrations?focus=sms_channel&a2p=1",
   },
   meta_lead_ads: {
-    title: "Connect Facebook Lead Ads",
+    title: "Connect Meta Lead Forms",
     actionLabel: "Connect",
     path: "integrations?focus=meta_lead_ads",
   },
-  scheduling: {
-    title: "Turn on scheduling + connect calendar",
-    actionLabel: "Connect calendar",
-    path: "integrations?focus=calendar",
-  },
+  google_search_console: { title: "Connect Google Search Console", actionLabel: "Connect", path: "integrations?focus=google_search_console" },
+  google_ads: { title: "Connect Google Ads", actionLabel: "Connect", path: "integrations?focus=google_ads" },
+  meta_ads: { title: "Connect Meta Ads (campaigns)", actionLabel: "Connect", path: "integrations?focus=meta_ads" },
 });
 
 /**
@@ -61,6 +62,9 @@ export function deriveRequiredSetupStepsFromIntegrations(integrations = []) {
   if (ids.has("meta_lead_ads") || ids.has("meta") || ids.has("facebook")) {
     steps.push("meta_lead_ads");
   }
+  if (ids.has("google_search_console") || ids.has("seo")) steps.push("google_search_console");
+  if (ids.has("google_ads")) steps.push("google_ads");
+  if (ids.has("meta_ads") || ids.has("facebook_ads")) steps.push("meta_ads");
 
   return [...new Set(steps)];
 }
@@ -68,6 +72,7 @@ export function deriveRequiredSetupStepsFromIntegrations(integrations = []) {
 /**
  * Full post-live checklist ids from an installed Business OS specification.
  */
+/** @param {Record<string, any> | null} specification */
 export function deriveRequiredSetupStepsFromSpecification(specification = null) {
   if (!specification || typeof specification !== "object") return ["email"];
 
@@ -83,11 +88,12 @@ export function deriveRequiredSetupStepsFromSpecification(specification = null) 
     (specification.capabilityRequirements ?? []).map((entry) => String(entry?.capabilityId ?? entry?.id ?? "")),
   );
   if (caps.has("scheduling") || caps.has("pkg.scheduling")) {
-    steps.push("scheduling");
+    // Scheduling and external calendar setup are one owner action. Do not
+    // create a second checklist card that leads to the same connection.
     if (!steps.includes("calendar")) steps.push("calendar");
   }
 
-  return [...new Set(steps.length ? steps : ["email"])];
+  return [...new Set(steps.length ? steps : ["email"])].filter((stepId) => stepId !== "scheduling");
 }
 
 function isConnectionConnected(connections, connectionId) {
@@ -110,6 +116,15 @@ function resolveA2pStatus({ connections = [], connectionRuntime = null } = {}) {
 
 /**
  * Build owner-facing platform incomplete checklist for Home.
+ * @param {{
+ *   workspaceId?: string,
+ *   requiredSetupSteps?: string[],
+ *   connections?: object[],
+ *   connectionRuntime?: object | null,
+ *   teamInviteChecklistComplete?: boolean,
+ *   knowledgeCount?: number,
+ *   includeTeamAndKnowledge?: boolean,
+ * }} options
  */
 export function buildPlatformSetupChecklist({
   workspaceId,
@@ -146,7 +161,7 @@ export function buildPlatformSetupChecklist({
     });
   }
 
-  for (const stepId of ["email", "calendar", "sms", "voice", "a2p_registration", "meta_lead_ads", "scheduling"]) {
+  for (const stepId of ["email", "calendar", "sms", "voice", "a2p_registration", "meta_lead_ads", "google_search_console", "google_ads", "meta_ads"]) {
     if (!steps.has(stepId)) continue;
     const label = STEP_LABELS[stepId];
     if (!label) continue;
@@ -154,9 +169,6 @@ export function buildPlatformSetupChecklist({
     let complete = false;
     if (stepId === "a2p_registration") {
       complete = smsConnected && a2pStatus === "complete";
-    } else if (stepId === "scheduling") {
-      // In-app schedule is usable; treat complete once calendar is connected or schedule was opened is tracked via calendar.
-      complete = isConnectionConnected(connections, "calendar");
     } else {
       const connectionId = CONNECTION_BY_STEP[stepId];
       complete = connectionId ? isConnectionConnected(connections, connectionId) : false;

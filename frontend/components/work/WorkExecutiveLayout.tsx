@@ -8,9 +8,9 @@ import { ChevronRight } from "lucide-react";
 import type { WorkViewModel } from "./WorkContext";
 import { WorkViewModelContext } from "./WorkContext";
 import PageHeader from "@/components/product/PageHeader";
+import { SimpleEmpty, SimplePanel, simplePageStyle } from "@/components/product/SimpleUI";
 import StatusBadge from "@/components/product/StatusBadge";
 import EntityAvatar from "@/components/shell/EntityAvatar";
-import ShellMetricStrip from "@/components/shell/ShellMetricStrip";
 import ShellPanel from "@/components/shell/ShellPanel";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
@@ -29,7 +29,7 @@ import {
 import RelationshipFollowUpResolutionDialog from "./RelationshipFollowUpResolutionDialog";
 import RelationshipFollowUpDraftDialog from "./RelationshipFollowUpDraftDialog";
 import CampaignStudioPanel from "./CampaignStudioPanel";
-import SpecialtyDeliverableView from "@/components/specialty/SpecialtyDeliverableView";
+import SpecialtyDeliverableView, { type SpecialtyArtifactPreview } from "@/components/specialty/SpecialtyDeliverableView";
 import {
   isResolvableRelationshipFollowUpWork,
   type RelationshipFollowUpOutcome,
@@ -41,21 +41,6 @@ const FILTERS: Array<{ id: WorkQueueFilter; label: string }> = [
   { id: "blocked", label: "Blocked" },
   { id: "overdue", label: "Overdue" },
 ];
-
-function PanelEmpty({ description }: { description: string }) {
-  return (
-    <div
-      style={{
-        padding: spacing.md,
-        color: cockpitColors.textMuted,
-        fontSize: typography.caption.fontSize,
-        lineHeight: 1.5,
-      }}
-    >
-      {description}
-    </div>
-  );
-}
 
 function SubjectChip({ name, href }: { name: string; href: string | null }) {
   const chip = (
@@ -103,14 +88,20 @@ function WorkQueueRow({
   const canResolveFollowUp = isResolvableRelationshipFollowUpWork(item);
   const title = String(item.title ?? "Work item");
   const avatarName = display.partyName ? String(display.partyName) : title;
-  const subjectHref = display.subjectId ? `/b/${businessId}/properties/${display.subjectId}` : null;
+  // Subject links need a vertical-aware destination (patient/player/etc.).
+  // Until a custom subject surface is installed, keep the work item in Work
+  // rather than falling through to the legacy property route.
+  const subjectHref = null;
   const dueSuffix = display.dueLabel
     ? display.overdue
-      ? ` · Overdue since ${display.dueLabel}`
+      ? ` · Overdue ${display.dueLabel}`
       : ` · Due ${display.dueLabel}`
     : "";
-  const priority = priorityLabel(item.priority);
-  const statusLabel = display.statusLabel ?? String(item.status ?? "").replace(/_/g, " ");
+  const meta = [
+    display.workTypeLabel,
+    display.partyName ? String(display.partyName) : null,
+    display.assigneeName ? String(display.assigneeName) : null,
+  ].filter(Boolean).join(" · ");
 
   const rowBody = (
     <>
@@ -128,20 +119,18 @@ function WorkQueueRow({
             <div style={{ fontWeight: 650, fontSize: typography.body.fontSize, color: cockpitColors.textPrimary }}>{title}</div>
             {display.subjectName ? <SubjectChip name={String(display.subjectName)} href={subjectHref} /> : null}
           </div>
-          <div style={{ marginTop: 2, fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary }}>
-            {display.workTypeLabel ?? ""}
-            {display.partyName ? `${display.workTypeLabel ? " · " : ""}${display.partyName}` : ""}
-            {display.assigneeName ? ` · ${display.assigneeName}` : ""}
-          </div>
-          <div style={{ marginTop: 2, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>
-            Next: {display.nextStep ?? "In progress"}
-            {dueSuffix}
-          </div>
+          {meta ? (
+            <div style={{ marginTop: 2, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>
+              {meta}{dueSuffix}
+            </div>
+          ) : dueSuffix ? (
+            <div style={{ marginTop: 2, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>{dueSuffix.slice(3)}</div>
+          ) : null}
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: spacing.xs, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
-        {priority ? <StatusBadge label={priority} tone={priorityTone(item.priority)} /> : null}
-        <StatusBadge label={statusLabel} tone={statusTone(item)} />
+        {priorityLabel(item.priority) ? <StatusBadge label={priorityLabel(item.priority)!} tone={priorityTone(item.priority)} /> : null}
+        <StatusBadge label={display.statusLabel ?? String(item.status ?? "").replace(/_/g, " ")} tone={statusTone(item)} />
         {canResolveFollowUp ? (
           <button
             type="button"
@@ -257,7 +246,7 @@ function CompleteWorkPanel({
   if (status === "completed") {
     return (
       <div style={{ padding: spacing.md, borderTop: `1px solid ${cockpitColors.panelBorder}` }}>
-        <div style={{ fontWeight: 650, marginBottom: spacing.xs, color: cockpitColors.textPrimary }}>Outcome</div>
+        <div style={{ fontWeight: 650, color: cockpitColors.textPrimary }}>Outcome</div>
         <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
           {existingOutcome || "Completed."}
         </div>
@@ -304,9 +293,6 @@ function CompleteWorkPanel({
   return (
     <div style={{ padding: spacing.md, borderTop: `1px solid ${cockpitColors.panelBorder}`, display: "grid", gap: spacing.sm }}>
       <div style={{ fontWeight: 650, color: cockpitColors.textPrimary }}>Record outcome</div>
-      <p style={{ margin: 0, fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
-        If it isn’t on Work, it didn’t happen. Note what changed so Memory stays trustworthy.
-      </p>
       <textarea
         value={outcomeSummary}
         onChange={(e) => setOutcomeSummary(e.target.value)}
@@ -425,16 +411,6 @@ export default function WorkExecutiveLayout() {
     if (targetWork) setFilter("all");
   }, [targetWork?.id]);
 
-  const metricStrip = useMemo(
-    () => [
-      { id: "open", label: "Open", value: String(counts.open) },
-      { id: "blocked", label: "Blocked", value: String(counts.blocked) },
-      { id: "overdue", label: "Overdue", value: String(counts.overdue) },
-      { id: "waiting", label: "Waiting", value: String(counts.waiting) },
-    ],
-    [counts],
-  );
-
   const visibleItems = useMemo(() => {
     const filtered = filterWorkItems(viewModel?.items, filter);
     return sortWorkQueueItems(filtered);
@@ -453,26 +429,56 @@ export default function WorkExecutiveLayout() {
 
   const emptyCopy =
     filter === "blocked"
-      ? "No blocked work right now."
+      ? "No blocked work."
       : filter === "overdue"
-        ? "No overdue work right now."
+        ? "No overdue work."
         : filter === "open"
-          ? "No open work right now."
-          : "Work handled by your team and digital employees will appear here.";
+          ? "No open work."
+          : "Nothing in the queue yet. Add a follow-up, or turn on a teammate automation.";
+
+  async function createOwnerWork() {
+    const title = window.prompt("What needs to get done?");
+    if (!title?.trim()) return;
+    const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/work`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: title.trim() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      window.alert(String(data.error ?? "Could not create work"));
+      return;
+    }
+    router.refresh();
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>
+    <div style={simplePageStyle}>
       <PageHeader
         title="Work"
-        description="Why each item exists, who owns it, what’s next, and the outcome when it’s done."
+        action={(
+          <button
+            type="button"
+            onClick={() => void createOwnerWork()}
+            style={{
+              borderRadius: radius.medium,
+              border: "none",
+              backgroundColor: cockpitColors.accent,
+              color: "#fff",
+              padding: "8px 12px",
+              fontSize: 13,
+              fontWeight: 750,
+              cursor: "pointer",
+            }}
+          >
+            + Work
+          </button>
+        )}
       />
-
-      <ShellMetricStrip metrics={metricStrip} />
 
       {targetWork ? (
         <ShellPanel
-          title="Selected work"
-          subtitle={targetWork.metadata?.artifact ? "Specialty deliverable opened for review." : "Opened from the contact record."}
+          title="Selected"
           action={
             <button
               type="button"
@@ -502,7 +508,7 @@ export default function WorkExecutiveLayout() {
           {targetWork.metadata?.artifact ? (
             <div style={{ padding: spacing.md, borderTop: `1px solid ${cockpitColors.panelBorder}` }}>
               <SpecialtyDeliverableView
-                artifact={targetWork.metadata.artifact}
+                artifact={targetWork.metadata.artifact as unknown as SpecialtyArtifactPreview}
                 knowledgeHref={`/b/${businessId}/knowledge`}
               />
             </div>
@@ -512,13 +518,12 @@ export default function WorkExecutiveLayout() {
         </ShellPanel>
       ) : null}
 
-      <ShellPanel
-        title="Active work queue"
-        subtitle={`${counts.all} active item${counts.all === 1 ? "" : "s"}`}
+      <SimplePanel
+        title="Work queue"
         action={<FilterChips active={filter} counts={counts} onSelect={setFilter} />}
       >
         {visibleItems.length === 0 ? (
-          <PanelEmpty description={emptyCopy} />
+          <SimpleEmpty>{emptyCopy}</SimpleEmpty>
         ) : (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {visibleItems.map((item) => (
@@ -532,7 +537,7 @@ export default function WorkExecutiveLayout() {
             ))}
           </div>
         )}
-      </ShellPanel>
+      </SimplePanel>
 
       {resolutionTarget ? (
         <RelationshipFollowUpResolutionDialog

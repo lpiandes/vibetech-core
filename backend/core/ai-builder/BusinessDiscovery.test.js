@@ -18,7 +18,8 @@ test("question planner asks required topics first and skips known optional topic
     limit: 20,
   });
   assert.ok(withEvidence.some((question) => question.questionId === "q_communications"));
-  assert.ok(!withEvidence.some((question) => question.questionId === "q_software"));
+  // Software is required — always ask even if website research already hinted at tools.
+  assert.ok(withEvidence.some((question) => question.questionId === "q_software"));
 });
 
 test("answer interpreter maps industry signals without inventing certainty", () => {
@@ -63,7 +64,45 @@ test("discovery engine progresses conversationally", async () => {
   assert.equal(applied.businessSummary.industry, "property_management");
   assert.ok(applied.nextQuestions.length >= 1);
   assert.ok(DISCOVERY_QUESTION_BANK.length >= 40);
-  assert.match(engine.initialPrompt().text, /what does your business do/i);
+  assert.match(engine.initialPrompt().text, /describe your business/i);
+});
+
+test("ready discovery does not queue a question behind recommendation", async () => {
+  const engine = new BusinessDiscoveryEngine({
+    planner: {
+      plan() {
+        throw new Error("planner must not run after discovery is ready");
+      },
+    },
+    completeness: {
+      evaluate() {
+        return {
+          readyForProposal: true,
+          percent: 100,
+          requiredTotal: 12,
+          requiredAnswered: 12,
+          requiredMissing: [],
+          unresolvedCount: 0,
+        };
+      },
+    },
+  });
+  const session = createBuilderSession({
+    currentStage: "interviewing",
+    businessSummary: {
+      businessName: "Whalers Hockey Club",
+      industry: "sports",
+      purchasedPackages: ["ai_receptionist", "crm_automation"],
+    },
+  });
+
+  const applied = await engine.applyAnswer(session, {
+    questionId: "q_desired_outcomes",
+    answer: "Answer every call and capture every family inquiry.",
+  });
+
+  assert.equal(applied.progress.readyForProposal, true);
+  assert.deepEqual(applied.nextQuestions, []);
 });
 
 test("integrations answer maps to connection ids the owner must sign into", () => {
@@ -78,7 +117,7 @@ test("integrations answer maps to connection ids the owner must sign into", () =
     "meta_lead_ads",
     "sms_channel",
   ].sort());
-  assert.deepEqual(result.fields.requiredSetupSteps, ["email", "calendar", "sms", "a2p_registration"]);
+  assert.deepEqual(result.fields.requiredSetupSteps, ["email", "calendar", "sms", "a2p_registration", "meta_lead_ads"]);
   assert.equal(result.fields.ownerWillConnectAccounts, true);
   assert.match(result.fields.connectionSetupNote, /sign into/i);
 
@@ -88,6 +127,19 @@ test("integrations answer maps to connection ids the owner must sign into", () =
   });
   assert.deepEqual(none.fields.integrationNeeds, []);
   assert.equal(none.fields.ownerWillConnectAccounts, false);
+});
+
+test("growth-channel selections are recorded without claiming they are connected", () => {
+  const interpreter = new BusinessDiscoveryAnswerInterpreter();
+  const result = interpreter.interpret({
+    questionId: "q_integrations",
+    answer: "google_ads, google_search_console, meta_ads",
+  });
+  assert.deepEqual([...result.fields.integrationNeeds].sort(), [
+    "google_ads",
+    "google_search_console",
+    "meta_ads",
+  ]);
 });
 
 test("free-form text extracts structured answers and skips inferred questions", async () => {
@@ -110,15 +162,22 @@ test("question bank covers departments, lead sources, automation, and expansion"
   }
 });
 
-test("political campaign industry pack is gated to political_campaigns", () => {
+test("only active operating packs receive curated diagnostic questions", () => {
   const planner = new BusinessDiscoveryQuestionPlanner();
-  const campaignQuestions = planner.plan({
+  const unsupportedIndustryQuestions = planner.plan({
     answers: [
       { questionId: "q_industry", answer: "political_campaigns" },
     ],
     businessSummary: { industry: "political_campaigns" },
     limit: 20,
   });
-  assert.ok(campaignQuestions.some((question) => question.questionId === "q_campaign_race_type"));
-  assert.ok(!campaignQuestions.some((question) => question.questionId === "q_dental_pms"));
+  assert.ok(!unsupportedIndustryQuestions.some((question) => question.questionId === "q_campaign_race_type"));
+  assert.ok(!unsupportedIndustryQuestions.some((question) => question.questionId === "q_dental_pms"));
+
+  const dentalQuestions = planner.plan({
+    answers: [{ questionId: "q_industry", answer: "dental" }],
+    businessSummary: { industry: "dental" },
+    limit: 20,
+  });
+  assert.ok(dentalQuestions.some((question) => question.questionId === "q_dental_pms"));
 });

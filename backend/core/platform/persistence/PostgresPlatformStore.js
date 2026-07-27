@@ -131,6 +131,49 @@ export class PostgresPlatformStore {
     return mapBusinessRow(rows[0] ?? null);
   }
 
+  async updateBusinessPackageConfiguration({ businessId, packageConfiguration }) {
+    if (!businessId) return null;
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `UPDATE businesses
+         SET package_configuration = $2::jsonb,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [String(businessId), JSON.stringify(packageConfiguration ?? {})],
+      ),
+    );
+    return mapBusinessRow(rows[0] ?? null);
+  }
+
+  async archiveBusiness({ businessId }) {
+    if (!businessId) return null;
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `UPDATE businesses
+         SET status = 'ARCHIVED', updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [String(businessId)],
+      ),
+    );
+    return mapBusinessRow(rows[0] ?? null);
+  }
+
+  async restoreBusiness({ businessId }) {
+    if (!businessId) return null;
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `UPDATE businesses
+         SET status = 'ACTIVE', updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [String(businessId)],
+      ),
+    );
+    return mapBusinessRow(rows[0] ?? null);
+  }
+
   async updateBusinessIndustryPackage({
     businessId,
     industryPackageId = null,
@@ -158,9 +201,13 @@ export class PostgresPlatformStore {
     return mapBusinessRow(rows[0] ?? null);
   }
 
-  async listBusinesses() {
+  async listBusinesses({ includeArchived = false } = {}) {
     const { rows } = await this.withClient((client) =>
-      client.query(`SELECT * FROM businesses ORDER BY created_at DESC`),
+      client.query(
+        includeArchived
+          ? `SELECT * FROM businesses ORDER BY created_at DESC`
+          : `SELECT * FROM businesses WHERE COALESCE(status, 'ACTIVE') <> 'ARCHIVED' ORDER BY created_at DESC`,
+      ),
     );
     return rows.map(mapBusinessRow);
   }
@@ -501,6 +548,46 @@ export class PostgresPlatformStore {
       ),
     );
     return rows[0];
+  }
+
+  async getAiAskQuotaUsage({ key }) {
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `SELECT used_count FROM ai_ask_quota_usage WHERE quota_key = $1`,
+        [String(key)],
+      ),
+    );
+    return rows[0]?.used_count ?? null;
+  }
+
+  async incrementAiAskQuotaUsage({
+    key,
+    day,
+    scope,
+    userId = null,
+    businessId = null,
+    employeeId = null,
+  }) {
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `INSERT INTO ai_ask_quota_usage (
+           quota_key, scope, day_utc, user_id, business_id, employee_id, used_count, updated_at
+         ) VALUES ($1, $2, $3::date, $4, $5, $6, 1, NOW())
+         ON CONFLICT (quota_key) DO UPDATE SET
+           used_count = ai_ask_quota_usage.used_count + 1,
+           updated_at = NOW()
+         RETURNING used_count`,
+        [
+          String(key),
+          String(scope ?? "ask"),
+          String(day),
+          userId ?? null,
+          businessId ?? null,
+          employeeId ?? null,
+        ],
+      ),
+    );
+    return rows[0]?.used_count ?? 1;
   }
 
   async getBusinessOwnerStatus(businessId) {
@@ -1068,6 +1155,7 @@ export class PostgresPlatformStore {
     return mapBusinessOSSpecificationRow(rows[0] ?? null);
   }
 
+  /** @param {{businessId: string, specificationId: string, specificationVersion?: number | null}} input */
   async getBusinessOSSpecification({ businessId, specificationId, specificationVersion = null }) {
     const params = [String(businessId), String(specificationId)];
     let sql = `SELECT * FROM business_os_specifications WHERE business_id = $1 AND specification_id = $2`;
@@ -1650,10 +1738,119 @@ export class PostgresPlatformStore {
         [String(businessId)],
       ),
     );
-    return mapAnalyticsDefinitionsRow(rows[0] ?? null);
+    return mapAnalyticsDefinitionsProp(rows[0] ?? null);
+  }
+
+  async upsertCapabilityProofRecord({
+    businessId,
+    capabilityId,
+    proveAction,
+    ok = false,
+    verified = false,
+    detail = {},
+  } = {}) {
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `INSERT INTO capability_proof_records (
+           business_id, capability_id, prove_action, ok, verified, detail, updated_at
+         ) VALUES ($1::uuid, $2, $3, $4, $5, $6::jsonb, NOW())
+         ON CONFLICT (business_id, capability_id) DO UPDATE SET
+           prove_action = EXCLUDED.prove_action,
+           ok = EXCLUDED.ok,
+           verified = EXCLUDED.verified,
+           detail = EXCLUDED.detail,
+           updated_at = NOW()
+         RETURNING *`,
+        [
+          String(businessId),
+          String(capabilityId),
+          String(proveAction),
+          Boolean(ok),
+          Boolean(verified),
+          JSON.stringify(detail ?? {}),
+        ],
+      ),
+    );
+    return mapCapabilityProofRow(rows[0]);
+  }
+
+  async listCapabilityProofRecords(businessId) {
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `SELECT * FROM capability_proof_records
+         WHERE business_id = $1::uuid
+         ORDER BY capability_id ASC`,
+        [String(businessId)],
+      ),
+    );
+    return rows.map(mapCapabilityProofRow);
+  }
+
+  async getCapabilityProofRecord(businessId, capabilityId) {
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `SELECT * FROM capability_proof_records
+         WHERE business_id = $1::uuid AND capability_id = $2
+         LIMIT 1`,
+        [String(businessId), String(capabilityId)],
+      ),
+    );
+    return rows[0] ? mapCapabilityProofRow(rows[0]) : null;
+  }
+
+  async touchWorkerHeartbeat({ workerId, status = "ok", detail = {} } = {}) {
+    await this.withClient((client) =>
+      client.query(
+        `INSERT INTO platform_worker_heartbeat (worker_id, status, detail, last_seen_at)
+         VALUES ($1, $2, $3::jsonb, NOW())
+         ON CONFLICT (worker_id) DO UPDATE SET
+           status = EXCLUDED.status,
+           detail = EXCLUDED.detail,
+           last_seen_at = NOW()`,
+        [String(workerId), String(status), JSON.stringify(detail ?? {})],
+      ),
+    );
+    return { workerId: String(workerId), status: String(status) };
+  }
+
+  async getLatestWorkerHeartbeat({ maxAgeSeconds = 60 } = {}) {
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `SELECT worker_id, status, detail, last_seen_at
+         FROM platform_worker_heartbeat
+         ORDER BY last_seen_at DESC
+         LIMIT 1`,
+      ),
+    );
+    const row = rows[0];
+    if (!row) return { ok: false, reason: "no_heartbeat" };
+    const ageMs = Date.now() - new Date(row.last_seen_at).getTime();
+    const fresh = ageMs <= Number(maxAgeSeconds) * 1000;
+    return {
+      ok: fresh && String(row.status) === "ok",
+      workerId: String(row.worker_id),
+      status: String(row.status),
+      ageMs,
+      lastSeenAt: row.last_seen_at?.toISOString?.() ?? row.last_seen_at,
+      detail: row.detail ?? {},
+    };
   }
 }
 
+function mapCapabilityProofRow(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    businessId: String(row.business_id),
+    capabilityId: String(row.capability_id),
+    proveAction: String(row.prove_action),
+    ok: Boolean(row.ok),
+    verified: Boolean(row.verified),
+    detail: row.detail ?? {},
+    createdAt: row.created_at?.toISOString?.() ?? row.created_at,
+    updatedAt: row.updated_at?.toISOString?.() ?? row.updated_at ?? null,
+  };
+}
 
 function mapSupportAccessSessionRow(row) {
   if (!row) return null;

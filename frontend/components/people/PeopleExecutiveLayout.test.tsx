@@ -124,8 +124,6 @@ test("PeopleExecutiveLayout renders executive people surface", () => {
   const html = renderPeople(makeIndex());
 
   assert.ok(html.includes("People"));
-  assert.ok(html.includes("Contacts and relationships VIBETech is tracking for this business."));
-  assert.ok(html.includes("People and relationships"));
   assert.ok(html.includes("Relationship follow-ups"));
   assert.ok(html.includes("Prospect — qualification incomplete"));
   assert.ok(html.includes("Create follow-up work"));
@@ -139,7 +137,7 @@ test("PeopleExecutiveLayout renders executive people surface", () => {
 
 test("PeopleExecutiveLayout renders compact empty state", () => {
   const html = renderPeople({ generatedAt: "2026-07-01T00:00:00.000Z", parties: [] });
-  assert.ok(html.includes("Residents, prospects, owners, and vendors will appear here"));
+  assert.ok(html.includes("No people yet."));
 });
 
 test("PeopleDetailLayout renders contact, property interest, and open work", () => {

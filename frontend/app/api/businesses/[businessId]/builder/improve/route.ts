@@ -86,15 +86,24 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     return NextResponse.json(result);
+  // Catch auth failures as 403 with a clear product error (not a generic 500).
   } catch (error) {
-    const productError = presentProductError(error);
+    const code = String((error as any)?.code ?? "");
+    const status = code === "FORBIDDEN" || code === "UNAUTHENTICATED" || code === "SUPPORT_ACCESS_REQUIRED"
+      ? (code === "UNAUTHENTICATED" ? 401 : 403)
+      : 500;
+    const productError = presentProductError(
+      code === "FORBIDDEN" || /permission|forbidden/i.test(String((error as any)?.message ?? ""))
+        ? "permission_denied"
+        : error,
+    );
     return NextResponse.json(
       {
         ok: false,
         error: productError.message,
         productError,
       },
-      { status: 500 },
+      { status },
     );
   }
 }

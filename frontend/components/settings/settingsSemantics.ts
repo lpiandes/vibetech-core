@@ -39,13 +39,13 @@ export function settingsHubLinks({
 }) {
   const links = [];
   if (canManageTeam) {
-    links.push({ id: "team", title: "Team", description: "Invite people and manage access", href: `/b/${businessId}/team` });
+    links.push({ id: "team", title: "Team", description: "", href: `/b/${businessId}/team` });
   }
   if (canManageIntegrations) {
     links.push({
       id: "integrations",
-      title: "Integrations",
-      description: "Connect email, software, and channels",
+      title: "Connections",
+      description: "",
       href: `/b/${businessId}/integrations`,
     });
   }
@@ -53,7 +53,7 @@ export function settingsHubLinks({
     links.push({
       id: "knowledge",
       title: "Knowledge",
-      description: "Business documents and instructions",
+      description: "",
       href: `/b/${businessId}/knowledge`,
     });
   }

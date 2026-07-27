@@ -65,12 +65,10 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
       return fromOs.slice(0, 4).map((action) => ({ label: action.label, href: action.href }));
     }
     const subjects = scope.installedBusinessOS?.subjectTypes ?? [];
-    const subjectLabel =
-      subjects.includes("property") || subjects.length === 0
-        ? "Add property"
-        : `Add ${String(subjects[0]).replace(/_/g, " ")}`;
-    const subjectHref =
-      subjects.includes("property") || subjects.length === 0 ? `${base}/properties?add=1` : `${base}/people`;
+    const subjectLabel = subjects.length
+      ? `Add ${String(subjects[0]).replace(/_/g, " ")}`
+      : "Add contact";
+    const subjectHref = subjects.includes("property") ? `${base}/properties?add=1` : `${base}/people`;
     return [
       { label: subjectLabel, href: subjectHref },
       { label: "Add knowledge", href: `${base}/knowledge?add=1` },
@@ -83,7 +81,7 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
     const entities = terminology?.entityLabels ?? terminology?.presentation?.entityLabels ?? {};
     const people = entities.people ?? entities.person ?? "people";
     const subjects =
-      entities.property ?? entities.subject ?? (scope.installedBusinessOS?.subjectTypes?.[0] ?? "records");
+      entities.subject ?? entities.record ?? (scope.installedBusinessOS?.subjectTypes?.[0] ?? "records");
     return `Search ${people}, ${String(subjects).replace(/_/g, " ")}, work…`;
   })();
 

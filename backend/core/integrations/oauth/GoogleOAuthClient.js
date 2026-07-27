@@ -14,6 +14,13 @@ export const GOOGLE_CALENDAR_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
+// Read-only access. Search Console is an SEO reporting source; it never
+// changes a site's search ranking or publishes website content.
+export const GOOGLE_SEARCH_CONSOLE_OAUTH_SCOPES = [
+  "https://www.googleapis.com/auth/webmasters.readonly",
+  "https://www.googleapis.com/auth/userinfo.email",
+];
+
 export function isGoogleOAuthAppConfigured() {
   return Boolean(
     safeString(process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID)
@@ -42,12 +49,16 @@ export function createGoogleOAuth2Client({ redirectUri } = {}) {
   );
 }
 
+/**
+ * @param {{state?: string, scopes?: string[], redirectUri?: string, accessType?: string, prompt?: string}} options
+ */
 export function buildGoogleAuthorizeUrl({
   state,
   scopes,
   redirectUri,
   accessType = "offline",
   prompt = "consent",
+  includeGrantedScopes = true,
 } = {}) {
   const client = createGoogleOAuth2Client({ redirectUri });
   return client.generateAuthUrl({
@@ -55,7 +66,7 @@ export function buildGoogleAuthorizeUrl({
     prompt,
     scope: Array.isArray(scopes) ? scopes : [],
     state: String(state ?? ""),
-    include_granted_scopes: true,
+    include_granted_scopes: includeGrantedScopes,
   });
 }
 

@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
 
-import PlatformAdminScreen from "@/components/platform/PlatformAdminScreen";
-import { ProductPage, PageHeader } from "@/components/product";
 import { cockpitColors, spacing } from "@/design/tokens";
 
 export default function PlatformLayout({ children }: { children: ReactNode }) {

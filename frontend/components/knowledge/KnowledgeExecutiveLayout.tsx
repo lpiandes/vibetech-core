@@ -11,9 +11,8 @@ import type { PlatformKnowledgeData, PlatformKnowledgeDocument } from "./Knowled
 import type { KnowledgeExecutiveContext, KnowledgePresentation } from "./knowledgeSemantics";
 import PageHeader from "@/components/product/PageHeader";
 import PrimaryButton from "@/components/product/PrimaryButton";
+import { NextBanner, SimpleEmpty, SimpleMetrics, SimplePanel, simplePageStyle } from "@/components/product/SimpleUI";
 import StatusBadge from "@/components/product/StatusBadge";
-import ShellMetricStrip from "@/components/shell/ShellMetricStrip";
-import ShellPanel from "@/components/shell/ShellPanel";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 import {
   canManageKnowledge,
@@ -21,24 +20,8 @@ import {
   documentStatusPresentation,
   extractionStatusPresentation,
   formatBytes,
-  formatKnowledgeDate,
   sourceTypePresentation,
 } from "./knowledgeSemantics";
-
-function PanelEmpty({ description }: { description: string }) {
-  return (
-    <div
-      style={{
-        padding: spacing.md,
-        color: cockpitColors.textMuted,
-        fontSize: typography.caption.fontSize,
-        lineHeight: 1.5,
-      }}
-    >
-      {description}
-    </div>
-  );
-}
 
 function categoryLabel(id: string) {
   return UNIVERSAL_CATEGORY_OPTIONS.find((c) => c.id === id)?.label ?? id;
@@ -91,10 +74,6 @@ function DocumentRow({
         <div style={{ fontWeight: 650, color: cockpitColors.textPrimary }}>{doc.title}</div>
         <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 2 }}>
           {source} · {formatBytes(doc.sizeBytes)}
-        </div>
-        <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 2 }}>
-          Added {formatKnowledgeDate(doc.createdAt)}
-          {doc.uploadedBy?.name ? ` · ${doc.uploadedBy.name}` : ""}
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: spacing.xs, marginTop: spacing.xs }}>
           <StatusBadge label={status.label} tone={status.tone} />
@@ -188,9 +167,7 @@ export default function KnowledgeExecutiveLayout({
   const documents = platformKnowledge?.documents ?? [];
   const canManage = canManageKnowledge(platformKnowledge?.canManage);
   const presentation = (knowledgeContext?.presentation ?? {}) as KnowledgePresentation;
-  const emptyCopy =
-    presentation.emptyStates?.documents ??
-    "Upload policies, procedures, and guides so VIBETech can follow how your business works.";
+  const emptyCopy = presentation.emptyStates?.documents ?? "No documents yet.";
 
   const filteredDocuments = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -210,7 +187,7 @@ export default function KnowledgeExecutiveLayout({
     [documents, knowledgeContext],
   );
 
-  const metricStrip = useMemo(() => counts.metrics, [counts.metrics]);
+  const metricItems = useMemo(() => counts.metrics, [counts.metrics]);
   const employeeImpacts = knowledgeContext?.employeeImpacts ?? [];
   const setupNeeds = knowledgeContext?.setupNeeds ?? [];
   const showEmployeeImpact = employeeImpacts.length > 0;
@@ -239,24 +216,20 @@ export default function KnowledgeExecutiveLayout({
   ) : undefined;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>
-      <PageHeader
-        title="Knowledge"
-        description="Citeable business memory. AI teammates consult tagged documents — they do not invent specialty content."
-        action={addAction}
-      />
+    <div style={simplePageStyle}>
+      <PageHeader title="Knowledge" action={addAction} />
 
-      <ShellMetricStrip metrics={metricStrip} />
+      {documents.length === 0 && canManage ? (
+        <NextBanner label="Upload first document" onClick={() => setShowAdd(true)} />
+      ) : null}
 
-      <ShellPanel title="What powers AI" subtitle="Categories owners understand">
+      <SimpleMetrics items={metricItems} />
+
+      <SimplePanel title="Categories">
         {powersAi ? (
-          <div style={{ padding: spacing.md, display: "flex", flexDirection: "column", gap: spacing.md }}>
-            <p style={{ margin: 0, fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
-              {powersAi.winClaim ??
-                "Every AI output shows what it read. If Knowledge is empty, we show a gap — we don’t fake expertise."}
-            </p>
+          <div style={{ padding: spacing.md, display: "flex", flexDirection: "column", gap: spacing.sm }}>
             <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>
-              {powersAi.taggedDocuments} tagged · {powersAi.untaggedDocuments} untagged · {powersAi.totalDocuments} total
+              {powersAi.taggedDocuments} tagged · {powersAi.untaggedDocuments} untagged
             </div>
             <div style={{ display: "grid", gap: spacing.sm }}>
               {powersAi.categories.map((cat) => (
@@ -271,14 +244,9 @@ export default function KnowledgeExecutiveLayout({
                     borderBottom: `1px solid ${cockpitColors.panelBorder}`,
                   }}
                 >
-                  <div>
-                    <div style={{ fontWeight: 600, color: cockpitColors.textPrimary }}>{cat.label}</div>
-                    <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>
-                      {cat.description}
-                    </div>
-                  </div>
+                  <div style={{ fontWeight: 600, color: cockpitColors.textPrimary }}>{cat.label}</div>
                   <StatusBadge
-                    label={cat.documentCount ? `${cat.documentCount} doc${cat.documentCount === 1 ? "" : "s"}` : "Empty"}
+                    label={cat.documentCount ? String(cat.documentCount) : "Empty"}
                     tone={cat.documentCount ? "success" : "warning"}
                   />
                 </div>
@@ -286,20 +254,19 @@ export default function KnowledgeExecutiveLayout({
             </div>
           </div>
         ) : (
-          <PanelEmpty description="Loading what AI can cite…" />
+          <SimpleEmpty>Loading…</SimpleEmpty>
         )}
-      </ShellPanel>
+      </SimplePanel>
 
-      <ShellPanel
-        title="Business knowledge"
-        subtitle={`${filteredDocuments.length} of ${counts.total} document${counts.total === 1 ? "" : "s"}`}
+      <SimplePanel
+        title="Documents"
         action={documents.length === 0 ? addAction : undefined}
       >
         <div style={{ padding: spacing.md, display: "flex", flexDirection: "column", gap: spacing.sm }}>
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search titles, filenames, categories…"
+            placeholder="Search documents"
             style={{
               padding: `${spacing.sm} ${spacing.md}`,
               borderRadius: 8,
@@ -329,9 +296,9 @@ export default function KnowledgeExecutiveLayout({
           </div>
         </div>
         {documents.length === 0 ? (
-          <PanelEmpty description={emptyCopy} />
+          <SimpleEmpty>{emptyCopy}</SimpleEmpty>
         ) : filteredDocuments.length === 0 ? (
-          <PanelEmpty description="No documents match this search." />
+          <SimpleEmpty>No matches.</SimpleEmpty>
         ) : (
           <div>
             {filteredDocuments.map((doc) => (
@@ -346,10 +313,10 @@ export default function KnowledgeExecutiveLayout({
             ))}
           </div>
         )}
-      </ShellPanel>
+      </SimplePanel>
 
-      <ShellPanel title="What this helps VIBETech do">
-        {showEmployeeImpact ? (
+      {showEmployeeImpact ? (
+        <SimplePanel title="AI coverage">
           <div>
             {employeeImpacts.map((impact) => (
               <div
@@ -366,29 +333,24 @@ export default function KnowledgeExecutiveLayout({
               >
                 <div>
                   <div style={{ fontWeight: 600, color: cockpitColors.textPrimary }}>{impact.name}</div>
-                  <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 2 }}>
-                    {impact.roleLabel}
-                  </div>
                   {!impact.helped && impact.missingCategories.length > 0 ? (
-                    <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, marginTop: 6 }}>
-                      Still needs: {impact.missingCategories.join(", ")}
+                    <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 4 }}>
+                      Needs: {impact.missingCategories.join(", ")}
                     </div>
                   ) : null}
                 </div>
                 <StatusBadge
-                  label={impact.helped ? "Knowledge requirements met" : "Needs business knowledge"}
+                  label={impact.helped ? "Ready" : "Needs docs"}
                   tone={impact.helped ? "success" : "warning"}
                 />
               </div>
             ))}
           </div>
-        ) : (
-          <PanelEmpty description={knowledgeContext?.fallbackExplanation ?? "Uploaded documents help VIBETech follow your policies and procedures."} />
-        )}
-      </ShellPanel>
+        </SimplePanel>
+      ) : null}
 
       {setupNeeds.length > 0 ? (
-        <ShellPanel title="Missing knowledge" subtitle={`${setupNeeds.length} setup need${setupNeeds.length === 1 ? "" : "s"}`}>
+        <SimplePanel title="Missing">
           <div>
             {setupNeeds.map((need) => (
               <div
@@ -400,12 +362,12 @@ export default function KnowledgeExecutiveLayout({
               >
                 <div style={{ fontWeight: 600, color: cockpitColors.textPrimary }}>{need.label}</div>
                 <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 4 }}>
-                  Needed for {need.employeeNames.join(", ")}
+                  {need.employeeNames.join(", ")}
                 </div>
               </div>
             ))}
           </div>
-        </ShellPanel>
+        </SimplePanel>
       ) : null}
 
       {showAdd && businessId ? (

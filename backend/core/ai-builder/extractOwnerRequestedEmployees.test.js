@@ -8,7 +8,7 @@ import {
 import { BuilderAssemblyPlanner } from "./BuilderAssemblyPlanner.js";
 import { createBuilderSession } from "./BuilderSession.js";
 
-test("extracts AI caller, FB lead gen, and intake from owner language", () => {
+test("extracts voice calling, Meta lead gen, and intake from owner language", () => {
   const matched = extractOwnerRequestedEmployees({
     answers: [{
       questionId: "q_digital_workforce",
@@ -38,8 +38,8 @@ test("assembly planner prioritizes owner-requested digital employees", () => {
   });
   const plan = new BuilderAssemblyPlanner().plan({ session });
   const labels = plan.selectedEmployees.map((entry) => entry.label);
-  assert.ok(labels.some((label) => /AI Caller/i.test(label)));
-  assert.ok(labels.some((label) => /Facebook Lead/i.test(label)));
+  assert.ok(labels.some((label) => /Voice Call Assistant/i.test(label)));
+  assert.ok(labels.some((label) => /Meta Lead/i.test(label)));
   assert.ok(labels.some((label) => /Intake/i.test(label)));
-  assert.equal(plan.selectedEmployees[0].label, "AI Caller");
+  assert.equal(plan.selectedEmployees[0].label, "Voice Call Assistant");
 });

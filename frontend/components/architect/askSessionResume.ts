@@ -4,6 +4,10 @@
 
 export function isContinuousImproveSession(session: any): boolean {
   if (!session || typeof session !== "object") return false;
+  // Admin package-add Ask is discovery — never continuous chat.
+  if (session.metadata?.packageAsk === true || session.businessSummary?.packageAsk === true) {
+    return false;
+  }
   if (session.metadata?.continuousImprovement) return true;
   if (session.continuousImprovement) return true;
   const mode = String(session.mode ?? session.title ?? session.stageKey ?? "");

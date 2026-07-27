@@ -51,7 +51,7 @@ export async function resolvePostInviteRedirect({
       businessId,
       businessName: businessName ?? undefined,
       actorId: actorUserId,
-      description: "Configure this business with Architect.",
+      // Leave description empty so discovery starts at question 1 (what the business does).
     });
     const sessionId = started.session?.sessionId;
     if (sessionId) {

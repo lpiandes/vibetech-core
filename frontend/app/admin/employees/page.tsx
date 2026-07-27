@@ -1,40 +1,32 @@
 import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
 import { getAdminPlatformService } from "@/lib/admin/getAdminServices";
-import { PageHeader } from "@/components/product";
-import ShellPanel from "@/components/shell/ShellPanel";
-import { cockpitColors, spacing } from "@/design/tokens";
+import AdminVtPage from "@/components/admin/AdminVtPage";
+import AdminDataTable from "@/components/admin/AdminDataTable";
+import { VtDockLink } from "@/components/product/VtChrome";
 
 export default async function AdminEmployeesPage() {
   const user = await requirePlatformAdmin();
   const result = getAdminPlatformService().listEmployeeArchetypes({ platformRole: user.platformRole });
 
+  const rows = (result.archetypes ?? []).map((archetype: any) => [
+    archetype.label,
+    archetype.purpose,
+    (archetype.responsibilities ?? []).join("; "),
+    (archetype.approvalLimits ?? []).join(", "),
+    archetype.readiness,
+  ]);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: spacing.lg }}>
-      <PageHeader title="AI employee library" description="Reusable archetypes — no raw internal IDs in the primary label" />
-      <ShellPanel title="Archetypes" subtitle="Installed variants appear per-business after install">
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead>
-              <tr>
-                {["Employee", "Purpose", "Responsibilities", "Approval limits", "Readiness"].map((label) => (
-                  <th key={label} style={{ textAlign: "left", padding: 8, borderBottom: `1px solid ${cockpitColors.panelBorder}` }}>{label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(result.archetypes ?? []).map((archetype: any) => (
-                <tr key={archetype.archetypeId}>
-                  <td style={{ padding: 8 }}>{archetype.label}</td>
-                  <td style={{ padding: 8 }}>{archetype.purpose}</td>
-                  <td style={{ padding: 8 }}>{(archetype.responsibilities ?? []).join("; ")}</td>
-                  <td style={{ padding: 8 }}>{(archetype.approvalLimits ?? []).join(", ")}</td>
-                  <td style={{ padding: 8 }}>{archetype.readiness}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </ShellPanel>
-    </div>
+    <AdminVtPage
+      title="AI employee library"
+      dock={<VtDockLink href="/admin">Dashboard</VtDockLink>}
+    >
+      <AdminDataTable
+        title="Archetypes"
+        headers={["Employee", "Purpose", "Responsibilities", "Approval limits", "Readiness"]}
+        rows={rows}
+        emptyLabel="No archetypes registered."
+      />
+    </AdminVtPage>
   );
 }

@@ -80,6 +80,21 @@ test("business email oauth exposes Connect with Google", () => {
   assert.equal(hasRealConnectAction({ id: "business_email", status: "NOT_CONNECTED" }, display), true);
 });
 
+test("connected email offers prove it works", () => {
+  const display = mergeIntegrationDisplay(
+    "business_email",
+    "Business email",
+    getIntegrationDisplay("business_email", undefined, liveFlags),
+    presentation,
+  );
+  const action = primaryIntegrationAction(
+    { id: "business_email", status: "CONNECTED", requirementLevel: "required" },
+    display,
+  );
+  assert.equal(action?.kind, "prove");
+  assert.equal(action?.proveAction, "send_test_email");
+});
+
 test("partition sections never build a roadmap of unavailable channels", () => {
   const sections = partitionIntegrationSections(
     connections,

@@ -22,6 +22,13 @@ export type BusinessScope = {
   role: string;
   permissions: string[];
   businessName: string;
+  purchasedPackages?: string[];
+  pendingPackageAsk?: {
+    status: "required";
+    packages: string[];
+    createdAt: string;
+    sessionId?: string | null;
+  } | null;
   installedNavigation?: {
     modules?: Array<Record<string, unknown>>;
     navigation?: Record<string, unknown>;

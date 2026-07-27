@@ -99,9 +99,13 @@ export const getAuthorizedWorkspace = cache(async (businessId: string, requiredP
 
   const connected = (service as any).connected as { credentialsHydrated?: boolean };
   if (!connected.credentialsHydrated) {
+    const vault =
+      (service as any)?.connected?.integrationPlatform?.credentialVault
+      ?? undefined;
     await timer.time("CREDENTIAL_HYDRATE", () =>
       hydrateWorkspaceCredentials({
         platformStore,
+        vault,
         workspaceId: businessId,
       }),
     );

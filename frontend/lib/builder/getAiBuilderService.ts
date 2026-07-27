@@ -1,6 +1,9 @@
 import { AiBuilderService } from "../../../backend/core/ai-builder/AiBuilderService.js";
 import { BuilderSessionRepository } from "../../../backend/core/ai-builder/BuilderSessionRepository.js";
 import { BusinessWebsiteResearchService } from "../../../backend/core/ai-builder/BusinessWebsiteResearchService.js";
+import { OptionalAIBuilderIntelligenceProvider } from "../../../backend/core/ai-builder/BuilderIntelligenceProvider.js";
+import { OpenAIBuilderIntelligenceClient } from "../../../backend/core/ai-builder/OpenAIBuilderIntelligenceClient.js";
+import { llmIsLiveAvailable } from "../../../backend/core/providers/createLlmProvider.js";
 import { platformStore } from "@/lib/server/compose";
 
 declare global {
@@ -11,7 +14,8 @@ declare global {
 }
 
 /** Bump when AiBuilderService public API changes so HMR cannot keep a stale singleton. */
-const AI_BUILDER_SERVICE_REVISION = 6;
+// Rebuild after package-Ask skips already-connected accounts.
+const AI_BUILDER_SERVICE_REVISION = 16;
 
 export function getAiBuilderService() {
   const existing = globalThis.__vibetechAiBuilderService as
@@ -29,6 +33,11 @@ export function getAiBuilderService() {
   }
 
   if (!globalThis.__vibetechAiBuilderService) {
+    const live = llmIsLiveAvailable();
+    const intelligence = new OptionalAIBuilderIntelligenceProvider({
+      enabled: live,
+      client: live ? new OpenAIBuilderIntelligenceClient() : null,
+    });
     // platformStore is a runtime Postgres adapter; JS constructor accepts any store-shaped object.
     // Wire live fetch so website review works in local/dev — service defaults to null for unit tests.
     globalThis.__vibetechAiBuilderService = new AiBuilderService({
@@ -39,6 +48,7 @@ export function getAiBuilderService() {
       researchService: new BusinessWebsiteResearchService({
         fetchImpl: globalThis.fetch.bind(globalThis),
       }),
+      intelligence,
     });
     globalThis.__vibetechAiBuilderServiceRevision = AI_BUILDER_SERVICE_REVISION;
   }

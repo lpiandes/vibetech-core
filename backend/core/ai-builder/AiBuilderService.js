@@ -13,7 +13,7 @@ import {
   createBuilderArtifactMappingProposal,
 } from "./BuilderArtifactClassifier.js";
 import { createBuilderEvidence } from "./BuilderEvidence.js";
-import { withBuilderSessionPatch } from "./BuilderSession.js";
+import { createBuilderSession, withBuilderSessionPatch } from "./BuilderSession.js";
 import {
   createBuilderProposalState,
   readProposalStateFromSession,
@@ -28,8 +28,15 @@ import {
 import { DeterministicBuilderIntelligenceProvider } from "./BuilderIntelligenceProvider.js";
 import { BuilderSpecificationChangePlanner } from "./BuilderSpecificationChangePlanner.js";
 import { BuilderChangeProposalService } from "./BuilderChangeProposalService.js";
+import { readPurchasedPackagesFromConfig, preservePurchasedPackagesConfig, readPendingPackageAsk, attachPendingPackageAskSession, clearPendingPackageAsk, resolvePackageAskQuestionIds, seedIntegrationsAnswerIfAlreadyConnected, specializePackageAskQuestion } from "../platform/packages/SalesPackageCatalog.js";
+import { checkAiAskQuota } from "./AiAskQuotaService.js";
+import { llmIsLiveAvailable } from "../providers/createLlmProvider.js";
 import { isUsableBusinessName, resolveBusinessDisplayName } from "./businessIdentity.js";
 import { withAutoAskTitle } from "./askConversationTitle.js";
+import {
+  AUTOMATION_HOWTO_REPLY,
+  isAutomationHowToRequest,
+} from "./askProductGuidance.js";
 import {
   createBuilderConversationMessage,
   appendConversation,
@@ -47,6 +54,10 @@ import {
 } from "./BuilderUxPresentation.js";
 import { buildDryRunChecklist } from "./BuilderDryRunChecklist.js";
 import { buildBuilderPortalPreview } from "./BuilderPortalPreview.js";
+
+// Proposals assembled before this version can contain retired template defaults.
+// They must be regenerated from the owner's answers before anything is approved.
+const ANSWERS_ONLY_BUILDER_POLICY_VERSION = "answers_only_v1";
 
 /**
  * End-to-end AI Builder façade used by API routes.
@@ -96,8 +107,335 @@ export class AiBuilderService {
         name: String(input.businessName ?? "New Business").trim() || "New Business",
       });
       businessId = String(created.id);
+      // A first-time Builder user has no existing business membership. Make the
+      // session creator the owner immediately, so they can continue the
+      // conversation and later operate the business they are designing.
+      if (input.actorId && typeof this.platformStore.createMembership === "function") {
+        await this.platformStore.createMembership({
+          userId: String(input.actorId),
+          businessId,
+          role: "OWNER",
+        });
+      }
     }
-    return this.sessionService.startSession({ ...input, businessId });
+
+    let purchasedPackages = Array.isArray(input.purchasedPackages) ? input.purchasedPackages : null;
+    if (
+      (!purchasedPackages || !purchasedPackages.length)
+      && businessId
+      && !String(businessId).startsWith("draft_")
+      && typeof this.platformStore?.getBusinessById === "function"
+    ) {
+      try {
+        const business = await this.platformStore.getBusinessById(businessId);
+        purchasedPackages = readPurchasedPackagesFromConfig(business?.packageConfiguration);
+      } catch {
+        purchasedPackages = [];
+      }
+    }
+
+    return this.sessionService.startSession({
+      ...input,
+      businessId,
+      purchasedPackages: purchasedPackages?.length ? purchasedPackages : undefined,
+    });
+  }
+
+  /**
+   * After admin adds packages: discovery Ask scoped only to newly added SKUs.
+   * Seeds identity from the live business so owners are not re-asked basics.
+   */
+  async startPackageAskSession({
+    businessId,
+    actorId = null,
+    connectedConnectionIds = null,
+  } = {}) {
+    if (!businessId || String(businessId).startsWith("draft_")) {
+      return deepFreeze({ ok: false, reason: "business_required" });
+    }
+    const business = await this.platformStore?.getBusinessById?.(businessId);
+    if (!business) return deepFreeze({ ok: false, reason: "business_not_found" });
+    const pending = readPendingPackageAsk(business.packageConfiguration);
+    if (!pending) return deepFreeze({ ok: false, reason: "no_pending_package_ask" });
+
+    const allPurchased = readPurchasedPackagesFromConfig(business.packageConfiguration);
+    const focusIds = resolvePackageAskQuestionIds(pending.packages);
+    const connectedIds = Array.isArray(connectedConnectionIds)
+      ? connectedConnectionIds.map(String)
+      : await this.#resolveConnectedConnectionIds(businessId);
+
+    // Resume the pending session when it is a real package-Ask interview.
+    // Frontend only mints once (no sessionId in URL); resume stops session spam.
+    if (pending.sessionId) {
+      const existing = await this.sessionService.getSession(pending.sessionId);
+      if (
+        existing
+        && existing.businessId === businessId
+        && existing.metadata?.packageAsk === true
+        && existing.mode !== "expand_existing_business"
+        && !existing.progress?.readyForProposal
+      ) {
+        let session = this.#withPackageAskFlags(existing, {
+          allPurchased,
+          packageAskPackages: pending.packages,
+          connectedConnectionIds: connectedIds,
+        });
+        const connectedSeed = seedIntegrationsAnswerIfAlreadyConnected({
+          packageAskPackages: pending.packages,
+          connectedConnectionIds: connectedIds,
+          nowISO: this.nowISO(),
+        });
+        if (connectedSeed && !(session.answers ?? []).some((a) => (
+          a.questionId === "q_integrations" && !a.skipped && !a.unknown && a.answer
+        ))) {
+          session = withBuilderSessionPatch(session, {
+            answers: [
+              ...(session.answers ?? []).filter((a) => a.questionId !== "q_integrations"),
+              connectedSeed,
+            ],
+          }, { updatedAt: this.nowISO() });
+        }
+        // Sync planner only — LLM replan on every resume caused slow polls + prompt drift.
+        const questions = this.sessionService.discoveryEngine.nextQuestions(session, { limit: 4 });
+        const focusOk = !questions.length
+          || !focusIds
+          || questions.every((q) => focusIds.has(String(q.questionId)));
+        if (focusOk) {
+          const progress = this.sessionService.discoveryEngine.completeness.evaluate({
+            answers: session.answers,
+            businessSummary: session.businessSummary,
+          });
+          session = withBuilderSessionPatch(session, { questions, progress }, { updatedAt: this.nowISO() });
+          await this.sessionService.repository.save(session);
+          return deepFreeze({
+            ok: true,
+            session,
+            pending,
+            nextQuestions: questions,
+            progress,
+            resumed: true,
+          });
+        }
+      }
+    }
+
+    const installation = await this.platformStore?.getBusinessOSInstallation?.(businessId).catch?.(() => null)
+      ?? null;
+    let specification = null;
+    if (installation?.specificationId) {
+      try {
+        const row = await this.platformStore.getBusinessOSSpecification({
+          businessId,
+          specificationId: installation.specificationId,
+        });
+        specification = row?.specification ?? null;
+      } catch {
+        specification = null;
+      }
+    }
+    const profile = specification?.businessProfile ?? {};
+    const businessName = resolveBusinessDisplayName(
+      business.name,
+      profile.businessName,
+      "Your business",
+    );
+    const industry = String(
+      profile.industry
+      ?? business.industry
+      ?? business.kind
+      ?? "",
+    ).trim() || "other";
+    const now = this.nowISO();
+
+    // Pull any already-answered focus questions from prior discovery — never re-ask them.
+    const priorAnswers = await this.#priorAnswersForPackageAsk({
+      businessId,
+      focusIds,
+    });
+    const connectedSeed = seedIntegrationsAnswerIfAlreadyConnected({
+      packageAskPackages: pending.packages,
+      connectedConnectionIds: connectedIds,
+      nowISO: now,
+    });
+    const answers = [...priorAnswers];
+    if (connectedSeed && !answers.some((a) => a.questionId === "q_integrations")) {
+      answers.push(connectedSeed);
+    }
+
+    let session = createBuilderSession({
+      mode: "configure_existing_business",
+      businessId,
+      actorId,
+      currentStage: "interviewing",
+      businessSummary: {
+        businessName,
+        industry,
+        services: profile.services ?? [],
+        purchasedPackages: allPurchased,
+        packageAsk: true,
+        packageAskPackages: pending.packages,
+        connectedConnectionIds: connectedIds,
+      },
+      answers,
+      conversation: [],
+      appearance: {
+        accentColor: "#0F766E",
+        businessName,
+        dashboardDensity: "comfortable",
+      },
+      metadata: {
+        packageAsk: true,
+        packageAskPackages: pending.packages,
+      },
+      progress: {
+        percent: 0,
+        label: "New packages",
+        readyForProposal: false,
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const questions = this.sessionService.discoveryEngine.nextQuestions(session, { limit: 4 });
+    const progress = this.sessionService.discoveryEngine.completeness.evaluate({
+      answers: session.answers,
+      businessSummary: session.businessSummary,
+    });
+    session = withBuilderSessionPatch(session, { questions, progress }, { updatedAt: now });
+    await this.sessionService.repository.save(session);
+
+    const nextConfig = attachPendingPackageAskSession(
+      business.packageConfiguration ?? {},
+      session.sessionId,
+    );
+    await this.platformStore.updateBusinessPackageConfiguration({
+      businessId,
+      packageConfiguration: nextConfig,
+    });
+
+    return deepFreeze({
+      ok: true,
+      session,
+      pending,
+      nextQuestions: questions,
+      progress,
+      resumed: false,
+    });
+  }
+
+  /** Ensure package-Ask sessions keep focus flags before any question planning. */
+  #withPackageAskFlags(session, {
+    allPurchased = null,
+    packageAskPackages = null,
+    connectedConnectionIds = null,
+  } = {}) {
+    if (!session?.metadata?.packageAsk && !session?.businessSummary?.packageAsk) {
+      return session;
+    }
+    const packages = Array.isArray(packageAskPackages) && packageAskPackages.length
+      ? packageAskPackages
+      : (session.metadata?.packageAskPackages
+        ?? session.businessSummary?.packageAskPackages
+        ?? []);
+    const purchased = Array.isArray(allPurchased) && allPurchased.length
+      ? allPurchased
+      : (session.businessSummary?.purchasedPackages ?? packages);
+    const connected = Array.isArray(connectedConnectionIds)
+      ? connectedConnectionIds.map(String)
+      : (session.businessSummary?.connectedConnectionIds ?? []);
+    return withBuilderSessionPatch(session, {
+      businessSummary: {
+        ...(session.businessSummary ?? {}),
+        purchasedPackages: purchased,
+        packageAsk: true,
+        packageAskPackages: packages,
+        connectedConnectionIds: connected,
+      },
+      metadata: {
+        ...(session.metadata ?? {}),
+        packageAsk: true,
+        packageAskPackages: packages,
+      },
+    }, { updatedAt: this.nowISO() });
+  }
+
+  /**
+   * Live connection type ids (calendar, business_email, …) — same facts Home / Launch use.
+   */
+  async #resolveConnectedConnectionIds(businessId) {
+    if (!businessId || !this.platformStore?.listIntegrationCredentialsForWorkspace) return [];
+    try {
+      const rows = await this.platformStore.listIntegrationCredentialsForWorkspace(businessId);
+      const connected = new Set();
+      const providerToConnection = {
+        gmail: "business_email",
+        google_calendar: "calendar",
+        twilio_sms: "sms_channel",
+        twilio_voice: "voice_channel",
+        meta_lead_ads: "meta_lead_ads",
+        meta_platform: "meta_lead_ads",
+        google_ads: "google_ads",
+        google_search_console: "google_search_console",
+      };
+      for (const row of rows ?? []) {
+        const provider = String(row?.providerType ?? "").trim();
+        const credId = String(row?.credentialId ?? "");
+        const mapped = providerToConnection[provider];
+        if (mapped) connected.add(mapped);
+        for (const [key, connectionId] of Object.entries(providerToConnection)) {
+          if (credId.includes(key) || provider.includes(key)) connected.add(connectionId);
+        }
+      }
+      return [...connected];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Reuse prior discovery answers for package-Ask focus questions only.
+   * Identity / already-answered focus IDs are not asked again.
+   */
+  async #priorAnswersForPackageAsk({ businessId, focusIds }) {
+    if (!focusIds || !focusIds.size) return [];
+    try {
+      const sessions = await this.sessionService.listForBusiness(businessId);
+      const byQuestion = new Map();
+      for (const prior of sessions ?? []) {
+        if (prior?.metadata?.packageAsk) continue;
+        for (const entry of prior.answers ?? []) {
+          const id = String(entry?.questionId ?? "");
+          if (!focusIds.has(id)) continue;
+          if (entry?.skipped || entry?.unknown) continue;
+          if (entry?.answer == null || !String(entry.answer).trim()) continue;
+          if (!byQuestion.has(id)) {
+            byQuestion.set(id, {
+              questionId: id,
+              answer: entry.answer,
+              skipped: false,
+              unknown: false,
+              answeredAt: entry.answeredAt ?? this.nowISO(),
+              evidenceSource: "prior_discovery",
+            });
+          }
+        }
+      }
+      return [...byQuestion.values()];
+    } catch {
+      return [];
+    }
+  }
+
+  async clearPackageAsk({ businessId } = {}) {
+    if (!businessId) return deepFreeze({ ok: false, reason: "business_required" });
+    const business = await this.platformStore?.getBusinessById?.(businessId);
+    if (!business) return deepFreeze({ ok: false, reason: "business_not_found" });
+    const packageConfiguration = clearPendingPackageAsk(business.packageConfiguration ?? {});
+    await this.platformStore.updateBusinessPackageConfiguration({
+      businessId,
+      packageConfiguration,
+    });
+    return deepFreeze({ ok: true, packageConfiguration });
   }
 
   getSession(sessionId) {
@@ -105,7 +443,67 @@ export class AiBuilderService {
   }
 
   answer(input) {
-    return this.sessionService.answer(input);
+    return this.#answerPackageAskAware(input);
+  }
+
+  async #answerPackageAskAware(input) {
+    const existing = await this.requireSession(input.sessionId);
+    const ensured = this.#withPackageAskFlags(existing);
+    if (ensured !== existing) {
+      await this.repository.save(ensured);
+    }
+    const result = await this.sessionService.answer(input);
+    if (!result?.ok || !result.session?.businessSummary?.packageAsk) {
+      return this.#withAnswerJourney(result);
+    }
+
+    const focus = resolvePackageAskQuestionIds(
+      result.session.businessSummary?.packageAskPackages
+        ?? result.session.metadata?.packageAskPackages
+        ?? [],
+    );
+    const connected = result.session.businessSummary?.connectedConnectionIds ?? [];
+    let nextQuestions = (result.nextQuestions ?? result.session.questions ?? [])
+      .filter((q) => !focus || focus.has(String(q.questionId)))
+      .map((q) => specializePackageAskQuestion(q, {
+        packageAsk: true,
+        packageAskPackages: result.session.businessSummary?.packageAskPackages ?? [],
+        connectedConnectionIds: connected,
+      }))
+      .filter((q) => q && !q.skipBecauseConnected);
+
+    const progress = this.sessionService.discoveryEngine.completeness.evaluate({
+      answers: result.session.answers,
+      businessSummary: result.session.businessSummary,
+    });
+    if (progress?.readyForProposal) nextQuestions = [];
+
+    const session = withBuilderSessionPatch(result.session, {
+      questions: nextQuestions,
+      progress,
+    }, { updatedAt: this.nowISO() });
+    await this.repository.save(session);
+    return this.#withAnswerJourney(deepFreeze({
+      ...result,
+      session,
+      nextQuestions,
+      progress,
+    }));
+  }
+
+  #withAnswerJourney(result) {
+    if (!result?.ok || !result.session) return result;
+    const journey = discoveryStageProgress({
+      answers: result.session.answers,
+      questions: result.session.questions ?? result.nextQuestions ?? [],
+      progress: result.progress ?? result.session.progress,
+      businessSummary: result.session.businessSummary,
+    });
+    return deepFreeze({
+      ...result,
+      journey,
+      nextQuestion: (result.nextQuestions ?? result.session.questions ?? [])[0] ?? null,
+    });
   }
 
   async listSessions({ businessId = null } = {}) {
@@ -178,9 +576,80 @@ export class AiBuilderService {
     return titled;
   }
 
-  async getWorkspace(sessionId) {
-    const session = await this.requireSession(sessionId);
-    const stored = await this.loadProposalState(session);
+  async getWorkspace(sessionId, { connectedConnectionIds = null } = {}) {
+    let session = await this.requireSession(sessionId);
+    if (session.metadata?.packageAsk || session.businessSummary?.packageAsk) {
+      const fromWorkspace = Array.isArray(connectedConnectionIds)
+        ? connectedConnectionIds.map(String).filter(Boolean)
+        : [];
+      const fromCredentials = await this.#resolveConnectedConnectionIds(session.businessId);
+      const connectedIds = [...new Set([...fromWorkspace, ...fromCredentials])];
+      session = this.#withPackageAskFlags(session, { connectedConnectionIds: connectedIds });
+      const connectedSeed = seedIntegrationsAnswerIfAlreadyConnected({
+        packageAskPackages: session.businessSummary?.packageAskPackages ?? [],
+        connectedConnectionIds: connectedIds,
+        nowISO: this.nowISO(),
+      });
+      if (connectedSeed && !(session.answers ?? []).some((a) => (
+        a.questionId === "q_integrations" && !a.skipped && !a.unknown && a.answer
+      ))) {
+        session = withBuilderSessionPatch(session, {
+          answers: [
+            ...(session.answers ?? []).filter((a) => a.questionId !== "q_integrations"),
+            connectedSeed,
+          ],
+        }, { updatedAt: this.nowISO() });
+      }
+    } else {
+      session = this.#withPackageAskFlags(session);
+    }
+    const progress = this.sessionService.discoveryEngine.completeness.evaluate({
+      answers: session.answers,
+      businessSummary: session.businessSummary,
+    });
+    // Never re-plan questions after ready — that flashes SOP/docs behind the recommendation.
+    // Package-Ask uses the sync planner only (no LLM on every GET — that looped the UI).
+    let questions = progress?.readyForProposal
+      ? []
+      : this.sessionService.discoveryEngine.nextQuestions(session, { limit: 4 });
+    // Hard gate: package-Ask never surfaces identity / unrelated bank questions.
+    if (session.businessSummary?.packageAsk) {
+      const focus = resolvePackageAskQuestionIds(
+        session.businessSummary?.packageAskPackages ?? session.businessSummary?.purchasedPackages ?? [],
+      );
+      if (focus) {
+        questions = questions.filter((q) => focus.has(String(q.questionId)));
+      }
+    }
+    if (JSON.stringify(session.questions ?? []) !== JSON.stringify(questions)
+      || JSON.stringify(session.progress ?? {}) !== JSON.stringify(progress)
+      || Boolean(session.businessSummary?.packageAsk) !== Boolean(session.metadata?.packageAsk)) {
+      session = withBuilderSessionPatch(session, {
+        questions,
+        progress,
+        businessSummary: session.businessSummary,
+        metadata: session.metadata,
+      }, { updatedAt: this.nowISO() });
+      await this.repository.save(session);
+    }
+    let stored = await this.loadProposalState(session);
+    // A recommendation assembled before the answers-only policy may contain
+    // default workspaces or AI teammates. Never let an unapproved legacy
+    // proposal reach installation; send it back through a fresh proposal.
+    if (stored?.specification
+      && stored.specification?.metadata?.builderPolicyVersion !== "answers_only_v1"
+      && !stored.approval
+      && !stored.installation) {
+      const cleared = createBuilderProposalState({ updatedAt: this.nowISO() });
+      session = await this.persistProposalState(session, cleared, {
+        currentStage: "interviewing",
+        specificationId: null,
+        specificationContentHash: null,
+        installationPlanId: null,
+        installationPlanHash: null,
+      });
+      stored = null;
+    }
     const proposal = stored?.specification
       ? clientSafeProposalView(this.buildPreview(session, stored))
       : null;
@@ -557,9 +1026,57 @@ export class AiBuilderService {
     });
   }
 
-  async chat({ sessionId, text, stack = null }) {
+  async chat({ sessionId, text, stack = null, actorId = null }) {
     const session = await this.requireSession(sessionId);
     const stored = await this.loadProposalState(session);
+
+    // Product how-to (Automations UI) — answer without spending Ask quota.
+    if (stored?.specification && isAutomationHowToRequest({ text, session })) {
+      const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+        messageId: `msg_user_ask_${Date.now()}`,
+        role: "user",
+        text,
+      }));
+      const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+        messageId: `msg_assistant_ask_${Date.now()}`,
+        role: "assistant",
+        text: AUTOMATION_HOWTO_REPLY,
+      }));
+      const updated = withBuilderSessionPatch(session, { conversation: withAssistant });
+      const saved = await this.persistChatSession(updated);
+      return deepFreeze({
+        ok: true,
+        session: saved,
+        conversational: true,
+        message: AUTOMATION_HOWTO_REPLY,
+        quota: null,
+        aiSource: "product_guidance",
+      });
+    }
+
+    // Live LLM Ask/builder turns consume the daily Ask quota (5/user).
+    let askQuota = null;
+    const llmEnabled = Boolean(
+      llmIsLiveAvailable()
+      && (this.intelligence?.enabled === true || this.intelligence?.client?.isLive?.()),
+    );
+    const quotaUserId = actorId || session.actorId || null;
+    if (llmEnabled && quotaUserId) {
+      askQuota = await checkAiAskQuota({
+        scope: "ask",
+        userId: quotaUserId,
+        platformStore: this.platformStore,
+        consume: true,
+      });
+      if (!askQuota.allowed) {
+        return deepFreeze({
+          ok: false,
+          reason: "quota_exceeded",
+          quota: askQuota,
+          message: askQuota.message,
+        });
+      }
+    }
 
     const candidateSnapshot = session.metadata?.candidateSnapshot
       ?? stored?.metadata?.candidateSnapshot
@@ -596,6 +1113,7 @@ export class AiBuilderService {
         brief,
         message: reply,
         inventedFacts: false,
+        quota: askQuota,
       });
     }
 
@@ -625,7 +1143,68 @@ export class AiBuilderService {
         nextQuestions: applied.nextQuestions,
         journey: applied.progress,
         message: applied.extracted?.note ?? null,
+        quota: askQuota,
+        aiSource: applied.extracted?.source ?? "deterministic",
       });
+    }
+
+    // Post-proposal continuous Ask: LLM interpret first, then capability runner.
+    if (llmEnabled && this.intelligence?.interpretChangeRequest) {
+      try {
+        const interpreted = await this.intelligence.interpretChangeRequest({
+          text,
+          session,
+          specification: stored.specification,
+        });
+        if (interpreted?.status === "reply" || interpreted?.kind === "conversational_reply") {
+          const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+            messageId: `msg_user_ask_${Date.now()}`,
+            role: "user",
+            text,
+          }));
+          const reply = String(interpreted.reply ?? "Happy to help — tell me what you want to change.");
+          const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+            messageId: `msg_assistant_ask_${Date.now()}`,
+            role: "assistant",
+            text: reply,
+          }));
+          const updated = withBuilderSessionPatch(session, { conversation: withAssistant });
+          const saved = await this.persistChatSession(updated);
+          return deepFreeze({
+            ok: true,
+            session: saved,
+            conversational: true,
+            message: reply,
+            quota: askQuota,
+            aiSource: interpreted?.source ?? "llm",
+          });
+        }
+
+        if (interpreted?.capabilityId) {
+          const changeService = this.changeProposalService;
+          const proposed = await changeService.propose({
+            session,
+            specification: stored.specification,
+            text,
+            priorValues: {
+              ...(session.metadata?.pendingChange?.values ?? {}),
+              ...(interpreted.values ?? {}),
+            },
+            selectCapabilityId: interpreted.capabilityId,
+            actorPermissions: ["business.manage"],
+          });
+          // Reuse the existing proposed-handling path below by falling through with proposed
+          return await this.#finalizeChangeProposal({
+            session,
+            text,
+            proposed,
+            askQuota,
+            aiSource: "llm",
+          });
+        }
+      } catch {
+        /* fall through to deterministic change path */
+      }
     }
 
     // Post-proposal: registry-driven change capabilities.
@@ -642,244 +1221,274 @@ export class AiBuilderService {
           : null,
         actorPermissions: ["business.manage"],
       });
-
-      await this.recordArchitectAudit(session, "architect.change_interpreted", {
-        status: proposed.status ?? (proposed.ok ? "matched" : "failed"),
-        capabilityId: proposed.capabilityId ?? null,
+      return await this.#finalizeChangeProposal({
+        session,
+        text,
+        proposed,
+        askQuota,
+        aiSource: llmEnabled ? "deterministic_fallback" : "deterministic",
       });
+    }
 
-      if (proposed.status === "needs_information") {
-        await this.recordArchitectAudit(session, "architect.change_needs_information", {
-          capabilityId: proposed.capabilityId,
-          missing: (proposed.missing ?? []).map((field) => field.id),
-        });
-        const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
-          messageId: `msg_user_change_${Date.now()}`,
-          role: "user",
-          text,
-        }));
-        const question = proposed.questions?.[0]
-          ?? proposed.missing?.[0]?.prompt
-          ?? "I need one more detail before I can propose that change.";
-        const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
-          messageId: `msg_assistant_need_${Date.now()}`,
-          role: "assistant",
-          text: question,
-        }));
-        const updated = withBuilderSessionPatch(session, {
-          conversation: withAssistant,
-          metadata: {
-            ...session.metadata,
-            pendingChange: {
-              status: "needs_information",
-              capabilityId: proposed.capabilityId,
-              values: proposed.values ?? {},
-              missing: proposed.missing ?? [],
-              summary: proposed.summary,
-            },
+    return deepFreeze({ ok: false, reason: "chat_unavailable", quota: askQuota });
+  }
+
+  async #finalizeChangeProposal({ session, text, proposed, askQuota = null, aiSource = "deterministic" }) {
+    await this.recordArchitectAudit(session, "architect.change_interpreted", {
+      status: proposed.status ?? (proposed.ok ? "matched" : "failed"),
+      capabilityId: proposed.capabilityId ?? null,
+      aiSource,
+    });
+
+    if (proposed.status === "needs_information") {
+      await this.recordArchitectAudit(session, "architect.change_needs_information", {
+        capabilityId: proposed.capabilityId,
+        missing: (proposed.missing ?? []).map((field) => field.id),
+      });
+      const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+        messageId: `msg_user_change_${Date.now()}`,
+        role: "user",
+        text,
+      }));
+      const question = proposed.questions?.[0]
+        ?? proposed.missing?.[0]?.prompt
+        ?? "I need one more detail before I can propose that change.";
+      const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+        messageId: `msg_assistant_need_${Date.now()}`,
+        role: "assistant",
+        text: question,
+      }));
+      const updated = withBuilderSessionPatch(session, {
+        conversation: withAssistant,
+        metadata: {
+          ...session.metadata,
+          pendingChange: {
+            status: "needs_information",
+            capabilityId: proposed.capabilityId,
+            values: proposed.values ?? proposed.request?.interpreted?.values ?? {},
           },
-        }, { updatedAt: this.nowISO() });
-        const saved = await this.persistChatSession(updated);
-        return deepFreeze({
-          ok: true,
-          status: "needs_information",
-          session: saved,
-          missing: proposed.missing,
-          questions: proposed.questions,
-          changeImpact: {
-            kind: proposed.legacyKind ?? proposed.capabilityId,
-            label: "Need a bit more detail",
-            requiresDryRun: false,
-            requiresApproval: false,
-            explanation: question,
-            risk: "low",
-            affectedAreas: [],
+        },
+      });
+      const saved = await this.persistChatSession(updated);
+      return deepFreeze({
+        ok: true,
+        session: saved,
+        needsInformation: true,
+        status: "needs_information",
+        proposed,
+        missing: proposed.missing,
+        questions: proposed.questions,
+        message: question,
+        quota: askQuota,
+        aiSource,
+        changeImpact: {
+          kind: proposed.legacyKind ?? proposed.capabilityId,
+          label: "Need a bit more detail",
+          requiresDryRun: false,
+          requiresApproval: false,
+          explanation: question,
+          risk: "low",
+          affectedAreas: [],
+        },
+      });
+    }
+
+    if (proposed.status === "ambiguous") {
+      await this.recordArchitectAudit(session, "architect.change_ambiguous", {
+        candidates: (proposed.candidates ?? []).map((entry) => entry.capabilityId),
+        aiSource,
+      });
+      const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+        messageId: `msg_user_change_${Date.now()}`,
+        role: "user",
+        text,
+      }));
+      const options = (proposed.candidates ?? [])
+        .map((entry, index) => `${index + 1}. ${entry.title}`)
+        .join("\n");
+      const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+        messageId: `msg_assistant_amb_${Date.now()}`,
+        role: "assistant",
+        text: `${proposed.message ?? "I found more than one possible change."}\n${options}`,
+      }));
+      const updated = withBuilderSessionPatch(session, {
+        conversation: withAssistant,
+        metadata: {
+          ...session.metadata,
+          pendingChange: {
+            status: "ambiguous",
+            candidates: proposed.candidates ?? [],
+            summary: proposed.summary,
           },
-        });
+        },
+      }, { updatedAt: this.nowISO() });
+      const saved = await this.persistChatSession(updated);
+      return deepFreeze({
+        ok: true,
+        status: "ambiguous",
+        session: saved,
+        candidates: proposed.candidates,
+        quota: askQuota,
+        aiSource,
+        changeImpact: {
+          kind: "ambiguous",
+          label: "Clarify the change",
+          requiresDryRun: false,
+          requiresApproval: false,
+          explanation: proposed.message,
+          risk: "low",
+          affectedAreas: [],
+        },
+      });
+    }
+
+    if (proposed.status === "unsupported" || (proposed.ok === false && proposed.status === "unsupported")) {
+      await this.recordArchitectAudit(session, "architect.change_unsupported", {
+        reason: proposed.reason ?? null,
+        aiSource,
+      });
+      if (proposed.gapHint && this.platformStore?.upsertBusinessCapabilityProposal && session.businessId) {
+        await this.platformStore.upsertBusinessCapabilityProposal({
+          id: `gap_${session.sessionId}_${Date.now()}`,
+          businessId: session.businessId,
+          proposalId: `arch_gap_${Date.now()}`,
+          requestedOutcome: proposed.gapHint.requestedOutcome ?? text,
+          evidence: [{ source: "architect_chat", text }],
+          whyInsufficient: proposed.reason ?? "unsupported_architect_capability",
+          status: "proposed",
+          createdByUserId: session.actorId,
+        }).catch(() => null);
       }
+      const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+        messageId: `msg_user_change_${Date.now()}`,
+        role: "user",
+        text,
+      }));
+      const unsupportedReply = proposed.reply
+        ?? `I understood: ${proposed.summary ?? text}. ${proposed.recommendation ?? "That change is not supported yet."} Nothing was changed.`;
+      const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+        messageId: `msg_assistant_unsup_${Date.now()}`,
+        role: "assistant",
+        text: unsupportedReply,
+      }));
+      const updated = withBuilderSessionPatch(session, {
+        conversation: withAssistant,
+        metadata: {
+          ...session.metadata,
+          pendingChange: null,
+          lastUnsupportedChange: {
+            summary: proposed.summary,
+            reason: proposed.reason,
+          },
+        },
+      }, { updatedAt: this.nowISO() });
+      const saved = await this.persistChatSession(updated);
+      return deepFreeze({
+        ok: true,
+        status: "unsupported",
+        session: saved,
+        unsupported: true,
+        message: unsupportedReply,
+        quota: askQuota,
+        aiSource,
+        changeImpact: {
+          kind: "unsupported",
+          label: "Not supported yet",
+          requiresDryRun: false,
+          requiresApproval: false,
+          explanation: proposed.recommendation ?? "Unsupported change — nothing was modified.",
+          risk: "low",
+          affectedAreas: [],
+        },
+      });
+    }
 
-      if (proposed.status === "ambiguous") {
-        await this.recordArchitectAudit(session, "architect.change_ambiguous", {
-          candidates: (proposed.candidates ?? []).map((entry) => entry.capabilityId),
-        });
-        const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
-          messageId: `msg_user_change_${Date.now()}`,
-          role: "user",
-          text,
-        }));
-        const options = (proposed.candidates ?? [])
-          .map((entry, index) => `${index + 1}. ${entry.title}`)
-          .join("\n");
-        const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
-          messageId: `msg_assistant_amb_${Date.now()}`,
-          role: "assistant",
-          text: `${proposed.message ?? "I found more than one possible change."}\n${options}`,
-        }));
-        const updated = withBuilderSessionPatch(session, {
-          conversation: withAssistant,
-          metadata: {
-            ...session.metadata,
-            pendingChange: {
-              status: "ambiguous",
-              candidates: proposed.candidates ?? [],
-              summary: proposed.summary,
-            },
-          },
-        }, { updatedAt: this.nowISO() });
-        const saved = await this.persistChatSession(updated);
-        return deepFreeze({
-          ok: true,
-          status: "ambiguous",
-          session: saved,
-          candidates: proposed.candidates,
-          changeImpact: {
-            kind: "ambiguous",
-            label: "Clarify the change",
-            requiresDryRun: false,
-            requiresApproval: false,
-            explanation: proposed.message,
-            risk: "low",
-            affectedAreas: [],
-          },
-        });
-      }
-
-      if (proposed.status === "unsupported" || proposed.ok === false && proposed.status === "unsupported") {
-        await this.recordArchitectAudit(session, "architect.change_unsupported", {
-          reason: proposed.reason ?? null,
-        });
-        if (proposed.gapHint && this.platformStore?.upsertBusinessCapabilityProposal && session.businessId) {
-          await this.platformStore.upsertBusinessCapabilityProposal({
-            id: `gap_${session.sessionId}_${Date.now()}`,
-            businessId: session.businessId,
-            proposalId: `arch_gap_${Date.now()}`,
-            requestedOutcome: proposed.gapHint.requestedOutcome ?? text,
-            evidence: [{ source: "architect_chat", text }],
-            whyInsufficient: proposed.reason ?? "unsupported_architect_capability",
-            status: "proposed",
-            createdByUserId: session.actorId,
-          }).catch(() => null);
-        }
-        const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
-          messageId: `msg_user_change_${Date.now()}`,
-          role: "user",
-          text,
-        }));
-        const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
-          messageId: `msg_assistant_unsup_${Date.now()}`,
-          role: "assistant",
-          text: `I understood: ${proposed.summary ?? text}. ${proposed.recommendation ?? "That change is not supported yet."} Nothing was changed.`,
-        }));
-        const updated = withBuilderSessionPatch(session, {
-          conversation: withAssistant,
-          metadata: {
-            ...session.metadata,
-            pendingChange: null,
-            lastUnsupportedChange: {
-              summary: proposed.summary,
-              reason: proposed.reason,
-            },
-          },
-        }, { updatedAt: this.nowISO() });
-        const saved = await this.persistChatSession(updated);
-        return deepFreeze({
-          ok: true,
-          status: "unsupported",
-          session: saved,
-          unsupported: true,
-          changeImpact: {
-            kind: "unsupported",
-            label: "Not supported yet",
-            requiresDryRun: false,
-            requiresApproval: false,
-            explanation: proposed.recommendation ?? "Unsupported change — nothing was modified.",
-            risk: "low",
-            affectedAreas: [],
-          },
-        });
-      }
-
-      if (proposed?.ok) {
-        const kind = proposed.request?.interpreted?.kind
-          ?? proposed.impact?.kind
-          ?? proposed.capabilityId
-          ?? "generic_change";
-        const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
-          messageId: `msg_user_change_${Date.now()}`,
-          role: "user",
-          text,
-        }));
-        const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
-          messageId: `msg_assistant_change_${Date.now()}`,
-          role: "assistant",
-          text: proposed.impact?.explanation
-            ?? `Proposed change: ${String(kind).replace(/_/g, " ")}. Dry run and approval are required before install.`,
-        }));
-        const nextSpec = proposed.nextSpecification ?? stored.specification;
-        const proposalState = createBuilderProposalState({
-          ...stored,
-          specification: nextSpec,
-          plan: null,
-          dryRunResult: null,
-          approval: null,
-          change: proposed,
-          updatedAt: this.nowISO(),
-        });
-        const titledMeta = withAutoAskTitle({
-          ...session,
-          conversation: withAssistant,
-          metadata: {
-            ...session.metadata,
-            pendingChange: null,
-            lastChangeRequest: proposed.request ?? proposed,
-            lastMutationPlan: proposed.mutationPlan ?? null,
-            lastChangeSideEffects: proposed.sideEffects ?? [],
-          },
-        }).metadata;
-        const updated = await this.persistProposalState(session, proposalState, {
-          conversation: withAssistant,
-          currentStage: "awaiting_review",
-          specificationId: nextSpec.specificationId,
-          specificationContentHash: nextSpec.contentHash,
-          installationPlanId: null,
-          installationPlanHash: null,
-          metadata: titledMeta,
-        });
-        this.installationRepository.saveSpecification({
-          ...nextSpec,
-          businessId: session.businessId ?? nextSpec.businessId,
-        });
-        await this.recordArchitectAudit(session, "architect.change_proposed", {
+    if (proposed?.ok) {
+      const stored = await this.loadProposalState(session);
+      const kind = proposed.request?.interpreted?.kind
+        ?? proposed.impact?.kind
+        ?? proposed.capabilityId
+        ?? "generic_change";
+      const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+        messageId: `msg_user_change_${Date.now()}`,
+        role: "user",
+        text,
+      }));
+      const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+        messageId: `msg_assistant_change_${Date.now()}`,
+        role: "assistant",
+        text: proposed.impact?.explanation
+          ?? `Proposed change: ${String(kind).replace(/_/g, " ")}. Dry run and approval are required before install.`,
+      }));
+      const nextSpec = proposed.nextSpecification ?? stored?.specification;
+      const proposalState = createBuilderProposalState({
+        ...stored,
+        specification: nextSpec,
+        plan: null,
+        dryRunResult: null,
+        approval: null,
+        change: proposed,
+        updatedAt: this.nowISO(),
+      });
+      const titledMeta = withAutoAskTitle({
+        ...session,
+        conversation: withAssistant,
+        metadata: {
+          ...session.metadata,
+          pendingChange: null,
+          lastChangeRequest: proposed.request ?? proposed,
+          lastMutationPlan: proposed.mutationPlan ?? null,
+          lastChangeSideEffects: proposed.sideEffects ?? [],
+        },
+      }).metadata;
+      const updated = await this.persistProposalState(session, proposalState, {
+        conversation: withAssistant,
+        currentStage: "awaiting_review",
+        specificationId: nextSpec.specificationId,
+        specificationContentHash: nextSpec.contentHash,
+        installationPlanId: null,
+        installationPlanHash: null,
+        metadata: titledMeta,
+      });
+      this.installationRepository.saveSpecification({
+        ...nextSpec,
+        businessId: session.businessId ?? nextSpec.businessId,
+      });
+      await this.recordArchitectAudit(session, "architect.change_proposed", {
+        kind,
+        capabilityId: proposed.capabilityId ?? null,
+        mutationPlanId: proposed.mutationPlan?.planId ?? null,
+        aiSource,
+      });
+      return deepFreeze({
+        ok: true,
+        status: "matched",
+        session: updated,
+        proposal: clientSafeProposalView(this.buildPreview(updated, proposalState)),
+        specification: nextSpec,
+        quota: askQuota,
+        aiSource,
+        changeImpact: {
           kind,
+          label: String(kind).replace(/_/g, " "),
+          requiresDryRun: true,
+          requiresApproval: true,
+          explanation: proposed.impact?.explanation
+            ?? `This would ${String(kind).replace(/_/g, " ")}. Nothing is installed until you review launch readiness and approve.`,
+          risk: proposed.impact?.risk ?? "medium",
+          affectedAreas: proposed.impact?.affectedAreas ?? ["proposal"],
+          warnings: proposed.warnings ?? [],
           capabilityId: proposed.capabilityId ?? null,
-          mutationPlanId: proposed.mutationPlan?.planId ?? null,
-        });
-        return deepFreeze({
-          ok: true,
-          status: "matched",
-          session: updated,
-          proposal: clientSafeProposalView(this.buildPreview(updated, proposalState)),
-          specification: nextSpec,
-          changeImpact: {
-            kind,
-            label: String(kind).replace(/_/g, " "),
-            requiresDryRun: true,
-            requiresApproval: true,
-            explanation: proposed.impact?.explanation
-              ?? `This would ${String(kind).replace(/_/g, " ")}. Nothing is installed until you review launch readiness and approve.`,
-            risk: proposed.impact?.risk ?? "medium",
-            affectedAreas: proposed.impact?.affectedAreas ?? ["proposal"],
-            warnings: proposed.warnings ?? [],
-            capabilityId: proposed.capabilityId ?? null,
-          },
-        });
-      }
+        },
+      });
     }
 
     return deepFreeze({
       ok: false,
       reason: "change_proposal_unavailable",
       message: "Architect could not build a governed change proposal.",
+      quota: askQuota,
+      aiSource,
     });
   }
 
@@ -904,6 +1513,13 @@ export class AiBuilderService {
     const session = await this.requireSession(sessionId);
     const stored = await this.loadProposalState(session);
     if (!stored?.specification) return deepFreeze({ ok: false, reason: "proposal_required" });
+    if (!isAnswersOnlyBuilderProposal(stored)) {
+      return deepFreeze({
+        ok: false,
+        reason: "proposal_refresh_required",
+        message: "This recommendation was created before your answers-only configuration. Refresh Architect and create a new recommendation before checking readiness.",
+      });
+    }
 
     const specification = applyPlanAdditionsToSpecification(stored.specification, session);
 
@@ -998,6 +1614,13 @@ export class AiBuilderService {
   async approve({ sessionId, actorId = null }) {
     const session = await this.requireSession(sessionId);
     const stored = await this.loadProposalState(session);
+    if (!isAnswersOnlyBuilderProposal(stored)) {
+      return deepFreeze({
+        ok: false,
+        reason: "proposal_refresh_required",
+        message: "This recommendation was created before your answers-only configuration. Refresh Architect and create a new recommendation before approving it.",
+      });
+    }
     if (!stored?.specification || !stored?.plan || !stored?.dryRunResult?.ok) {
       return deepFreeze({ ok: false, reason: "dry_run_required" });
     }
@@ -1059,6 +1682,13 @@ export class AiBuilderService {
     }
 
     let stored = await this.loadProposalState(session);
+    if (!isAnswersOnlyBuilderProposal(stored)) {
+      return deepFreeze({
+        ok: false,
+        reason: "proposal_refresh_required",
+        message: "This recommendation was created before your answers-only configuration. Refresh Architect and create a new recommendation before going live.",
+      });
+    }
     if (!stored?.specification || !stored?.plan || !stored?.dryRunResult) {
       return deepFreeze({ ok: false, reason: "dry_run_required" });
     }
@@ -1175,10 +1805,15 @@ export class AiBuilderService {
       });
     }
 
+    const actionResults = installed.actionResults
+      ?? installed.installation?.actionCheckpoints
+      ?? [];
     return deepFreeze({
       ok: installed.ok,
       session: updated,
       installation: installed,
+      actionResults,
+      installProgress: summarizeInstallActionProgress(actionResults, { ok: installed.ok }),
       openHref: installed.ok ? `/b/${businessId}/home` : null,
     });
   }
@@ -1382,7 +2017,9 @@ export class AiBuilderService {
       businessId,
       industryPackageId: nextPackageId,
       industryPackageVersion: 1,
-      packageConfiguration: isProperty ? (current?.packageConfiguration ?? {}) : {},
+      packageConfiguration: isProperty
+        ? (current?.packageConfiguration ?? {})
+        : preservePurchasedPackagesConfig(current?.packageConfiguration),
     });
   }
 
@@ -1526,6 +2163,11 @@ export class AiBuilderService {
   }
 }
 
+function isAnswersOnlyBuilderProposal(proposalState) {
+  return proposalState?.specification?.metadata?.builderPolicyVersion
+    === ANSWERS_ONLY_BUILDER_POLICY_VERSION;
+}
+
 function unique(items) {
   return [...new Set(items.map((entry) => String(entry)).filter(Boolean))];
 }
@@ -1575,4 +2217,45 @@ function isIntelligenceAttentionQuestion(text) {
   if (!normalized.trim()) return true;
   return /(what needs attention|why does this matter|what evidence|who owns|already being handled|what changed|what should we do|did we try|tried before|explain this|why|evidence|owner|next)/i
     .test(normalized);
+}
+
+const INSTALL_OP_STAGE = Object.freeze({
+  INSTALL_MODULE: "core",
+  INSTALL_NAVIGATION: "core",
+  INSTALL_ROLE: "core",
+  INSTALL_PIPELINE: "blueprint",
+  INSTALL_WORKFLOW: "blueprint",
+  INSTALL_WORK_TYPE: "capabilities",
+  INSTALL_REQUEST_TYPE: "capabilities",
+  INSTALL_DASHBOARD: "capabilities",
+  INSTALL_EMPLOYEE: "employees",
+  INSTALL_KNOWLEDGE_SCOPE: "knowledge",
+  REQUIRE_SETUP: "integrations",
+  REQUIRE_PLATFORM_CAPABILITY: "integrations",
+  INSTALL_INTEGRATION_REQUIREMENT: "integrations",
+});
+
+function summarizeInstallActionProgress(actionResults = [], { ok = false } = {}) {
+  const results = Array.isArray(actionResults) ? actionResults : [];
+  const completedOps = results.filter((result) => {
+    const status = String(result?.status ?? "");
+    return ["applied", "noop", "deferred", "requires_setup", "recorded_gap"].includes(status);
+  }).length;
+  const failedOps = results.filter((result) => String(result?.status ?? "") === "failed").length;
+  const totalOps = Math.max(results.length, 1);
+  const byStage = {};
+  for (const result of results) {
+    const stageId = INSTALL_OP_STAGE[String(result?.type ?? "")] ?? "capabilities";
+    byStage[stageId] = (byStage[stageId] ?? 0) + 1;
+  }
+  const percent = ok
+    ? 100
+    : Math.max(0, Math.min(99, Math.round((completedOps / totalOps) * 100)));
+  return {
+    percent,
+    completedOps,
+    failedOps,
+    totalOps: results.length,
+    byStage,
+  };
 }

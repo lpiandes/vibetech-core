@@ -33,7 +33,14 @@ export class AutomationRuleEngine {
 
     const activeAutomations = autos.filter((a) => String(a?.status ?? "") === "ACTIVE");
 
-    const triggerCandidates = activeAutomations.filter((a) => String(a?.trigger?.eventType ?? "") === eventType);
+    const triggerCandidates = activeAutomations.filter((a) => {
+      if (String(a?.trigger?.eventType ?? "") === eventType) return true;
+      const extras = [
+        ...(Array.isArray(a?.trigger?.metadata?.eventTypes) ? a.trigger.metadata.eventTypes : []),
+        ...(Array.isArray(a?.metadata?.eventTypes) ? a.metadata.eventTypes : []),
+      ].map(String);
+      return extras.includes(eventType);
+    });
 
     const ordered = toSortedByPriorityThenId(triggerCandidates);
 

@@ -105,7 +105,9 @@ export class IntegrationHubEngine {
         recommendationId: `rec_int_${providerId}`,
         kind: "integration",
         label: provider.label,
-        reason: detected.some((entry) => entry.providerId === providerId)
+        reason: provider.status !== "available"
+          ? `${provider.label} is planned in this operating pack, but is not live until its provider adapter, account connection, and first real test are verified.`
+          : detected.some((entry) => entry.providerId === providerId)
           ? `Detected signal for ${provider.label} — connect it so Business OS capabilities stay accurate. Never assume it is already linked.`
           : `${provider.label} unlocks ${provider.capabilities.map((id) => resolveCapability(id)?.label ?? id).join(", ")} for this business.`,
         confidence: detected.some((entry) => entry.providerId === providerId) ? 0.88 : 0.78,
@@ -118,7 +120,7 @@ export class IntegrationHubEngine {
         alternatives: altProviders,
         benefits: buildBenefits(provider),
         payload: { connection, provider },
-        selected: true,
+        selected: provider.status === "available",
         assumptions: ["Credentials are stored as encrypted references only.", "Connection is never silently activated."],
       }));
 

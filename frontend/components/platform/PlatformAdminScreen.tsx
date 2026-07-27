@@ -6,8 +6,15 @@ import Link from "next/link";
 import CreateBusinessModal from "@/components/platform/CreateBusinessModal";
 import PrimaryButton from "@/components/product/PrimaryButton";
 import StatusBadge from "@/components/product/StatusBadge";
-import { ProductPage, PageHeader } from "@/components/product";
-import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
+import AdminVtPage from "@/components/admin/AdminVtPage";
+import {
+  VtCard,
+  VtDockButton,
+  VtDockLink,
+  VtEmpty,
+  VtPanel,
+} from "@/components/product/VtChrome";
+import { cockpitColors, spacing, typography } from "@/design/tokens";
 
 type BusinessRow = {
   id: string;
@@ -93,74 +100,76 @@ export default function PlatformAdminScreen() {
   }
 
   return (
-    <ProductPage>
-      <PageHeader title="Businesses" action={<PrimaryButton onClick={() => setShowCreate(true)}>+ Create business</PrimaryButton>} />
-
-      {loading ? (
-        <p style={{ color: cockpitColors.textMuted }}>Loading…</p>
-      ) : businesses.length === 0 ? (
-        <p style={{ color: cockpitColors.textSecondary }}>No businesses yet.</p>
-      ) : (
-        <div style={{ borderRadius: radius.large, border: `1px solid ${cockpitColors.panelBorder}`, overflow: "hidden", background: cockpitColors.panel }}>
-          {businesses.map((b, index) => (
-            <div
-              key={b.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: spacing.md,
-                padding: `${spacing.md} ${spacing.lg}`,
-                borderBottom: index < businesses.length - 1 ? `1px solid ${cockpitColors.panelBorder}` : undefined,
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 600, color: cockpitColors.textPrimary }}>{b.name}</div>
-                <div style={{ marginTop: 4, display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
-                  {b.kind === "DEMO" ? <StatusBadge label="Demo" tone="info" /> : null}
-                  <StatusBadge label={b.ownerStatus} tone={b.ownerStatus === "Active" ? "success" : "neutral"} />
-                </div>
-              </div>
-              <Link href={`/b/${b.id}/home`} style={{ color: cockpitColors.accent, fontWeight: 600, textDecoration: "none" }}>
-                Open
-              </Link>
-            </div>
-          ))}
-        </div>
+    <AdminVtPage
+      title="Create & invite"
+      eyebrow="Platform"
+      dock={(
+        <>
+          <VtDockButton onClick={() => setShowCreate(true)}>+ Create business</VtDockButton>
+          <VtDockLink href="/admin">Admin</VtDockLink>
+          <VtDockLink href="/admin/businesses">Business directory</VtDockLink>
+        </>
       )}
-
-      {devMode ? (
-        <section style={{ marginTop: spacing.xl }}>
-          <h2 style={{ fontSize: typography.sectionTitle.fontSize, marginBottom: spacing.sm }}>Development invitations</h2>
-          <p style={{ ...typography.caption, color: cockpitColors.textMuted, marginTop: 0 }}>
-            Email is not configured locally. Pending invitations appear here so you can copy test links.
-          </p>
-          {copyMessage ? <p style={{ color: cockpitColors.accent, margin: `${spacing.sm} 0` }}>{copyMessage}</p> : null}
-          {devInvites.length === 0 ? (
-            <p style={{ color: cockpitColors.textSecondary }}>No pending invitations.</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
-              {devInvites.map((inv) => (
+    >
+      <VtPanel title="Businesses">
+        {loading ? (
+          <p style={{ margin: 0, color: cockpitColors.textMuted }}>Loading…</p>
+        ) : businesses.length === 0 ? (
+          <VtEmpty label="No businesses yet." />
+        ) : (
+          <div style={{ display: "grid", gap: 10 }}>
+            {businesses.map((b) => (
+              <VtCard key={b.id} padding={14}>
                 <div
-                  key={inv.id}
                   style={{
-                    padding: spacing.md,
-                    border: `1px solid ${cockpitColors.panelBorder}`,
-                    borderRadius: 8,
-                    background: cockpitColors.panel,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: spacing.md,
                   }}
                 >
-                  <div style={{ fontWeight: 600, color: cockpitColors.textPrimary }}>{inv.businessName}</div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: cockpitColors.textPrimary }}>{b.name}</div>
+                    <div style={{ marginTop: 6, display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
+                      {b.kind === "DEMO" ? <StatusBadge label="Demo" tone="info" /> : null}
+                      <StatusBadge label={b.ownerStatus} tone={b.ownerStatus === "Active" ? "success" : "neutral"} />
+                    </div>
+                  </div>
+                  <Link href={`/b/${b.id}/home`} style={{ color: cockpitColors.accent, fontWeight: 700, textDecoration: "none" }}>
+                    Open
+                  </Link>
+                </div>
+              </VtCard>
+            ))}
+          </div>
+        )}
+      </VtPanel>
+
+      {devMode ? (
+        <VtPanel title="Development invitations">
+          <p style={{ ...typography.caption, color: cockpitColors.textMuted, margin: "0 0 12px" }}>
+            Email is not configured locally. Pending invitations appear here so you can copy test links.
+          </p>
+          {copyMessage ? (
+            <p style={{ color: cockpitColors.accent, margin: "0 0 12px", fontWeight: 700 }}>{copyMessage}</p>
+          ) : null}
+          {devInvites.length === 0 ? (
+            <VtEmpty label="No pending invitations." />
+          ) : (
+            <div style={{ display: "grid", gap: 10 }}>
+              {devInvites.map((inv) => (
+                <VtCard key={inv.id} padding={14} accent>
+                  <div style={{ fontWeight: 700, color: cockpitColors.textPrimary }}>{inv.businessName}</div>
                   <div style={{ marginTop: 4, color: cockpitColors.textSecondary, fontSize: typography.caption.fontSize }}>
                     {inv.email} · {inv.roleLabel}
                   </div>
-                  <div style={{ marginTop: 4, display: "flex", gap: spacing.sm, flexWrap: "wrap", alignItems: "center" }}>
+                  <div style={{ marginTop: 8, display: "flex", gap: spacing.sm, flexWrap: "wrap", alignItems: "center" }}>
                     <StatusBadge label={inv.status} tone={inv.status === "Pending" ? "neutral" : "info"} />
                     <span style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
                       Expires {formatExpiry(inv.expiresAt)}
                     </span>
                   </div>
-                  <div style={{ marginTop: spacing.sm, display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
+                  <div style={{ marginTop: spacing.sm }}>
                     {inv.hasLink && inv.inviteUrl ? (
                       <PrimaryButton onClick={() => copyInviteLink(inv.inviteUrl!)}>Copy invitation link</PrimaryButton>
                     ) : (
@@ -169,14 +178,14 @@ export default function PlatformAdminScreen() {
                       </PrimaryButton>
                     )}
                   </div>
-                </div>
+                </VtCard>
               ))}
             </div>
           )}
-        </section>
+        </VtPanel>
       ) : null}
 
       {showCreate ? <CreateBusinessModal onClose={() => setShowCreate(false)} onCreated={refresh} /> : null}
-    </ProductPage>
+    </AdminVtPage>
   );
 }

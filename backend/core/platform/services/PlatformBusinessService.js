@@ -5,6 +5,10 @@ import { activateWorkspace, PROPERTY_MANAGEMENT_PACKAGE_ID } from "../../workspa
 import { buildEmptyPropertyManagementConfiguration } from "../../../../industries/property-management/config/buildEmptyPropertyManagementConfiguration.js";
 import { workspaceActivationRegistry } from "../../workspace/activation/WorkspaceActivationRegistry.js";
 import { MEMBERSHIP_ROLES } from "../permissions/rolePermissions.js";
+import {
+  mergePurchasedPackagesIntoConfig,
+  normalizePurchasedPackages,
+} from "../packages/SalesPackageCatalog.js";
 
 const NOW_ISO = "2026-07-01T00:00:00.000Z";
 
@@ -36,16 +40,19 @@ export function createPlatformBusinessService({ store, createAndDeliverInvitatio
     ownerEmail,
     createdByUserId,
     industryPackageId = null,
+    purchasedPackages = [],
   }) {
     const businessId = crypto.randomUUID();
     const businessName = String(name).trim() || "New Business";
     const isPropertyPackage = industryPackageId === PROPERTY_MANAGEMENT_PACKAGE_ID;
-    const packageConfiguration = isPropertyPackage
+    const scopedPackages = normalizePurchasedPackages(purchasedPackages);
+    const baseConfiguration = isPropertyPackage
       ? buildEmptyPropertyManagementConfiguration({
         companyName: businessName,
         workspaceId: businessId,
       })
       : {};
+    const packageConfiguration = mergePurchasedPackagesIntoConfig(baseConfiguration, scopedPackages);
 
     const business = await store.createBusiness({
       id: businessId,
@@ -72,7 +79,11 @@ export function createPlatformBusinessService({ store, createAndDeliverInvitatio
       action: "business.created",
       targetType: "business",
       targetId: business.id,
-      metadata: { name: business.name, ownerEmail },
+      metadata: {
+        name: business.name,
+        ownerEmail,
+        purchasedPackages: scopedPackages,
+      },
     });
 
     return { business, invitation: invite };

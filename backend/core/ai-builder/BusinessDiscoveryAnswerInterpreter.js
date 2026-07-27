@@ -67,6 +67,10 @@ export class BusinessDiscoveryAnswerInterpreter {
       case "q_repetitive_work":
         fields.repetitiveWork = splitList(text);
         break;
+      case "q_desired_workflows":
+        fields.desiredWorkflows = splitList(text);
+        fields.primaryWorkflow = text;
+        break;
       case "q_bottlenecks":
         fields.bottlenecks = splitList(text);
         break;
@@ -136,6 +140,7 @@ export class BusinessDiscoveryAnswerInterpreter {
       case "q_tell_us":
         fields.description = text;
         Object.assign(fields, inferFromDescription(text));
+        Object.assign(fields, inferNeedsFromDescription(text));
         break;
       case "q_property_inquiries":
         fields.propertyInquirySources = splitList(text);
@@ -409,7 +414,10 @@ export function normalizeIntegrationNeeds(text) {
   if (/\b(google\s*calendar|calendar|calendly|outlook\s*calendar)\b/.test(lower)) out.add("calendar");
   if (/\b(sms|text(?:ing| message)?|twilio(?:\s*sms)?)\b/.test(lower)) out.add("sms_channel");
   if (/\b(phone|voice|call(?:ing)?|twilio(?:\s*voice)?)\b/.test(lower)) out.add("voice_channel");
-  if (/\b(facebook|meta|lead\s*ads?|fb\s*leads?)\b/.test(lower)) out.add("meta_lead_ads");
+  if (/\b(facebook\s*lead\s*ads?|meta\s*lead\s*ads?|lead\s*ads?|fb\s*leads?)\b/.test(lower)) out.add("meta_lead_ads");
+  if (/\bmeta\s*ads?|facebook\s*ads?|instagram\s*ads?\b/.test(lower)) out.add("meta_ads");
+  if (/\bgoogle\s*ads?|adwords\b/.test(lower)) out.add("google_ads");
+  if (/\b(search\s*console|seo)\b/.test(lower)) out.add("google_search_console");
   if (/\b(pms|appfolio|property\s*management)\b/.test(lower)) out.add("property_management_system");
 
   for (const token of lower.split(/[^a-z0-9_]+/)) {
@@ -417,45 +425,57 @@ export function normalizeIntegrationNeeds(text) {
     if (token === "google_calendar" || token === "calendar") out.add("calendar");
     if (token === "twilio_sms" || token === "sms_channel") out.add("sms_channel");
     if (token === "twilio_voice" || token === "voice_channel") out.add("voice_channel");
+    if (token === "meta_platform") {
+      out.add("meta_ads");
+      out.add("meta_lead_ads");
+    }
     if (token === "facebook_lead_ads" || token === "meta_lead_ads") out.add("meta_lead_ads");
+    if (token === "google_ads") out.add("google_ads");
+    if (token === "google_search_console" || token === "seo") out.add("google_search_console");
+    if (token === "meta_ads" || token === "facebook_ads") out.add("meta_ads");
   }
 
   return [...out];
 }
 
 function normalizeIndustry(text) {
-  const lower = String(text).toLowerCase();
-  if (lower.includes("propert") || lower.includes("real estate") || lower.includes("leasing") || lower.includes("broker")) {
+  const lower = String(text ?? "").toLowerCase().trim();
+  if (!lower) return "other";
+
+  const hasWord = (pattern) => new RegExp(`(?:^|[^a-z0-9])(?:${pattern})(?:$|[^a-z0-9])`, "i").test(lower);
+
+  if (
+    hasWord("propert(?:y|ies)?|leasing|broker(?:age)?")
+    || lower.includes("real estate")
+  ) {
     return "property_management";
   }
-  if (lower.includes("dental") || lower.includes("dentist") || lower.includes("orthodont")) {
+  if (hasWord("dental|dentist|orthodont(?:ic|ics|ist)?")) {
     return "dental";
   }
-  if (lower.includes("hockey") || lower.includes("sport") || lower.includes("travel club") || lower === "sports") {
+  // Word-bounded sports — never match transport / passport / support / export.
+  if (
+    hasWord("hockey|soccer|lacrosse|baseball|softball|basketball|football|volleyball|swim(?:ming)?")
+    || hasWord("sports?(?:\\s+club|\\s+league|\\s+team)?")
+    || lower.includes("travel club")
+    || lower === "sports"
+  ) {
     return "sports";
   }
   if (
-    lower.includes("legal")
-    || lower.includes("law")
-    || lower.includes("accounting")
-    || lower.includes("consult")
+    hasWord("legal|lawyer|attorney|law\\s*firm|accounting|accountant|consult(?:ing|ant)?")
     || lower.includes("professional_services")
   ) {
     return "professional_services";
   }
-  if (
-    lower.includes("political")
-    || lower.includes("campaign")
-    || lower.includes("election")
-    || lower.includes("pac")
-  ) {
+  if (hasWord("political|campaign|election|\\bpac\\b")) {
     return "political_campaigns";
   }
-  if (lower.includes("marketing") || lower.includes("agency") || lower.includes("advertising")) {
+  if (hasWord("marketing|advertising") || hasWord("agency")) {
     return "marketing_agency";
   }
   // Known chips that are not dedicated packs stay labeled; packs still route via resolvePackIndustry → other.
-  const chip = lower.trim().replace(/\s+/g, "_");
+  const chip = lower.replace(/\s+/g, "_");
   const knownChips = new Set([
     "home_services",
     "retail",
@@ -497,6 +517,27 @@ function inferFromDescription(text) {
   if (industry === "political_campaigns") {
     fields.services = fields.services ?? ["voter_outreach", "fundraising", "volunteer_coordination"];
     fields.customerTypes = fields.customerTypes ?? ["voter", "volunteer", "donor"];
+  }
+  return fields;
+}
+
+/** Pull goals / needs / pain from the opening "describe business + what you need" answer. */
+function inferNeedsFromDescription(text) {
+  const raw = String(text ?? "").trim();
+  if (!raw) return {};
+  const fields = {};
+  const needMatch = raw.match(
+    /\b(?:want|need|looking for|hoping to|help (?:us|me)(?: with)?|from (?:you|vibetech))\b[:\s]+(.+)/i,
+  );
+  if (needMatch?.[1]) {
+    fields.desiredOutcomes = splitList(needMatch[1].slice(0, 400));
+    fields.goals = fields.desiredOutcomes;
+  } else if (/\b(automat|ai|follow[- ]?up|leads?|intake|scheduling|reminders?)\b/i.test(raw)) {
+    fields.goals = splitList(raw).slice(0, 5);
+    fields.desiredOutcomes = fields.goals;
+  }
+  if (/\b(pain|struggl|overwhelm|manual|too slow|forget|drop(?:ping)?)\b/i.test(raw)) {
+    fields.painPoints = splitList(raw).slice(0, 5);
   }
   return fields;
 }

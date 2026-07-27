@@ -14,6 +14,9 @@ describe("routeProtection", () => {
     assert.equal(isPublicPath("/login"), true);
     assert.equal(isPublicPath("/api/auth/session"), true);
     assert.equal(isPublicPath("/api/health"), true);
+    assert.equal(isPublicPath("/api/platform/jobs/tick"), true);
+    assert.equal(isPublicPath("/api/businesses/biz_1/integrations/meta/webhook"), true);
+    assert.equal(isPublicPath("/api/businesses/biz_1/forms/submit"), true);
     assert.equal(isPublicPath("/invite/abc"), true);
     assert.equal(isPublicPath("/api/invite/abc"), true);
     assert.equal(isPublicPath("/forbidden"), true);
@@ -37,6 +40,7 @@ describe("routeProtection", () => {
     assert.equal(requiresPlatformAdmin("/platform"), true);
     assert.equal(requiresPlatformAdmin("/api/admin/support/enter"), true);
     assert.equal(requiresPlatformAdmin("/api/platform/businesses"), true);
+    assert.equal(requiresPlatformAdmin("/api/platform/jobs/tick"), false);
     assert.equal(requiresPlatformAdmin("/api/dev/invitations"), true);
     assert.equal(requiresPlatformAdmin("/b/x/home"), false);
     assert.equal(isApiPath("/api/businesses/x/work"), true);

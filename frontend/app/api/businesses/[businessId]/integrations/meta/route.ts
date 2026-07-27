@@ -5,6 +5,7 @@ import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
 import { getSharedCredentialVault, isMetaLeadAdsConfigured } from "@/lib/server/liveIntegrations";
 import { putDurableCredential } from "../../../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
+import { subscribeMetaPageToLeadgen } from "../../../../../../../backend/core/integrations/meta/ingestMetaLead.js";
 
 export async function POST(
   request: Request,
@@ -31,10 +32,17 @@ export async function POST(
       );
     }
 
+    const origin = new URL(request.url).origin;
+    const webhookUrl = `${origin}/api/businesses/${encodeURIComponent(businessId)}/integrations/meta/webhook`;
+
     const credentialId = `cred_meta_${businessId}`;
+    const vault =
+      (ctx.service as any)?.connected?.integrationPlatform?.credentialVault
+      ?? getSharedCredentialVault();
+
     await putDurableCredential({
       platformStore,
-      vault: getSharedCredentialVault(),
+      vault,
       workspaceId: businessId,
       credentialId,
       providerType: "meta_lead_ads",
@@ -45,7 +53,7 @@ export async function POST(
         appId: process.env.META_APP_ID || "",
         appSecret: process.env.META_APP_SECRET || "",
       },
-      metadata: { pageId },
+      metadata: { pageId, webhookUrl, lastWebhookAt: null },
     });
 
     const knowledgeCount = await platformStore.countActiveKnowledgeDocuments(businessId);
@@ -55,9 +63,49 @@ export async function POST(
       platformActiveKnowledgeCount: knowledgeCount,
     });
 
+    const subscribed = await subscribeMetaPageToLeadgen({
+      pageId,
+      pageAccessToken,
+    });
+
+    await putDurableCredential({
+      platformStore,
+      vault,
+      workspaceId: businessId,
+      credentialId,
+      providerType: "meta_lead_ads",
+      secrets: {
+        pageId,
+        pageAccessToken,
+        verifyToken: process.env.META_LEAD_VERIFY_TOKEN || process.env.META_WEBHOOK_VERIFY_TOKEN || "",
+        appId: process.env.META_APP_ID || "",
+        appSecret: process.env.META_APP_SECRET || "",
+      },
+      metadata: {
+        pageId,
+        subscribed: subscribed.ok === true,
+        subscribedAt: subscribed.ok ? new Date().toISOString() : null,
+        subscribeWarning: subscribed.ok ? null : (subscribed.message ?? subscribed.reason),
+        webhookUrl,
+        lastWebhookAt: null,
+      },
+    });
+
     return NextResponse.json({
       ok: true,
       connection: { id: connection?.id, connectionType: connection?.connectionType, status: connection?.status },
+      subscribed: subscribed.ok === true,
+      subscribeWarning: subscribed.ok ? null : (subscribed.message ?? subscribed.reason),
+      webhookUrl,
+      lastWebhookAt: null,
+      verifyTokenHint: "Use the same META_LEAD_VERIFY_TOKEN configured on the server when Meta asks for a verify token.",
+      nextSteps: [
+        "In Meta Developer App → Webhooks, subscribe to Page → leadgen (one-time per app).",
+        `Callback URL: ${webhookUrl}`,
+        "Verify token must match the server META_LEAD_VERIFY_TOKEN.",
+        "Create a Lead Form + run a Lead Ad (or Instant Form) on this Page.",
+        "Submit a test lead — it should appear in People and fire intake automations.",
+      ],
     });
   } catch (err) {
     return authorizationErrorResponse(err);

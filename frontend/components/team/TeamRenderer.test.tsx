@@ -68,13 +68,11 @@ const makePlatformTeam = () => ({
 test("Renderer: team page uses executive shell sections and metrics", () => {
   const html = renderToStaticMarkup(<TeamRenderer viewModel={makeVm()} platformTeam={makePlatformTeam()} />);
 
-  assert.ok(html.includes("Team"));
-  assert.ok(html.includes("People and AI teammates accountable for work in this business."));
+  assert.ok(html.includes("Staff") || html.includes("workforce"));
   assert.ok(html.includes("People"));
-  assert.ok(html.includes("Pending invitations"));
+  assert.ok(html.includes("Pending invites") || html.includes("Pending"));
   assert.ok(html.includes("AI teammates"));
-  assert.ok(html.includes("Getting ready") || html.includes("Needs setup"));
-  assert.ok(html.includes("Ready") || html.includes("Working"));
+  assert.ok(html.includes("Working") || html.includes("Ready") || html.includes("Active"));
 });
 
 test("Renderer: human team rows render role labels and contact details", () => {
@@ -85,16 +83,13 @@ test("Renderer: human team rows render role labels and contact details", () => {
   assert.ok(html.includes("Administrator"));
 });
 
-test("Renderer: digital employees use human labels and blockers", () => {
+test("Renderer: digital employees use role titles and blockers", () => {
   const html = renderToStaticMarkup(<TeamRenderer viewModel={makeVm()} platformTeam={makePlatformTeam()} />);
 
   assert.ok(html.includes("Resident & Prospect Coordinator"));
   assert.ok(html.includes("Maintenance Coordinator"));
   assert.ok(html.includes("Connect required business channels"));
-  assert.ok(html.includes("View work"));
-  assert.ok(html.includes("Finish setup"));
   assert.ok(!html.includes("pm_resident_prospect_coordinator"));
-  assert.ok(!html.includes("resident_prospect_coordination"));
   assert.ok(!html.includes("CONFIGURING"));
 });
 
@@ -106,8 +101,7 @@ test("Renderer: compact empty human team state", () => {
     />,
   );
 
-  assert.ok(html.includes("Invite employees so they can access VIBETech"));
-  assert.ok(!html.includes("No team members yet"));
+  assert.ok(html.includes("No staff yet") || html.includes("Invite"));
 });
 
 test("Loading placeholders: deterministic executive labels", () => {

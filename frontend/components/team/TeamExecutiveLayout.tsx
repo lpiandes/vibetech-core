@@ -11,14 +11,13 @@ import type { PlatformTeamData } from "./TeamRenderer";
 import PageHeader from "@/components/product/PageHeader";
 import PrimaryButton from "@/components/product/PrimaryButton";
 import SecondaryButton from "@/components/product/SecondaryButton";
+import { SimpleEmpty, SimpleMetrics, SimplePanel, simplePageStyle } from "@/components/product/SimpleUI";
 import StatusBadge from "@/components/product/StatusBadge";
 import EntityAvatar from "@/components/shell/EntityAvatar";
-import ShellMetricStrip from "@/components/shell/ShellMetricStrip";
-import ShellPanel from "@/components/shell/ShellPanel";
 import OrganizationWorkspace from "@/components/workforce/OrganizationWorkspace";
 import EmployeeWorkerCard from "@/components/team/EmployeeWorkerCard";
 import { copyInviteLink } from "@/lib/platform/inviteLinks";
-import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
+import { cockpitColors, spacing, typography } from "@/design/tokens";
 import {
   deriveTeamCounts,
   monitoringSummary,
@@ -28,21 +27,6 @@ import {
 
 function safeArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
-}
-
-function PanelEmpty({ description }: { description: string }) {
-  return (
-    <div
-      style={{
-        padding: spacing.md,
-        color: cockpitColors.textMuted,
-        fontSize: typography.caption.fontSize,
-        lineHeight: 1.5,
-      }}
-    >
-      {description}
-    </div>
-  );
 }
 
 function HumanMemberRow({ member }: { member: { id: string; name: string; email: string; roleLabel: string } }) {
@@ -171,12 +155,12 @@ export default function TeamExecutiveLayout({
 
   const counts = useMemo(() => deriveTeamCounts(platformMembers, digitalEmployees), [platformMembers, digitalEmployees]);
 
-  const metricStrip = useMemo(
+  const metricItems = useMemo(
     () => [
       { id: "human", label: "People", value: String(counts.humanTeam) },
-      { id: "digital", label: "AI teammates", value: String(counts.digitalEmployees) },
+      { id: "digital", label: "AI", value: String(counts.digitalEmployees) },
       { id: "ready", label: "Working", value: String(counts.ready) },
-      { id: "setup", label: "Getting ready", value: String(counts.needsSetup) },
+      { id: "setup", label: "Setup", value: String(counts.needsSetup) },
     ],
     [counts],
   );
@@ -260,15 +244,11 @@ export default function TeamExecutiveLayout({
     flashMessage("Invitation link copied.");
   }
 
-  const inviteAction = canInvite ? <PrimaryButton onClick={() => setShowInvite(true)}>+ Invite teammate</PrimaryButton> : undefined;
+  const inviteAction = canInvite ? <PrimaryButton onClick={() => setShowInvite(true)}>+ Invite staff member</PrimaryButton> : undefined;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.xl }}>
-      <PageHeader
-        title="Team"
-        description="People and AI teammates accountable for work in this business."
-        action={inviteAction}
-      />
+    <div style={simplePageStyle}>
+      <PageHeader title="Staff & workforce" action={inviteAction} />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button
@@ -284,7 +264,7 @@ export default function TeamExecutiveLayout({
             cursor: "pointer",
           }}
         >
-          Team roster
+          Staff access
         </button>
         <button
           type="button"
@@ -299,7 +279,7 @@ export default function TeamExecutiveLayout({
             cursor: "pointer",
           }}
         >
-          Organization
+          Organization structure
         </button>
       </div>
 
@@ -308,7 +288,7 @@ export default function TeamExecutiveLayout({
       ) : null}
 
       {workspace === "organization" ? (
-        <OrganizationWorkspace organization={organization ?? {
+        <OrganizationWorkspace canManageTeam={canManage} organization={organization ?? {
           hasOrganization: platformMembers.length > 0 || digitalEmployees.length > 0,
           departments: [],
           teams: [],
@@ -335,22 +315,21 @@ export default function TeamExecutiveLayout({
             { id: "humans", label: "Humans", value: platformMembers.length },
             { id: "ai", label: "AI employees", value: digitalEmployees.length },
             { id: "departments", label: "Departments", value: 0 },
-            { id: "teams", label: "Teams", value: 0 },
+            { id: "teams", label: "Staff groups", value: 0 },
           ],
         }} />
       ) : null}
 
       {workspace === "team" ? (
         <>
-      <ShellMetricStrip metrics={metricStrip} />
+      <SimpleMetrics items={metricItems} />
 
-      <ShellPanel
-        title="People"
-        subtitle={`${counts.humanTeam} member${counts.humanTeam === 1 ? "" : "s"}`}
+      <SimplePanel
+        title="Staff"
         action={platformMembers.length === 0 ? inviteAction : undefined}
       >
         {platformMembers.length === 0 ? (
-          <PanelEmpty description="Invite teammates so they can access VIBETech and work alongside AI teammates." />
+          <SimpleEmpty>No staff yet.</SimpleEmpty>
         ) : (
           <div>
             {platformMembers.map((member) => (
@@ -358,10 +337,10 @@ export default function TeamExecutiveLayout({
             ))}
           </div>
         )}
-      </ShellPanel>
+      </SimplePanel>
 
       {pending.length > 0 ? (
-        <ShellPanel title="Pending invitations" subtitle={`${pending.length} waiting to accept`}>
+        <SimplePanel title="Pending invites">
           <div>
             {pending.map((invite) => (
               <div
@@ -403,15 +382,12 @@ export default function TeamExecutiveLayout({
               </div>
             ))}
           </div>
-        </ShellPanel>
+        </SimplePanel>
       ) : null}
 
-      <ShellPanel
-        title="AI teammates"
-        subtitle={`${counts.digitalEmployees} teammate${counts.digitalEmployees === 1 ? "" : "s"}`}
-      >
+      <SimplePanel title="AI teammates">
         {digitalEmployees.length === 0 ? (
-          <PanelEmpty description="Your AI teammates will appear here once the business is set up." />
+          <SimpleEmpty>No AI teammates yet.</SimpleEmpty>
         ) : (
           <div>
             {digitalEmployees.map((employee) => (
@@ -423,7 +399,7 @@ export default function TeamExecutiveLayout({
             ))}
           </div>
         )}
-      </ShellPanel>
+      </SimplePanel>
         </>
       ) : null}
 
@@ -431,6 +407,7 @@ export default function TeamExecutiveLayout({
         <InvitePersonDialog
           businessId={businessId}
           showDevInviteLinks={showDevInviteLinks}
+          audienceLabel="staff member"
           onClose={() => setShowInvite(false)}
           onSent={() => {
             setShowInvite(false);

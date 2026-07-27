@@ -5,11 +5,14 @@ import Link from "next/link";
 import {
   AlertCircle,
   BookOpen,
+  Calendar,
   Home,
+  Kanban,
   Link2,
   Settings,
   Users,
   ClipboardList,
+  Zap,
 } from "lucide-react";
 
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
@@ -34,6 +37,12 @@ function iconForName(iconName: string): ReactNode {
       return <AlertCircle size={16} aria-hidden />;
     case "folder":
       return <ClipboardList size={16} aria-hidden />;
+    case "calendar":
+      return <Calendar size={16} aria-hidden />;
+    case "kanban":
+      return <Kanban size={16} aria-hidden />;
+    case "zap":
+      return <Zap size={16} aria-hidden />;
     default:
       return <Home size={16} aria-hidden />;
   }
@@ -64,10 +73,15 @@ export default function PrimaryNavigation({
   const specialtyModules = Array.isArray((scope.installedBusinessOS as { modules?: unknown[] } | null)?.modules)
     ? ((scope.installedBusinessOS as { modules: unknown[] }).modules as Array<Record<string, unknown>>)
     : [];
+  const installedModuleIds = specialtyModules
+    .map((module) => module.moduleId)
+    .filter((moduleId): moduleId is string => typeof moduleId === "string");
   const items = getCanonicalBusinessNav(scope.businessId, scope.permissions, {
     role: scope.role,
     subjectLabel: subjectLabelFromScope(scope),
+    installedModuleIds,
     specialtyModules: specialtyModules as any,
+    purchasedPackages: scope.purchasedPackages ?? [],
   });
   const supportAccess = scope.supportAccess;
   const activeHref = findActiveNavHref(

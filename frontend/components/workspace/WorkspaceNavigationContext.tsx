@@ -16,6 +16,7 @@ type WorkspaceNavigationContextValue = {
   pendingHref: string | null;
   isNavigating: boolean;
   beginNavigation: (href: string) => void;
+  cancelNavigation: () => void;
   displayPath: string;
   perf: NavPerfTimestamps;
 };
@@ -39,12 +40,14 @@ export function WorkspaceNavigationProvider({ children }: { children: ReactNode 
     targetHref: null,
   });
   const loadingFrameRef = useRef<number | null>(null);
+  const pathnameAtPendingRef = useRef<string | null>(null);
 
   const beginNavigation = useCallback((href: string) => {
     const target = normalizePath(href);
     if (target === normalizedPathname) return;
 
     const clickAt = performance.now();
+    pathnameAtPendingRef.current = normalizedPathname;
     setPendingHref(target);
     setPerf({
       clickAt,
@@ -60,25 +63,41 @@ export function WorkspaceNavigationProvider({ children }: { children: ReactNode 
     });
   }, [normalizedPathname]);
 
+  const cancelNavigation = useCallback(() => {
+    pathnameAtPendingRef.current = null;
+    setPendingHref(null);
+  }, []);
+
   useEffect(() => {
     if (!pendingHref) return;
-    if (normalizePath(pendingHref) !== normalizedPathname) return;
 
-    let cancelled = false;
-    const target = pendingHref;
-    requestAnimationFrame(() => {
+    if (normalizePath(pendingHref) === normalizedPathname) {
+      let cancelled = false;
+      const target = pendingHref;
       requestAnimationFrame(() => {
-        if (cancelled) return;
-        setPerf((prev) => (prev.targetHref === target ? { ...prev, contentAt: performance.now() } : prev));
-        setPendingHref(null);
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          setPerf((prev) => (prev.targetHref === target ? { ...prev, contentAt: performance.now() } : prev));
+          setPendingHref(null);
+          pathnameAtPendingRef.current = null;
+        });
       });
-    });
+      return () => {
+        cancelled = true;
+      };
+    }
 
-    return () => {
-      cancelled = true;
-    };
+    // Path changed to somewhere other than the pending target (replace/back/redirect).
+    // Keep optimistic highlight while still on the page where the click started.
+    if (
+      pathnameAtPendingRef.current != null
+      && normalizedPathname !== pathnameAtPendingRef.current
+      && normalizePath(pendingHref) !== normalizedPathname
+    ) {
+      setPendingHref(null);
+      pathnameAtPendingRef.current = null;
+    }
   }, [normalizedPathname, pendingHref]);
-
   useEffect(() => {
     return () => {
       if (loadingFrameRef.current !== null) cancelAnimationFrame(loadingFrameRef.current);
@@ -94,10 +113,11 @@ export function WorkspaceNavigationProvider({ children }: { children: ReactNode 
       pendingHref,
       isNavigating,
       beginNavigation,
+      cancelNavigation,
       displayPath,
       perf,
     }),
-    [normalizedPathname, pendingHref, isNavigating, beginNavigation, displayPath, perf],
+    [normalizedPathname, pendingHref, isNavigating, beginNavigation, cancelNavigation, displayPath, perf],
   );
 
   return <WorkspaceNavigationContext.Provider value={value}>{children}</WorkspaceNavigationContext.Provider>;

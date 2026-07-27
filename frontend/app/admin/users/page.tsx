@@ -1,9 +1,9 @@
 import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
 import { getAdminPlatformService } from "@/lib/admin/getAdminServices";
-import { PageHeader } from "@/components/product";
-import ShellPanel from "@/components/shell/ShellPanel";
+import AdminVtPage from "@/components/admin/AdminVtPage";
+import AdminDataTable from "@/components/admin/AdminDataTable";
 import StatusBadge from "@/components/product/StatusBadge";
-import { cockpitColors, spacing } from "@/design/tokens";
+import { VtDockLink } from "@/components/product/VtChrome";
 
 export default async function AdminUsersPage() {
   const user = await requirePlatformAdmin();
@@ -12,41 +12,26 @@ export default async function AdminUsersPage() {
     platformRole: user.platformRole,
   });
 
+  const rows = (result.users ?? []).map((entry: any) => [
+    entry.name ?? "—",
+    entry.email,
+    entry.platformRole
+      ? <StatusBadge key="r" label={String(entry.platformRole)} tone="neutral" />
+      : "—",
+    entry.createdAt ? String(entry.createdAt).slice(0, 10) : "—",
+  ]);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: spacing.lg }}>
-      <PageHeader title="Platform users" description="Admins, owners, and members — tenant boundaries respected" />
-      <ShellPanel title="Users" subtitle="Platform role shown when assigned">
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead>
-              <tr>
-                {["Name", "Email", "Platform role", "Created"].map((label) => (
-                  <th key={label} style={{ textAlign: "left", padding: 8, borderBottom: `1px solid ${cockpitColors.panelBorder}` }}>{label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(result.users ?? []).map((entry: any) => (
-                <tr key={entry.id}>
-                  <td style={{ padding: 8 }}>{entry.name ?? "—"}</td>
-                  <td style={{ padding: 8 }}>{entry.email}</td>
-                  <td style={{ padding: 8 }}>
-                    {entry.platformRole
-                      ? <StatusBadge label={String(entry.platformRole)} tone="neutral" />
-                      : "—"}
-                  </td>
-                  <td style={{ padding: 8, color: cockpitColors.textMuted }}>
-                    {entry.createdAt ? String(entry.createdAt).slice(0, 10) : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!result.users?.length ? (
-            <div style={{ color: cockpitColors.textMuted, padding: spacing.md }}>No users found.</div>
-          ) : null}
-        </div>
-      </ShellPanel>
-    </div>
+    <AdminVtPage
+      title="Platform users"
+      dock={<VtDockLink href="/admin">Dashboard</VtDockLink>}
+    >
+      <AdminDataTable
+        title="Users"
+        headers={["Name", "Email", "Platform role", "Created"]}
+        rows={rows}
+        emptyLabel="No users found."
+      />
+    </AdminVtPage>
   );
 }

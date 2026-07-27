@@ -26,7 +26,8 @@ if (!email || !password) {
 
 await runMigrations();
 const result = await bootstrapPlatformAdmin({ email, password, name });
-console.log(result.created ? "Created platform admin:" : "Platform admin already exists:");
+console.log(result.created ? "Created platform admin:" : "Platform admin already exists (password reset):");
 console.log(`  id: ${result.user.id}`);
 console.log(`  email: ${result.user.email}`);
+console.log(`  database: ${process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL).host : "(unset)"}`);
 await closePool();

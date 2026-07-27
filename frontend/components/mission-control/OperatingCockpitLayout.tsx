@@ -19,6 +19,7 @@ import {
 import type { MissionControlViewModel } from "./MissionControlContext";
 import { MissionControlViewModelContext } from "./MissionControlContext";
 import DemoStoryMode from "./DemoStoryMode";
+import { useOptionalBusinessScope } from "@/lib/platform/BusinessScopeContext";
 
 import StatusPill from "@/components/executive/StatusPill";
 import { cockpitColors, semanticColors, spacing, typography, radius } from "@/design/tokens";
@@ -431,7 +432,28 @@ function Panel({ title, subtitle, children, action }: { title: string; subtitle?
 
 export default function OperatingCockpitLayout() {
   const viewModel = useContext<MissionControlViewModel | null>(MissionControlViewModelContext);
+  const scope = useOptionalBusinessScope();
   const router = useRouter();
+  const [stateFilter, setStateFilter] = useState<string | null>(null);
+  const businessId = String(
+    scope?.businessId
+    ?? (viewModel as { businessId?: string } | null)?.businessId
+    ?? "",
+  );
+
+  const handleApproval = useCallback(
+    async (approvalId: string, decision: string) => {
+      if (!businessId) return;
+      const res = await fetch(`/api/approvals/${approvalId}/decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, businessId }),
+      });
+      if (res.ok) router.refresh();
+    },
+    [router, businessId],
+  );
+
   if (!viewModel) return null;
 
   const cc = (viewModel as any).commandCenter ?? viewModel;
@@ -445,7 +467,6 @@ export default function OperatingCockpitLayout() {
   const operatingStates = safeArray(cc.operatingStates);
   const autonomous = safeArray(cc.autonomousContinuation ?? cc.whatHappensNext);
   const continuationTitle = cc.autonomousContinuationTitle ?? "VIBETech will keep moving";
-  const [stateFilter, setStateFilter] = useState<string | null>(null);
 
   const filteredEpisodes =
     stateFilter === "new"
@@ -461,18 +482,6 @@ export default function OperatingCockpitLayout() {
               : episodeFeed;
   const attentionPanelTitle = (viewModel as any).productContext?.pageLabels?.attention ?? "Needs decision";
   const showDemoStory = safeArray((viewModel as any).demoStorySteps).length > 0;
-
-  const handleApproval = useCallback(
-    async (approvalId: string, decision: string) => {
-      await fetch(`/api/approvals/${approvalId}/decision`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision }),
-      });
-      router.refresh();
-    },
-    [router],
-  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.md, paddingBottom: spacing.lg }}>

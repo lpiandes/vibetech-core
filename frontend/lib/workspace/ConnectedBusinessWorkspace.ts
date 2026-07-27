@@ -86,7 +86,7 @@ export class ConnectedBusinessWorkspace {
       workspaceId,
       activation: activation ?? undefined,
       runtimeSnapshots,
-      extraProviders: Array.isArray(extraProviders) ? extraProviders : [],
+      extraProviders: (Array.isArray(extraProviders) ? extraProviders : []) as object[],
     });
     this.ctx = result.ctx;
     this.activation = result.activation;

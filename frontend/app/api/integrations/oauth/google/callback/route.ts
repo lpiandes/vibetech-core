@@ -10,7 +10,7 @@ import {
   getSharedOAuthStateStore,
   getGoogleOAuthAppConfig,
 } from "@/lib/server/liveIntegrations";
-import { putDurableCredential } from "../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
+import { putDurableCredential } from "../../../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
 import { workspaceCompositionRegistry } from "@/lib/workspace/WorkspaceCompositionRegistry";
 
 const OAUTH_STATE_COOKIE = "vt_google_oauth_state";
@@ -91,7 +91,9 @@ export async function GET(request: Request) {
     }
 
     const knowledgeCount = await platformStore.countActiveKnowledgeDocuments(businessId);
-    const vault = getSharedCredentialVault();
+    const vault =
+      (ctx.service as any)?.connected?.integrationPlatform?.credentialVault
+      ?? getSharedCredentialVault();
 
     if (pending.providerType === "gmail") {
       const credentialId = `cred_gmail_${businessId}`;
@@ -105,8 +107,9 @@ export async function GET(request: Request) {
           refreshToken: tokens.refreshToken,
           accessToken: tokens.accessToken || null,
           senderEmail: tokens.senderEmail || null,
+          scope: tokens.scope || grantedScope || null,
         },
-        metadata: { senderEmail: tokens.senderEmail || null },
+        metadata: { senderEmail: tokens.senderEmail || null, scope: tokens.scope || grantedScope || null },
       });
       await ctx.service.connectBusinessEmailGmail({
         credentialId,
@@ -129,6 +132,40 @@ export async function GET(request: Request) {
         metadata: { senderEmail: tokens.senderEmail || null },
       });
       await ctx.service.connectGoogleCalendar({
+        credentialId,
+        senderEmail: tokens.senderEmail,
+        platformActiveKnowledgeCount: knowledgeCount,
+      });
+      const calendarStatus = String(
+        ctx.service.connected?.integrationPlatform?.connectionRuntime?.getConnectionByType?.("calendar")?.status
+        ?? "",
+      ).toUpperCase();
+      if (calendarStatus !== "CONNECTED") {
+        return NextResponse.redirect(
+          new URL(
+            `${pending.redirectPath}${pending.redirectPath?.includes("?") ? "&" : "?"}error=${encodeURIComponent(
+              "Calendar connected but verification failed. Reconnect and approve calendar access.",
+            )}`,
+            request.url,
+          ),
+        );
+      }
+    } else if (pending.providerType === "google_search_console") {
+      const credentialId = `cred_gsc_${businessId}`;
+      await putDurableCredential({
+        platformStore,
+        vault,
+        workspaceId: businessId,
+        credentialId,
+        providerType: "google_search_console",
+        secrets: {
+          refreshToken: tokens.refreshToken,
+          accessToken: tokens.accessToken || null,
+          senderEmail: tokens.senderEmail || null,
+        },
+        metadata: { senderEmail: tokens.senderEmail || null },
+      });
+      await ctx.service.connectGoogleSearchConsole({
         credentialId,
         senderEmail: tokens.senderEmail,
         platformActiveKnowledgeCount: knowledgeCount,

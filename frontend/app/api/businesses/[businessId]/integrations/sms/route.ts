@@ -31,9 +31,12 @@ export async function POST(
     }
 
     const credentialId = `cred_twilio_sms_${businessId}`;
+    const vault =
+      (ctx.service as any)?.connected?.integrationPlatform?.credentialVault
+      ?? getSharedCredentialVault();
     await putDurableCredential({
       platformStore,
-      vault: getSharedCredentialVault(),
+      vault,
       workspaceId: businessId,
       credentialId,
       providerType: "twilio_sms",
@@ -47,6 +50,24 @@ export async function POST(
       fromNumber,
       platformActiveKnowledgeCount: knowledgeCount,
     });
+
+    if (body?.a2pComplete === true) {
+      await ctx.service.markSmsA2pRegistrationComplete(knowledgeCount);
+    }
+
+    const status = String(connection?.status ?? "").toUpperCase();
+    if (status !== "CONNECTED") {
+      const healthMsg = String(connection?.health?.message ?? "").trim();
+      return NextResponse.json(
+        {
+          error: healthMsg
+            || "Twilio credentials were saved but verification failed. Double-check Account SID, Auth Token, and From number.",
+          code: "VERIFY_FAILED",
+          connection: { id: connection?.id, connectionType: connection?.connectionType, status: connection?.status },
+        },
+        { status: 400 },
+      );
+    }
 
     return NextResponse.json({
       ok: true,

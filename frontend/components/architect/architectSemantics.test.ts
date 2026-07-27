@@ -31,6 +31,7 @@ import {
   reasoningMoments,
   researchFindingCards,
   scrubProposalPurpose,
+  summarizeInstallProgress,
 } from "./architectSemantics.ts";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -193,12 +194,20 @@ test("install experience uses humanized staged progress", () => {
   assert.equal(stages[0].state, "done");
   assert.equal(humanInstallState("pending"), "Waiting");
   assert.equal(stages[5].state, "pending");
+  assert.equal(HUMAN_COPY.installing, "Building your workspace…");
+  const progress = summarizeInstallProgress([
+    { type: "INSTALL_MODULE", status: "applied" },
+    { type: "INSTALL_EMPLOYEE", status: "applied" },
+    { type: "INSTALL_WORKFLOW", status: "requires_setup" },
+  ]);
+  assert.equal(progress.percent, 100);
+  assert.ok(progress.stages.some((stage) => stage.id === "employees" && stage.state === "done"));
 });
 
 test("executive briefing and completion actions", () => {
   assert.deepEqual(
     ARCHITECT_COMPLETION_ACTIONS.map((action) => action.id),
-    ["open_portal", "invite", "improve"],
+    ["open_portal"],
   );
   assert.equal(ARCHITECT_COMPLETION_ACTIONS[0].label, "Open your business");
   const briefing = executiveBriefing({
@@ -211,16 +220,17 @@ test("executive briefing and completion actions", () => {
       integrations: { items: [] },
     },
   });
-  assert.equal(briefing.headline, "Your business is live");
-  assert.equal(briefing.highlights.find((item) => item.id === "workspaces")?.value, 2);
-  assert.ok(briefing.actions.length >= 3);
+  assert.equal(briefing.headline, "Open your business");
+  assert.equal(briefing.highlights.find((item) => item.id === "navigation")?.value, 2);
+  assert.equal(briefing.actions.length, 1);
+  assert.equal(briefing.actions[0].id, "open_portal");
 
   const junk = executiveBriefing({
     businessName: "ok",
     explanation: { summary: "ok will run on VIBETech with 7 workspaces." },
   });
   assert.equal(junk.businessName, "Your business");
-  assert.match(junk.summary, /Your business will run on VIBETech/);
+  assert.match(junk.summary, /ready\. Open Home/);
 });
 
 test("human copy bans technical install jargon", () => {
@@ -349,7 +359,7 @@ test("Architect workspace mounts approve walkthrough instead of portal preview",
   assert.ok(!workspace.includes("PortalPreviewImmersive"));
   assert.ok(!workspace.includes("portal_preview"));
   assert.match(workspace, /continuous\) \{\s*setCenterMode\("conversation"\)/s);
-  assert.match(workspace, /Review recommendation/);
+  assert.ok(!workspace.includes("Review recommendation"));
   assert.match(walkthrough, /Back/);
   assert.match(walkthrough, /Next/);
   assert.ok(!walkthrough.includes("Business health"));

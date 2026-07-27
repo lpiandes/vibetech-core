@@ -25,8 +25,8 @@ export class BusinessDiscoveryEngine {
 
   initialPrompt() {
     return deepFreeze({
-      text: "In a few sentences, what does your business do?",
-      why: "A short description is enough to start. Architect will ask only what still matters.",
+      text: "Describe your business and what you want or need from VIBETech.",
+      why: "Start with the big picture — what you do and what success looks like. We’ll ask specialized follow-ups from there.",
     });
   }
 
@@ -37,6 +37,47 @@ export class BusinessDiscoveryEngine {
       businessSummary: session.businessSummary,
       limit,
     });
+  }
+
+  /**
+   * Package-Ask / interview: prefer LLM-rewritten prompts from the scoped bank.
+   */
+  async nextQuestionsAsync(session, { limit = 3 } = {}) {
+    return this.#resolveNextQuestions(session, {
+      answers: session.answers,
+      businessSummary: session.businessSummary,
+      limit,
+    });
+  }
+
+  /**
+   * Prefer LLM-specialized follow-ups (bank IDs only); fall back to deterministic planner.
+   */
+  async #resolveNextQuestions(sessionLike, { answers, businessSummary, limit = 3 } = {}) {
+    const planned = this.planner.plan({
+      answers,
+      evidence: sessionLike?.evidence ?? [],
+      businessSummary,
+      limit: Math.max(limit, 8),
+    });
+    // Package-Ask must stay deterministic — LLM rewrites reintroduce the full bank prompt.
+    if (businessSummary?.packageAsk || !this.intelligence?.proposeNextDiscoveryQuestions || planned.length === 0) {
+      return planned.slice(0, limit);
+    }
+    try {
+      const proposed = await this.intelligence.proposeNextDiscoveryQuestions({
+        session: { ...sessionLike, answers, businessSummary },
+        remainingBank: planned,
+        answered: answers,
+        limit,
+      });
+      if (Array.isArray(proposed) && proposed.length > 0) {
+        return proposed.slice(0, limit);
+      }
+    } catch {
+      /* deterministic fallback */
+    }
+    return planned.slice(0, limit);
   }
 
   async applyAnswer(session, {
@@ -104,6 +145,17 @@ export class BusinessDiscoveryEngine {
       relatedQuestionId: questionId,
     }));
 
+    // Once discovery has enough evidence, do not queue another question behind
+    // the recommendation transition. This prevents a question from flashing
+    // briefly while the client moves to assembly.
+    const nextQuestions = progress.readyForProposal
+      ? []
+      : await this.#resolveNextQuestions(session, {
+        answers,
+        businessSummary,
+        limit: 3,
+      });
+
     return deepFreeze({
       answers,
       businessSummary,
@@ -112,12 +164,7 @@ export class BusinessDiscoveryEngine {
       progress,
       summary,
       conversation,
-      nextQuestions: this.planner.plan({
-        answers,
-        evidence: session.evidence,
-        businessSummary,
-        limit: 3,
-      }),
+      nextQuestions,
     });
   }
 
@@ -126,7 +173,26 @@ export class BusinessDiscoveryEngine {
    * keep only non-inferable questions in the backlog.
    */
   async applyFreeText(session, { text, nowISO = new Date().toISOString() } = {}) {
-    const extracted = this.interpreter.extractFromFreeText(text);
+    let extracted = this.interpreter.extractFromFreeText(text);
+    if (this.intelligence?.extractFromFreeText) {
+      try {
+        const llmExtract = await this.intelligence.extractFromFreeText({ text, session });
+        if (llmExtract?.fields && typeof llmExtract.fields === "object") {
+          extracted = {
+            ...extracted,
+            fields: { ...extracted.fields, ...llmExtract.fields },
+            answeredQuestionIds: Array.from(new Set([
+              ...(extracted.answeredQuestionIds ?? []),
+              ...(Array.isArray(llmExtract.answeredQuestionIds) ? llmExtract.answeredQuestionIds : []),
+            ])),
+            note: llmExtract.note ?? extracted.note,
+            source: "llm+deterministic",
+          };
+        }
+      } catch {
+        /* keep deterministic extraction */
+      }
+    }
     const businessSummary = {
       ...session.businessSummary,
       ...extracted.fields,
@@ -164,12 +230,13 @@ export class BusinessDiscoveryEngine {
       text: String(text),
       at: nowISO,
     }));
-    const nextQuestions = this.planner.plan({
-      answers,
-      evidence: session.evidence,
-      businessSummary,
-      limit: 3,
-    });
+    const nextQuestions = progress.readyForProposal
+      ? []
+      : await this.#resolveNextQuestions(session, {
+        answers,
+        businessSummary,
+        limit: 3,
+      });
     conversation = appendConversation(conversation, createBuilderConversationMessage({
       messageId: `msg_assistant_free_${Date.parse(nowISO)}`,
       role: "assistant",

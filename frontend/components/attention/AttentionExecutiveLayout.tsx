@@ -1,10 +1,11 @@
 "use client";
 
-import { useContext, useCallback } from "react";
+import { useContext, useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { MissionControlViewModelContext } from "@/components/mission-control/MissionControlContext";
+import { useOptionalBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import StatusPill from "@/components/executive/StatusPill";
 import { cockpitColors, spacing, typography, radius, semanticColors } from "@/design/tokens";
 
@@ -20,19 +21,44 @@ function priorityTone(p: string): "danger" | "warning" | "neutral" {
 
 export default function AttentionExecutiveLayout() {
   const viewModel = useContext(MissionControlViewModelContext);
+  const scope = useOptionalBusinessScope();
   const router = useRouter();
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const items = safeArray(viewModel?.attentionItems ?? viewModel?.needsYourAttention);
+  const businessId = String(
+    scope?.businessId
+    ?? (viewModel as { businessId?: string } | null)?.businessId
+    ?? "",
+  );
 
   const handleApproval = useCallback(
     async (approvalId: string, decision: string) => {
-      await fetch(`/api/approvals/${approvalId}/decision`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision }),
-      });
-      router.refresh();
+      if (!businessId) {
+        setActionError("Missing business context — refresh and try again.");
+        return;
+      }
+      setActionError(null);
+      setPendingId(approvalId);
+      try {
+        const res = await fetch(`/api/approvals/${approvalId}/decision`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision, businessId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          setActionError(String(data.error ?? "Could not save your decision."));
+          return;
+        }
+        router.refresh();
+      } catch {
+        setActionError("Network error — try again.");
+      } finally {
+        setPendingId(null);
+      }
     },
-    [router],
+    [router, businessId],
   );
 
   return (
@@ -55,6 +81,20 @@ export default function AttentionExecutiveLayout() {
           Only items requiring meaningful human intervention
         </div>
       </div>
+
+      {actionError ? (
+        <div style={{
+          padding: spacing.sm,
+          borderRadius: radius.medium,
+          border: `1px solid ${semanticColors.criticalBorder ?? "#fecaca"}`,
+          backgroundColor: "#fef2f2",
+          color: cockpitColors.critical ?? "#b91c1c",
+          fontSize: 13,
+          fontWeight: 650,
+        }}>
+          {actionError}
+        </div>
+      ) : null}
 
       {items.length === 0 ? (
         <div style={{ padding: spacing.md, color: cockpitColors.textMuted, borderRadius: radius.large, border: `1px solid ${cockpitColors.panelBorder}`, backgroundColor: cockpitColors.panel }}>

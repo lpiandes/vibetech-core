@@ -1,10 +1,12 @@
+import Link from "next/link";
+
 import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
 import { getAdminPlatformService } from "@/lib/admin/getAdminServices";
-import { PageHeader } from "@/components/product";
-import ShellPanel from "@/components/shell/ShellPanel";
+import AdminVtPage from "@/components/admin/AdminVtPage";
+import AdminDataTable from "@/components/admin/AdminDataTable";
 import StatusBadge from "@/components/product/StatusBadge";
-import { cockpitColors, spacing } from "@/design/tokens";
-import Link from "next/link";
+import { VtDockLink } from "@/components/product/VtChrome";
+import { cockpitColors } from "@/design/tokens";
 
 export default async function AdminBusinessesPage() {
   const user = await requirePlatformAdmin();
@@ -13,39 +15,33 @@ export default async function AdminBusinessesPage() {
     platformRole: user.platformRole,
   });
 
+  const rows = (result.businesses ?? []).map((business: any) => [
+    <strong key="n">{business.name}</strong>,
+    business.industry ?? "—",
+    <StatusBadge key="o" label={String(business.ownerStatus)} tone="neutral" />,
+    business.installedOsVersion ?? "—",
+    business.readiness ?? "—",
+    <Link key="a" href={`/admin/businesses/${business.id}`} style={{ color: cockpitColors.accent, fontWeight: 800 }}>
+      Open
+    </Link>,
+  ]);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: spacing.lg }}>
-      <PageHeader title="Businesses" description="Directory of client businesses" />
-      <ShellPanel title="Business directory" subtitle="Open a business to see their real Home in Admin view">
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead>
-              <tr>
-                {["Name", "Industry", "Owner", "OS", "Readiness", "Actions"].map((label) => (
-                  <th key={label} style={{ textAlign: "left", padding: 8, borderBottom: `1px solid ${cockpitColors.panelBorder}` }}>{label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(result.businesses ?? []).map((business: any) => (
-                <tr key={business.id}>
-                  <td style={{ padding: 8 }}>{business.name}</td>
-                  <td style={{ padding: 8 }}>{business.industry}</td>
-                  <td style={{ padding: 8 }}><StatusBadge label={String(business.ownerStatus)} tone="neutral" /></td>
-                  <td style={{ padding: 8 }}>{business.installedOsVersion ?? "—"}</td>
-                  <td style={{ padding: 8 }}>{business.readiness}</td>
-                  <td style={{ padding: 8, display: "flex", gap: 8 }}>
-                    <Link href={`/admin/businesses/${business.id}`}>Open</Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!result.businesses?.length ? (
-            <div style={{ color: cockpitColors.textMuted, padding: spacing.md }}>No businesses yet.</div>
-          ) : null}
-        </div>
-      </ShellPanel>
-    </div>
+    <AdminVtPage
+      title="Businesses"
+      dock={(
+        <>
+          <VtDockLink href="/platform">Create & invite</VtDockLink>
+          <VtDockLink href="/admin">Dashboard</VtDockLink>
+        </>
+      )}
+    >
+      <AdminDataTable
+        title="Business directory"
+        headers={["Name", "Industry", "Owner", "OS", "Readiness", "Actions"]}
+        rows={rows}
+        emptyLabel="No businesses yet."
+      />
+    </AdminVtPage>
   );
 }

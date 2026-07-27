@@ -48,17 +48,52 @@ async function journey({
 
   // Answer key remaining questions until proposal-ready or force propose with enough summary.
   let sessionId = started.session.sessionId;
-  for (const [questionId, answer] of [
+  const baseAnswers = [
     ["q_company_name", businessName],
+    ["q_website", websiteFixture?.url ?? "We do not have a website yet"],
     ["q_industry", description],
     ["q_services", "core services"],
     ["q_customers", "customers"],
+    ["q_value_promise", "reliable service and clear communication"],
     ["q_roles", "owner, manager, employee"],
     ["q_repetitive_work", "follow-ups"],
+    ["q_desired_workflows", "FB lead comes in -> email -> SMS -> update pipeline"],
+    ["q_bottlenecks", "manual coordination"],
     ["q_approvals", "customer messages"],
+    ["q_communications", "email and text"],
+    ["q_scheduling", "Yes, the team schedules appointments and events"],
+    ["q_lead_sources", "website and referrals"],
+    ["q_documents", "We have operating policies and templates"],
+    ["q_integrations", "gmail, google_calendar, twilio_sms"],
     ["q_pain_points", "manual coordination"],
     ["q_desired_outcomes", "clear workspaces and approvals"],
-  ]) {
+    ["q_digital_workforce", "Intake coordinator"],
+  ];
+  const lowerDescription = description.toLowerCase();
+  const packAnswers = /dental/.test(lowerDescription)
+    ? [
+      ["q_dental_pms", "Dentrix"],
+      ["q_dental_billing", "Insurance and patient billing are reviewed by the office manager"],
+      ["q_dental_recall", "Recall is reviewed weekly and approved before sending"],
+      ["q_dental_appointment_model", "Front desk schedules appointments"],
+      ["q_dental_first_reply", "Hours, insurance accepted, and next available appointment"],
+    ]
+    : /hockey|sports|club/.test(lowerDescription)
+      ? [
+        ["q_sports_teams", "U12 and U14 travel teams"],
+        ["q_sports_schedule", "Coaches schedule practices, games, and tournaments with facilities"],
+        ["q_sports_fundraising", "Track sponsor outreach and owner-approved fundraisers"],
+        ["q_sports_opponents", "Track opponents, facilities, and ice time in the schedule"],
+        ["q_sports_parent_comms", "Email and text with parent approval"],
+      ]
+      : /property/.test(lowerDescription)
+        ? [
+          ["q_other_vertical_shape", "We manage homes and coordinate leasing, maintenance, and owner communication"],
+          ["q_other_primary_workflow", "Requests are routed to the right person and reviewed before external messages send"],
+          ["q_other_communication_priority", "Keep owners, residents, and vendors informed with approved email and text"],
+        ]
+        : [];
+  for (const [questionId, answer] of [...baseAnswers, ...packAnswers]) {
     await service.answer({ sessionId, questionId, answer });
   }
 
@@ -104,7 +139,7 @@ async function journey({
   return { service, proposed, installed, sessionId };
 }
 
-test("property management AI Builder journey", async () => {
+test("unsupported property-management AI Builder journey remains universal and never installs a property fixture", async () => {
   const { proposed, installed } = await journey({
     businessId: "biz_builder_pm",
     businessName: "Harbor Property Group",
@@ -115,12 +150,12 @@ test("property management AI Builder journey", async () => {
     },
     changeText: "Add a weekly newsletter",
   });
-  assert.ok(proposed.specification.modules.some((module) => module.moduleId === "properties"));
-  assert.ok(installed.installation.configuration.modules.some((module) => module.moduleId === "properties"));
+  assert.ok(!proposed.specification.modules.some((module) => module.moduleId === "properties"));
+  assert.ok(!installed.installation.configuration.modules.some((module) => module.moduleId === "properties"));
 });
 
-test("dental practice AI Builder journey", async () => {
-  const { proposed } = await journey({
+test("dental practice AI Builder journey installs its workflows and CRM pipelines", async () => {
+  const { proposed, installed } = await journey({
     businessId: "biz_builder_dental",
     businessName: "Bright Smile Dental",
     description: "Family dental practice with cleanings, exams, and treatment plans for patients.",
@@ -132,6 +167,10 @@ test("dental practice AI Builder journey", async () => {
   });
   assert.ok(proposed.specification.modules.some((module) => module.label === "Patients"));
   assert.ok(proposed.specification.modules.some((module) => module.moduleId === "appointments"));
+  assert.ok(proposed.specification.workflowDefinitions.some((workflow) => workflow.workflowId === "patient_intake"));
+  assert.ok(proposed.specification.pipelineDefinitions.some((pipeline) => pipeline.pipelineId === "new_patient_intake"));
+  assert.ok(installed.installation.configuration.workflows.some((workflow) => workflow.workflowId === "patient_intake"));
+  assert.ok(installed.installation.configuration.pipelines.some((pipeline) => pipeline.pipelineId === "new_patient_intake"));
   const employee = resolveRoleAccess({
     specification: proposed.specification,
     membershipRole: MEMBERSHIP_ROLES.EMPLOYEE,
@@ -140,14 +179,23 @@ test("dental practice AI Builder journey", async () => {
   assert.equal(canAccessModule({ roleAccess: employee, moduleId: "billing" }), false);
 });
 
-test("hockey travel club AI Builder journey with tenant isolation and support access", async () => {
+test("sports-club AI Builder journey stays answer-driven and tenant-isolated", async () => {
   const a = await journey({
     businessId: "biz_builder_hockey",
     businessName: "Northline Travel Hockey",
     description: "Youth travel hockey club with teams, practices, drills, and scouting reports.",
-    changeText: "Give coaches access to scouting",
   });
   assert.ok(a.proposed.specification.modules.some((module) => module.moduleId === "teams"));
+  assert.ok(a.proposed.specification.modules.some((module) => module.moduleId === "players"));
+  assert.ok(a.proposed.specification.workflowDefinitions.some((workflow) => workflow.workflowId === "player_registration"));
+  assert.ok(a.installed.installation.configuration.pipelines.some((pipeline) => pipeline.pipelineId === "player_registration"));
+  const customized = (a.proposed.specification.employeeDefinitions ?? []).find((employee) => (
+    employee?.operatingContract?.automationPath?.customized
+  ));
+  assert.ok(customized, "desired workflows should install a customized automation path");
+  assert.ok(
+    customized.operatingContract.automationPath.steps.some((step) => step.type === "send_sms"),
+  );
 
   const b = await journey({
     businessId: "biz_builder_pm_iso",

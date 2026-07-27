@@ -7,6 +7,26 @@ import {
   presentAskHistory,
 } from "./askSessionResume.ts";
 
+test("package Ask sessions are never treated as continuous chat", () => {
+  assert.equal(
+    isContinuousImproveSession({
+      sessionId: "abs_pkg",
+      mode: "expand_existing_business",
+      metadata: { packageAsk: true },
+    }),
+    false,
+  );
+  assert.equal(
+    isContinuousImproveSession({
+      sessionId: "abs_cfg",
+      mode: "configure_existing_business",
+      metadata: { packageAsk: true },
+      businessSummary: { packageAsk: true },
+    }),
+    false,
+  );
+});
+
 test("continuous Ask never resumes discovery leftovers", () => {
   const discovery = {
     sessionId: "abs_old",

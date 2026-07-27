@@ -1,10 +1,16 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
 import { platformStore } from "@/lib/server/compose";
+import { liveIntegrationAvailability } from "@/lib/server/liveIntegrations";
 import BusinessOnboardingHome from "@/components/operating/BusinessOnboardingHome";
 import MissionControlRenderer from "@/components/mission-control/MissionControlRenderer";
 import { composePortalModel } from "@/lib/portal-renderer/composePortalModel.js";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
+import { mergeBosEmployeesForTeam } from "@/lib/team/mergeBosEmployeesForTeam.js";
+import { reconcilePackWorkforce } from "@/lib/team/reconcilePackWorkforce.js";
+import { reconcileOperatingContracts } from "@/lib/team/reconcileOperatingContracts.js";
+import { redirect } from "next/navigation";
+import { readPendingPackageAsk } from "../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
 /**
  * Home is one experience with two moments:
@@ -18,8 +24,9 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
 
     let hasInstalledOs = false;
     let installedSpecification: Record<string, unknown> | null = null;
+    let installation: any = null;
     try {
-      const installation = await platformStore.getBusinessOSInstallation(businessId);
+      installation = await platformStore.getBusinessOSInstallation(businessId);
       let specification = null;
       if (installation?.specificationId) {
         const specRow = await platformStore.getBusinessOSSpecification({
@@ -47,7 +54,64 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
 
     const knowledgeDocumentCount = await platformStore.countActiveKnowledgeDocuments(businessId);
     markRequestTiming("KNOWLEDGE_DB");
-    ctx.service.refreshOperationalState(knowledgeDocumentCount);
+
+    const businessName = String(
+      (ctx as any).authz?.business?.name
+      ?? (installedSpecification as any)?.businessProfile?.businessName
+      ?? "",
+    );
+    const industry = String(
+      (ctx as any).authz?.business?.industry
+      ?? (ctx as any).service?.businessProfile?.industry
+      ?? (installedSpecification as any)?.businessProfile?.industry
+      ?? "",
+    );
+    const reconciled = hasInstalledOs
+      ? await reconcilePackWorkforce({
+        platformStore,
+        businessId,
+        installation,
+        specification: installedSpecification,
+        industry,
+        businessName,
+        operatingPackId: String(
+          (installedSpecification as any)?.operatingPackId
+          ?? installation?.configuration?.operatingPackId
+          ?? "",
+        ),
+      })
+      : { employees: [], healed: false, added: 0, industry: null };
+
+    const contractReconcile = hasInstalledOs
+      ? await reconcileOperatingContracts({
+        platformStore,
+        businessId,
+        installation: {
+          ...(installation ?? {}),
+          configuration: {
+            ...(installation?.configuration ?? {}),
+            employees: Array.isArray(reconciled.employees) ? reconciled.employees : [],
+          },
+        },
+        specification: installedSpecification,
+        industry: reconciled.industry ?? industry,
+        businessName,
+      })
+      : { employees: [], healed: false, updated: 0, industry: null };
+
+    const bosEmployees = mergeBosEmployeesForTeam({
+      configuration: {
+        ...(installation?.configuration ?? {}),
+        employees: Array.isArray(contractReconcile.employees) && contractReconcile.employees.length
+          ? contractReconcile.employees
+          : (Array.isArray(reconciled.employees) ? reconciled.employees : []),
+      },
+      specification: installedSpecification as any,
+    });
+
+    ctx.service.refreshOperationalState(knowledgeDocumentCount, {
+      bosEmployeeDefinitions: bosEmployees.length ? bosEmployees : null,
+    });
     markRequestTiming("REFRESH_OPERATIONAL_STATE");
 
     const home = ctx.service.loadBusinessHomeViewModel({
@@ -67,6 +131,13 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       );
     }
 
+    const pendingPackageAsk = readPendingPackageAsk(
+      (ctx as any).authz?.business?.packageConfiguration ?? {},
+    );
+    if (pendingPackageAsk) {
+      redirect(`/b/${encodeURIComponent(businessId)}/architect?packageAsk=1`);
+    }
+
     // Product 2 — installed: editorial operating Home.
     const ownerFirstName = String((ctx.user as { name?: string | null } | undefined)?.name ?? "")
       .trim()
@@ -75,15 +146,138 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       ownerFirstName,
       setupChecklist: Array.isArray(home.checklist) ? home.checklist : [],
     });
+
+    const proofRows = await platformStore.listCapabilityProofRecords(businessId).catch(() => []);
+    const proofRecords: Record<string, {
+      ok: boolean;
+      verified: boolean;
+      at: string | null;
+      detail?: Record<string, unknown>;
+      deferredByOwner?: boolean;
+    }> = {};
+    for (const row of proofRows) {
+      const detail = row?.detail && typeof row.detail === "object" ? row.detail : {};
+      const honest = isHonestCapabilityProof(row.capabilityId, row, detail);
+      proofRecords[row.capabilityId] = {
+        ok: Boolean(row.ok) && honest,
+        verified: Boolean(row.verified),
+        at: row.updatedAt ?? row.createdAt ?? null,
+        detail,
+        deferredByOwner: detail.deferredByOwner === true,
+      };
+    }
+
+    // Prefer live ConnectionRuntime (includes calendar/SMS after OAuth). Snapshot alone can omit them.
+    const runtimeConnections =
+      (ctx.service as any)?.connected?.integrationPlatform?.connectionRuntime?.getConnections?.() ?? [];
+    const snapshotConnections =
+      (ctx.service as any)?.connected?.connectedSystemsSnapshot?.connections ?? [];
+    const connectionStatuses: Record<string, string> = {};
+    for (const conn of snapshotConnections) {
+      if (conn?.id) connectionStatuses[String(conn.id)] = String(conn.status ?? "NOT_CONNECTED");
+    }
+    for (const conn of runtimeConnections) {
+      const id = String(conn?.connectionType ?? "");
+      if (!id) continue;
+      connectionStatuses[id] = String(conn?.status ?? "NOT_CONNECTED");
+    }
+    const connections = (snapshotConnections.length
+      ? snapshotConnections
+      : runtimeConnections.map((conn: any) => ({
+        id: String(conn.connectionType),
+        status: String(conn.status ?? "NOT_CONNECTED"),
+        displayName: String(conn.connectionType ?? ""),
+      }))
+    ).map((conn: any) => {
+      const id = String(conn?.id ?? conn?.connectionType ?? "");
+      const live = id ? connectionStatuses[id] : null;
+      return live ? { ...conn, status: live } : conn;
+    });
+
+    const smsCreds = await platformStore.listIntegrationCredentialsForWorkspace(businessId).catch(() => []);
+    const smsCred = (Array.isArray(smsCreds) ? smsCreds : []).find((row: any) => {
+      const provider = String(row?.providerType ?? "");
+      const id = String(row?.credentialId ?? "");
+      return provider === "twilio_sms" || id.includes("twilio_sms");
+    });
+    const smsMeta = smsCred?.metadata && typeof smsCred.metadata === "object" ? smsCred.metadata : {};
+    const smsRuntime = runtimeConnections.find((c: any) => String(c?.connectionType ?? "") === "sms_channel");
+    const smsRuntimeMeta = smsRuntime?.metadata && typeof smsRuntime.metadata === "object" ? smsRuntime.metadata : {};
+    const smsBrand = smsMeta.brand ?? smsRuntimeMeta.brand ?? null;
+    const smsSetup = {
+      connected: String(connectionStatuses.sms_channel ?? "").toUpperCase() === "CONNECTED",
+      fromNumber: String(smsMeta.fromNumber ?? smsRuntimeMeta.fromNumber ?? smsCred?.secrets?.fromNumber ?? ""),
+      a2pRegistrationStatus: String(
+        smsMeta.a2pRegistrationStatus
+        ?? smsRuntimeMeta.a2pRegistrationStatus
+        ?? "pending",
+      ),
+      brand: smsBrand,
+    };
+
+    const enrichedViewModel = {
+      ...missionControlViewModel,
+      proofRecords,
+      connectionStatuses,
+      connections,
+      smsSetup,
+      knowledgeCount: knowledgeDocumentCount,
+      liveFlags: liveIntegrationAvailability(),
+      bosEmployees,
+    };
     markRequestTiming("MISSION_CONTROL", {
-      bytes: JSON.stringify(missionControlViewModel).length,
+      bytes: JSON.stringify(enrichedViewModel).length,
     });
 
     return (
       <MissionControlRenderer
-        viewModel={missionControlViewModel as never}
+        viewModel={enrichedViewModel as never}
         variant="mission_control"
       />
     );
   });
+}
+
+
+/** Outbound proves only count when a real provider reference exists (not simulated). */
+function isHonestCapabilityProof(
+  capabilityId: string,
+  row: { ok?: boolean; proveAction?: string | null },
+  detail: Record<string, unknown>,
+) {
+  const id = String(capabilityId ?? "");
+  const action = String(row?.proveAction ?? detail?.proveAction ?? "");
+  const isSms = id === "sms_send" || action === "send_test_sms";
+  const isEmail = id === "customer_email_send" || action === "send_test_email";
+  const isCalendar = id === "calendar_scheduling" || action === "create_test_event";
+  if (!isSms && !isEmail && !isCalendar) return true;
+  if (detail?.simulated === true) return false;
+  if (detail?.awaitingOwnerConfirm === true) return false;
+
+  const execution = detail?.execution && typeof detail.execution === "object"
+    ? (detail.execution as Record<string, unknown>)
+    : {};
+  const nested = detail?.detail && typeof detail.detail === "object"
+    ? (detail.detail as Record<string, unknown>)
+    : {};
+  const ref = detail?.externalReference
+    ?? execution?.externalReference
+    ?? nested?.externalReference
+    ?? detail?.messageId
+    ?? execution?.messageId
+    ?? nested?.messageId;
+  if (!ref) return false;
+  if (isSms) {
+    const delivery = String(
+      detail?.deliveryStatus
+      ?? execution?.deliveryStatus
+      ?? (detail?.delivery as { status?: string } | undefined)?.status
+      ?? (execution?.delivery as { status?: string } | undefined)?.status
+      ?? nested?.deliveryStatus
+      ?? "",
+    ).toLowerCase();
+    // Queued/accepted alone used to mark Done — require sent/delivered confirmation.
+    if (delivery !== "delivered" && delivery !== "sent") return false;
+  }
+  return true;
 }

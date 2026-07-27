@@ -1,5 +1,6 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { presentEmployeeOperatingStatus } from "./presentEmployeeOperatingStatus.js";
+import { presentTeammateHomeGlance } from "./presentTeammateHomeGlance.js";
 
 /**
  * Supervision Home composition — presentation only from existing Mission Control experience.
@@ -242,18 +243,25 @@ function buildRecentActivity({ timeline, handled, improvements, briefing, base }
 }
 
 function normalizeDecisionItem(item, base) {
+  const preferredHref = resolveBusinessHref(item.workHref ?? item.href, base);
   const actions = asArray(item.availableActions).map((action) => deepFreeze({
     id: String(action.id ?? action.label ?? "action"),
     label: String(action.label ?? "Open"),
-    href: resolveBusinessHref(action.href, base),
+    href: resolveBusinessHref(action.href, base) || preferredHref,
   })).filter((action) => action.href);
+  if (preferredHref && !actions.some((action) => action.href === preferredHref)) {
+    actions.unshift(deepFreeze({ id: "open_work", label: "Open draft", href: preferredHref }));
+  }
   if (base && !actions.some((action) => /review|connect|open/i.test(action.label))) {
     actions.push(deepFreeze({ id: "review", label: "Review", href: `${base}/intelligence` }));
   }
+  const why = String(item.sourceType) === "specialty_draft"
+    ? [item.summary, item.reason].filter(Boolean).join(" — ")
+    : String(item.reason ?? item.summary ?? item.businessImpact ?? "");
   return deepFreeze({
     id: String(item.id),
     title: String(item.title ?? "Decision needed"),
-    why: String(item.reason ?? item.summary ?? item.businessImpact ?? ""),
+    why,
     evidenceSummary: summarizeEvidence(item),
     proposedAction: String(
       item.recommendedAction?.label
@@ -269,7 +277,7 @@ function normalizeDecisionItem(item, base) {
     askHref: base
       ? `${base}/architect?${item.intelligenceCandidateId
         ? `intelligenceCandidateId=${encodeURIComponent(item.intelligenceCandidateId)}`
-        : item.sourceId && item.sourceType === "work"
+        : item.sourceId && (item.sourceType === "work" || item.sourceType === "specialty_draft")
           ? `workId=${encodeURIComponent(item.sourceId)}`
           : ""}`.replace(/\?$/, "")
       : null,
@@ -357,7 +365,12 @@ function normalizeEmployee(emp, base) {
   return deepFreeze({
     id: employeeId,
     name: String(emp.name ?? "Teammate"),
-    responsibility: String(emp.responsibility ?? emp.role ?? ""),
+    responsibility: presentTeammateHomeGlance({
+      purpose: emp.purpose,
+      responsibility: emp.responsibility,
+      role: emp.role,
+      description: emp.description,
+    }),
     status: operating.id,
     statusLabel: operating.label,
     currentAssignment: emp.currentHandling == null ? null : String(emp.currentHandling),

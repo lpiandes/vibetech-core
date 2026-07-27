@@ -5,6 +5,8 @@ import { getDefaultBlueprintRegistry } from "../blueprints/BlueprintRegistry.js"
 import { BUSINESS_OS_EMPLOYEE_ARCHETYPES } from "../business-os/BusinessOSEmployeeArchetypes.js";
 import { listDashboardComponentTypes, BUSINESS_OS_DASHBOARD_COMPONENTS } from "../business-os/BusinessOSDashboardComponentRegistry.js";
 import { getDefaultCapabilityPackageRegistry } from "../ai-builder/capability-packages/CapabilityPackageRegistry.js";
+import { buildOperatorActions } from "./buildOperatorActions.js";
+import { notifyPlatformOperators } from "./notifyPlatformOperators.js";
 
 function fail(message) {
   throw new Error(`AdminPlatformService: ${message}`);
@@ -75,17 +77,33 @@ export class AdminPlatformService {
 
     const failedInstalls = installations.filter((entry) => /fail|partial/i.test(String(entry.status ?? ""))).length;
 
+    const operatorActions = await buildOperatorActions({
+      businesses,
+      listCredentials: (businessId) =>
+        this.platformStore.listIntegrationCredentialsForWorkspace?.(businessId) ?? [],
+      failedInstalls: installations
+        .filter((entry) => /fail|partial/i.test(String(entry.status ?? "")))
+        .map((entry) => ({
+          ...entry,
+          businessName: businesses.find((b) => String(b.id) === String(entry.businessId))?.name ?? null,
+        })),
+    });
+
+    // Fire-and-forget email/Slack notify when configured (deduped; never blocks dashboard).
+    void notifyPlatformOperators({ actions: operatorActions, force: false }).catch(() => {});
+
     return deepFreeze({
       ok: true,
       metrics: {
         totalBusinesses: businesses.length,
         activeBusinesses: businesses.filter((entry) => !entry.archivedAt && entry.status !== "archived").length,
-        needingAttention: needsAttention,
+        needingAttention: Math.max(needsAttention, operatorActions.length),
         // Totals — never the length of a "recent" slice (that looked like hardcoded 8s).
         architectSessions: sessions.length,
         installations: installations.length,
         failedOrPartialInstalls: failedInstalls,
         activeSupportSessions: supportActive.length,
+        operatorActions: operatorActions.length,
         // Keep legacy keys for older UI bindings.
         recentArchitectSessions: sessions.length,
         recentInstallations: installations.length,
@@ -95,7 +113,13 @@ export class AdminPlatformService {
         .map(summarizeSession),
       recentInstallations: installations.slice(0, 6),
       activeSupportSessions: supportActive,
-      platformAlerts: buildPlatformAlerts({ failedInstalls, needsAttention, supportActive }),
+      platformAlerts: buildPlatformAlerts({
+        failedInstalls,
+        needsAttention,
+        supportActive,
+        operatorActions,
+      }),
+      operatorActions,
       recentAudits: audits.slice(0, 6).map(summarizeAudit),
       capabilityGaps: collectGaps(sessions),
       businesses: businesses
@@ -178,6 +202,7 @@ export class AdminPlatformService {
         id: String(business.id),
         name: business.name,
         industry: business.industry ?? business.kind ?? null,
+        packageConfiguration: business.packageConfiguration ?? {},
         ownerStatus,
         members: members.map((member) => ({
           userId: member.userId,
@@ -489,8 +514,15 @@ function summarizeInstallation(installation) {
   };
 }
 
-function buildPlatformAlerts({ failedInstalls, needsAttention, supportActive }) {
+function buildPlatformAlerts({ failedInstalls, needsAttention, supportActive, operatorActions = [] }) {
   const alerts = [];
+  if (operatorActions.length > 0) {
+    alerts.push({
+      id: "operator_actions",
+      label: `${operatorActions.length} exception(s) need you — open Platform exceptions below`,
+      level: "warning",
+    });
+  }
   if (failedInstalls > 0) {
     alerts.push({ id: "failed_installs", label: `${failedInstalls} failed/partial install(s)`, level: "warning" });
   }

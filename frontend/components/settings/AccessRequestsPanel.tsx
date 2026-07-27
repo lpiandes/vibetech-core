@@ -85,9 +85,6 @@ export default function AccessRequestsPanel() {
     <div style={{ display: "grid", gap: spacing.md }}>
       <div>
         <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Access requests</h2>
-        <p style={{ margin: "6px 0 0", color: cockpitColors.textSecondary, fontSize: typography.caption.fontSize }}>
-          Request additional modules or permissions. Owners approve — nothing is granted silently.
-        </p>
       </div>
       {error ? <ProductErrorBanner error={error} /> : null}
       {success ? (

@@ -25,7 +25,7 @@ export async function POST(
         specificationId: installation.specificationId,
         specificationVersion: installation.specificationVersion ?? null,
       }).catch(() => null);
-      employees = Array.isArray(spec?.employeeDefinitions) ? spec.employeeDefinitions : [];
+      employees = Array.isArray(spec?.specification?.employeeDefinitions) ? spec.specification.employeeDefinitions : [];
     }
 
     const found = employees.find(

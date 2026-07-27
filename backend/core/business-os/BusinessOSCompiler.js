@@ -211,6 +211,28 @@ export class BusinessOSCompiler {
       }));
     }
 
+    for (const pipeline of asArray(specification.pipelineDefinitions)) {
+      actions.push(createInstallAction({
+        specification,
+        type: "INSTALL_PIPELINE",
+        targetId: pipeline.pipelineId,
+        label: `Install ${pipeline.label}`,
+        explanation: clientExplanation(`${pipeline.label} tracks a governed lifecycle with visible stages.`),
+        payload: pipeline,
+      }));
+    }
+
+    for (const workflow of asArray(specification.workflowDefinitions)) {
+      actions.push(createInstallAction({
+        specification,
+        type: "INSTALL_WORKFLOW",
+        targetId: workflow.workflowId,
+        label: `Install ${workflow.label}`,
+        explanation: clientExplanation(`${workflow.label} is installed with its trigger, stages, approvals, and escalation rules.`),
+        payload: workflow,
+      }));
+    }
+
     for (const employee of asArray(specification.employeeDefinitions)) {
       actions.push(createInstallAction({
         specification,

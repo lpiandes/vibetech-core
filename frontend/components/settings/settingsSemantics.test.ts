@@ -15,6 +15,7 @@ test("settings hub links include team, integrations, and knowledge when permitte
     links.map((link) => link.id),
     ["team", "integrations", "knowledge"],
   );
+  assert.equal(links.find((l) => l.id === "integrations")?.title, "Connections");
   assert.ok(links.every((link) => link.href.startsWith("/b/biz-1/")));
 });
 

@@ -9,6 +9,7 @@ import PrimaryButton from "@/components/product/PrimaryButton";
 import EntityAvatar from "@/components/shell/EntityAvatar";
 import ShellPanel from "@/components/shell/ShellPanel";
 import ShowingCoordinationDialog from "@/components/communications/ShowingCoordinationDialog";
+import InboxCrmContactLink from "@/components/communications/InboxCrmContactLink";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 import type { StatusBadgeTone } from "@/components/product/StatusBadge";
 import { deliveryStatusPresentation, formatInboxTimestamp } from "./inboxSemantics";
@@ -240,6 +241,11 @@ export default function CommunicationThreadDetailLayout({
             <div style={{ padding: spacing.md, display: "grid", gap: spacing.md }}>
               <ContextField label="Name" value={detail.contact.displayName ?? "Unknown contact"} />
               <ContextField label="Email" value={detail.contact.email ?? "—"} />
+              <InboxCrmContactLink
+                businessId={businessId}
+                email={detail.contact.email}
+                displayName={detail.contact.displayName}
+              />
             </div>
           </ShellPanel>
 
