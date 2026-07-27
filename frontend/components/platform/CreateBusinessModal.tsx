@@ -160,8 +160,9 @@ export default function CreateBusinessModal({
                       <span
                         style={{
                           display: "block",
-                          fontWeight: 700,
+                          fontWeight: 650,
                           fontSize: 14,
+                          fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
                           color: cockpitColors.textPrimary,
                           lineHeight: 1.35,
                         }}

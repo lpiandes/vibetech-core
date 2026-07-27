@@ -45,6 +45,8 @@ export default function SimpleModal({
           backgroundColor: cockpitColors.panel,
           border: `1px solid ${cockpitColors.panelBorder}`,
           boxShadow: "0 20px 50px rgba(0,0,0,0.15)",
+          fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          color: cockpitColors.textPrimary,
         }}
         onClick={(e) => e.stopPropagation()}
       >
