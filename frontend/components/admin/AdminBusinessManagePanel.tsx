@@ -111,7 +111,7 @@ export default function AdminBusinessManagePanel({
 
   async function archiveBusiness() {
     const confirmed = window.confirm(
-      `Archive “${initialName}”? It will leave active directories. This does not hard-delete data.`,
+      `Delete “${initialName}”? It will leave active directories. Data is archived, not hard-wiped.`,
     );
     if (!confirmed) return;
     setBusy(true);
@@ -123,14 +123,14 @@ export default function AdminBusinessManagePanel({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "Could not archive business.");
+        setError(data.error ?? "Could not delete business.");
         return;
       }
-      setMessage("Business archived.");
+      setMessage("Business deleted from active directories.");
       router.push("/admin/businesses");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not archive business.");
+      setError(err instanceof Error ? err.message : "Could not delete business.");
     } finally {
       setBusy(false);
     }
@@ -209,7 +209,7 @@ export default function AdminBusinessManagePanel({
           </SecondaryButton>
           {!archived ? (
             <SecondaryButton onClick={() => void archiveBusiness()} disabled={busy}>
-              Archive
+              Delete business
             </SecondaryButton>
           ) : null}
         </div>

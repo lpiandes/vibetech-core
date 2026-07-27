@@ -4,6 +4,7 @@ import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
 import { getAdminPlatformService } from "@/lib/admin/getAdminServices";
 import AdminVtPage from "@/components/admin/AdminVtPage";
 import AdminDataTable from "@/components/admin/AdminDataTable";
+import AdminDeleteBusinessButton from "@/components/admin/AdminDeleteBusinessButton";
 import StatusBadge from "@/components/product/StatusBadge";
 import { VtDockLink } from "@/components/product/VtChrome";
 import { cockpitColors } from "@/design/tokens";
@@ -21,9 +22,12 @@ export default async function AdminBusinessesPage() {
     <StatusBadge key="o" label={String(business.ownerStatus)} tone="neutral" />,
     business.installedOsVersion ?? "—",
     business.readiness ?? "—",
-    <Link key="a" href={`/admin/businesses/${business.id}`} style={{ color: cockpitColors.accent, fontWeight: 800 }}>
-      Open
-    </Link>,
+    <span key="a" style={{ display: "inline-flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+      <Link href={`/admin/businesses/${business.id}`} style={{ color: cockpitColors.accent, fontWeight: 800 }}>
+        Open
+      </Link>
+      <AdminDeleteBusinessButton businessId={business.id} businessName={String(business.name ?? "Business")} />
+    </span>,
   ]);
 
   return (

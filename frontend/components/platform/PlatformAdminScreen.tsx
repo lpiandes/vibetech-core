@@ -7,6 +7,7 @@ import CreateBusinessModal from "@/components/platform/CreateBusinessModal";
 import PrimaryButton from "@/components/product/PrimaryButton";
 import StatusBadge from "@/components/product/StatusBadge";
 import AdminVtPage from "@/components/admin/AdminVtPage";
+import AdminDeleteBusinessButton from "@/components/admin/AdminDeleteBusinessButton";
 import {
   VtCard,
   VtDockButton,
@@ -193,6 +194,11 @@ export default function PlatformAdminScreen() {
                     >
                       Open
                     </Link>
+                    <AdminDeleteBusinessButton
+                      businessId={b.id}
+                      businessName={b.name}
+                      onDeleted={() => void refresh()}
+                    />
                   </div>
                 </div>
               </VtCard>
