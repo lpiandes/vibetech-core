@@ -26,7 +26,11 @@ export async function PATCH(request: Request, { params }: Params) {
       const {
         applyPurchasedPackagesChange,
         normalizePurchasedPackages,
+        readPendingPackageAsk,
       } = await import("../../../../../../backend/core/platform/packages/SalesPackageCatalog.js");
+      const { syncPurchasedPackagesOntoInstallation } = await import(
+        "../../../../../../backend/core/platform/packages/syncPurchasedPackagesOntoInstallation.js"
+      );
       const packages = normalizePurchasedPackages(body.purchasedPackages);
       if (!packages.length) {
         return NextResponse.json(
@@ -34,13 +38,48 @@ export async function PATCH(request: Request, { params }: Params) {
           { status: 400 },
         );
       }
-      const packageConfiguration = applyPurchasedPackagesChange(
-        existing.packageConfiguration ?? {},
-        packages,
-      );
+      // Plain clone — never persist a frozen object tree.
+      let packageConfiguration = JSON.parse(JSON.stringify(
+        applyPurchasedPackagesChange(
+          existing.packageConfiguration ?? {},
+          packages,
+        ),
+      ));
+
+      const installationSync = await syncPurchasedPackagesOntoInstallation({
+        platformStore,
+        businessId,
+        purchasedPackages: packages,
+        packageConfiguration,
+        actorId: "platform_admin",
+        ensurePendingAsk: true,
+      });
+
+      // Sync may restore pending Ask when employees were missing from a prior broken save.
+      if (
+        installationSync?.pendingPackageAsk
+        && !readPendingPackageAsk(packageConfiguration)
+      ) {
+        packageConfiguration = {
+          ...packageConfiguration,
+          pendingPackageAsk: installationSync.pendingPackageAsk,
+        };
+      }
+
       business = await platformStore.updateBusinessPackageConfiguration({
         businessId,
         packageConfiguration,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        business,
+        pendingPackageAsk: readPendingPackageAsk(packageConfiguration),
+        installationSync: {
+          ok: Boolean(installationSync?.ok),
+          employeesAdded: Number(installationSync?.added ?? 0),
+          packagesInjected: installationSync?.packagesInjected ?? [],
+        },
       });
     }
 

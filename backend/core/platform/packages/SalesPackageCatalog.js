@@ -776,7 +776,8 @@ export function readPendingPackageAsk(packageConfiguration = {}) {
 
 /**
  * Diff previous vs next packages. Only newly added SKUs require Ask.
- * Removals clear pending Ask (nav/missions shrink immediately).
+ * Removals drop pending Ask entries that are no longer purchased.
+ * Re-saving the same package set MUST keep an existing pending Ask (do not clear).
  */
 export function applyPurchasedPackagesChange(packageConfiguration = {}, nextPurchasedPackages = []) {
   const previous = readPurchasedPackagesFromConfig(packageConfiguration);
@@ -784,18 +785,41 @@ export function applyPurchasedPackagesChange(packageConfiguration = {}, nextPurc
   const prevSet = new Set(previous);
   const added = next.filter((id) => !prevSet.has(id));
   let base = mergePurchasedPackagesIntoConfig(packageConfiguration, next);
+
   if (added.length) {
+    // Merge newly added into any existing pending Ask (don't drop earlier unfinished asks).
+    const existingPending = readPendingPackageAsk(packageConfiguration);
+    const pendingPackages = normalizePurchasedPackages([
+      ...(existingPending?.packages ?? []),
+      ...added,
+    ]).filter((id) => next.includes(id));
     base = {
       ...base,
       pendingPackageAsk: {
         status: "required",
-        packages: added,
-        createdAt: new Date().toISOString(),
-        sessionId: null,
+        packages: pendingPackages,
+        createdAt: existingPending?.createdAt || new Date().toISOString(),
+        sessionId: existingPending?.sessionId ?? null,
       },
     };
   } else {
-    delete base.pendingPackageAsk;
+    const existingPending = readPendingPackageAsk(packageConfiguration);
+    if (existingPending) {
+      const stillRelevant = existingPending.packages.filter((id) => next.includes(id));
+      if (stillRelevant.length) {
+        base = {
+          ...base,
+          pendingPackageAsk: {
+            ...existingPending,
+            packages: stillRelevant,
+          },
+        };
+      } else {
+        delete base.pendingPackageAsk;
+      }
+    } else {
+      delete base.pendingPackageAsk;
+    }
   }
   return deepFreeze(base);
 }

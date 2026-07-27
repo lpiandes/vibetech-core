@@ -46,9 +46,35 @@ export default async function BusinessScopedLayout({
 
   const permissions = Array.from(ctx.permissions).map(String);
   const businessName = ctx.authz.business.name;
-  const packageConfiguration = ctx.authz.business.packageConfiguration ?? {};
+  let packageConfiguration = ctx.authz.business.packageConfiguration ?? {};
   const purchasedPackages = readPurchasedPackagesFromConfig(packageConfiguration);
-  const pendingPackageAsk = readPendingPackageAsk(packageConfiguration);
+  let pendingPackageAsk = readPendingPackageAsk(packageConfiguration);
+
+  // Heal missing thin-SKU employees / wiped pending Ask from prior package-save bugs.
+  if (purchasedPackages.length) {
+    try {
+      const { healPurchasedPackagesForBusiness } = await import(
+        "../../../../backend/core/platform/packages/syncPurchasedPackagesOntoInstallation.js"
+      );
+      const heal = await healPurchasedPackagesForBusiness({
+        platformStore,
+        businessId,
+        packageConfiguration,
+        actorId: "layout_heal",
+      });
+      if (heal?.pendingRestored && heal.pendingPackageAsk) {
+        packageConfiguration = {
+          ...packageConfiguration,
+          pendingPackageAsk: heal.pendingPackageAsk,
+        };
+        pendingPackageAsk = heal.pendingPackageAsk as typeof pendingPackageAsk;
+      } else if (!pendingPackageAsk && heal?.pendingPackageAsk) {
+        pendingPackageAsk = heal.pendingPackageAsk as typeof pendingPackageAsk;
+      }
+    } catch {
+      // Non-fatal — page still renders.
+    }
+  }
 
   const headerStore = await headers();
   const pathname = headerStore.get("x-pathname") ?? "";

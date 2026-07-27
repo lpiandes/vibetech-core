@@ -244,6 +244,25 @@ test("applyPurchasedPackagesChange sets pending Ask only for newly added package
   assert.deepEqual(cleared.purchasedPackages, ["ai_receptionist", "scheduling"]);
 });
 
+test("re-saving the same packages keeps pending Ask", () => {
+  const withPending = applyPurchasedPackagesChange(
+    { purchasedPackages: ["ai_receptionist"] },
+    ["ai_receptionist", "social_background_screening"],
+  );
+  assert.deepEqual(
+    readPendingPackageAsk(withPending)?.packages,
+    ["social_background_screening"],
+  );
+  const resave = applyPurchasedPackagesChange(
+    withPending,
+    ["ai_receptionist", "social_background_screening"],
+  );
+  assert.deepEqual(
+    readPendingPackageAsk(resave)?.packages,
+    ["social_background_screening"],
+  );
+});
+
 test("package Ask focuses on catalog question IDs for scheduling", async () => {
   const {
     questionMatchesPackageAsk,

@@ -131,6 +131,7 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       );
     }
 
+    // Layout already heals + redirects pending Ask; keep a safety redirect here.
     const pendingPackageAsk = readPendingPackageAsk(
       (ctx as any).authz?.business?.packageConfiguration ?? {},
     );
