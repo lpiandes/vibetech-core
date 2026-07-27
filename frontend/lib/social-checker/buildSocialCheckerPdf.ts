@@ -1,5 +1,5 @@
 /**
- * Minimal text PDF builder (no deps) for Social Checker result downloads.
+ * Minimal text PDF builder for categorized Social Checker downloads.
  * Browser-safe (TextEncoder) — no Node Buffer.
  */
 function pdfEscape(text: string) {
@@ -10,9 +10,36 @@ function byteLength(s: string) {
   return new TextEncoder().encode(s).length;
 }
 
+type Hit = {
+  network?: string;
+  kind?: string;
+  title?: string;
+  url?: string;
+  snippet?: string;
+  confidence?: number;
+};
+
+type Platform = {
+  network: string;
+  label: string;
+  profile?: Hit | null;
+  posts?: Hit[];
+  mentions?: Hit[];
+};
+
+function pushHit(lines: string[], hit: Hit, label: string) {
+  lines.push(`  [${label}] ${hit.title || "Untitled"}`);
+  if (hit.url) lines.push(`    ${hit.url}`);
+  if (hit.snippet) lines.push(`    ${hit.snippet}`);
+  if (hit.confidence != null) lines.push(`    Confidence: ${hit.confidence}`);
+  lines.push("");
+}
+
 export function buildSocialCheckerPdf(report: {
   subject: { name?: string; handle?: string | null };
-  profiles: Array<{ network?: string; title?: string; url?: string; snippet?: string; confidence?: number }>;
+  profiles?: Hit[];
+  platforms?: Platform[];
+  discoveredHandles?: string[];
   generatedAt?: string;
   disclaimer?: string;
 }): Blob {
@@ -21,20 +48,36 @@ export function buildSocialCheckerPdf(report: {
     `Subject: ${report.subject?.name || "—"}${report.subject?.handle ? ` (@${report.subject.handle})` : ""}`,
     `Generated: ${report.generatedAt || new Date().toISOString()}`,
     "",
-    "Profiles",
-    "-------",
   ];
 
-  if (!report.profiles?.length) {
-    lines.push("No public profiles found.");
-  } else {
-    for (const p of report.profiles.slice(0, 40)) {
-      lines.push(`[${String(p.network || "web").toUpperCase()}] ${p.title || "Untitled"}`);
-      if (p.url) lines.push(`  ${p.url}`);
-      if (p.snippet) lines.push(`  ${p.snippet}`);
-      if (p.confidence != null) lines.push(`  Confidence: ${p.confidence}`);
+  if (report.discoveredHandles?.length) {
+    lines.push(`Handles found: ${report.discoveredHandles.map((h) => `@${h}`).join(", ")}`);
+    lines.push("");
+  }
+
+  const platforms = Array.isArray(report.platforms) ? report.platforms : [];
+  if (platforms.length) {
+    for (const platform of platforms) {
+      lines.push(String(platform.label || platform.network).toUpperCase());
+      lines.push("--------");
+      if (platform.profile) pushHit(lines, platform.profile, "PROFILE");
+      else lines.push("  (No clear profile URL found)", "");
+      if (platform.posts?.length) {
+        lines.push("  Posts / media");
+        for (const hit of platform.posts.slice(0, 25)) pushHit(lines, hit, "POST");
+      }
+      if (platform.mentions?.length) {
+        lines.push("  Mentions & related");
+        for (const hit of platform.mentions.slice(0, 25)) pushHit(lines, hit, "MENTION");
+      }
       lines.push("");
     }
+  } else if (report.profiles?.length) {
+    for (const p of report.profiles.slice(0, 80)) {
+      pushHit(lines, p, String(p.network || "web").toUpperCase());
+    }
+  } else {
+    lines.push("No public profiles found.");
   }
 
   if (report.disclaimer) {
@@ -47,36 +90,62 @@ export function buildSocialCheckerPdf(report: {
     return wrapped.length ? wrapped : [""];
   });
 
-  const content: string[] = ["BT", "/F1 11 Tf", "50 780 Td", "14 TL"];
-  contentLines.forEach((line, i) => {
-    if (i === 0) content.push(`(${pdfEscape(line)}) Tj`);
-    else content.push(`T* (${pdfEscape(line)}) Tj`);
-  });
-  content.push("ET");
-  const stream = content.join("\n");
+  const pages: string[][] = [];
+  for (let i = 0; i < contentLines.length; i += 48) {
+    pages.push(contentLines.slice(i, i + 48));
+  }
+  if (!pages.length) pages.push([""]);
 
-  const objects: string[] = [];
-  objects.push("1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj");
-  objects.push("2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj");
-  objects.push(
-    "3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>endobj",
+  const rebuilt: string[] = [];
+  rebuilt.push("1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj");
+
+  let objId = 3;
+  const streamParts: { id: number; stream: string }[] = [];
+  const pageParts: { id: number; contentId: number }[] = [];
+  const pageRefs: number[] = [];
+
+  for (const pageLines of pages) {
+    const content: string[] = ["BT", "/F1 10 Tf", "50 780 Td", "14 TL"];
+    pageLines.forEach((line, i) => {
+      if (i === 0) content.push(`(${pdfEscape(line)}) Tj`);
+      else content.push(`T* (${pdfEscape(line)}) Tj`);
+    });
+    content.push("ET");
+    const stream = content.join("\n");
+    const contentId = objId++;
+    const pageId = objId++;
+    streamParts.push({ id: contentId, stream });
+    pageParts.push({ id: pageId, contentId });
+    pageRefs.push(pageId);
+  }
+  const fontId = objId;
+
+  rebuilt.push(
+    `2 0 obj<< /Type /Pages /Kids [${pageRefs.map((n) => `${n} 0 R`).join(" ")}] /Count ${pageRefs.length} >>endobj`,
   );
-  objects.push(`4 0 obj<< /Length ${byteLength(stream)} >>stream\n${stream}\nendstream endobj`);
-  objects.push("5 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj");
+  for (const { id, stream } of streamParts) {
+    rebuilt.push(`${id} 0 obj<< /Length ${byteLength(stream)} >>stream\n${stream}\nendstream endobj`);
+  }
+  for (const { id, contentId } of pageParts) {
+    rebuilt.push(
+      `${id} 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentId} 0 R /Resources << /Font << /F1 ${fontId} 0 R >> >> >>endobj`,
+    );
+  }
+  rebuilt.push(`${fontId} 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj`);
 
   let pdf = "%PDF-1.4\n";
   const offsets = [0];
-  for (const obj of objects) {
+  for (const obj of rebuilt) {
     offsets.push(byteLength(pdf));
     pdf += `${obj}\n`;
   }
   const xrefStart = byteLength(pdf);
-  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += `xref\n0 ${rebuilt.length + 1}\n`;
   pdf += "0000000000 65535 f \n";
   for (let i = 1; i < offsets.length; i += 1) {
     pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
   }
-  pdf += `trailer<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  pdf += `trailer<< /Size ${rebuilt.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
 
   return new Blob([pdf], { type: "application/pdf" });
 }

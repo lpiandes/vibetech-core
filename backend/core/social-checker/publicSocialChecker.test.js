@@ -3,9 +3,14 @@ import assert from "node:assert/strict";
 
 import {
   checkSocialCheckerRateLimit,
+  organizePlatformSections,
   rankProfiles,
   runPublicSocialCheck,
 } from "./publicSocialChecker.js";
+import {
+  classifyHitKind,
+  extractHandleFromUrl,
+} from "../integrations/social-screening/serperSocialDiscovery.js";
 
 test("rate limit soft-caps per day key", () => {
   const store = new Map();
@@ -20,11 +25,37 @@ test("rate limit soft-caps per day key", () => {
 
 test("rankProfiles prefers linkedin profile urls", () => {
   const ranked = rankProfiles([
-    { network: "web", title: "Random", url: "https://example.com", snippet: "x" },
-    { network: "linkedin", title: "Jane Doe", url: "https://linkedin.com/in/jane", snippet: "About profile" },
+    { network: "web", kind: "mention", title: "Random", url: "https://example.com", snippet: "x" },
+    { network: "linkedin", kind: "profile", title: "Jane Doe", url: "https://linkedin.com/in/jane", snippet: "About profile" },
   ]);
   assert.equal(ranked[0].network, "linkedin");
   assert.ok(ranked[0].confidence > ranked[1].confidence);
+});
+
+test("classifyHitKind separates profiles posts and mentions", () => {
+  assert.equal(classifyHitKind("https://instagram.com/someone"), "profile");
+  assert.equal(classifyHitKind("https://instagram.com/p/AbCdEf"), "post");
+  assert.equal(classifyHitKind("https://x.com/org/status/123"), "post");
+  assert.equal(classifyHitKind("https://news.example.com/story", "Mention of someone"), "mention");
+});
+
+test("extractHandleFromUrl pulls platform handles", () => {
+  assert.equal(extractHandleFromUrl("https://www.instagram.com/sampleuser/"), "sampleuser");
+  assert.equal(extractHandleFromUrl("https://www.tiktok.com/@sampleuser"), "sampleuser");
+  assert.equal(extractHandleFromUrl("https://www.linkedin.com/in/sample-user-123"), "sample-user-123");
+});
+
+test("organizePlatformSections groups profile then posts then mentions", () => {
+  const sections = organizePlatformSections(rankProfiles([
+    { network: "instagram", kind: "post", title: "Reel", url: "https://instagram.com/reel/abc", snippet: "goal" },
+    { network: "instagram", kind: "profile", title: "Jane", url: "https://instagram.com/jane", snippet: "780 followers" },
+    { network: "instagram", kind: "mention", title: "News", url: "https://instagram.com/p/xyz", snippet: "about jane" },
+    { network: "tiktok", kind: "profile", title: "Jane TT", url: "https://tiktok.com/@jane", snippet: "bio" },
+  ]));
+  assert.equal(sections[0].network, "instagram");
+  assert.equal(sections[0].profile?.url, "https://instagram.com/jane");
+  assert.ok(sections[0].posts.length >= 1);
+  assert.ok(sections.some((s) => s.network === "tiktok"));
 });
 
 test("runPublicSocialCheck requires name or handle", async () => {
@@ -33,19 +64,48 @@ test("runPublicSocialCheck requires name or handle", async () => {
   assert.equal(res.reason, "name_required");
 });
 
-test("runPublicSocialCheck uses discovery mock", async () => {
-  const fetchImpl = async () => ({
-    ok: true,
-    json: async () => ({
-      organic: [
-        {
-          title: "Jane Doe - LinkedIn",
-          link: "https://www.linkedin.com/in/janedoe",
-          snippet: "Product leader profile",
-        },
-      ],
-    }),
-  });
+test("runPublicSocialCheck deep discovery returns platforms", async () => {
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}"));
+    const q = String(body.q ?? "");
+    if (q.includes("linkedin.com/in")) {
+      return {
+        ok: true,
+        json: async () => ({
+          organic: [{
+            title: "Jane Doe - LinkedIn",
+            link: "https://www.linkedin.com/in/janedoe",
+            snippet: "Product leader profile",
+          }],
+        }),
+      };
+    }
+    if (q.includes("instagram.com") && q.includes("-inurl")) {
+      return {
+        ok: true,
+        json: async () => ({
+          organic: [{
+            title: "Jane Doe (@janedoe)",
+            link: "https://www.instagram.com/janedoe/",
+            snippet: "120 followers",
+          }],
+        }),
+      };
+    }
+    if (q.includes("instagram.com/p") || q.includes("instagram.com/reel")) {
+      return {
+        ok: true,
+        json: async () => ({
+          organic: [{
+            title: "A public reel",
+            link: "https://www.instagram.com/reel/AbC123/",
+            snippet: "Jane Doe scores",
+          }],
+        }),
+      };
+    }
+    return { ok: true, json: async () => ({ organic: [] }) };
+  };
   const res = await runPublicSocialCheck({
     name: "Jane Doe",
     handle: "janedoe",
@@ -54,5 +114,7 @@ test("runPublicSocialCheck uses discovery mock", async () => {
   });
   assert.equal(res.ok, true);
   assert.ok(res.profiles.length >= 1);
+  assert.ok(Array.isArray(res.platforms));
+  assert.ok(res.platforms.length >= 1);
   assert.match(res.disclaimer, /Not an employment/i);
 });

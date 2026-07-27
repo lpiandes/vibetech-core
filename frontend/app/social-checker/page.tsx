@@ -4,32 +4,34 @@ import { useMemo, useState, type CSSProperties, type FormEvent } from "react";
 
 import { buildSocialCheckerPdf } from "@/lib/social-checker/buildSocialCheckerPdf";
 
-type Profile = {
+type Hit = {
   network?: string;
+  kind?: string;
   title?: string;
   url?: string;
   snippet?: string;
   confidence?: number;
+  handle?: string | null;
+};
+
+type Platform = {
+  network: string;
+  label: string;
+  profile: Hit | null;
+  posts: Hit[];
+  mentions: Hit[];
+  all: Hit[];
 };
 
 type Report = {
   subject: { name?: string; handle?: string | null };
-  profiles: Profile[];
-  byNetwork?: Record<string, Profile[]>;
+  profiles: Hit[];
+  platforms?: Platform[];
+  discoveredHandles?: string[];
   generatedAt?: string;
   disclaimer?: string;
   remaining?: number;
   limit?: number;
-};
-
-const NETWORK_LABELS: Record<string, string> = {
-  linkedin: "LinkedIn",
-  instagram: "Instagram",
-  youtube: "YouTube",
-  x: "X / Twitter",
-  facebook: "Facebook",
-  tiktok: "TikTok",
-  web: "Web",
 };
 
 export default function SocialCheckerPage() {
@@ -39,10 +41,8 @@ export default function SocialCheckerPage() {
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<Report | null>(null);
 
-  const networksFound = useMemo(() => {
-    if (!report?.profiles?.length) return 0;
-    return new Set(report.profiles.map((p) => p.network || "web")).size;
-  }, [report]);
+  const platforms = useMemo(() => report?.platforms ?? [], [report]);
+  const hitCount = report?.profiles?.length ?? 0;
 
   async function onSearch(e: FormEvent) {
     e.preventDefault();
@@ -98,8 +98,8 @@ export default function SocialCheckerPage() {
           <span style={titleAccent}> Get social context.</span>
         </h1>
         <p style={lede}>
-          Search LinkedIn, Instagram, YouTube, X, Facebook, and TikTok for public profiles
-          tied to a person or brand — then download a simple PDF summary.
+          Deep search across Instagram, TikTok, LinkedIn, YouTube, X, Facebook, Threads,
+          Reddit, GitHub, and more — grouped by platform with profile, posts, and mentions.
         </p>
 
         <form onSubmit={onSearch} style={form}>
@@ -115,7 +115,7 @@ export default function SocialCheckerPage() {
             />
           </label>
           <label style={label}>
-            Username / handle <span style={optional}>(optional)</span>
+            Username / handle <span style={optional}>(optional — improves matches)</span>
             <input
               value={handle}
               onChange={(e) => setHandle(e.target.value)}
@@ -125,8 +125,13 @@ export default function SocialCheckerPage() {
             />
           </label>
           <button type="submit" disabled={busy} style={cta}>
-            {busy ? "Searching…" : "Search platforms"}
+            {busy ? "Searching platforms…" : "Search platforms"}
           </button>
+          {busy ? (
+            <p style={busyHint}>
+              Running profile + post queries across networks. This can take a little longer.
+            </p>
+          ) : null}
         </form>
 
         {error ? <p style={errorBox}>{error}</p> : null}
@@ -140,39 +145,31 @@ export default function SocialCheckerPage() {
                   {report.subject?.handle ? ` · @${report.subject.handle}` : ""}
                 </h2>
                 <p style={resultsMeta}>
-                  {report.profiles.length} hits across {networksFound} networks
+                  {hitCount} hits · {platforms.length} platforms
                   {typeof report.remaining === "number"
                     ? ` · ${report.remaining} searches left today`
                     : ""}
                 </p>
+                {report.discoveredHandles?.length ? (
+                  <p style={handlesRow}>
+                    Handles found:{" "}
+                    {report.discoveredHandles.map((h) => (
+                      <span key={h} style={handleChip}>@{h}</span>
+                    ))}
+                  </p>
+                ) : null}
               </div>
               <button type="button" onClick={downloadPdf} style={secondaryBtn}>
                 Download PDF
               </button>
             </div>
 
-            {report.profiles.length === 0 ? (
+            {platforms.length === 0 ? (
               <p style={empty}>No public profiles found for that query.</p>
             ) : (
-              <div style={grid}>
-                {report.profiles.map((p, i) => (
-                  <article key={`${p.url}-${i}`} style={card}>
-                    <div style={cardTop}>
-                      <span style={networkChip}>
-                        {NETWORK_LABELS[String(p.network || "web")] || p.network}
-                      </span>
-                      {p.confidence != null ? (
-                        <span style={confidence}>{p.confidence}% match</span>
-                      ) : null}
-                    </div>
-                    <h3 style={cardTitle}>{p.title || "Untitled result"}</h3>
-                    {p.snippet ? <p style={snippet}>{p.snippet}</p> : null}
-                    {p.url ? (
-                      <a href={p.url} target="_blank" rel="noreferrer" style={urlLink}>
-                        {p.url}
-                      </a>
-                    ) : null}
-                  </article>
+              <div style={platformStack}>
+                {platforms.map((platform) => (
+                  <PlatformSection key={platform.network} platform={platform} />
                 ))}
               </div>
             )}
@@ -189,6 +186,79 @@ export default function SocialCheckerPage() {
         </a>
       </footer>
     </div>
+  );
+}
+
+function PlatformSection({ platform }: { platform: Platform }) {
+  const postCount = platform.posts?.length ?? 0;
+  const mentionCount = platform.mentions?.length ?? 0;
+  return (
+    <section style={platformCard}>
+      <header style={platformHeader}>
+        <h3 style={platformTitle}>{platform.label}</h3>
+        <span style={platformMeta}>
+          {platform.profile ? "Profile" : "No profile"}
+          {postCount ? ` · ${postCount} posts` : ""}
+          {mentionCount ? ` · ${mentionCount} mentions` : ""}
+        </span>
+      </header>
+
+      <div style={subsection}>
+        <h4 style={subsectionTitle}>Profile</h4>
+        {platform.profile ? (
+          <HitCard hit={platform.profile} emphasis />
+        ) : (
+          <p style={emptySoft}>No clear public profile URL indexed for this name.</p>
+        )}
+      </div>
+
+      <div style={subsection}>
+        <h4 style={subsectionTitle}>Posts &amp; media</h4>
+        {postCount ? (
+          <div style={hitStack}>
+            {platform.posts.map((hit, i) => (
+              <HitCard key={`${hit.url}-${i}`} hit={hit} />
+            ))}
+          </div>
+        ) : (
+          <p style={emptySoft}>No public posts/reels indexed yet for this subject.</p>
+        )}
+      </div>
+
+      <div style={subsection}>
+        <h4 style={subsectionTitle}>Mentions &amp; related</h4>
+        {mentionCount ? (
+          <div style={hitStack}>
+            {platform.mentions.map((hit, i) => (
+              <HitCard key={`${hit.url}-${i}`} hit={hit} />
+            ))}
+          </div>
+        ) : (
+          <p style={emptySoft}>No additional mentions found on this platform.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function HitCard({ hit, emphasis = false }: { hit: Hit; emphasis?: boolean }) {
+  return (
+    <article style={emphasis ? hitCardEmphasis : hitCard}>
+      <div style={cardTop}>
+        <span style={kindChip}>{String(hit.kind || "mention").toUpperCase()}</span>
+        {hit.confidence != null ? (
+          <span style={confidence}>{hit.confidence}% match</span>
+        ) : null}
+      </div>
+      <h5 style={cardTitle}>{hit.title || "Untitled result"}</h5>
+      {hit.handle ? <p style={handleLine}>@{hit.handle}</p> : null}
+      {hit.snippet ? <p style={snippet}>{hit.snippet}</p> : null}
+      {hit.url ? (
+        <a href={hit.url} target="_blank" rel="noreferrer" style={urlLink}>
+          {hit.url}
+        </a>
+      ) : null}
+    </article>
   );
 }
 
@@ -253,7 +323,7 @@ const badge: CSSProperties = {
 const main: CSSProperties = {
   position: "relative",
   zIndex: 1,
-  maxWidth: 920,
+  maxWidth: 980,
   margin: "0 auto",
   padding: "24px clamp(20px, 5vw, 56px) 80px",
 };
@@ -284,7 +354,7 @@ const titleAccent: CSSProperties = {
 
 const lede: CSSProperties = {
   margin: "16px 0 0",
-  maxWidth: 620,
+  maxWidth: 680,
   color: "rgba(232,238,252,0.72)",
   fontSize: 17,
   lineHeight: 1.55,
@@ -334,6 +404,13 @@ const cta: CSSProperties = {
   background: "linear-gradient(90deg, #22d3ee, #818cf8)",
 };
 
+const busyHint: CSSProperties = {
+  margin: 0,
+  fontSize: 13,
+  color: "rgba(232,238,252,0.55)",
+  fontWeight: 600,
+};
+
 const errorBox: CSSProperties = {
   marginTop: 18,
   padding: "12px 14px",
@@ -347,7 +424,7 @@ const errorBox: CSSProperties = {
 const results: CSSProperties = {
   marginTop: 40,
   display: "grid",
-  gap: 18,
+  gap: 22,
 };
 
 const resultsHead: CSSProperties = {
@@ -371,6 +448,26 @@ const resultsMeta: CSSProperties = {
   fontWeight: 600,
 };
 
+const handlesRow: CSSProperties = {
+  margin: "10px 0 0",
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+  alignItems: "center",
+  fontSize: 13,
+  color: "rgba(232,238,252,0.65)",
+  fontWeight: 600,
+};
+
+const handleChip: CSSProperties = {
+  borderRadius: 999,
+  border: "1px solid rgba(125,211,252,0.35)",
+  padding: "2px 8px",
+  color: "#7dd3fc",
+  fontWeight: 750,
+  fontSize: 12,
+};
+
 const secondaryBtn: CSSProperties = {
   borderRadius: 12,
   border: "1px solid rgba(125,211,252,0.45)",
@@ -381,18 +478,75 @@ const secondaryBtn: CSSProperties = {
   cursor: "pointer",
 };
 
-const grid: CSSProperties = {
+const platformStack: CSSProperties = {
   display: "grid",
-  gap: 12,
+  gap: 18,
 };
 
-const card: CSSProperties = {
-  borderRadius: 16,
+const platformCard: CSSProperties = {
+  borderRadius: 18,
   border: "1px solid rgba(148,163,184,0.22)",
-  background: "linear-gradient(165deg, rgba(15,23,42,0.9), rgba(15,23,42,0.55))",
-  padding: "16px 18px",
+  background: "linear-gradient(165deg, rgba(15,23,42,0.95), rgba(15,23,42,0.6))",
+  padding: "18px 18px 16px",
+  display: "grid",
+  gap: 16,
+};
+
+const platformHeader: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  justifyContent: "space-between",
+  gap: 8,
+  alignItems: "baseline",
+  borderBottom: "1px solid rgba(148,163,184,0.18)",
+  paddingBottom: 10,
+};
+
+const platformTitle: CSSProperties = {
+  margin: 0,
+  fontSize: 20,
+  fontWeight: 850,
+  letterSpacing: "-0.01em",
+};
+
+const platformMeta: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: "rgba(232,238,252,0.5)",
+};
+
+const subsection: CSSProperties = {
   display: "grid",
   gap: 8,
+};
+
+const subsectionTitle: CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: "#67e8f9",
+};
+
+const hitStack: CSSProperties = {
+  display: "grid",
+  gap: 8,
+};
+
+const hitCard: CSSProperties = {
+  borderRadius: 12,
+  border: "1px solid rgba(148,163,184,0.18)",
+  background: "rgba(2,6,23,0.35)",
+  padding: "12px 14px",
+  display: "grid",
+  gap: 6,
+};
+
+const hitCardEmphasis: CSSProperties = {
+  ...hitCard,
+  border: "1px solid rgba(34,211,238,0.35)",
+  background: "linear-gradient(165deg, rgba(8,47,73,0.55), rgba(2,6,23,0.45))",
 };
 
 const cardTop: CSSProperties = {
@@ -402,12 +556,11 @@ const cardTop: CSSProperties = {
   alignItems: "center",
 };
 
-const networkChip: CSSProperties = {
-  fontSize: 11,
+const kindChip: CSSProperties = {
+  fontSize: 10,
   fontWeight: 800,
   letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  color: "#67e8f9",
+  color: "#a5b4fc",
 };
 
 const confidence: CSSProperties = {
@@ -418,20 +571,27 @@ const confidence: CSSProperties = {
 
 const cardTitle: CSSProperties = {
   margin: 0,
-  fontSize: 16,
+  fontSize: 15,
   fontWeight: 750,
+};
+
+const handleLine: CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#7dd3fc",
 };
 
 const snippet: CSSProperties = {
   margin: 0,
   color: "rgba(232,238,252,0.7)",
-  fontSize: 14,
+  fontSize: 13,
   lineHeight: 1.45,
 };
 
 const urlLink: CSSProperties = {
   color: "#93c5fd",
-  fontSize: 13,
+  fontSize: 12,
   wordBreak: "break-all",
   fontWeight: 600,
 };
@@ -439,6 +599,13 @@ const urlLink: CSSProperties = {
 const empty: CSSProperties = {
   color: "rgba(232,238,252,0.65)",
   fontWeight: 650,
+};
+
+const emptySoft: CSSProperties = {
+  margin: 0,
+  color: "rgba(232,238,252,0.45)",
+  fontSize: 13,
+  fontWeight: 600,
 };
 
 const disclaimer: CSSProperties = {
