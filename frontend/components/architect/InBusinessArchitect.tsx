@@ -132,8 +132,42 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
           return;
         }
 
-        // Pre-install "Talk to VIBETech" / Start over — always begin at question 1.
-        if (!hasInstalledOs && (forceNewSetup || (!sessionFromQuery && !hasPrompt && !hasContext))) {
+        // Explicit Start over — mint a fresh discovery interview.
+        if (!hasInstalledOs && forceNewSetup) {
+          const data = await startDiscoverySession({
+            businessId,
+            prompt: "",
+            businessName: scope.businessName,
+          });
+          if (!data.ok) {
+            throw Object.assign(new Error(data.error ?? data.reason ?? "Could not open business setup."), {
+              productError: data.productError ?? presentProductError(data.error ?? data.reason),
+            });
+          }
+          const nextId = data.session?.sessionId as string | undefined;
+          if (!nextId) throw new Error("No setup session returned.");
+          if (cancelled) return;
+          setSessionId(nextId);
+          setSessionContinuous(false);
+          await refreshHistory(nextId);
+          router.replace(`/b/${encodeURIComponent(businessId)}/architect?sessionId=${encodeURIComponent(nextId)}`);
+          return;
+        }
+
+        // Pre-install entry with no session in the URL: resume progress first.
+        if (!hasInstalledOs && !sessionFromQuery && !hasPrompt && !hasContext) {
+          const listRes = await fetch(`/api/builder/sessions?businessId=${encodeURIComponent(businessId)}`);
+          const listData = await listRes.json().catch(() => ({}));
+          if (cancelled) return;
+          const resumeId = pickResumableSessionId(listData?.sessions, { continuousOnly: false });
+          if (resumeId) {
+            setSessionId(resumeId);
+            setSessionContinuous(false);
+            await refreshHistory(resumeId);
+            router.replace(`/b/${encodeURIComponent(businessId)}/architect?sessionId=${encodeURIComponent(resumeId)}`);
+            return;
+          }
+
           const data = await startDiscoverySession({
             businessId,
             prompt: "",

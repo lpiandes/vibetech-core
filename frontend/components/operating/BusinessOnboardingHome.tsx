@@ -14,7 +14,7 @@ export default function BusinessOnboardingHome({
   businessId: string;
   businessName: string;
 }) {
-  const talkHref = `/b/${encodeURIComponent(businessId)}/architect?newSetup=1`;
+  const talkHref = `/b/${encodeURIComponent(businessId)}/architect`;
 
   return (
     <div

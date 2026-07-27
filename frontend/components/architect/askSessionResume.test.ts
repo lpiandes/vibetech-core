@@ -74,6 +74,29 @@ test("continuous Ask never resumes discovery leftovers", () => {
     "abs_old",
   );
 
+  const emptySetup = {
+    sessionId: "abs_empty_setup",
+    mode: "new_business",
+    stageKey: "discovering",
+    progressPercent: 0,
+    hasUserMessage: false,
+    answerCount: 0,
+    updatedAt: "2026-07-12T13:00:00.000Z",
+  };
+  const progressedSetup = {
+    sessionId: "abs_progress",
+    mode: "new_business",
+    stageKey: "interviewing",
+    progressPercent: 40,
+    hasUserMessage: true,
+    answerCount: 5,
+    updatedAt: "2026-07-12T11:00:00.000Z",
+  };
+  assert.equal(
+    pickResumableSessionId([emptySetup, progressedSetup], { continuousOnly: false }),
+    "abs_progress",
+  );
+
   const history = presentAskHistory([discovery, continuous, emptyDraft], {
     activeSessionId: "abs_empty",
   });

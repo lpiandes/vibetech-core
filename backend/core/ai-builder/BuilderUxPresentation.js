@@ -101,6 +101,7 @@ export function sessionListCard(session) {
   ).trim().slice(0, 80);
   const messageCount = conversation.filter((entry) => String(entry?.text ?? "").trim()).length;
   const hasUserMessage = Boolean(firstUser);
+  const answerCount = Array.isArray(session.answers) ? session.answers.length : 0;
   const emptyAsk = continuousImprovement && !hasUserMessage;
   const preview = emptyAsk
     ? ""
@@ -124,6 +125,7 @@ export function sessionListCard(session) {
     preview,
     messageCount,
     hasUserMessage,
+    answerCount,
     emptyAsk,
   });
 }

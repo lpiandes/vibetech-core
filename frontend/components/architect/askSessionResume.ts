@@ -44,6 +44,7 @@ export function isSetupPlanSession(session: any): boolean {
 /**
  * Pick a session to resume.
  * For continuous-only (installed business), never fall back to a discovery transcript.
+ * For setup, prefer sessions with real progress over empty drafts.
  */
 export function pickResumableSessionId(
   sessions: unknown,
@@ -59,7 +60,34 @@ export function pickResumableSessionId(
     const continuous = pool.find((row: any) => isContinuousImproveSession(row));
     return continuous?.sessionId ? String(continuous.sessionId) : null;
   }
-  const pick = pool[0];
+
+  const setupPool = pool.filter((row: any) => !isContinuousImproveSession(row));
+  const ranked = (setupPool.length ? setupPool : pool)
+    .map((row: any) => {
+      const stage = String(row?.stageKey ?? row?.currentStage ?? "");
+      const progress = Number(row?.progressPercent ?? 0) || 0;
+      let score = progress;
+      if (row?.hasUserMessage) score += 50;
+      if (Number(row?.answerCount ?? 0) > 0) score += 40;
+      if (Number(row?.messageCount ?? 0) > 1) score += 10;
+      if ([
+        "proposal_ready",
+        "awaiting_review",
+        "dry_run_ready",
+        "awaiting_approval",
+        "interviewing",
+        "assembling",
+      ].includes(stage)) {
+        score += 30;
+      }
+      return { row, score, updatedAt: String(row?.updatedAt ?? "") };
+    })
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return right.updatedAt.localeCompare(left.updatedAt);
+    });
+
+  const pick = ranked[0]?.row;
   return pick?.sessionId ? String(pick.sessionId) : null;
 }
 
