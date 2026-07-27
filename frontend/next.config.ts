@@ -12,10 +12,20 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: repoRoot,
   // Knowledge extraction uses Node-only packages. Externalize them so the
   // server compiler does not try to bundle pdfjs/browser internals into RSC.
-  serverExternalPackages: ["pg", "bcryptjs", "mammoth", "pdf-parse"],
+  serverExternalPackages: ["pg", "bcryptjs", "mammoth", "pdf-parse", "googleapis", "nodemailer"],
   experimental: {
     // Enables next/navigation forbidden() + unauthorized() for clean 403/401 UX.
     authInterrupts: true,
+  },
+  webpack: (config) => {
+    // Backend files live outside frontend/; resolve their deps from both install roots.
+    config.resolve.modules = [
+      ...(config.resolve.modules ?? []),
+      path.join(frontendDir, "node_modules"),
+      path.join(repoRoot, "node_modules"),
+      "node_modules",
+    ];
+    return config;
   },
   eslint: {
     // This foundation sprint focuses on architecture/shell. Keep builds
