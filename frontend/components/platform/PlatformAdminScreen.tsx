@@ -21,6 +21,7 @@ type BusinessRow = {
   name: string;
   kind: string;
   ownerStatus: string;
+  ownerInviteEmail?: string | null;
 };
 
 type DevInvite = {
@@ -83,6 +84,23 @@ export default function PlatformAdminScreen() {
     window.setTimeout(() => setCopyMessage(null), 2500);
   }
 
+  async function copyOwnerInviteLink(businessId: string) {
+    setGeneratingId(businessId);
+    const res = await fetch(`/api/platform/businesses/${businessId}/owner-invite`);
+    const data = await res.json().catch(() => ({}));
+    setGeneratingId(null);
+    if (!res.ok || !data.inviteUrl) {
+      setCopyMessage(data.error ?? "Could not load invitation link.");
+      window.setTimeout(() => setCopyMessage(null), 3500);
+      return;
+    }
+    await copyInviteLink(data.inviteUrl);
+    if (!data.emailConfigured) {
+      setCopyMessage("Invitation link copied. Email delivery is not configured on this deploy.");
+      window.setTimeout(() => setCopyMessage(null), 4000);
+    }
+  }
+
   async function generateInviteLink(invitationId: string) {
     setGeneratingId(invitationId);
     const res = await fetch(`/api/dev/invitations/${invitationId}/generate-link`, { method: "POST" });
@@ -112,6 +130,9 @@ export default function PlatformAdminScreen() {
       )}
     >
       <VtPanel title="Businesses">
+        {copyMessage ? (
+          <p style={{ color: cockpitColors.accent, margin: "0 0 12px", fontWeight: 700 }}>{copyMessage}</p>
+        ) : null}
         {loading ? (
           <p style={{ margin: 0, color: cockpitColors.textMuted }}>Loading…</p>
         ) : businesses.length === 0 ? (
@@ -128,16 +149,51 @@ export default function PlatformAdminScreen() {
                     gap: spacing.md,
                   }}
                 >
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 700, color: cockpitColors.textPrimary }}>{b.name}</div>
+                    {b.ownerInviteEmail ? (
+                      <div
+                        style={{
+                          marginTop: 4,
+                          color: cockpitColors.textSecondary,
+                          fontSize: typography.caption.fontSize,
+                        }}
+                      >
+                        Invite: {b.ownerInviteEmail}
+                      </div>
+                    ) : null}
                     <div style={{ marginTop: 6, display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
                       {b.kind === "DEMO" ? <StatusBadge label="Demo" tone="info" /> : null}
-                      <StatusBadge label={b.ownerStatus} tone={b.ownerStatus === "Active" ? "success" : "neutral"} />
+                      <StatusBadge
+                        label={b.ownerStatus}
+                        tone={b.ownerStatus === "Active" ? "success" : "neutral"}
+                      />
                     </div>
                   </div>
-                  <Link href={`/b/${b.id}/home`} style={{ color: cockpitColors.accent, fontWeight: 700, textDecoration: "none" }}>
-                    Open
-                  </Link>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
+                    {b.ownerStatus === "Owner invited" ? (
+                      <button
+                        type="button"
+                        onClick={() => void copyOwnerInviteLink(b.id)}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: cockpitColors.accent,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          padding: 0,
+                        }}
+                      >
+                        {generatingId === b.id ? "Loading…" : "Copy invite link"}
+                      </button>
+                    ) : null}
+                    <Link
+                      href={`/b/${b.id}/home`}
+                      style={{ color: cockpitColors.accent, fontWeight: 700, textDecoration: "none" }}
+                    >
+                      Open
+                    </Link>
+                  </div>
                 </div>
               </VtCard>
             ))}

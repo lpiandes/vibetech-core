@@ -8,7 +8,11 @@ function isProduction() {
 }
 
 function shouldExposeInviteUrl(delivery) {
-  return !isProduction() && !delivery.sent;
+  // When email did not go out, return the link so an admin can share it manually
+  // (including production, where Resend may be unset).
+  if (!delivery?.sent) return Boolean(delivery?.inviteUrl);
+  // Successful send: keep the raw invite token out of API responses.
+  return false;
 }
 
 function resolveLocalOrigin() {

@@ -73,8 +73,10 @@ export async function POST(request: Request) {
         invitation: {
           id: result.invitation.invitation.id,
           email: result.invitation.invitation.email,
-          inviteUrl: result.invitation.inviteUrl,
+          inviteUrl: result.invitation.inviteUrl ?? null,
           emailSent: result.invitation.delivery.sent,
+          deliveryReason: result.invitation.delivery.reason ?? null,
+          deliveryMessage: result.invitation.delivery.message ?? null,
         },
       },
       { status: 201 },
