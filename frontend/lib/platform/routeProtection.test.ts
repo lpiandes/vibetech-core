@@ -17,6 +17,8 @@ describe("routeProtection", () => {
     assert.equal(isPublicPath("/api/platform/jobs/tick"), true);
     assert.equal(isPublicPath("/api/businesses/biz_1/integrations/meta/webhook"), true);
     assert.equal(isPublicPath("/api/businesses/biz_1/forms/submit"), true);
+    assert.equal(isPublicPath("/social-checker"), true);
+    assert.equal(isPublicPath("/api/social-checker/search"), true);
     assert.equal(isPublicPath("/invite/abc"), true);
     assert.equal(isPublicPath("/api/invite/abc"), true);
     assert.equal(isPublicPath("/forbidden"), true);

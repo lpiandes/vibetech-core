@@ -14,6 +14,13 @@ export function isPublicPath(pathname: string): boolean {
   ) {
     return true;
   }
+  // Public Social Checker (rate-limited in-route).
+  if (pathname === "/social-checker" || pathname.startsWith("/social-checker/")) {
+    return true;
+  }
+  if (pathname === "/api/social-checker/search" || pathname.startsWith("/api/social-checker/")) {
+    return true;
+  }
   // Public intake surfaces (Meta signature / form rate-limit enforced in-route).
   if (/^\/api\/businesses\/[^/]+\/integrations\/meta\/webhook\/?$/.test(pathname)) {
     return true;

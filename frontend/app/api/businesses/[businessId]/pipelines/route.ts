@@ -17,6 +17,8 @@ import {
   removePipelineCard,
   reorderPipelineStages,
   defaultIntakePipeline,
+  setOwnerColor,
+  OWNER_COLOR_PALETTE,
 } from "../../../../../../backend/core/crm/CrmStore.js";
 
 export async function GET(
@@ -28,10 +30,22 @@ export async function GET(
     await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
     const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
     const crm = readCrmState(installation);
+    const memberships = await platformStore.listMembershipsForBusiness(businessId).catch(() => []);
+    const members = (memberships ?? [])
+      .filter((m: { status?: string }) => !m.status || String(m.status).toUpperCase() === "ACTIVE")
+      .map((m: { userId: string; userName?: string; email?: string; role?: string }) => ({
+        userId: String(m.userId),
+        name: String(m.userName || m.email || "Teammate").trim() || "Teammate",
+        email: String(m.email ?? ""),
+        role: String(m.role ?? ""),
+      }));
     return NextResponse.json({
       ok: true,
       pipelines: crm.pipelines,
       contacts: crm.contacts,
+      ownerColors: crm.ownerColors ?? {},
+      ownerColorPalette: OWNER_COLOR_PALETTE,
+      members,
     });
   } catch (error) {
     return authorizationErrorResponse(error);
@@ -150,6 +164,12 @@ export async function POST(
       } catch {
         /* optional */
       }
+    } else if (action === "set_owner_color") {
+      crm = setOwnerColor(crm, {
+        userId: String(body.userId ?? ""),
+        colorId: body.colorId == null || body.colorId === "" ? null : String(body.colorId),
+        label: body.label ?? null,
+      });
     } else {
       return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
@@ -158,6 +178,7 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       pipelines: crm.pipelines,
+      ownerColors: crm.ownerColors ?? {},
       createdPipelineId,
       createdStageId,
       createdCardId,

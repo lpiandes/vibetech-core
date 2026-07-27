@@ -18,14 +18,79 @@ export const CONTACT_KINDS = Object.freeze([
 /** Reminder offsets for org calendar events (custom AI automation). */
 export const CALENDAR_REMINDER_OFFSETS = Object.freeze(["24h", "1h", "10m"]);
 
+/** Fixed palette for sales-rep ownership on pipeline cards. */
+export const OWNER_COLOR_PALETTE = Object.freeze([
+  { id: "blue", label: "Blue", hex: "#2563eb" },
+  { id: "green", label: "Green", hex: "#16a34a" },
+  { id: "amber", label: "Amber", hex: "#d97706" },
+  { id: "rose", label: "Rose", hex: "#e11d48" },
+  { id: "violet", label: "Violet", hex: "#7c3aed" },
+  { id: "cyan", label: "Cyan", hex: "#0891b2" },
+  { id: "orange", label: "Orange", hex: "#ea580c" },
+  { id: "slate", label: "Slate", hex: "#475569" },
+]);
+
 export function emptyCrmState() {
   return {
     version: 1,
     contacts: [],
     pipelines: [defaultIntakePipeline()],
     calendarEvents: [],
+    ownerColors: {},
     updatedAt: null,
   };
+}
+
+/**
+ * Normalize owner color map: { [userId]: { colorId, hex, label } }
+ */
+export function normalizeOwnerColors(raw = {}) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const byId = Object.fromEntries(OWNER_COLOR_PALETTE.map((c) => [c.id, c]));
+  const out = {};
+  for (const [userId, value] of Object.entries(raw)) {
+    const id = String(userId || "").trim();
+    if (!id) continue;
+    if (typeof value === "string") {
+      const color = byId[value] || OWNER_COLOR_PALETTE.find((c) => c.hex === value);
+      if (!color) continue;
+      out[id] = { colorId: color.id, hex: color.hex, label: color.label };
+      continue;
+    }
+    if (!value || typeof value !== "object") continue;
+    const colorId = String(value.colorId ?? value.id ?? "").trim();
+    const color = byId[colorId]
+      || OWNER_COLOR_PALETTE.find((c) => c.hex === String(value.hex ?? "").trim());
+    if (!color) continue;
+    out[id] = {
+      colorId: color.id,
+      hex: color.hex,
+      label: String(value.label ?? color.label).trim() || color.label,
+    };
+  }
+  return out;
+}
+
+/**
+ * @param {object} [crm]
+ * @param {{ userId?: string, colorId?: string | null, label?: string | null }} [opts]
+ */
+export function setOwnerColor(crm, { userId, colorId, label = null } = {}) {
+  const id = String(userId ?? "").trim();
+  if (!id) return crm;
+  const next = { ...(crm.ownerColors ?? {}) };
+  if (!colorId) {
+    delete next[id];
+    return { ...crm, ownerColors: next };
+  }
+  const color = OWNER_COLOR_PALETTE.find((c) => c.id === String(colorId));
+  if (!color) return crm;
+  next[id] = {
+    colorId: color.id,
+    hex: color.hex,
+    label: String(label ?? color.label).trim() || color.label,
+  };
+  return { ...crm, ownerColors: next };
 }
 
 export function defaultIntakePipeline() {
@@ -53,6 +118,7 @@ export function readCrmState(installation = null) {
       ? raw.pipelines
       : [defaultIntakePipeline()],
     calendarEvents: Array.isArray(raw.calendarEvents) ? raw.calendarEvents : [],
+    ownerColors: normalizeOwnerColors(raw.ownerColors),
     updatedAt: raw.updatedAt ?? null,
   };
 }
@@ -224,6 +290,8 @@ export function upsertPipelineCard(crm, { pipelineId, card }) {
     if (String(pipe.id) !== String(pipelineId)) return pipe;
     const id = String(card.id || `card_${crypto.randomUUID().slice(0, 8)}`);
     cardId = id;
+    const existing = (pipe.cards ?? []).find((c) => String(c.id) === id) ?? null;
+    const ownerProvided = Object.prototype.hasOwnProperty.call(card, "ownerUserId");
     const next = {
       id,
       contactId: String(card.contactId ?? ""),
@@ -231,10 +299,14 @@ export function upsertPipelineCard(crm, { pipelineId, card }) {
       title: card.title == null ? "Opportunity" : String(card.title),
       stageId: String(card.stageId ?? pipe.stages?.[0]?.id ?? "stage_new"),
       value: Number(card.value) || 0,
-      ownerUserId: card.ownerUserId ?? null,
-      expectedClose: card.expectedClose ?? null,
+      ownerUserId: ownerProvided
+        ? (card.ownerUserId ? String(card.ownerUserId) : null)
+        : (existing?.ownerUserId ?? null),
+      expectedClose: Object.prototype.hasOwnProperty.call(card, "expectedClose")
+        ? (card.expectedClose ?? null)
+        : (existing?.expectedClose ?? null),
       updatedAt: new Date().toISOString(),
-      createdAt: card.createdAt ?? new Date().toISOString(),
+      createdAt: card.createdAt ?? existing?.createdAt ?? new Date().toISOString(),
     };
     const cards = [...(pipe.cards ?? [])];
     const idx = cards.findIndex((c) => String(c.id) === id);

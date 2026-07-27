@@ -14,6 +14,16 @@ const { auth } = NextAuth(authConfig);
 export default auth((request) => {
   const mwStart = Date.now();
   const { pathname, search } = request.nextUrl;
+  const host = String(request.headers.get("host") ?? "").toLowerCase();
+  const isSocialHost = host.startsWith("social.") || host.startsWith("social-checker.");
+
+  // social.vtechdevelopment.com → public Social Checker surface
+  if (isSocialHost && (pathname === "/" || pathname === "")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/social-checker";
+    return NextResponse.rewrite(url);
+  }
+
   const isLoggedIn = Boolean(request.auth?.user);
   const platformRole = (request.auth?.user as { platformRole?: string | null } | undefined)?.platformRole ?? null;
 

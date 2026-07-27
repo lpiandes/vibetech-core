@@ -22,6 +22,7 @@ type Card = {
   stageId: string;
   contactId?: string;
   value?: number;
+  ownerUserId?: string | null;
 };
 type Pipeline = {
   id: string;
@@ -30,6 +31,20 @@ type Pipeline = {
   cards: Card[];
 };
 type Contact = { id: string; name: string; email?: string; kind?: string };
+type TeamMember = { userId: string; name: string; email: string; role?: string };
+type OwnerColor = { colorId: string; hex: string; label: string };
+type ColorSwatch = { id: string; label: string; hex: string };
+
+const DEFAULT_OWNER_PALETTE: ColorSwatch[] = [
+  { id: "blue", label: "Blue", hex: "#2563eb" },
+  { id: "green", label: "Green", hex: "#16a34a" },
+  { id: "amber", label: "Amber", hex: "#d97706" },
+  { id: "rose", label: "Rose", hex: "#e11d48" },
+  { id: "violet", label: "Violet", hex: "#7c3aed" },
+  { id: "cyan", label: "Cyan", hex: "#0891b2" },
+  { id: "orange", label: "Orange", hex: "#ea580c" },
+  { id: "slate", label: "Slate", hex: "#475569" },
+];
 
 function isTerminalStage(stage: Stage) {
   const key = `${stage.id} ${stage.label}`.toLowerCase();
@@ -39,6 +54,9 @@ function isTerminalStage(stage: Stage) {
 export default function PipelinesExperience({ businessId }: { businessId: string }) {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [ownerColors, setOwnerColors] = useState<Record<string, OwnerColor>>({});
+  const [ownerPalette, setOwnerPalette] = useState<ColorSwatch[]>(DEFAULT_OWNER_PALETTE);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragCardId, setDragCardId] = useState<string | null>(null);
@@ -50,6 +68,7 @@ export default function PipelinesExperience({ businessId }: { businessId: string
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [cardDraft, setCardDraft] = useState("");
   const [cardContactId, setCardContactId] = useState("");
+  const [cardOwnerUserId, setCardOwnerUserId] = useState("");
   const [newPipelineOpen, setNewPipelineOpen] = useState(false);
   const [newPipelineName, setNewPipelineName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -66,7 +85,12 @@ export default function PipelinesExperience({ businessId }: { businessId: string
     const contactData = await contactRes.json().catch(() => ({}));
     if (!pipeRes.ok || !data.ok) throw new Error(data.error ?? "Could not load pipelines");
     setPipelines(data.pipelines ?? []);
-    setContacts(contactData.contacts ?? []);
+    setContacts(contactData.contacts ?? data.contacts ?? []);
+    setMembers(Array.isArray(data.members) ? data.members : []);
+    setOwnerColors(data.ownerColors && typeof data.ownerColors === "object" ? data.ownerColors : {});
+    if (Array.isArray(data.ownerColorPalette) && data.ownerColorPalette.length) {
+      setOwnerPalette(data.ownerColorPalette);
+    }
     setActiveId((prev) => {
       if (prev && (data.pipelines ?? []).some((p: Pipeline) => p.id === prev)) return prev;
       return data.pipelines?.[0]?.id ?? null;
@@ -108,6 +132,43 @@ export default function PipelinesExperience({ businessId }: { businessId: string
     return (pipeline.cards ?? []).filter((c) => !terminalIds.has(c.stageId)).length;
   }, [pipeline]);
 
+  const ownerLegend = useMemo(() => {
+    const usedIds = new Set(
+      (pipeline?.cards ?? [])
+        .map((c) => String(c.ownerUserId ?? "").trim())
+        .filter(Boolean),
+    );
+    for (const id of Object.keys(ownerColors)) usedIds.add(id);
+    return [...usedIds].map((userId) => {
+      const member = members.find((m) => m.userId === userId);
+      const color = ownerColors[userId];
+      const name = member?.name || color?.label || "Rep";
+      const colorLabel = color?.label?.split("·")[0]?.trim() || color?.colorId || "Unassigned";
+      return {
+        userId,
+        name,
+        hex: color?.hex ?? cockpitColors.accent,
+        chip: color ? `${colorLabel} · ${name.split(" ")[0]}` : name,
+      };
+    });
+  }, [pipeline, ownerColors, members]);
+
+  function ownerAccent(ownerUserId?: string | null) {
+    const id = String(ownerUserId ?? "").trim();
+    if (!id) return cockpitColors.accent;
+    return ownerColors[id]?.hex ?? cockpitColors.accent;
+  }
+
+  function ownerChipLabel(ownerUserId?: string | null) {
+    const id = String(ownerUserId ?? "").trim();
+    if (!id) return null;
+    const member = members.find((m) => m.userId === id);
+    const color = ownerColors[id];
+    const first = (member?.name || "Rep").split(" ")[0];
+    const colorLabel = color?.label?.split("·")[0]?.trim() || color?.colorId || "Owner";
+    return `${colorLabel} · ${first}`;
+  }
+
   async function post(body: Record<string, unknown>) {
     let res: Response;
     try {
@@ -124,9 +185,13 @@ export default function PipelinesExperience({ businessId }: { businessId: string
       throw new Error(data.error ?? `Update failed (${res.status})`);
     }
     setPipelines(data.pipelines ?? []);
+    if (data.ownerColors && typeof data.ownerColors === "object") {
+      setOwnerColors(data.ownerColors);
+    }
     return data as {
       ok: true;
       pipelines: Pipeline[];
+      ownerColors?: Record<string, OwnerColor>;
       createdPipelineId?: string | null;
       createdStageId?: string | null;
       createdCardId?: string | null;
@@ -145,10 +210,25 @@ export default function PipelinesExperience({ businessId }: { businessId: string
     }
   }
 
-  function focusCardForEdit(cardId: string, draft = "", contactId = "") {
+  function focusCardForEdit(cardId: string, draft = "", contactId = "", ownerUserId = "") {
     setEditingCardId(cardId);
     setCardDraft(draft);
     setCardContactId(contactId);
+    setCardOwnerUserId(ownerUserId);
+  }
+
+  async function ensureOwnerColor(userId: string, displayName: string) {
+    if (!userId || ownerColors[userId]) return;
+    const used = new Set(Object.values(ownerColors).map((c) => c.colorId));
+    const nextSwatch = ownerPalette.find((c) => !used.has(c.id)) ?? ownerPalette[0];
+    if (!nextSwatch) return;
+    const first = displayName.split(" ")[0] || "Rep";
+    await post({
+      action: "set_owner_color",
+      userId,
+      colorId: nextSwatch.id,
+      label: `${nextSwatch.label} · ${first}`,
+    });
   }
 
   async function addOpportunity(stageId?: string) {
@@ -167,6 +247,7 @@ export default function PipelinesExperience({ businessId }: { businessId: string
           title: "",
           stageId: targetStageId,
           contactId: cardContactId || undefined,
+          ownerUserId: cardOwnerUserId || null,
         },
       });
       stageNodeRefs.current[targetStageId]?.scrollIntoView({
@@ -175,7 +256,7 @@ export default function PipelinesExperience({ businessId }: { businessId: string
         block: "nearest",
       });
       if (data.createdCardId) {
-        focusCardForEdit(data.createdCardId, "", cardContactId);
+        focusCardForEdit(data.createdCardId, "", cardContactId, cardOwnerUserId);
       }
     });
   }
@@ -186,10 +267,18 @@ export default function PipelinesExperience({ businessId }: { businessId: string
     const card = (pipeline.cards ?? []).find((c) => c.id === cardId);
     const next = cardDraft.trim() || "Untitled";
     const nextContactId = cardContactId;
+    const nextOwnerId = cardOwnerUserId;
     setEditingCardId(null);
     if (!card) return;
-    if (next === card.title && String(card.contactId ?? "") === String(nextContactId ?? "")) return;
+    const sameTitle = next === card.title;
+    const sameContact = String(card.contactId ?? "") === String(nextContactId ?? "");
+    const sameOwner = String(card.ownerUserId ?? "") === String(nextOwnerId ?? "");
+    if (sameTitle && sameContact && sameOwner) return;
     await run(async () => {
+      if (nextOwnerId) {
+        const member = members.find((m) => m.userId === nextOwnerId);
+        await ensureOwnerColor(nextOwnerId, member?.name || "Rep");
+      }
       await post({
         action: "rename_card",
         pipelineId: pipeline.id,
@@ -199,6 +288,7 @@ export default function PipelinesExperience({ businessId }: { businessId: string
           stageId: card.stageId,
           contactId: nextContactId || "",
           value: card.value,
+          ownerUserId: nextOwnerId || null,
         },
       });
     });
@@ -404,9 +494,46 @@ export default function PipelinesExperience({ businessId }: { businessId: string
         </VtDock>
         <p style={{ margin: "10px 0 0", fontSize: 13, color: "rgba(255,255,255,0.72)", fontWeight: 650, maxWidth: 720 }}>
           + Stage and + Opportunity drop straight onto the board — type the name in place.
-          Drag the ⋮⋮ handle to reorder stages; drag cards between stages.
+          Assign a sales rep on each card; their color highlights the opportunity on every stage.
         </p>
       </VtHero>
+
+      {ownerLegend.length > 0 ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: cockpitColors.textMuted }}>
+            Agents
+          </span>
+          {ownerLegend.map((entry) => (
+            <span
+              key={entry.userId}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                borderRadius: 999,
+                border: `1px solid ${cockpitColors.panelBorder}`,
+                padding: "4px 10px",
+                fontSize: 12,
+                fontWeight: 750,
+                color: cockpitColors.textPrimary,
+                background: "#fff",
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 999,
+                  background: entry.hex,
+                  boxShadow: `0 0 0 2px ${entry.hex}33`,
+                }}
+              />
+              {entry.chip}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
         {pipelines.map((p) => (
@@ -599,6 +726,8 @@ export default function PipelinesExperience({ businessId }: { businessId: string
                     {cards.map((card) => {
                       const contact = contacts.find((c) => c.id === card.contactId);
                       const isEditing = editingCardId === card.id;
+                      const accent = ownerAccent(card.ownerUserId);
+                      const chip = ownerChipLabel(card.ownerUserId);
                       return (
                         <div
                           key={card.id}
@@ -619,12 +748,14 @@ export default function PipelinesExperience({ businessId }: { businessId: string
                           onDragEnd={() => setDragCardId(null)}
                           style={{
                             borderRadius: 12,
-                            border: `1px solid ${isEditing ? cockpitColors.accent : "rgba(28,25,23,0.1)"}`,
-                            background: "linear-gradient(165deg, #fff, #f0fdfa)",
+                            border: `1px solid ${isEditing ? accent : "rgba(28,25,23,0.1)"}`,
+                            background: card.ownerUserId
+                              ? `linear-gradient(165deg, #fff, ${accent}14)`
+                              : "linear-gradient(165deg, #fff, #f0fdfa)",
                             padding: "11px 12px",
                             cursor: isEditing ? "text" : "grab",
                             boxShadow: "0 6px 16px rgba(28,25,23,0.06)",
-                            borderLeft: `3px solid ${cockpitColors.accent}`,
+                            borderLeft: `4px solid ${accent}`,
                             display: "grid",
                             gap: 6,
                           }}
@@ -668,11 +799,42 @@ export default function PipelinesExperience({ businessId }: { businessId: string
                                       <option key={c.id} value={c.id}>{c.name}</option>
                                     ))}
                                   </select>
+                                  <select
+                                    value={cardOwnerUserId}
+                                    onChange={(e) => setCardOwnerUserId(e.target.value)}
+                                    onBlur={() => void commitRenameCard()}
+                                    style={{
+                                      width: "100%",
+                                      borderRadius: 8,
+                                      border: `1px solid ${cockpitColors.panelBorder}`,
+                                      padding: "6px 8px",
+                                      fontSize: 12,
+                                      fontWeight: 650,
+                                      background: "#fff",
+                                    }}
+                                    aria-label="Sales owner"
+                                  >
+                                    <option value="">Unassigned</option>
+                                    {members.map((m) => {
+                                      const color = ownerColors[m.userId];
+                                      const prefix = color ? `${color.label.split("·")[0].trim()} · ` : "";
+                                      return (
+                                        <option key={m.userId} value={m.userId}>
+                                          {prefix}{m.name}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
                                 </div>
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={() => focusCardForEdit(card.id, card.title, card.contactId ?? "")}
+                                  onClick={() => focusCardForEdit(
+                                    card.id,
+                                    card.title,
+                                    card.contactId ?? "",
+                                    card.ownerUserId ?? "",
+                                  )}
                                   style={{
                                     border: "none",
                                     background: "transparent",
@@ -692,6 +854,31 @@ export default function PipelinesExperience({ businessId }: { businessId: string
                               {!isEditing && contact ? (
                                 <div style={{ fontSize: 12, color: cockpitColors.textSecondary, marginTop: 4, fontWeight: 600 }}>
                                   {contact.name}
+                                </div>
+                              ) : null}
+                              {!isEditing && chip ? (
+                                <div
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 5,
+                                    marginTop: 6,
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    color: accent,
+                                    letterSpacing: "0.02em",
+                                  }}
+                                >
+                                  <span
+                                    aria-hidden
+                                    style={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: 999,
+                                      background: accent,
+                                    }}
+                                  />
+                                  {chip}
                                 </div>
                               ) : null}
                             </div>

@@ -1,7 +1,8 @@
 # VIBETech Production Deployment Checklist
 
-Target app host: `https://app.vtechdevelopment.com`
-Do **not** migrate the marketing website in this train.
+Target app host: `https://app.vtechdevelopment.com`  
+Social Checker host: `https://social.vtechdevelopment.com` (same Next deploy; add domain in Vercel)  
+Do **not** migrate the marketing website in this train — keep apex on Hostinger; use subdomain products + optional vanity redirects under `marketing/hostinger-dropin/`.
 
 ## Required environment variables
 

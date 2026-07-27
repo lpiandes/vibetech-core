@@ -1,7 +1,17 @@
 # VIBETech Pilot Production Operations
 
-Target: `https://app.vtechdevelopment.com`  
-Marketing site (`https://vtechdevelopment.com`) stays on Hostinger unchanged.
+Target app: `https://app.vtechdevelopment.com`  
+Social Checker: `https://social.vtechdevelopment.com` (same Next deploy; host-aware routing)  
+Marketing site (`https://vtechdevelopment.com`) stays on Hostinger — do **not** reverse-proxy the Next app under apex path prefixes.
+
+## Product URL map
+
+| Surface | URL | Host |
+|---------|-----|------|
+| Marketing | `https://vtechdevelopment.com` | Hostinger |
+| AI Operating System | `https://app.vtechdevelopment.com` | Vercel / Node VPS |
+| Social Checker | `https://social.vtechdevelopment.com` | Same app project (add domain in Vercel) |
+| Optional vanity | `/AIOperatingSystem`, `/SocialChecker` on apex | Hostinger redirects only (see `marketing/hostinger-dropin/`) |
 
 ## Current infrastructure facts (validated 2026-07-11)
 
@@ -20,12 +30,15 @@ Marketing site (`https://vtechdevelopment.com`) stays on Hostinger unchanged.
 Complete these before the app can go live on the target hostname:
 
 1. **DNS** in Hostinger hPanel → Domains → DNS:
-   - `A` or `CNAME` for `app` → your app host (Vercel CNAME or VPS IP)
+   - `CNAME` (or `A`) for `app` → Vercel target (`cname.vercel-dns.com` after project domain add) or VPS IP
+   - `CNAME` for `social` → same Vercel target (add `social.vtechdevelopment.com` as a project domain)
 2. **Postgres** (managed): Neon (upgrade plan), Supabase, RDS, or Hostinger VPS Postgres
 3. **App host**: Vercel project for `frontend/` **or** Node VPS with systemd
-4. **Secrets** (see `docs/env.production.example`)
+4. **Secrets** (see `docs/env.production.example`) — `NEXTAUTH_URL` and `APP_URL` must be `https://app.vtechdevelopment.com`
 5. **SMTP or Resend** for owner/employee invites
 6. **Persistent volumes** for `KNOWLEDGE_STORAGE_ROOT` and `IMPORT_STORAGE_ROOT` (VPS) or accepted Vercel Blob follow-up
+7. **OAuth redirect URIs** (Gmail etc.) updated to `https://app.vtechdevelopment.com/...`
+8. **Hostinger marketing** — upload `marketing/hostinger-dropin/` vanity redirects + ship `marketing/site/` upgrades (chatbot, ROI, starting-at rates, Why VibeTech, product CTAs)
 
 ## Deploy sequence (once prerequisites exist)
 
@@ -55,7 +68,13 @@ NEXT_DIST_DIR=.next-prod npx next start -p 3000
 ## Verification checklist
 
 - [ ] `https://app.vtechdevelopment.com` resolves + TLS certificate valid
+- [ ] `https://social.vtechdevelopment.com` resolves to the same app + TLS valid
+- [ ] `NEXTAUTH_URL` / `APP_URL` = `https://app.vtechdevelopment.com` (not apex, not localhost)
+- [ ] Hostinger `/AIOperatingSystem` and `/SocialChecker` redirect to product subdomains
+- [ ] Hostinger marketing upgraded from `marketing/site/` (chatbot, ROI, rates, Why VibeTech)
+- [ ] `SERPER_API_KEY` set for Social Checker public search
 - [ ] `GET /api/health` → 200 `{ ok: true, database: "ok" }`
+- [ ] `GET https://social.vtechdevelopment.com/` serves Social Checker (public)
 - [ ] Login as platform admin → `/admin`
 - [ ] Architect create → research → upload → propose → dry-run → approve → install
 - [ ] Mission Control opens for installed business
