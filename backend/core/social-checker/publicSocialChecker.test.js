@@ -35,8 +35,53 @@ test("rankProfiles prefers linkedin profile urls", () => {
 test("classifyHitKind separates profiles posts and mentions", () => {
   assert.equal(classifyHitKind("https://instagram.com/someone"), "profile");
   assert.equal(classifyHitKind("https://instagram.com/p/AbCdEf"), "post");
+  // Query preference must not override clear post URLs
+  assert.equal(classifyHitKind("https://instagram.com/reel/AbCdEf", "", "", "profile"), "post");
   assert.equal(classifyHitKind("https://x.com/org/status/123"), "post");
   assert.equal(classifyHitKind("https://news.example.com/story", "Mention of someone"), "mention");
+});
+
+test("filterSubjectRelevant drops unrelated celebrity noise", async () => {
+  const { filterSubjectRelevant } = await import("./publicSocialChecker.js");
+  const filtered = filterSubjectRelevant([
+    {
+      network: "instagram",
+      kind: "profile",
+      title: "Jane Doe (@janedoe)",
+      url: "https://www.instagram.com/janedoe/",
+      snippet: "Jane Doe. 100 followers",
+      handle: "janedoe",
+    },
+    {
+      network: "tiktok",
+      kind: "profile",
+      title: "Post Malone (@postmalone)",
+      url: "https://www.tiktok.com/@postmalone",
+      snippet: "17M followers",
+      handle: "postmalone",
+    },
+    {
+      network: "instagram",
+      kind: "post",
+      title: "Hat trick by Jane Doe",
+      url: "https://www.instagram.com/p/abc",
+      snippet: "Jane Doe scores again",
+      handle: null,
+    },
+    {
+      network: "youtube",
+      kind: "profile",
+      title: "Megyn Kelly",
+      url: "https://www.youtube.com/@MegynKelly",
+      snippet: "Talk show",
+      handle: "MegynKelly",
+    },
+  ], { name: "Jane Doe", handles: ["janedoe"] });
+
+  assert.ok(filtered.some((h) => h.handle === "janedoe"));
+  assert.ok(filtered.some((h) => /Hat trick/i.test(h.title)));
+  assert.equal(filtered.some((h) => /postmalone/i.test(h.url)), false);
+  assert.equal(filtered.some((h) => /MegynKelly/i.test(h.url)), false);
 });
 
 test("extractHandleFromUrl pulls platform handles", () => {
@@ -47,11 +92,11 @@ test("extractHandleFromUrl pulls platform handles", () => {
 
 test("organizePlatformSections groups profile then posts then mentions", () => {
   const sections = organizePlatformSections(rankProfiles([
-    { network: "instagram", kind: "post", title: "Reel", url: "https://instagram.com/reel/abc", snippet: "goal" },
-    { network: "instagram", kind: "profile", title: "Jane", url: "https://instagram.com/jane", snippet: "780 followers" },
-    { network: "instagram", kind: "mention", title: "News", url: "https://instagram.com/p/xyz", snippet: "about jane" },
-    { network: "tiktok", kind: "profile", title: "Jane TT", url: "https://tiktok.com/@jane", snippet: "bio" },
-  ]));
+    { network: "instagram", kind: "post", relation: "own", title: "Reel", url: "https://instagram.com/reel/abc", snippet: "goal", handle: "jane" },
+    { network: "instagram", kind: "profile", title: "Jane", url: "https://instagram.com/jane", snippet: "780 followers", handle: "jane" },
+    { network: "instagram", kind: "mention", relation: "mentioned", title: "News", url: "https://instagram.com/p/xyz", snippet: "about jane", handle: null },
+    { network: "tiktok", kind: "profile", title: "Jane TT", url: "https://tiktok.com/@jane", snippet: "bio", handle: "jane" },
+  ], { name: "Jane Doe", handles: ["jane"] }));
   assert.equal(sections[0].network, "instagram");
   assert.equal(sections[0].profile?.url, "https://instagram.com/jane");
   assert.ok(sections[0].posts.length >= 1);

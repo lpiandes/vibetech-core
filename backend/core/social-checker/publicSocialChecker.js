@@ -5,6 +5,8 @@
 import {
   discoverSocialProfiles,
   SOCIAL_NETWORKS,
+  isNoiseUrl,
+  nameMatchesSubject,
 } from "../integrations/social-screening/serperSocialDiscovery.js";
 
 export const PLATFORM_ORDER = Object.freeze([
@@ -77,25 +79,94 @@ export function checkSocialCheckerRateLimit({
 }
 
 /**
- * @param {Array<{ network?: string, kind?: string, title?: string, url?: string, snippet?: string, handle?: string|null }>} [profiles]
+ * Keep only hits about this subject: their profile, their posts, or posts that mention/tag them.
+ * @param {object[]} profiles
+ * @param {{ name?: string, handles?: string[] }} subject
  */
-export function rankProfiles(profiles = []) {
+export function filterSubjectRelevant(profiles = [], subject = {}) {
+  const name = String(subject.name ?? "").trim();
+  const handles = (Array.isArray(subject.handles) ? subject.handles : [])
+    .map((h) => String(h).replace(/^@/, "").toLowerCase())
+    .filter(Boolean);
+  const handleSet = new Set(handles);
+
+  // First pass: collect trusted profile handles that clearly belong to the subject
+  for (const hit of profiles) {
+    if (String(hit.kind) !== "profile") continue;
+    if (isNoiseUrl(hit.url)) continue;
+    const blob = `${hit.title ?? ""} ${hit.snippet ?? ""}`;
+    if (name && nameMatchesSubject(blob, name) && hit.handle) {
+      handleSet.add(String(hit.handle).toLowerCase());
+    }
+  }
+
+  const out = [];
+  for (const hit of profiles) {
+    if (isNoiseUrl(hit.url)) continue;
+    const title = String(hit.title ?? "");
+    const snippet = String(hit.snippet ?? "");
+    const url = String(hit.url ?? "");
+    const blob = `${title} ${snippet} ${url}`.toLowerCase();
+    const handle = String(hit.handle ?? "").toLowerCase();
+    const named = name ? nameMatchesSubject(`${title} ${snippet}`, name) : false;
+    const handleHit = handle && handleSet.has(handle);
+    const handleInText = [...handleSet].some((h) => h.length >= 3 && blob.includes(h.toLowerCase()));
+
+    // Must be about the subject somehow
+    if (!named && !handleHit && !handleInText) continue;
+
+    let kind = String(hit.kind || "mention");
+    // Own content: profile URL or post under a trusted handle
+    const ownContent = handleHit || (handle && handleSet.has(handle));
+    if (kind === "profile" && !named && !handleHit) continue;
+    if (kind === "profile" && named) {
+      // ok
+    } else if (kind === "post" && ownContent) {
+      kind = "post"; // their own post
+    } else if (named || handleInText) {
+      kind = kind === "profile" ? "profile" : "mention"; // tagged / mentioned
+    } else {
+      continue;
+    }
+
+    out.push({
+      ...hit,
+      kind,
+      relation: ownContent && kind !== "mention" ? "own" : "mentioned",
+    });
+  }
+  return out;
+}
+
+/**
+ * @param {Array<{ network?: string, kind?: string, title?: string, url?: string, snippet?: string, handle?: string|null, relation?: string }>} [profiles]
+ * @param {{ name?: string, handles?: string[] }} [subject]
+ */
+export function rankProfiles(profiles = [], subject = {}) {
+  const name = String(subject.name ?? "").trim();
+  const handles = new Set(
+    (Array.isArray(subject.handles) ? subject.handles : [])
+      .map((h) => String(h).replace(/^@/, "").toLowerCase())
+      .filter(Boolean),
+  );
   const scored = (Array.isArray(profiles) ? profiles : []).map((p, index) => {
     const network = String(p.network ?? "web").toLowerCase();
     const kind = String(p.kind ?? "mention").toLowerCase();
     const title = String(p.title ?? "");
     const snippet = String(p.snippet ?? "");
     const url = String(p.url ?? "");
-    let score = 35;
+    const handle = String(p.handle ?? "").toLowerCase();
+    let score = 40;
     const orderIdx = PLATFORM_ORDER.indexOf(network);
-    if (orderIdx >= 0) score += (PLATFORM_ORDER.length - orderIdx) * 2;
-    if (kind === "profile") score += 28;
-    else if (kind === "post") score += 12;
-    if (/linkedin\.com\/in\//i.test(url)) score += 18;
-    if (/instagram\.com\/[^/]+\/?$/i.test(url)) score += 16;
-    if (/tiktok\.com\/@[^/]+\/?$/i.test(url)) score += 16;
-    if (/profile|official|followers|following|about/i.test(`${title} ${snippet}`)) score += 8;
-    if (snippet.length > 40) score += 4;
+    if (orderIdx >= 0) score += (PLATFORM_ORDER.length - orderIdx);
+    if (kind === "profile") score += 30;
+    else if (kind === "post" && p.relation === "own") score += 18;
+    else if (kind === "mention" || kind === "post") score += 10;
+    if (name && nameMatchesSubject(`${title} ${snippet}`, name)) score += 20;
+    if (handle && handles.has(handle)) score += 15;
+    if (/linkedin\.com\/in\//i.test(url)) score += 12;
+    if (/instagram\.com\/[^/]+\/?$/i.test(url)) score += 12;
+    if (/tiktok\.com\/@[^/]+\/?$/i.test(url)) score += 12;
     return {
       ...p,
       network,
@@ -110,6 +181,7 @@ export function rankProfiles(profiles = []) {
 
 /**
  * Group ranked hits into per-platform sections: profile, posts, mentions.
+ * Empty platforms are dropped.
  * @param {ReturnType<typeof rankProfiles>} profiles
  */
 export function organizePlatformSections(profiles = []) {
@@ -133,14 +205,16 @@ export function organizePlatformSections(profiles = []) {
     const kind = String(hit.kind || "mention");
     if (kind === "profile") {
       if (!bucket.profile || (hit.confidence ?? 0) > (bucket.profile.confidence ?? 0)) {
-        // Previous best profile demoted into mentions/posts if needed
         if (bucket.profile) bucket.mentions.push(bucket.profile);
         bucket.profile = hit;
       } else {
         bucket.mentions.push(hit);
       }
-    } else if (kind === "post") {
+    } else if (kind === "post" && hit.relation === "own") {
       bucket.posts.push(hit);
+    } else if (kind === "post") {
+      // Someone else's post that mentions them
+      bucket.mentions.push(hit);
     } else {
       bucket.mentions.push(hit);
     }
@@ -154,13 +228,13 @@ export function organizePlatformSections(profiles = []) {
     if (!PLATFORM_ORDER.includes(id)) ordered.push(bucket);
   }
 
-  // Sort posts/mentions by confidence within each platform
   for (const bucket of ordered) {
     bucket.posts.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
     bucket.mentions.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
   }
 
-  return ordered;
+  // Drop platforms with nothing useful
+  return ordered.filter((b) => b.profile || b.posts.length || b.mentions.length);
 }
 
 /**
@@ -186,14 +260,16 @@ export async function runPublicSocialCheck({
     return { ok: false, reason: "serper_api_key_missing", profiles: [], platforms: [], searches: [] };
   }
 
+  const subject = {
+    name: subjectName || handleClean,
+    handles: handleClean ? [handleClean] : [],
+  };
+
   const discovered = await discoverSocialProfiles({
-    subject: {
-      name: subjectName || handleClean,
-      handles: handleClean ? [handleClean] : [],
-    },
+    subject,
     serperApiKey: String(serperApiKey).trim(),
     fetchImpl,
-    maxPerNetwork: 10,
+    maxPerNetwork: 8,
     depth: "deep",
     networks: [...SOCIAL_NETWORKS],
   });
@@ -208,7 +284,20 @@ export async function runPublicSocialCheck({
     };
   }
 
-  const profiles = rankProfiles(discovered.profiles);
+  const relevant = filterSubjectRelevant(discovered.profiles, {
+    name: subjectName,
+    handles: [
+      ...subject.handles,
+      ...(discovered.discoveredHandles ?? []),
+    ],
+  });
+  const profiles = rankProfiles(relevant, {
+    name: subjectName,
+    handles: [
+      ...subject.handles,
+      ...(discovered.discoveredHandles ?? []),
+    ],
+  });
   const platforms = organizePlatformSections(profiles);
   /** @type {Record<string, typeof profiles>} */
   const byNetwork = {};
@@ -226,6 +315,6 @@ export async function runPublicSocialCheck({
     searches: discovered.searches ?? [],
     generatedAt: new Date().toISOString(),
     disclaimer:
-      "Public OSINT-style social presence context only. Not an employment, tenant, or FCRA background screen. Profile and post previews come from publicly indexed search results — private accounts and non-indexed content will not appear.",
+      "Public OSINT-style social presence context only. Not an employment, tenant, or FCRA background screen. Only profiles, posts, and mentions that match the searched name or verified handles are shown.",
   };
 }

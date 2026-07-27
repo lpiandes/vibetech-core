@@ -213,7 +213,7 @@ function PlatformSection({ platform }: { platform: Platform }) {
       </div>
 
       <div style={subsection}>
-        <h4 style={subsectionTitle}>Posts &amp; media</h4>
+        <h4 style={subsectionTitle}>Their posts &amp; media</h4>
         {postCount ? (
           <div style={hitStack}>
             {platform.posts.map((hit, i) => (
@@ -221,12 +221,12 @@ function PlatformSection({ platform }: { platform: Platform }) {
             ))}
           </div>
         ) : (
-          <p style={emptySoft}>No public posts/reels indexed yet for this subject.</p>
+          <p style={emptySoft}>No indexed posts from this profile yet.</p>
         )}
       </div>
 
       <div style={subsection}>
-        <h4 style={subsectionTitle}>Mentions &amp; related</h4>
+        <h4 style={subsectionTitle}>Mentions &amp; tags</h4>
         {mentionCount ? (
           <div style={hitStack}>
             {platform.mentions.map((hit, i) => (
@@ -234,7 +234,7 @@ function PlatformSection({ platform }: { platform: Platform }) {
             ))}
           </div>
         ) : (
-          <p style={emptySoft}>No additional mentions found on this platform.</p>
+          <p style={emptySoft}>No mentions/tags of this name found on this platform.</p>
         )}
       </div>
     </section>

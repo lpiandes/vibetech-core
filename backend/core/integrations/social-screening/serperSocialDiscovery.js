@@ -184,15 +184,13 @@ export function guessNetwork(url) {
 
 /**
  * Classify a hit as profile | post | mention for UI grouping.
+ * URL shape wins over query preference so /reel/ and /p/ never become "profile".
  */
 export function classifyHitKind(url, title = "", snippet = "", preferredKind = null) {
-  if (preferredKind === "profile" || preferredKind === "post" || preferredKind === "mention") {
-    return preferredKind;
-  }
   const u = String(url).toLowerCase();
   const blob = `${title} ${snippet}`.toLowerCase();
 
-  // Explicit post/content URL shapes
+  // Explicit post/content URL shapes — always post
   if (
     /\/(p|reel|tv|reels)\//i.test(u)
     || /\/status\//i.test(u)
@@ -207,29 +205,67 @@ export function classifyHitKind(url, title = "", snippet = "", preferredKind = n
     || /\/photos?\//i.test(u)
     || /\/videos?\//i.test(u)
     || /\/pulse\//i.test(u)
+    || /\/activity-/i.test(u)
+    || /threads\.net\/post/i.test(u)
   ) {
     return "post";
   }
 
-  // Profile-like URL shapes
+  // Profile-like URL shapes — always profile
   if (
     /linkedin\.com\/in\//i.test(u)
-    || /instagram\.com\/[^/]+\/?$/i.test(u)
+    || /instagram\.com\/([a-z0-9._]+)\/?(?:\?|$)/i.test(u)
     || /tiktok\.com\/@[^/]+\/?$/i.test(u)
-    || /(?:x|twitter)\.com\/[^/]+\/?$/i.test(u)
+    || /(?:^|\/\/)(?:www\.)?(?:x|twitter)\.com\/[a-z0-9_]+\/?(?:\?|$)/i.test(u)
     || /youtube\.com\/(@|channel\/|c\/|user\/)/i.test(u)
     || /threads\.net\/@[^/]+\/?$/i.test(u)
     || /reddit\.com\/user\//i.test(u)
-    || /github\.com\/[^/]+\/?$/i.test(u)
-    || /twitch\.tv\/[^/]+\/?$/i.test(u)
+    || /github\.com\/[a-z0-9_-]+\/?$/i.test(u)
+    || /twitch\.tv\/[a-z0-9_]+\/?$/i.test(u)
     || /snapchat\.com\/(add|@)/i.test(u)
     || /facebook\.com\/(people\/|profile\.php)/i.test(u)
   ) {
     return "profile";
   }
 
+  if (preferredKind === "profile" || preferredKind === "post" || preferredKind === "mention") {
+    return preferredKind;
+  }
   if (/profile|official account|followers|following/i.test(blob)) return "profile";
   return "mention";
+}
+
+/** Generic platform / docs / marketing pages that are never subject-relevant. */
+export function isNoiseUrl(url) {
+  const u = String(url ?? "").toLowerCase();
+  if (!u) return true;
+  const noiseHosts = [
+    "developers.facebook.com",
+    "developers.google.com",
+    "developer.x.com",
+    "developer.twitter.com",
+    "docs.github.com",
+    "help.instagram.com",
+    "about.instagram.com",
+    "newsroom.tiktok.com",
+    "forbusiness.snapchat.com",
+    "parents.snapchat.com",
+    "easylens.snapchat.com",
+    "scan.snapchat.com",
+    "meetups.twitch.tv",
+    "dev.twitch.tv",
+    "appeals.twitch.tv",
+    "link.twitch.tv",
+    "code.facebook.com",
+    "ai.facebook.com",
+    "music.youtube.com",
+    "gist.github.com",
+  ];
+  if (noiseHosts.some((n) => u.includes(n))) return true;
+  if (/^https?:\/\/(www\.)?(instagram|tiktok|facebook|snapchat|pinterest|reddit|youtube|x|twitter)\.com\/?(\?.*)?$/i.test(u)) {
+    return true;
+  }
+  return false;
 }
 
 export function extractHandleFromUrl(url) {
@@ -346,7 +382,8 @@ async function discoverDeepSocialPresence({
   const searches = [];
   const profiles = [];
   const seen = new Set();
-  const discoveredHandles = new Set(handleSeed.map((h) => h.toLowerCase()));
+  /** Only handles the user provided or that appear on a name-matching profile URL. */
+  const trustedHandles = new Set(handleSeed.map((h) => h.toLowerCase()));
 
   async function runQuery(network, query, preferredKind, num = maxPerNetwork) {
     if (!query) return;
@@ -358,19 +395,23 @@ async function discoverDeepSocialPresence({
       num,
     });
     for (const row of rows) {
+      const url = String(row?.link ?? "").trim();
+      if (!url || isNoiseUrl(url)) continue;
       const hit = pushHit(profiles, seen, row, network, preferredKind);
       if (!hit) continue;
-      const extracted = extractHandleFromUrl(hit.url);
-      if (extracted) discoveredHandles.add(extracted.toLowerCase());
+      // Only trust handles from clear profile URLs whose title/snippet also names the subject.
+      if (hit.kind === "profile" && hit.handle && nameMatchesSubject(`${hit.title} ${hit.snippet} ${hit.url}`, name)) {
+        trustedHandles.add(String(hit.handle).toLowerCase());
+      }
     }
   }
 
-  // Broad open-web sweep first (catch news, school, sports, blogs, etc.)
+  // Mentions / news / sports sites — must include the quoted name
   if (name) {
     await runQuery("web", `"${name}"`, "mention", 10);
   }
 
-  // Run each platform's profile + content queries in parallel batches
+  // Platform profile + content queries anchored to the subject name (and optional handle)
   for (const spec of wanted) {
     const profileQs = spec.profileQueries(name || primaryHandle, primaryHandle) || [];
     const contentQs = spec.contentQueries(name || primaryHandle, primaryHandle) || [];
@@ -380,18 +421,26 @@ async function discoverDeepSocialPresence({
     ]);
   }
 
-  // Follow-up: for discovered handles, pull more profile + content hits (batched)
-  const followHandles = [...discoveredHandles].slice(0, 6);
+  // Follow-up ONLY for trusted subject handles (never random extracted accounts)
+  const followHandles = [...trustedHandles].slice(0, 4);
   const followJobs = [];
   for (const handle of followHandles) {
     for (const spec of wanted) {
-      const profileQs = (spec.profileQueries("", handle) || []).slice(0, 1);
-      const contentQs = (spec.contentQueries("", handle) || []).slice(0, 1);
-      for (const q of profileQs) followJobs.push(runQuery(spec.network, q, "profile", 5));
-      for (const q of contentQs) followJobs.push(runQuery(spec.network, q, "post", 5));
+      // Keep the subject name in follow-up queries so Serper stays on-person
+      const profileQs = name
+        ? [`"${name}" site:${siteHint(spec.network)}`, ...(spec.profileQueries(name, handle) || []).slice(0, 1)]
+        : (spec.profileQueries("", handle) || []).slice(0, 1);
+      const contentQs = name
+        ? [`"${name}" (${contentSiteHint(spec.network)})`, ...(spec.contentQueries(name, handle) || []).slice(0, 1)]
+        : (spec.contentQueries("", handle) || []).slice(0, 1);
+      for (const q of [...new Set(profileQs)].slice(0, 2)) {
+        followJobs.push(runQuery(spec.network, q, "profile", 5));
+      }
+      for (const q of [...new Set(contentQs)].slice(0, 2)) {
+        followJobs.push(runQuery(spec.network, q, "post", 5));
+      }
     }
   }
-  // Cap concurrency bursts to avoid Serper rate spikes
   for (let i = 0; i < followJobs.length; i += 8) {
     await Promise.all(followJobs.slice(i, i + 8));
   }
@@ -400,13 +449,62 @@ async function discoverDeepSocialPresence({
     ok: true,
     profiles,
     searches,
-    discoveredHandles: [...discoveredHandles],
+    discoveredHandles: [...trustedHandles],
   };
+}
+
+function siteHint(network) {
+  const map = {
+    linkedin: "linkedin.com/in",
+    instagram: "instagram.com",
+    tiktok: "tiktok.com",
+    youtube: "youtube.com",
+    x: "x.com",
+    facebook: "facebook.com",
+    threads: "threads.net",
+    reddit: "reddit.com",
+    github: "github.com",
+    pinterest: "pinterest.com",
+    twitch: "twitch.tv",
+    snapchat: "snapchat.com",
+  };
+  return map[network] || `${network}.com`;
+}
+
+function contentSiteHint(network) {
+  const map = {
+    linkedin: "site:linkedin.com/posts OR site:linkedin.com/pulse",
+    instagram: "site:instagram.com/p OR site:instagram.com/reel",
+    tiktok: "site:tiktok.com/video OR site:tiktok.com/@",
+    youtube: "site:youtube.com/watch OR site:youtu.be",
+    x: "site:x.com/status OR site:twitter.com/status",
+    facebook: "site:facebook.com/posts OR site:facebook.com/videos",
+    threads: "site:threads.net/post",
+    reddit: "site:reddit.com/r OR site:reddit.com/comments",
+    github: "site:github.com",
+    pinterest: "site:pinterest.com/pin",
+    twitch: "site:twitch.tv/videos OR site:twitch.tv/clip",
+    snapchat: "site:snapchat.com",
+  };
+  return map[network] || `site:${network}.com`;
+}
+
+/** True when haystack contains the subject full name (all significant tokens). */
+export function nameMatchesSubject(haystack, name) {
+  const text = String(haystack ?? "").toLowerCase();
+  const tokens = String(name ?? "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+  if (!tokens.length) return false;
+  // Require every token (first + last etc.) so "Leo" alone never matches random Leos
+  return tokens.every((token) => text.includes(token));
 }
 
 function pushHit(profiles, seen, row, networkHint, preferredKind) {
   const url = String(row?.link ?? "").trim();
-  if (!url || seen.has(url)) return null;
+  if (!url || seen.has(url) || isNoiseUrl(url)) return null;
   seen.add(url);
   const network = networkHint && networkHint !== "handle" ? networkHint : guessNetwork(url);
   const title = String(row?.title ?? "");
