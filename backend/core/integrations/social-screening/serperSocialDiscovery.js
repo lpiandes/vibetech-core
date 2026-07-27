@@ -1,6 +1,11 @@
 /**
  * Serper Google search — discover public social profiles / posts for a subject.
  * Used by tenant social screening (basic) and public Social Checker (deep).
+ *
+ * Deep mode is intentionally profile-first:
+ *   1) resolve the person's profile on each platform
+ *   2) find posts from that profile
+ *   3) find posts that @tag or directly mention them
  */
 
 export const SOCIAL_NETWORKS = Object.freeze([
@@ -30,31 +35,42 @@ const BASIC_NETWORK_QUERIES = Object.freeze([
 
 /**
  * Deep Social Checker: profile + posts/mentions queries across many platforms.
- * Each entry may define profileQueries and contentQueries (functions of name/handle).
  */
 const DEEP_NETWORK_SPECS = Object.freeze([
   {
     network: "linkedin",
     profileQueries: (name, handle) => [
       `"${name}" site:linkedin.com/in`,
-      handle ? `"${handle}" site:linkedin.com/in` : null,
+      handle ? `site:linkedin.com/in/${handle}` : null,
     ].filter(Boolean),
-    contentQueries: (name, handle) => [
-      `"${name}" (site:linkedin.com/posts OR site:linkedin.com/feed OR site:linkedin.com/pulse)`,
-      handle ? `"${handle}" site:linkedin.com/posts` : null,
+    ownPostQueries: (name, handle) => [
+      handle ? `"${name}" site:linkedin.com/in/${handle}` : null,
+      handle ? `site:linkedin.com/in/${handle} (posts OR activity)` : null,
     ].filter(Boolean),
+    mentionQueries: (name, handle) => [
+      handle ? `"@${handle}" (site:linkedin.com/posts OR site:linkedin.com/feed)` : null,
+      `"${name}" (site:linkedin.com/posts OR site:linkedin.com/pulse)`,
+    ].filter(Boolean),
+    profileUrl: (handle) => `https://www.linkedin.com/in/${handle}/`,
   },
   {
     network: "instagram",
     profileQueries: (name, handle) => [
-      `"${name}" site:instagram.com -inurl:/p/ -inurl:/reel/ -inurl:/tv/`,
+      `"${name}" site:instagram.com -inurl:/p/ -inurl:/reel/ -inurl:/tv/ -inurl:/stories/`,
+      `"${name}" Instagram`,
       handle ? `site:instagram.com/${handle}` : null,
+    ].filter(Boolean),
+    ownPostQueries: (name, handle) => [
+      handle ? `site:instagram.com/${handle}` : null,
+      handle ? `"${name}" site:instagram.com/${handle}` : null,
+      handle ? `"${name}" on Instagram site:instagram.com` : null,
+    ].filter(Boolean),
+    mentionQueries: (name, handle) => [
+      handle ? `"@${handle}" (site:instagram.com/p OR site:instagram.com/reel)` : null,
       handle ? `"@${handle}" site:instagram.com` : null,
+      `"${name}" (tagged OR "photo of" OR with) (site:instagram.com/p OR site:instagram.com/reel)`,
     ].filter(Boolean),
-    contentQueries: (name, handle) => [
-      `"${name}" (site:instagram.com/p OR site:instagram.com/reel OR site:instagram.com/tv)`,
-      handle ? `"${handle}" (site:instagram.com/p OR site:instagram.com/reel)` : null,
-    ].filter(Boolean),
+    profileUrl: (handle) => `https://www.instagram.com/${handle}/`,
   },
   {
     network: "tiktok",
@@ -62,10 +78,15 @@ const DEEP_NETWORK_SPECS = Object.freeze([
       `"${name}" site:tiktok.com/@`,
       handle ? `site:tiktok.com/@${handle}` : null,
     ].filter(Boolean),
-    contentQueries: (name, handle) => [
-      `"${name}" site:tiktok.com/video`,
-      handle ? `"${handle}" site:tiktok.com/video` : null,
+    ownPostQueries: (name, handle) => [
+      handle ? `site:tiktok.com/@${handle}` : null,
+      handle ? `"${name}" site:tiktok.com/@${handle}` : null,
     ].filter(Boolean),
+    mentionQueries: (name, handle) => [
+      handle ? `"@${handle}" site:tiktok.com` : null,
+      `"${name}" site:tiktok.com/video`,
+    ].filter(Boolean),
+    profileUrl: (handle) => `https://www.tiktok.com/@${handle}`,
   },
   {
     network: "youtube",
@@ -73,43 +94,61 @@ const DEEP_NETWORK_SPECS = Object.freeze([
       `"${name}" (site:youtube.com/@ OR site:youtube.com/channel OR site:youtube.com/c/ OR site:youtube.com/user)`,
       handle ? `site:youtube.com/@${handle}` : null,
     ].filter(Boolean),
-    contentQueries: (name, handle) => [
-      `"${name}" (site:youtube.com/watch OR site:youtu.be OR site:youtube.com/shorts)`,
-      handle ? `"${handle}" site:youtube.com/watch` : null,
+    ownPostQueries: (name, handle) => [
+      handle ? `site:youtube.com/@${handle}` : null,
+      handle ? `"${name}" site:youtube.com/@${handle}` : null,
     ].filter(Boolean),
+    mentionQueries: (name, handle) => [
+      handle ? `"@${handle}" (site:youtube.com/watch OR site:youtu.be)` : null,
+      `"${name}" (site:youtube.com/watch OR site:youtu.be OR site:youtube.com/shorts)`,
+    ].filter(Boolean),
+    profileUrl: (handle) => `https://www.youtube.com/@${handle}`,
   },
   {
     network: "x",
     profileQueries: (name, handle) => [
       `"${name}" (site:x.com OR site:twitter.com) -inurl:/status/`,
-      handle ? `(site:x.com/${handle} OR site:twitter.com/${handle})` : null,
+      handle ? `(site:x.com/${handle} OR site:twitter.com/${handle}) -inurl:/status/` : null,
     ].filter(Boolean),
-    contentQueries: (name, handle) => [
+    ownPostQueries: (name, handle) => [
+      handle ? `(site:x.com/${handle}/status OR site:twitter.com/${handle}/status)` : null,
+      handle ? `from:${handle}` : null,
+    ].filter(Boolean),
+    mentionQueries: (name, handle) => [
+      handle ? `"@${handle}" (site:x.com/status OR site:twitter.com/status)` : null,
       `"${name}" (site:x.com/status OR site:twitter.com/status)`,
-      handle ? `"${handle}" (site:x.com/status OR site:twitter.com/status)` : null,
     ].filter(Boolean),
+    profileUrl: (handle) => `https://x.com/${handle}`,
   },
   {
     network: "facebook",
     profileQueries: (name, handle) => [
-      `"${name}" (site:facebook.com/people OR site:facebook.com/profile.php OR site:facebook.com/)`,
+      `"${name}" (site:facebook.com/people OR site:facebook.com/profile.php)`,
       handle ? `site:facebook.com/${handle}` : null,
     ].filter(Boolean),
-    contentQueries: (name, handle) => [
-      `"${name}" (site:facebook.com/posts OR site:facebook.com/videos OR site:facebook.com/watch OR site:facebook.com/photo)`,
-      handle ? `"${handle}" site:facebook.com/posts` : null,
+    ownPostQueries: (name, handle) => [
+      handle ? `site:facebook.com/${handle}` : null,
     ].filter(Boolean),
+    mentionQueries: (name, handle) => [
+      handle ? `"@${handle}" site:facebook.com` : null,
+      `"${name}" (site:facebook.com/posts OR site:facebook.com/photos OR site:facebook.com/watch)`,
+    ].filter(Boolean),
+    profileUrl: (handle) => `https://www.facebook.com/${handle}`,
   },
   {
     network: "threads",
     profileQueries: (name, handle) => [
-      `"${name}" site:threads.net`,
+      `"${name}" site:threads.net/@`,
       handle ? `site:threads.net/@${handle}` : null,
     ].filter(Boolean),
-    contentQueries: (name, handle) => [
-      `"${name}" site:threads.net/post`,
-      handle ? `"${handle}" site:threads.net` : null,
+    ownPostQueries: (name, handle) => [
+      handle ? `site:threads.net/@${handle}` : null,
     ].filter(Boolean),
+    mentionQueries: (name, handle) => [
+      handle ? `"@${handle}" site:threads.net` : null,
+      `"${name}" site:threads.net/post`,
+    ].filter(Boolean),
+    profileUrl: (handle) => `https://www.threads.net/@${handle}`,
   },
   {
     network: "reddit",
@@ -117,41 +156,58 @@ const DEEP_NETWORK_SPECS = Object.freeze([
       `"${name}" site:reddit.com/user`,
       handle ? `site:reddit.com/user/${handle}` : null,
     ].filter(Boolean),
-    contentQueries: (name, handle) => [
-      `"${name}" (site:reddit.com/r OR site:reddit.com/comments)`,
-      handle ? `"${handle}" site:reddit.com` : null,
+    ownPostQueries: (name, handle) => [
+      handle ? `site:reddit.com/user/${handle}` : null,
     ].filter(Boolean),
+    mentionQueries: (name, handle) => [
+      handle ? `"u/${handle}" site:reddit.com` : null,
+      `"${name}" (site:reddit.com/r OR site:reddit.com/comments)`,
+    ].filter(Boolean),
+    profileUrl: (handle) => `https://www.reddit.com/user/${handle}/`,
   },
   {
     network: "github",
     profileQueries: (name, handle) => [
-      `"${name}" site:github.com -inurl:/issues -inurl:/pull`,
+      `"${name}" site:github.com -inurl:/issues -inurl:/pull -inurl:/blob`,
       handle ? `site:github.com/${handle}` : null,
     ].filter(Boolean),
-    contentQueries: (name, handle) => [
-      `"${name}" (site:github.com/*/issues OR site:github.com/*/pull OR site:gist.github.com)`,
-      handle ? `"${handle}" site:github.com` : null,
+    ownPostQueries: (name, handle) => [
+      handle ? `site:github.com/${handle}` : null,
     ].filter(Boolean),
+    mentionQueries: (name, handle) => [
+      handle ? `"@${handle}" site:github.com` : null,
+      `"${name}" (site:github.com/*/issues OR site:github.com/*/pull)`,
+    ].filter(Boolean),
+    profileUrl: (handle) => `https://github.com/${handle}`,
   },
   {
     network: "pinterest",
     profileQueries: (name, handle) => [
-      `"${name}" site:pinterest.com`,
+      `"${name}" site:pinterest.com -inurl:/pin/`,
       handle ? `site:pinterest.com/${handle}` : null,
     ].filter(Boolean),
-    contentQueries: (name, handle) => [
-      `"${name}" (site:pinterest.com/pin OR site:pinterest.com/idea)`,
+    ownPostQueries: (name, handle) => [
+      handle ? `site:pinterest.com/${handle}` : null,
     ].filter(Boolean),
+    mentionQueries: (name) => [
+      `"${name}" site:pinterest.com/pin`,
+    ],
+    profileUrl: (handle) => `https://www.pinterest.com/${handle}/`,
   },
   {
     network: "twitch",
     profileQueries: (name, handle) => [
-      `"${name}" site:twitch.tv`,
+      `"${name}" site:twitch.tv -inurl:/videos -inurl:/clip`,
       handle ? `site:twitch.tv/${handle}` : null,
     ].filter(Boolean),
-    contentQueries: (name, handle) => [
+    ownPostQueries: (name, handle) => [
+      handle ? `site:twitch.tv/${handle}` : null,
+    ].filter(Boolean),
+    mentionQueries: (name, handle) => [
+      handle ? `"@${handle}" site:twitch.tv` : null,
       `"${name}" (site:twitch.tv/videos OR site:twitch.tv/clip)`,
     ].filter(Boolean),
+    profileUrl: (handle) => `https://www.twitch.tv/${handle}`,
   },
   {
     network: "snapchat",
@@ -159,10 +215,18 @@ const DEEP_NETWORK_SPECS = Object.freeze([
       `"${name}" (site:snapchat.com/add OR site:snapchat.com/@)`,
       handle ? `site:snapchat.com/add/${handle}` : null,
     ].filter(Boolean),
-    contentQueries: (name) => [
+    ownPostQueries: () => [],
+    mentionQueries: (name) => [
       `"${name}" site:snapchat.com`,
     ],
+    profileUrl: (handle) => `https://www.snapchat.com/add/${handle}`,
   },
+]);
+
+const RESERVED_PATH_HANDLES = new Set([
+  "p", "reel", "reels", "tv", "status", "posts", "video", "watch", "shorts",
+  "photo", "photos", "videos", "share", "explore", "stories", "accounts",
+  "about", "help", "privacy", "directory", "jobs", "ads", "developers",
 ]);
 
 export function guessNetwork(url) {
@@ -190,7 +254,6 @@ export function classifyHitKind(url, title = "", snippet = "", preferredKind = n
   const u = String(url).toLowerCase();
   const blob = `${title} ${snippet}`.toLowerCase();
 
-  // Explicit post/content URL shapes — always post
   if (
     /\/(p|reel|tv|reels)\//i.test(u)
     || /\/status\//i.test(u)
@@ -211,7 +274,6 @@ export function classifyHitKind(url, title = "", snippet = "", preferredKind = n
     return "post";
   }
 
-  // Profile-like URL shapes — always profile
   if (
     /linkedin\.com\/in\//i.test(u)
     || /instagram\.com\/([a-z0-9._]+)\/?(?:\?|$)/i.test(u)
@@ -284,11 +346,133 @@ export function extractHandleFromUrl(url) {
   ];
   for (const re of patterns) {
     const m = u.match(re);
-    if (m?.[1] && !["p", "reel", "reels", "tv", "status", "posts", "video", "watch", "shorts", "photo", "photos", "videos", "share", "explore"].includes(m[1].toLowerCase())) {
+    if (m?.[1] && !RESERVED_PATH_HANDLES.has(m[1].toLowerCase())) {
       return m[1];
     }
   }
   return null;
+}
+
+/** True when haystack contains the subject full name (all significant tokens). */
+export function nameMatchesSubject(haystack, name) {
+  const text = String(haystack ?? "").toLowerCase();
+  const tokens = nameTokens(name);
+  if (!tokens.length) return false;
+  return tokens.every((token) => text.includes(token));
+}
+
+function nameTokens(name) {
+  return String(name ?? "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Serper/Google often appends OCR roster text like
+ * "LEO PIANDES (A) NICK DEMIO (A) NE 10" onto unrelated Instagram posts.
+ * That is NOT a real mention of the person.
+ */
+export function looksLikeRosterOcrPollution(snippet, name) {
+  const s = String(snippet ?? "");
+  if (!s) return false;
+  // Classic hockey/sports lineup OCR: NAME (A) OTHER NAME (A)
+  if (/\([AC]\)\s+[A-Z][A-Z .'-]{1,40}\s*\([AC]\)/.test(s)) return true;
+  if (/\([AC]\)\s*NE\s*\d+/i.test(s) && nameMatchesSubject(s, name)) return true;
+  // Many ALL-CAPS multi-word names jammed together with the subject
+  const capsNames = s.match(/\b[A-Z]{2,}(?:\s+[A-Z]{2,})+\b/g) || [];
+  if (capsNames.length >= 2 && nameMatchesSubject(s, name) && !nameMatchesSubject(capsNames[0], name)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Direct mention / tag only — not polluted snippet ghosts.
+ * Accept when:
+ *  - @handle appears in title or snippet
+ *  - full name appears in the TITLE
+ *  - snippet has clear tag language + name, and is not OCR roster junk
+ */
+export function isDirectMention({ title = "", snippet = "", name = "", handles = [] } = {}) {
+  const t = String(title ?? "");
+  const s = String(snippet ?? "");
+  const blob = `${t} ${s}`;
+  const handleList = (Array.isArray(handles) ? handles : [])
+    .map((h) => String(h).replace(/^@/, "").trim())
+    .filter((h) => h.length >= 2);
+
+  for (const h of handleList) {
+    if (new RegExp(`(^|[^A-Za-z0-9_])@${escapeRegex(h)}\\b`, "i").test(blob)) return true;
+    if (new RegExp(`\\bu/${escapeRegex(h)}\\b`, "i").test(blob)) return true;
+  }
+
+  if (name && nameMatchesSubject(t, name)) return true;
+
+  if (name && nameMatchesSubject(s, name)) {
+    if (looksLikeRosterOcrPollution(s, name)) return false;
+    if (/\b(tagged|mention(?:ed|s)?|featuring|congratulat(?:es|ions)?|photo of|with @)\b/i.test(s)) {
+      return true;
+    }
+    // Name must appear early and not be buried after another subject headline
+    const early = s.slice(0, 140);
+    if (nameMatchesSubject(early, name) && !looksLikeRosterOcrPollution(early, name)) {
+      return true;
+    }
+    return false;
+  }
+
+  return false;
+}
+
+/**
+ * Heuristic: is this post authored by the subject (vs merely about them)?
+ */
+export function isLikelyOwnPost({ title = "", snippet = "", url = "", name = "", handle = "" } = {}) {
+  const t = String(title ?? "");
+  const s = String(snippet ?? "");
+  const u = String(url ?? "").toLowerCase();
+  const h = String(handle ?? "").replace(/^@/, "").toLowerCase();
+  const blob = `${t} ${s}`.toLowerCase();
+
+  if (h) {
+    if (u.includes(`/${h}/`) || u.includes(`/@${h}`)) return true;
+    if (new RegExp(`${escapeRegex(h)}['']s (profile|post|reel|video|photo)`, "i").test(blob)) return true;
+    if (new RegExp(`^@?${escapeRegex(h)}[\\s.•·|:]`, "i").test(t.trim())) return true;
+    if (new RegExp(`\\(@?${escapeRegex(h)}\\)`, "i").test(t)) return true;
+  }
+  if (name && new RegExp(`${escapeRegex(name)}\\s+on\\s+(instagram|tiktok|facebook|linkedin|youtube|x|twitter)`, "i").test(t)) {
+    return true;
+  }
+  return false;
+}
+
+export function profileLooksLikeSubject({ title = "", snippet = "", url = "", name = "", handles = [] } = {}) {
+  const t = String(title ?? "");
+  const s = String(snippet ?? "");
+  const handle = extractHandleFromUrl(url);
+  const provided = new Set(
+    (Array.isArray(handles) ? handles : [])
+      .map((h) => String(h).replace(/^@/, "").toLowerCase())
+      .filter(Boolean),
+  );
+
+  if (handle && provided.has(handle.toLowerCase())) return true;
+  if (name && nameMatchesSubject(t, name)) return true;
+  // Profile titles often look like "Name (@handle)" — require name in title OR name+handle pairing
+  if (name && nameMatchesSubject(`${t} ${s}`, name) && !looksLikeRosterOcrPollution(s, name)) {
+    // Avoid trusting random profiles that only match via polluted snippet
+    if (nameMatchesSubject(t, name)) return true;
+    if (handle && (t.toLowerCase().includes(handle.toLowerCase()) || s.toLowerCase().includes(handle.toLowerCase()))) {
+      return nameMatchesSubject(`${t} ${s}`, name);
+    }
+  }
+  return false;
 }
 
 export async function discoverSocialProfiles({
@@ -320,7 +504,7 @@ export async function discoverSocialProfiles({
       serperApiKey,
       networks,
       fetchImpl,
-      maxPerNetwork: Math.max(maxPerNetwork, 8),
+      maxPerNetwork: Math.max(maxPerNetwork, 6),
     });
   }
 
@@ -365,6 +549,9 @@ export async function discoverSocialProfiles({
   return { ok: true, profiles, searches };
 }
 
+/**
+ * Profile → own posts → direct tags/mentions, per platform.
+ */
 async function discoverDeepSocialPresence({
   name,
   handles,
@@ -374,7 +561,6 @@ async function discoverDeepSocialPresence({
   maxPerNetwork,
 }) {
   const handleSeed = handles.map((h) => String(h).replace(/^@/, "")).filter(Boolean);
-  const primaryHandle = handleSeed[0] || "";
   const wanted = Array.isArray(networks) && networks.length
     ? DEEP_NETWORK_SPECS.filter((n) => networks.map(String).map((x) => x.toLowerCase()).includes(n.network))
     : DEEP_NETWORK_SPECS;
@@ -382,11 +568,20 @@ async function discoverDeepSocialPresence({
   const searches = [];
   const profiles = [];
   const seen = new Set();
-  /** Only handles the user provided or that appear on a name-matching profile URL. */
-  const trustedHandles = new Set(handleSeed.map((h) => h.toLowerCase()));
+  /** @type {Map<string, Set<string>>} network -> trusted handles */
+  const trustedByNetwork = new Map();
+  const allTrusted = new Set(handleSeed.map((h) => h.toLowerCase()));
+
+  function trustHandle(network, handle) {
+    const h = String(handle || "").replace(/^@/, "").trim();
+    if (!h || RESERVED_PATH_HANDLES.has(h.toLowerCase())) return;
+    if (!trustedByNetwork.has(network)) trustedByNetwork.set(network, new Set());
+    trustedByNetwork.get(network).add(h.toLowerCase());
+    allTrusted.add(h.toLowerCase());
+  }
 
   async function runQuery(network, query, preferredKind, num = maxPerNetwork) {
-    if (!query) return;
+    if (!query) return [];
     searches.push({ network, query, kind: preferredKind });
     const rows = await serperSearch({
       query,
@@ -394,112 +589,232 @@ async function discoverDeepSocialPresence({
       fetchImpl,
       num,
     });
+    const hits = [];
     for (const row of rows) {
       const url = String(row?.link ?? "").trim();
       if (!url || isNoiseUrl(url)) continue;
       const hit = pushHit(profiles, seen, row, network, preferredKind);
-      if (!hit) continue;
-      // Only trust handles from clear profile URLs whose title/snippet also names the subject.
-      if (hit.kind === "profile" && hit.handle && nameMatchesSubject(`${hit.title} ${hit.snippet} ${hit.url}`, name)) {
-        trustedHandles.add(String(hit.handle).toLowerCase());
-      }
+      if (hit) hits.push(hit);
     }
+    return hits;
   }
 
-  // Mentions / news / sports sites — must include the quoted name
-  if (name) {
-    await runQuery("web", `"${name}"`, "mention", 10);
+  function ensureSynthesizedProfile(network, handle, nameHint) {
+    const spec = wanted.find((s) => s.network === network);
+    if (!spec?.profileUrl || !handle) return;
+    const url = spec.profileUrl(handle);
+    if (seen.has(url) || isNoiseUrl(url)) return;
+    seen.add(url);
+    profiles.push({
+      network,
+      kind: "profile",
+      relation: "own",
+      title: nameHint ? `${nameHint} (@${handle})` : `@${handle}`,
+      url,
+      snippet: "Resolved profile URL for verified handle.",
+      handle,
+    });
   }
 
-  // Platform profile + content queries anchored to the subject name (and optional handle)
+  // ── PHASE 1: find profiles first (per platform) ──────────────────────────
   for (const spec of wanted) {
-    const profileQs = spec.profileQueries(name || primaryHandle, primaryHandle) || [];
-    const contentQs = spec.contentQueries(name || primaryHandle, primaryHandle) || [];
-    await Promise.all([
-      ...profileQs.map((q) => runQuery(spec.network, q, "profile", maxPerNetwork)),
-      ...contentQs.map((q) => runQuery(spec.network, q, "post", maxPerNetwork)),
-    ]);
-  }
+    const seedHandle = handleSeed[0] || "";
+    const qs = spec.profileQueries(name || seedHandle, seedHandle) || [];
+    const hits = [];
+    for (const q of qs.slice(0, 3)) {
+      hits.push(...await runQuery(spec.network, q, "profile", maxPerNetwork));
+    }
 
-  // Follow-up ONLY for trusted subject handles (never random extracted accounts)
-  const followHandles = [...trustedHandles].slice(0, 4);
-  const followJobs = [];
-  for (const handle of followHandles) {
-    for (const spec of wanted) {
-      // Keep the subject name in follow-up queries so Serper stays on-person
-      const profileQs = name
-        ? [`"${name}" site:${siteHint(spec.network)}`, ...(spec.profileQueries(name, handle) || []).slice(0, 1)]
-        : (spec.profileQueries("", handle) || []).slice(0, 1);
-      const contentQs = name
-        ? [`"${name}" (${contentSiteHint(spec.network)})`, ...(spec.contentQueries(name, handle) || []).slice(0, 1)]
-        : (spec.contentQueries("", handle) || []).slice(0, 1);
-      for (const q of [...new Set(profileQs)].slice(0, 2)) {
-        followJobs.push(runQuery(spec.network, q, "profile", 5));
+    let foundSubjectProfile = false;
+    for (const hit of hits) {
+      if (hit.kind !== "profile") {
+        // Profile queries sometimes return posts — ignore here; phase 2/3 handle content
+        continue;
       }
-      for (const q of [...new Set(contentQs)].slice(0, 2)) {
-        followJobs.push(runQuery(spec.network, q, "post", 5));
+      if (!profileLooksLikeSubject({
+        title: hit.title,
+        snippet: hit.snippet,
+        url: hit.url,
+        name,
+        handles: handleSeed,
+      })) {
+        // Drop unrelated profile hits early (celebrities, random accounts)
+        const idx = profiles.indexOf(hit);
+        if (idx >= 0) profiles.splice(idx, 1);
+        seen.delete(hit.url);
+        continue;
+      }
+      foundSubjectProfile = true;
+      hit.relation = "own";
+      if (hit.handle) {
+        trustHandle(spec.network, hit.handle);
+        ensureSynthesizedProfile(spec.network, hit.handle, name);
+      }
+    }
+
+    // User-supplied handle: if this platform's profile search found them, or a
+    // direct site:platform/handle query matched, materialize the profile URL.
+    // Never invent the same handle on every other network.
+    if (seedHandle && foundSubjectProfile) {
+      trustHandle(spec.network, seedHandle);
+      ensureSynthesizedProfile(spec.network, seedHandle, name);
+    } else if (seedHandle) {
+      // Direct handle probe — only trust if the result looks like the subject
+      const probeQs = (spec.profileQueries(name || seedHandle, seedHandle) || [])
+        .filter((q) => q.toLowerCase().includes(seedHandle.toLowerCase()));
+      for (const q of probeQs.slice(0, 1)) {
+        const probeHits = await runQuery(spec.network, q, "profile", 3);
+        for (const hit of probeHits) {
+          if (hit.kind !== "profile") continue;
+          if (!profileLooksLikeSubject({
+            title: hit.title,
+            snippet: hit.snippet,
+            url: hit.url,
+            name,
+            handles: handleSeed,
+          }) && !(hit.handle && hit.handle.toLowerCase() === seedHandle.toLowerCase() && nameMatchesSubject(`${hit.title} ${hit.snippet}`, name))) {
+            const idx = profiles.indexOf(hit);
+            if (idx >= 0) profiles.splice(idx, 1);
+            seen.delete(hit.url);
+            continue;
+          }
+          foundSubjectProfile = true;
+          hit.relation = "own";
+          trustHandle(spec.network, seedHandle);
+          if (hit.handle) trustHandle(spec.network, hit.handle);
+          ensureSynthesizedProfile(spec.network, seedHandle, name);
+        }
+      }
+      // Last resort for provided handle: if URL shape is exact, keep a clickable profile
+      // even when Serper returns thin snippets (common for Instagram).
+      if (!foundSubjectProfile && seedHandle) {
+        const exact = hits.find((h) => h.handle && h.handle.toLowerCase() === seedHandle.toLowerCase() && h.kind === "profile");
+        if (exact) {
+          trustHandle(spec.network, seedHandle);
+          ensureSynthesizedProfile(spec.network, seedHandle, name);
+          foundSubjectProfile = true;
+        }
       }
     }
   }
-  for (let i = 0; i < followJobs.length; i += 8) {
-    await Promise.all(followJobs.slice(i, i + 8));
+
+  // ── PHASE 2: own posts from trusted profiles only ────────────────────────
+  for (const spec of wanted) {
+    const netHandles = [...(trustedByNetwork.get(spec.network) || [])];
+    if (!netHandles.length) continue;
+    for (const handle of netHandles.slice(0, 2)) {
+      const qs = spec.ownPostQueries?.(name, handle) || [];
+      for (const q of qs.slice(0, 2)) {
+        const hits = await runQuery(spec.network, q, "post", maxPerNetwork);
+        for (const hit of hits) {
+          if (hit.kind === "profile") continue;
+          if (isLikelyOwnPost({
+            title: hit.title,
+            snippet: hit.snippet,
+            url: hit.url,
+            name,
+            handle,
+          })) {
+            hit.kind = "post";
+            hit.relation = "own";
+            hit.handle = hit.handle || handle;
+          } else if (isDirectMention({
+            title: hit.title,
+            snippet: hit.snippet,
+            name,
+            handles: [handle, ...allTrusted],
+          })) {
+            hit.kind = "mention";
+            hit.relation = "mentioned";
+          } else {
+            // Drop unrelated posts that merely appeared in a site:handle crawl
+            const idx = profiles.indexOf(hit);
+            if (idx >= 0) profiles.splice(idx, 1);
+            seen.delete(hit.url);
+          }
+        }
+      }
+    }
+  }
+
+  // ── PHASE 3: direct @tags / name-in-title mentions only ──────────────────
+  for (const spec of wanted) {
+    const netHandles = [...(trustedByNetwork.get(spec.network) || [])];
+    const mentionHandles = netHandles.length ? netHandles : handleSeed;
+    const primary = mentionHandles[0] || "";
+    const qs = spec.mentionQueries?.(name, primary) || [];
+    for (const q of qs.slice(0, 2)) {
+      const hits = await runQuery(spec.network, q, "mention", Math.min(5, maxPerNetwork));
+      for (const hit of hits) {
+        if (hit.kind === "profile") {
+          // Don't let mention queries promote random profiles
+          if (!profileLooksLikeSubject({
+            title: hit.title,
+            snippet: hit.snippet,
+            url: hit.url,
+            name,
+            handles: [...allTrusted],
+          })) {
+            const idx = profiles.indexOf(hit);
+            if (idx >= 0) profiles.splice(idx, 1);
+            seen.delete(hit.url);
+          }
+          continue;
+        }
+        if (isLikelyOwnPost({
+          title: hit.title,
+          snippet: hit.snippet,
+          url: hit.url,
+          name,
+          handle: primary,
+        })) {
+          hit.kind = "post";
+          hit.relation = "own";
+          continue;
+        }
+        if (isDirectMention({
+          title: hit.title,
+          snippet: hit.snippet,
+          name,
+          handles: [...allTrusted],
+        })) {
+          hit.kind = "mention";
+          hit.relation = "mentioned";
+        } else {
+          const idx = profiles.indexOf(hit);
+          if (idx >= 0) profiles.splice(idx, 1);
+          seen.delete(hit.url);
+        }
+      }
+    }
+  }
+
+  // Web / sports / news mentions (name must be in the TITLE — no OCR ghosts)
+  if (name) {
+    const webHits = await runQuery("web", `"${name}"`, "mention", 8);
+    for (const hit of webHits) {
+      if (nameMatchesSubject(hit.title, name) || isDirectMention({
+        title: hit.title,
+        snippet: hit.snippet,
+        name,
+        handles: [...allTrusted],
+      })) {
+        hit.kind = hit.kind === "profile" ? "profile" : "mention";
+        hit.relation = "mentioned";
+      } else {
+        const idx = profiles.indexOf(hit);
+        if (idx >= 0) profiles.splice(idx, 1);
+        seen.delete(hit.url);
+      }
+    }
   }
 
   return {
     ok: true,
     profiles,
     searches,
-    discoveredHandles: [...trustedHandles],
+    discoveredHandles: [...allTrusted],
   };
-}
-
-function siteHint(network) {
-  const map = {
-    linkedin: "linkedin.com/in",
-    instagram: "instagram.com",
-    tiktok: "tiktok.com",
-    youtube: "youtube.com",
-    x: "x.com",
-    facebook: "facebook.com",
-    threads: "threads.net",
-    reddit: "reddit.com",
-    github: "github.com",
-    pinterest: "pinterest.com",
-    twitch: "twitch.tv",
-    snapchat: "snapchat.com",
-  };
-  return map[network] || `${network}.com`;
-}
-
-function contentSiteHint(network) {
-  const map = {
-    linkedin: "site:linkedin.com/posts OR site:linkedin.com/pulse",
-    instagram: "site:instagram.com/p OR site:instagram.com/reel",
-    tiktok: "site:tiktok.com/video OR site:tiktok.com/@",
-    youtube: "site:youtube.com/watch OR site:youtu.be",
-    x: "site:x.com/status OR site:twitter.com/status",
-    facebook: "site:facebook.com/posts OR site:facebook.com/videos",
-    threads: "site:threads.net/post",
-    reddit: "site:reddit.com/r OR site:reddit.com/comments",
-    github: "site:github.com",
-    pinterest: "site:pinterest.com/pin",
-    twitch: "site:twitch.tv/videos OR site:twitch.tv/clip",
-    snapchat: "site:snapchat.com",
-  };
-  return map[network] || `site:${network}.com`;
-}
-
-/** True when haystack contains the subject full name (all significant tokens). */
-export function nameMatchesSubject(haystack, name) {
-  const text = String(haystack ?? "").toLowerCase();
-  const tokens = String(name ?? "")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/i)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 2);
-  if (!tokens.length) return false;
-  // Require every token (first + last etc.) so "Leo" alone never matches random Leos
-  return tokens.every((token) => text.includes(token));
 }
 
 function pushHit(profiles, seen, row, networkHint, preferredKind) {

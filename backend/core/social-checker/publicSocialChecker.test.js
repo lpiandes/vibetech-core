@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   checkSocialCheckerRateLimit,
+  filterSubjectRelevant,
   organizePlatformSections,
   rankProfiles,
   runPublicSocialCheck,
@@ -10,6 +11,9 @@ import {
 import {
   classifyHitKind,
   extractHandleFromUrl,
+  isDirectMention,
+  looksLikeRosterOcrPollution,
+  profileLooksLikeSubject,
 } from "../integrations/social-screening/serperSocialDiscovery.js";
 
 test("rate limit soft-caps per day key", () => {
@@ -35,22 +39,83 @@ test("rankProfiles prefers linkedin profile urls", () => {
 test("classifyHitKind separates profiles posts and mentions", () => {
   assert.equal(classifyHitKind("https://instagram.com/someone"), "profile");
   assert.equal(classifyHitKind("https://instagram.com/p/AbCdEf"), "post");
-  // Query preference must not override clear post URLs
   assert.equal(classifyHitKind("https://instagram.com/reel/AbCdEf", "", "", "profile"), "post");
   assert.equal(classifyHitKind("https://x.com/org/status/123"), "post");
   assert.equal(classifyHitKind("https://news.example.com/story", "Mention of someone"), "mention");
 });
 
-test("filterSubjectRelevant drops unrelated celebrity noise", async () => {
-  const { filterSubjectRelevant } = await import("./publicSocialChecker.js");
+test("looksLikeRosterOcrPollution catches hockey lineup ghosts", () => {
+  const snip = "... LEO PIANDES (A) NICK DEMIO (A) NE 10. newnorthstars's profile picture ...";
+  assert.equal(looksLikeRosterOcrPollution(snip, "Leo Piandes"), true);
+  assert.equal(
+    isDirectMention({
+      title: "Utah Mammoth on Instagram: Wake up, our prospects...",
+      snippet: snip,
+      name: "Leo Piandes",
+      handles: ["lpiandes"],
+    }),
+    false,
+  );
+  assert.equal(
+    isDirectMention({
+      title: "Congratulations to Captain Leo Piandes'22",
+      snippet: "induction into the National Honor Society",
+      name: "Leo Piandes",
+      handles: ["lpiandes"],
+    }),
+    true,
+  );
+  assert.equal(
+    isDirectMention({
+      title: "Photo by someone",
+      snippet: "Great game with @lpiandes tonight",
+      name: "Leo Piandes",
+      handles: ["lpiandes"],
+    }),
+    true,
+  );
+});
+
+test("profileLooksLikeSubject requires name on profile", () => {
+  assert.equal(profileLooksLikeSubject({
+    title: "Leo Piandes (@lpiandes)",
+    snippet: "Assumption || Tilton",
+    url: "https://www.instagram.com/lpiandes/",
+    name: "Leo Piandes",
+  }), true);
+  assert.equal(profileLooksLikeSubject({
+    title: "Post Malone (@postmalone)",
+    snippet: "17M followers",
+    url: "https://www.tiktok.com/@postmalone",
+    name: "Leo Piandes",
+  }), false);
+});
+
+test("filterSubjectRelevant drops Utah Mammoth OCR ghosts and celebrities", () => {
   const filtered = filterSubjectRelevant([
     {
       network: "instagram",
       kind: "profile",
-      title: "Jane Doe (@janedoe)",
-      url: "https://www.instagram.com/janedoe/",
-      snippet: "Jane Doe. 100 followers",
-      handle: "janedoe",
+      title: "Leo Piandes (@lpiandes)",
+      url: "https://www.instagram.com/lpiandes/",
+      snippet: "780 followers. Assumption || Tilton",
+      handle: "lpiandes",
+    },
+    {
+      network: "instagram",
+      kind: "post",
+      title: "Utah Mammoth on Instagram: Wake up, our prospects just ...",
+      url: "https://www.instagram.com/reel/DaMJvkIxA5X/",
+      snippet: "... LEO PIANDES (A) NICK DEMIO (A) NE 10. newnorthstars's profile picture ...",
+      handle: null,
+    },
+    {
+      network: "instagram",
+      kind: "post",
+      title: "Congratulations to Captain Leo Piandes'22 for his induction into ...",
+      url: "https://www.instagram.com/p/CdPHgUkLt3q/",
+      snippet: "Well deserved for his hard work off the field.",
+      handle: null,
     },
     {
       network: "tiktok",
@@ -60,28 +125,12 @@ test("filterSubjectRelevant drops unrelated celebrity noise", async () => {
       snippet: "17M followers",
       handle: "postmalone",
     },
-    {
-      network: "instagram",
-      kind: "post",
-      title: "Hat trick by Jane Doe",
-      url: "https://www.instagram.com/p/abc",
-      snippet: "Jane Doe scores again",
-      handle: null,
-    },
-    {
-      network: "youtube",
-      kind: "profile",
-      title: "Megyn Kelly",
-      url: "https://www.youtube.com/@MegynKelly",
-      snippet: "Talk show",
-      handle: "MegynKelly",
-    },
-  ], { name: "Jane Doe", handles: ["janedoe"] });
+  ], { name: "Leo Piandes", handles: ["lpiandes"] });
 
-  assert.ok(filtered.some((h) => h.handle === "janedoe"));
-  assert.ok(filtered.some((h) => /Hat trick/i.test(h.title)));
+  assert.ok(filtered.some((h) => h.url.includes("lpiandes") && h.kind === "profile"));
+  assert.ok(filtered.some((h) => /Captain Leo Piandes/i.test(h.title)));
+  assert.equal(filtered.some((h) => /Utah Mammoth/i.test(h.title)), false);
   assert.equal(filtered.some((h) => /postmalone/i.test(h.url)), false);
-  assert.equal(filtered.some((h) => /MegynKelly/i.test(h.url)), false);
 });
 
 test("extractHandleFromUrl pulls platform handles", () => {
@@ -94,7 +143,7 @@ test("organizePlatformSections groups profile then posts then mentions", () => {
   const sections = organizePlatformSections(rankProfiles([
     { network: "instagram", kind: "post", relation: "own", title: "Reel", url: "https://instagram.com/reel/abc", snippet: "goal", handle: "jane" },
     { network: "instagram", kind: "profile", title: "Jane", url: "https://instagram.com/jane", snippet: "780 followers", handle: "jane" },
-    { network: "instagram", kind: "mention", relation: "mentioned", title: "News", url: "https://instagram.com/p/xyz", snippet: "about jane", handle: null },
+    { network: "instagram", kind: "mention", relation: "mentioned", title: "News about Jane Doe", url: "https://instagram.com/p/xyz", snippet: "about jane", handle: null },
     { network: "tiktok", kind: "profile", title: "Jane TT", url: "https://tiktok.com/@jane", snippet: "bio", handle: "jane" },
   ], { name: "Jane Doe", handles: ["jane"] }));
   assert.equal(sections[0].network, "instagram");
@@ -109,7 +158,7 @@ test("runPublicSocialCheck requires name or handle", async () => {
   assert.equal(res.reason, "name_required");
 });
 
-test("runPublicSocialCheck deep discovery returns platforms", async () => {
+test("runPublicSocialCheck profile-first finds instagram then own content", async () => {
   const fetchImpl = async (_url, init) => {
     const body = JSON.parse(String(init?.body ?? "{}"));
     const q = String(body.q ?? "");
@@ -125,26 +174,38 @@ test("runPublicSocialCheck deep discovery returns platforms", async () => {
         }),
       };
     }
-    if (q.includes("instagram.com") && q.includes("-inurl")) {
+    if (q.includes("instagram.com") && (q.includes("-inurl") || q.includes("site:instagram.com/janedoe"))) {
       return {
         ok: true,
         json: async () => ({
           organic: [{
-            title: "Jane Doe (@janedoe)",
+            title: "Jane Doe (@janedoe) • Instagram photos and videos",
             link: "https://www.instagram.com/janedoe/",
             snippet: "120 followers",
           }],
         }),
       };
     }
-    if (q.includes("instagram.com/p") || q.includes("instagram.com/reel")) {
+    if (q.includes("Jane Doe on Instagram") || (q.includes("site:instagram.com/janedoe") && !q.includes("-inurl"))) {
       return {
         ok: true,
         json: async () => ({
           organic: [{
-            title: "A public reel",
-            link: "https://www.instagram.com/reel/AbC123/",
-            snippet: "Jane Doe scores",
+            title: "Jane Doe on Instagram: My goal",
+            link: "https://www.instagram.com/p/OwnPost1/",
+            snippet: "janedoe's post",
+          }],
+        }),
+      };
+    }
+    if (q.includes("@janedoe") && q.includes("instagram")) {
+      return {
+        ok: true,
+        json: async () => ({
+          organic: [{
+            title: "Team night with @janedoe",
+            link: "https://www.instagram.com/p/TagPost1/",
+            snippet: "Congrats to @janedoe",
           }],
         }),
       };
@@ -158,8 +219,8 @@ test("runPublicSocialCheck deep discovery returns platforms", async () => {
     fetchImpl,
   });
   assert.equal(res.ok, true);
-  assert.ok(res.profiles.length >= 1);
-  assert.ok(Array.isArray(res.platforms));
-  assert.ok(res.platforms.length >= 1);
+  const ig = res.platforms.find((p) => p.network === "instagram");
+  assert.ok(ig, "instagram platform present");
+  assert.ok(ig.profile?.url?.includes("janedoe"), "instagram profile resolved");
   assert.match(res.disclaimer, /Not an employment/i);
 });

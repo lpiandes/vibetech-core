@@ -98,8 +98,8 @@ export default function SocialCheckerPage() {
           <span style={titleAccent}> Get social context.</span>
         </h1>
         <p style={lede}>
-          Deep search across Instagram, TikTok, LinkedIn, YouTube, X, Facebook, Threads,
-          Reddit, GitHub, and more — grouped by platform with profile, posts, and mentions.
+          For each platform we resolve your profile first, then your posts, then
+          posts that tag or directly mention you — Instagram, TikTok, LinkedIn, YouTube, X, and more.
         </p>
 
         <form onSubmit={onSearch} style={form}>
@@ -208,7 +208,7 @@ function PlatformSection({ platform }: { platform: Platform }) {
         {platform.profile ? (
           <HitCard hit={platform.profile} emphasis />
         ) : (
-          <p style={emptySoft}>No clear public profile URL indexed for this name.</p>
+          <p style={emptySoft}>No public profile found yet for this name on this platform.</p>
         )}
       </div>
 
@@ -234,7 +234,7 @@ function PlatformSection({ platform }: { platform: Platform }) {
             ))}
           </div>
         ) : (
-          <p style={emptySoft}>No mentions/tags of this name found on this platform.</p>
+          <p style={emptySoft}>No direct tags or name mentions found on this platform.</p>
         )}
       </div>
     </section>

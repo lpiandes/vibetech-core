@@ -1,12 +1,18 @@
 /**
  * Public Social Checker — deep multi-platform presence discovery.
  * Uses Serper discovery only (not the full FCRA screening pipeline).
+ *
+ * Display order per platform: profile → their posts → direct tags/mentions.
  */
 import {
   discoverSocialProfiles,
   SOCIAL_NETWORKS,
   isNoiseUrl,
   nameMatchesSubject,
+  isDirectMention,
+  isLikelyOwnPost,
+  profileLooksLikeSubject,
+  looksLikeRosterOcrPollution,
 } from "../integrations/social-screening/serperSocialDiscovery.js";
 
 export const PLATFORM_ORDER = Object.freeze([
@@ -79,7 +85,8 @@ export function checkSocialCheckerRateLimit({
 }
 
 /**
- * Keep only hits about this subject: their profile, their posts, or posts that mention/tag them.
+ * Keep only: their profile, posts they authored, or posts that directly tag/mention them.
+ * Drops Serper OCR roster ghosts (e.g. "LEO PIANDES (A) NICK DEMIO (A)" on unrelated reels).
  * @param {object[]} profiles
  * @param {{ name?: string, handles?: string[] }} subject
  */
@@ -90,51 +97,66 @@ export function filterSubjectRelevant(profiles = [], subject = {}) {
     .filter(Boolean);
   const handleSet = new Set(handles);
 
-  // First pass: collect trusted profile handles that clearly belong to the subject
   for (const hit of profiles) {
     if (String(hit.kind) !== "profile") continue;
     if (isNoiseUrl(hit.url)) continue;
-    const blob = `${hit.title ?? ""} ${hit.snippet ?? ""}`;
-    if (name && nameMatchesSubject(blob, name) && hit.handle) {
+    if (profileLooksLikeSubject({
+      title: hit.title,
+      snippet: hit.snippet,
+      url: hit.url,
+      name,
+      handles,
+    }) && hit.handle) {
       handleSet.add(String(hit.handle).toLowerCase());
     }
   }
 
+  const handleList = [...handleSet];
   const out = [];
+
   for (const hit of profiles) {
     if (isNoiseUrl(hit.url)) continue;
     const title = String(hit.title ?? "");
     const snippet = String(hit.snippet ?? "");
     const url = String(hit.url ?? "");
-    const blob = `${title} ${snippet} ${url}`.toLowerCase();
     const handle = String(hit.handle ?? "").toLowerCase();
-    const named = name ? nameMatchesSubject(`${title} ${snippet}`, name) : false;
-    const handleHit = handle && handleSet.has(handle);
-    const handleInText = [...handleSet].some((h) => h.length >= 3 && blob.includes(h.toLowerCase()));
+    const kindIn = String(hit.kind || "mention");
 
-    // Must be about the subject somehow
-    if (!named && !handleHit && !handleInText) continue;
-
-    let kind = String(hit.kind || "mention");
-    // Own content: profile URL or post under a trusted handle
-    const ownContent = handleHit || (handle && handleSet.has(handle));
-    if (kind === "profile" && !named && !handleHit) continue;
-    if (kind === "profile" && named) {
-      // ok
-    } else if (kind === "post" && ownContent) {
-      kind = "post"; // their own post
-    } else if (named || handleInText) {
-      kind = kind === "profile" ? "profile" : "mention"; // tagged / mentioned
-    } else {
+    if (looksLikeRosterOcrPollution(snippet, name) && !nameMatchesSubject(title, name)) {
       continue;
     }
 
-    out.push({
-      ...hit,
-      kind,
-      relation: ownContent && kind !== "mention" ? "own" : "mentioned",
+    // Profile: must look like the subject
+    if (kindIn === "profile") {
+      if (!profileLooksLikeSubject({ title, snippet, url, name, handles: handleList })) continue;
+      out.push({ ...hit, kind: "profile", relation: "own" });
+      continue;
+    }
+
+    // Own posts (already tagged by discovery, or heuristic)
+    const own = hit.relation === "own" || isLikelyOwnPost({
+      title,
+      snippet,
+      url,
+      name,
+      handle: handle || handleList[0] || "",
     });
+    if (own && (kindIn === "post" || hit.relation === "own")) {
+      // Still require some subject signal so random site:handle crawl junk doesn't slip in
+      const subjectSignal = (handle && handleSet.has(handle))
+        || handleList.some((h) => url.toLowerCase().includes(`/${h}/`) || url.toLowerCase().includes(`/@${h}`))
+        || isLikelyOwnPost({ title, snippet, url, name, handle: handle || handleList[0] || "" });
+      if (!subjectSignal) continue;
+      out.push({ ...hit, kind: "post", relation: "own" });
+      continue;
+    }
+
+    // Mentions: @tag or name in title / clear direct mention — never OCR ghosts
+    if (isDirectMention({ title, snippet, name, handles: handleList })) {
+      out.push({ ...hit, kind: "mention", relation: "mentioned" });
+    }
   }
+
   return out;
 }
 
@@ -159,11 +181,11 @@ export function rankProfiles(profiles = [], subject = {}) {
     let score = 40;
     const orderIdx = PLATFORM_ORDER.indexOf(network);
     if (orderIdx >= 0) score += (PLATFORM_ORDER.length - orderIdx);
-    if (kind === "profile") score += 30;
-    else if (kind === "post" && p.relation === "own") score += 18;
-    else if (kind === "mention" || kind === "post") score += 10;
-    if (name && nameMatchesSubject(`${title} ${snippet}`, name)) score += 20;
-    if (handle && handles.has(handle)) score += 15;
+    if (kind === "profile") score += 35;
+    else if (kind === "post" && p.relation === "own") score += 20;
+    else if (kind === "mention") score += 8;
+    if (name && nameMatchesSubject(title, name)) score += 22;
+    if (handle && handles.has(handle)) score += 18;
     if (/linkedin\.com\/in\//i.test(url)) score += 12;
     if (/instagram\.com\/[^/]+\/?$/i.test(url)) score += 12;
     if (/tiktok\.com\/@[^/]+\/?$/i.test(url)) score += 12;
@@ -212,9 +234,6 @@ export function organizePlatformSections(profiles = []) {
       }
     } else if (kind === "post" && hit.relation === "own") {
       bucket.posts.push(hit);
-    } else if (kind === "post") {
-      // Someone else's post that mentions them
-      bucket.mentions.push(hit);
     } else {
       bucket.mentions.push(hit);
     }
@@ -233,7 +252,6 @@ export function organizePlatformSections(profiles = []) {
     bucket.mentions.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
   }
 
-  // Drop platforms with nothing useful
   return ordered.filter((b) => b.profile || b.posts.length || b.mentions.length);
 }
 
@@ -269,7 +287,7 @@ export async function runPublicSocialCheck({
     subject,
     serperApiKey: String(serperApiKey).trim(),
     fetchImpl,
-    maxPerNetwork: 8,
+    maxPerNetwork: 6,
     depth: "deep",
     networks: [...SOCIAL_NETWORKS],
   });
@@ -315,6 +333,6 @@ export async function runPublicSocialCheck({
     searches: discovered.searches ?? [],
     generatedAt: new Date().toISOString(),
     disclaimer:
-      "Public OSINT-style social presence context only. Not an employment, tenant, or FCRA background screen. Only profiles, posts, and mentions that match the searched name or verified handles are shown.",
+      "Public OSINT-style social presence context only. Not an employment, tenant, or FCRA background screen. Only the subject's profile, their own posts, and posts that directly tag or mention them are shown.",
   };
 }
