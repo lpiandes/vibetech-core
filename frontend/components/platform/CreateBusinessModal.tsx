@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import SimpleModal from "@/components/product/SimpleModal";
 import PrimaryButton from "@/components/product/PrimaryButton";
 import SecondaryButton from "@/components/product/SecondaryButton";
-import { VtCard } from "@/components/product/VtChrome";
 import { spacing, typography, cockpitColors } from "@/design/tokens";
 import { listSellableSalesPackagesForAdmin } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
@@ -76,6 +75,7 @@ export default function CreateBusinessModal({
     <SimpleModal
       title="Create business"
       onClose={onClose}
+      maxWidth={560}
       footer={
         success ? (
           <PrimaryButton onClick={onClose}>Done</PrimaryButton>
@@ -93,48 +93,96 @@ export default function CreateBusinessModal({
         <div style={{ display: "flex", flexDirection: "column", gap: spacing.md }}>
           <label style={{ display: "flex", flexDirection: "column", gap: spacing.xs }}>
             <span style={{ fontWeight: 700, fontSize: typography.caption.fontSize }}>Business name</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} style={{ padding: `${spacing.sm} ${spacing.md}`, borderRadius: 10, border: `1px solid ${cockpitColors.panelBorder}` }} />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              style={{
+                padding: `${spacing.sm} ${spacing.md}`,
+                borderRadius: 10,
+                border: `1px solid ${cockpitColors.panelBorder}`,
+                fontSize: 15,
+              }}
+            />
           </label>
           <label style={{ display: "flex", flexDirection: "column", gap: spacing.xs }}>
             <span style={{ fontWeight: 700, fontSize: typography.caption.fontSize }}>Owner email</span>
-            <input type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} style={{ padding: `${spacing.sm} ${spacing.md}`, borderRadius: 10, border: `1px solid ${cockpitColors.panelBorder}` }} />
+            <input
+              type="email"
+              value={ownerEmail}
+              onChange={(e) => setOwnerEmail(e.target.value)}
+              style={{
+                padding: `${spacing.sm} ${spacing.md}`,
+                borderRadius: 10,
+                border: `1px solid ${cockpitColors.panelBorder}`,
+                fontSize: 15,
+              }}
+            />
           </label>
-          <div style={{ display: "grid", gap: spacing.sm }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
             <div style={{ fontWeight: 700, fontSize: typography.caption.fontSize }}>Purchased packages</div>
-            <p style={{ ...typography.caption, color: cockpitColors.textSecondary, margin: 0 }}>
+            <p style={{ fontSize: 13, color: cockpitColors.textSecondary, margin: 0, lineHeight: 1.45 }}>
               Check what they bought on the sales sheet. Discovery and the workspace stay inside this scope.
             </p>
-            <div style={{ display: "grid", gap: spacing.sm, maxHeight: 280, overflowY: "auto" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                maxHeight: 320,
+                overflowY: "auto",
+                paddingRight: 4,
+              }}
+            >
               {packages.map((pkg) => {
                 const checked = purchasedPackages.includes(pkg.id);
                 return (
-                  <VtCard key={pkg.id} padding={12} accent={checked}>
-                    <label
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "auto 1fr",
-                        gap: spacing.sm,
-                        alignItems: "start",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => togglePackage(pkg.id)}
-                        style={{ marginTop: 3 }}
-                      />
-                      <span>
-                        <span style={{ display: "block", fontWeight: 700, fontSize: typography.caption.fontSize }}>
-                          {pkg.label}
-                        </span>
-                        <span style={{ display: "block", ...typography.caption, color: cockpitColors.textSecondary }}>
-                          {pkg.description}
-                          {pkg.honestyNote ? ` ${pkg.honestyNote}` : ""}
-                        </span>
+                  <label
+                    key={pkg.id}
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      alignItems: "flex-start",
+                      cursor: "pointer",
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      border: `2px solid ${checked ? "rgba(15,118,110,0.45)" : cockpitColors.panelBorder}`,
+                      background: checked ? "rgba(15,118,110,0.06)" : "#fff",
+                      minHeight: 56,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => togglePackage(pkg.id)}
+                      style={{ marginTop: 3, flexShrink: 0, width: 16, height: 16 }}
+                    />
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      <span
+                        style={{
+                          display: "block",
+                          fontWeight: 700,
+                          fontSize: 14,
+                          color: cockpitColors.textPrimary,
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        {pkg.label}
                       </span>
-                    </label>
-                  </VtCard>
+                      <span
+                        style={{
+                          display: "block",
+                          marginTop: 4,
+                          fontSize: 12,
+                          color: cockpitColors.textSecondary,
+                          lineHeight: 1.45,
+                          fontWeight: 400,
+                        }}
+                      >
+                        {pkg.description}
+                        {pkg.honestyNote ? ` ${pkg.honestyNote}` : ""}
+                      </span>
+                    </span>
+                  </label>
                 );
               })}
             </div>
