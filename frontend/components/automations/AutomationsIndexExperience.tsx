@@ -69,7 +69,7 @@ export default function AutomationsIndexExperience({
     <VtPage>
       <VtHero
         eyebrow="Mission · Automations"
-        title="Loadouts"
+        title="Workflows"
         right={<VtStatusChip label={`${activeCount}/${rows.length} LIVE`} tone={activeCount > 0 ? "live" : "off"} />}
       >
         <VtDock>
@@ -78,7 +78,7 @@ export default function AutomationsIndexExperience({
         </VtDock>
       </VtHero>
 
-      <VtPanel title="Teammate paths">
+      <VtPanel title="Workflows">
         {rows.length === 0 ? <VtEmpty label="No AI teammates yet — open Roster" /> : null}
         <div style={{ display: "grid", gap: 10 }}>
           {rows.map((row) => (

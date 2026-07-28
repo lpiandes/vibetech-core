@@ -1,4 +1,4 @@
-import WorkflowAutomationsExperience from "@/components/automations/WorkflowAutomationsExperience";
+import AutomationsIndexExperience from "@/components/automations/AutomationsIndexExperience";
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
 import { platformStore } from "@/lib/server/compose";
 import { presentAutomationPath } from "../../../../../backend/core/ai-builder/operating-contract/automationPath.js";
@@ -42,8 +42,9 @@ export default async function AutomationsPage({
       active: Boolean(active),
       href: `/b/${encodeURIComponent(businessId)}/specialty/${encodeURIComponent(employeeId)}`,
       stepCount: path.steps?.length ?? 0,
+      triggerLabel: String(built.contract?.trigger?.summary ?? path.triggerLabel ?? ""),
     };
   });
 
-  return <WorkflowAutomationsExperience businessId={businessId} teammates={teammates} />;
+  return <AutomationsIndexExperience businessId={businessId} teammates={teammates} />;
 }
