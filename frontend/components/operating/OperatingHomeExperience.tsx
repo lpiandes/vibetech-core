@@ -53,13 +53,18 @@ export default function OperatingHomeExperience() {
   );
 
   const [homeView, setHomeView] = useState<HomeViewMode>("setup");
+  const [viewReady, setViewReady] = useState(false);
 
   useEffect(() => {
-    if (!businessId || typeof window === "undefined") return;
+    if (!businessId || typeof window === "undefined") {
+      setViewReady(true);
+      return;
+    }
     const stored = window.localStorage.getItem(homeViewStorageKey(businessId));
     if (stored === "dashboard" || stored === "setup") {
       setHomeView(stored);
     }
+    setViewReady(true);
   }, [businessId]);
 
   function selectHomeView(next: HomeViewMode) {
@@ -73,6 +78,15 @@ export default function OperatingHomeExperience() {
     return (
       <HomeCanvas>
         <HomeHero greeting="Welcome." />
+      </HomeCanvas>
+    );
+  }
+
+  // Avoid flashing Setup when localStorage already prefers Operating dashboard.
+  if (!viewReady) {
+    return (
+      <HomeCanvas>
+        <HomeHero greeting={supervision.greeting?.headline ?? "Good day."} />
       </HomeCanvas>
     );
   }

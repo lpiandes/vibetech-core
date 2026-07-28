@@ -6,6 +6,20 @@ import { useEffect, useState } from "react";
 import { VtMetricStrip } from "@/components/product/VtChrome";
 import { cockpitColors } from "@/design/tokens";
 
+type StripStats = {
+  contactCount: number;
+  openOpportunities: number;
+  upcomingEvents: number;
+  nextEventTitle?: string | null;
+};
+
+const EMPTY_STRIP: StripStats = {
+  contactCount: 0,
+  openOpportunities: 0,
+  upcomingEvents: 0,
+  nextEventTitle: null,
+};
+
 export default function CrmReportingStrip({
   businessId,
   inboxHref,
@@ -25,12 +39,8 @@ export default function CrmReportingStrip({
   showPipelines?: boolean;
   showAutomations?: boolean;
 }) {
-  const [strip, setStrip] = useState<{
-    contactCount: number;
-    openOpportunities: number;
-    upcomingEvents: number;
-    nextEventTitle?: string | null;
-  } | null>(null);
+  // Always paint the strip on first frame — never return null (that caused the home flicker).
+  const [strip, setStrip] = useState<StripStats>(EMPTY_STRIP);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,15 +65,13 @@ export default function CrmReportingStrip({
           nextEventTitle: upcoming[0]?.title ?? null,
         });
       } catch {
-        /* ignore */
+        /* keep empty strip */
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [businessId]);
-
-  if (!strip) return null;
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
@@ -98,8 +106,8 @@ function QuickLink({ href, children }: { href: string; children: React.ReactNode
         color: cockpitColors.textPrimary,
         textDecoration: "none",
         fontSize: 11,
-        fontWeight: 900,
-        letterSpacing: "0.06em",
+        fontWeight: 800,
+        letterSpacing: "0.04em",
         textTransform: "uppercase",
       }}
     >
