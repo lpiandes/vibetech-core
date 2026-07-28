@@ -159,6 +159,7 @@ export function filterWorkItems(items: unknown, filter: WorkQueueFilter) {
     case "overdue":
       return active.filter((item) => isOverdueWorkItem(item));
     case "open":
+      return active.filter((item) => !isBlockedWorkItem(item));
     case "all":
     default:
       return active;

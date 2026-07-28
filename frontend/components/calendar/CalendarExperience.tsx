@@ -21,6 +21,15 @@ import { cockpitColors } from "@/design/tokens";
 
 type ConferenceType = "none" | "google_meet" | "zoom";
 
+/** ISO → datetime-local value in the browser's local timezone (never raw UTC slice). */
+function isoToDatetimeLocal(iso: string | null | undefined) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 type CalEvent = {
   id: string;
   title: string;
@@ -282,8 +291,8 @@ export default function CalendarExperience({
     setMeetAppsOpen(false);
     setTitle(event.title || "");
     setDescription(event.description || "");
-    setStart(event.start ? event.start.slice(0, 16) : "");
-    setEnd(event.end ? event.end.slice(0, 16) : "");
+    setStart(isoToDatetimeLocal(event.start));
+    setEnd(isoToDatetimeLocal(event.end));
     setConferenceType((event.conferenceType as ConferenceType) || "none");
     setConferenceUrl(event.conferenceUrl || "");
     setEditingEventId(event.id);
@@ -306,6 +315,8 @@ export default function CalendarExperience({
             description,
             start: start ? new Date(start).toISOString() : "",
             end: end ? new Date(end).toISOString() : "",
+            conferenceType,
+            conferenceUrl: conferenceType === "zoom" ? conferenceUrl.trim() : undefined,
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -315,6 +326,8 @@ export default function CalendarExperience({
         setDescription("");
         setStart("");
         setEnd("");
+        setConferenceType("none");
+        setConferenceUrl("");
         setComposerOpen(false);
         setNotice("Event updated.");
         await load();

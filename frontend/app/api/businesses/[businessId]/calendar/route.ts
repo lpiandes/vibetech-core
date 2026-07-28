@@ -481,8 +481,20 @@ export async function PATCH(
     const nextStart = body.start != null ? String(body.start).trim() : existing.start;
     const nextEnd = body.end != null ? String(body.end).trim() : existing.end;
     const nextDescription = body.description != null ? String(body.description) : existing.description;
+    const conferenceTypeRaw = body.conferenceType != null
+      ? String(body.conferenceType).trim().toLowerCase()
+      : String(existing.conferenceType ?? "none").toLowerCase();
+    const nextConferenceType = ["google_meet", "zoom"].includes(conferenceTypeRaw)
+      ? conferenceTypeRaw
+      : "none";
+    const nextConferenceUrl = nextConferenceType === "zoom"
+      ? String(body.conferenceUrl ?? existing.conferenceUrl ?? "").trim()
+      : (nextConferenceType === "google_meet" ? (existing.conferenceUrl ?? null) : null);
     if (!nextTitle || !nextStart || !nextEnd) {
       return NextResponse.json({ ok: false, error: "title, start, and end required" }, { status: 400 });
+    }
+    if (nextConferenceType === "zoom" && !nextConferenceUrl) {
+      return NextResponse.json({ ok: false, error: "Zoom URL required" }, { status: 400 });
     }
 
     let googleUpdate: any = null;
@@ -518,6 +530,8 @@ export async function PATCH(
       start: nextStart,
       end: nextEnd,
       description: nextDescription,
+      conferenceType: nextConferenceType === "none" ? null : nextConferenceType,
+      conferenceUrl: nextConferenceType === "none" ? null : nextConferenceUrl,
     });
     await writeCrmState({ platformStore, installation, crm, actorId });
     const updated = (crm.calendarEvents ?? []).find((e: any) => String(e.id) === String(existing.id));

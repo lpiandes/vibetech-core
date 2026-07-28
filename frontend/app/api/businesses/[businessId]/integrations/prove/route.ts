@@ -41,7 +41,6 @@ export async function POST(
 ) {
   try {
     const { businessId } = await params;
-    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.INTEGRATIONS_MANAGE);
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action ?? "");
     const outboundApproved = body?.outboundApproved !== false;
@@ -53,8 +52,15 @@ export async function POST(
       || action === "send_test_sms"
       || action === "create_test_event";
 
+    // Knowledge defer is a Knowledge action — Integrations manage is not required.
+    const isKnowledgeDefer = body?.defer === true && capabilityId === "knowledge_consult";
+    const ctx = await getAuthorizedWorkspace(
+      businessId,
+      isKnowledgeDefer ? PERMISSIONS.KNOWLEDGE_MANAGE : PERMISSIONS.INTEGRATIONS_MANAGE,
+    );
+
     // Knowledge can be deferred — not proven, but launch path continues.
-    if (body?.defer === true && capabilityId === "knowledge_consult") {
+    if (isKnowledgeDefer) {
       const at = new Date().toISOString();
       const result = {
         ok: false,

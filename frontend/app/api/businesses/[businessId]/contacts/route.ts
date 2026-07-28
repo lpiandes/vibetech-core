@@ -62,7 +62,7 @@ export async function POST(
 ) {
   try {
     const { businessId } = await params;
-    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_MANAGE);
+    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
     const body = await request.json().catch(() => ({}));
     const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
     if (!installation) {
@@ -131,7 +131,7 @@ export async function PATCH(
 ) {
   try {
     const { businessId } = await params;
-    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_MANAGE);
+    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
     const body = await request.json().catch(() => ({}));
     const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
     if (!installation) {
@@ -167,7 +167,7 @@ export async function DELETE(
 ) {
   try {
     const { businessId } = await params;
-    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_MANAGE);
+    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
     const body = await request.json().catch(() => ({}));
     const contactId = String(body.id ?? body.contactId ?? "").trim();
     if (!contactId) {

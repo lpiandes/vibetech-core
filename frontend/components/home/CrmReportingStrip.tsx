@@ -63,7 +63,9 @@ export default function CrmReportingStrip({
         setLoadError(null);
         const cards = (pipes.pipelines ?? []).flatMap((p: any) => p.cards ?? []);
         const open = cards.filter((c: any) => !String(c.stageId).includes("won") && !String(c.stageId).includes("lost"));
-        const upcoming = (cal.events ?? []).filter((e: any) => e.start && String(e.start) >= new Date().toISOString());
+        const upcoming = (cal.events ?? [])
+          .filter((e: any) => e.start && String(e.start) >= new Date().toISOString())
+          .sort((a: any, b: any) => String(a.start).localeCompare(String(b.start)));
         setStrip({
           contactCount: (contacts.contacts ?? []).length,
           openOpportunities: open.length,

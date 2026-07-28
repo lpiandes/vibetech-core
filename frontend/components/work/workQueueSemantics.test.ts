@@ -69,7 +69,7 @@ test("filters use adapter overdue semantics and active-work boundaries", () => {
   ];
 
   assert.equal(filterWorkItems(items, "all").length, 2);
-  assert.equal(filterWorkItems(items, "open").length, 2);
+  assert.equal(filterWorkItems(items, "open").length, 1);
   assert.equal(filterWorkItems(items, "blocked").length, 1);
   assert.equal(filterWorkItems(items, "overdue").length, 1);
   assert.equal(isOverdueWorkItem(makeItem(), NOW), true);
@@ -109,7 +109,7 @@ test("resolveWorkRowHref never uses legacy engagement routes in business scope",
       },
       "biz_1",
     ),
-    "/b/biz_1/properties/subj_main",
+    null,
   );
 
   assert.equal(

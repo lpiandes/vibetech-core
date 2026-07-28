@@ -11,7 +11,10 @@ import { presentProductError, type ProductErrorView } from "@/lib/platform/produ
  */
 export default function AccessRequestsPanel() {
   const scope = useBusinessScope();
-  const canApprove = scope.role === "OWNER" || scope.permissions.includes("business.manage");
+  const canApprove = scope.role === "OWNER"
+    || scope.role === "ADMIN"
+    || scope.permissions.includes("business.manage")
+    || scope.permissions.includes("approvals.decide");
   const [requests, setRequests] = useState<any[]>([]);
   const [reason, setReason] = useState("");
   const [moduleId, setModuleId] = useState("performance");
