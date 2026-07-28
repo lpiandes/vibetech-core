@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 
 import PrimaryButton from "@/components/product/PrimaryButton";
@@ -852,9 +853,20 @@ export default function PipelinesExperience({ businessId }: { businessId: string
                                 </button>
                               )}
                               {!isEditing && contact ? (
-                                <div style={{ fontSize: 12, color: cockpitColors.textSecondary, marginTop: 4, fontWeight: 600 }}>
+                                <Link
+                                  href={`/b/${encodeURIComponent(businessId)}/people/${encodeURIComponent(contact.id)}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    display: "inline-block",
+                                    fontSize: 12,
+                                    color: cockpitColors.accent,
+                                    marginTop: 4,
+                                    fontWeight: 650,
+                                    textDecoration: "none",
+                                  }}
+                                >
                                   {contact.name}
-                                </div>
+                                </Link>
                               ) : null}
                               {!isEditing && chip ? (
                                 <div

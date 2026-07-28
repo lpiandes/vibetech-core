@@ -1,12 +1,26 @@
-# Hostinger vanity redirects
+# ROI qualifier drop-in (keeps existing site)
 
-Upload these folders to the Hostinger web root so pretty marketing paths bounce to product subdomains.
+Do **not** replace the whole marketing site with `marketing/site/`.
 
-| Path on apex | Redirects to |
-|--------------|--------------|
-| `/AIOperatingSystem/` | `https://app.vtechdevelopment.com` |
-| `/SocialChecker/` | `https://social.vtechdevelopment.com` |
+Use these files to restore the original homepage and add a 3-question ROI check:
 
-Each folder contains `.htaccess` (LiteSpeed/Apache) plus a fallback `index.html` meta-refresh for hosts that ignore rewrite rules.
+| File | Action |
+|------|--------|
+| `index.with-roi.html` → upload as `index.html` | Your original homepage + ROI section |
+| `roi-qualifier.css` | Styles for the widget |
+| `roi-qualifier.js` | 3 questions → recommendation + ROI → book a call |
 
-Also ship the full marketing upgrade from [`../site/`](../site/) (chatbot, ROI, starting-at rates, Why VibeTech, product nav).
+## Behavior
+
+1. Three broad multiple-choice questions  
+2. Recommends a starting package  
+3. Shows estimated monthly drag + upside  
+4. **Book a call** (mailto by default)
+
+Optional Calendly: before `roi-qualifier.js`, add:
+
+```html
+<script>window.VIBETECH_BOOK_CALL_URL = "https://calendly.com/your-link";</script>
+```
+
+Vanity redirects (`AIOperatingSystem/`, `SocialChecker/`) can stay.

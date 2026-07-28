@@ -21,6 +21,7 @@ const KINDS = ["lead", "client", "family", "contractor", "vendor", "employee", "
 
 type Contact = {
   id: string;
+  partyId?: string;
   name: string;
   email?: string;
   phone?: string;
@@ -56,6 +57,13 @@ export default function ContactsCrmPanel({ businessId }: { businessId: string })
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [pipelines, setPipelines] = useState<Array<{ id: string; name: string; stages: Array<{ id: string; label: string }> }>>([]);
+  const [importPipelineId, setImportPipelineId] = useState("");
+  const [importStageId, setImportStageId] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importReport, setImportReport] = useState<string | null>(null);
+  const [addToPipeline, setAddToPipeline] = useState(true);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/contacts`);
@@ -67,6 +75,37 @@ export default function ContactsCrmPanel({ businessId }: { businessId: string })
   useEffect(() => {
     void load().catch((err) => setError(err instanceof Error ? err.message : "Load failed"));
   }, [load]);
+
+  useEffect(() => {
+    if (!importOpen) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/pipelines`);
+        const data = await res.json().catch(() => ({}));
+        if (cancelled || !res.ok) return;
+        const list = (data.pipelines ?? []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          stages: (p.stages ?? []).map((s: any) => ({ id: s.id, label: s.label })),
+        }));
+        setPipelines(list);
+        if (!importPipelineId && list[0]) {
+          setImportPipelineId(list[0].id);
+          setImportStageId(list[0].stages?.[0]?.id ?? "");
+        }
+      } catch {
+        /* optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [importOpen, businessId, importPipelineId]);
+
+  const importStages = useMemo(() => {
+    return pipelines.find((p) => p.id === importPipelineId)?.stages ?? [];
+  }, [pipelines, importPipelineId]);
 
   const selected = useMemo(
     () => contacts.find((c) => c.id === selectedId) ?? null,
@@ -194,6 +233,36 @@ export default function ContactsCrmPanel({ businessId }: { businessId: string })
     }
   }
 
+  async function runLeadImport() {
+    if (!importFile) return;
+    setBusy(true);
+    setError(null);
+    setImportReport(null);
+    try {
+      const form = new FormData();
+      form.append("file", importFile);
+      form.append("addToPipeline", addToPipeline ? "true" : "false");
+      if (importPipelineId) form.append("pipelineId", importPipelineId);
+      if (importStageId) form.append("stageId", importStageId);
+      form.append("kind", "lead");
+      const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/contacts/import`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Import failed");
+      await load();
+      setImportReport(
+        `Imported ${data.rowCount ?? 0} rows · ${data.created ?? 0} created · ${data.updated ?? 0} updated · ${data.skipped ?? 0} skipped`,
+      );
+      setImportFile(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runSocialScreen() {
     if (!selected && !editName.trim()) return;
     setBusy(true);
@@ -231,6 +300,9 @@ export default function ContactsCrmPanel({ businessId }: { businessId: string })
         <VtDock>
           <VtDockLink href={`/b/${encodeURIComponent(businessId)}/pipelines`}>Pipelines</VtDockLink>
           <VtDockLink href={`/b/${encodeURIComponent(businessId)}/inbox`}>Inbox</VtDockLink>
+          <button type="button" onClick={() => setImportOpen((v) => !v)} style={dockBtnStyle}>
+            {importOpen ? "Close import" : "Import leads"}
+          </button>
           <button type="button" onClick={() => setComposerOpen((v) => !v)} style={dockBtnStyle}>
             {composerOpen ? "Close" : "+ Contact"}
           </button>
@@ -243,6 +315,63 @@ export default function ContactsCrmPanel({ businessId }: { businessId: string })
           <VtFilterChip key={k} active={kindFilter === k} onClick={() => setKindFilter(k)}>{k}</VtFilterChip>
         ))}
       </div>
+
+      {importOpen ? (
+        <VtPanel title="Import lead list">
+          <p style={{ margin: "0 0 10px", color: cockpitColors.textSecondary, fontSize: 13, fontWeight: 600 }}>
+            Upload a CSV with name/email/phone columns. Leads land in People
+            {addToPipeline ? " and on the selected pipeline stage." : "."}
+          </p>
+          <div style={{ display: "grid", gap: 8 }}>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+              style={vtInputStyle}
+            />
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 13 }}>
+              <input
+                type="checkbox"
+                checked={addToPipeline}
+                onChange={(e) => setAddToPipeline(e.target.checked)}
+              />
+              Add to pipeline
+            </label>
+            {addToPipeline ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <select
+                  value={importPipelineId}
+                  onChange={(e) => {
+                    setImportPipelineId(e.target.value);
+                    const stages = pipelines.find((p) => p.id === e.target.value)?.stages ?? [];
+                    setImportStageId(stages[0]?.id ?? "");
+                  }}
+                  style={vtInputStyle}
+                >
+                  {pipelines.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={importStageId}
+                  onChange={(e) => setImportStageId(e.target.value)}
+                  style={vtInputStyle}
+                >
+                  {importStages.map((s) => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            <PrimaryButton onClick={() => void runLeadImport()} disabled={busy || !importFile}>
+              {busy ? "Importing…" : "Import CSV"}
+            </PrimaryButton>
+            {importReport ? (
+              <p style={{ margin: 0, fontWeight: 750, color: cockpitColors.accent }}>{importReport}</p>
+            ) : null}
+          </div>
+        </VtPanel>
+      ) : null}
 
       {composerOpen ? (
         <VtPanel title="Recruit contact">

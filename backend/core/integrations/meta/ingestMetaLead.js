@@ -3,12 +3,8 @@
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
-import {
-  readCrmState,
-  writeCrmState,
-  upsertContact,
-  upsertPipelineCard,
-} from "../../crm/CrmStore.js";
+import { readCrmState } from "../../crm/CrmStore.js";
+import { ensureCrmContactPersisted } from "../../crm/ensureCrmContactAndOptionalCard.js";
 import { MetaLeadAdsIntegrationAdapter } from "../adapters/MetaLeadAdsIntegrationAdapter.js";
 import { INTEGRATION_CAPABILITIES } from "../capabilities/IntegrationCapability.js";
 
@@ -214,47 +210,33 @@ export async function ingestMetaLead({
     });
   }
 
-  crm = upsertContact(crm, {
-    id: contactId,
-    partyId: contactId,
-    name: mapped.name,
-    email: mapped.email,
-    phone: mapped.phone,
-    kind: "lead",
-    tags: ["facebook", "meta_lead"],
-    notes: [
-      "Source: Facebook Lead Ads",
-      normalized.formId ? `Form: ${normalized.formId}` : null,
-      `Leadgen: ${id}`,
-      mapped.email ? `Email: ${mapped.email}` : null,
-      mapped.phone ? `Phone: ${mapped.phone}` : null,
-    ].filter(Boolean).join("\n"),
-  });
-
-  // Drop into first pipeline as new intake card when available.
-  const pipe = (crm.pipelines ?? [])[0] ?? null;
-  let cardId = null;
-  if (pipe?.stages?.[0]?.id) {
-    const upserted = upsertPipelineCard(crm, {
-      pipelineId: pipe.id,
-      card: {
-        id: `card_meta_${id}`.slice(0, 64),
-        title: mapped.name,
-        stageId: pipe.stages[0].id,
-        contactId,
-        value: 0,
-      },
-    });
-    crm = upserted.crm;
-    cardId = upserted.cardId;
-  }
-
-  await writeCrmState({
+  const ensured = await ensureCrmContactPersisted({
     platformStore,
     installation: install,
-    crm,
     actorId,
+    contact: {
+      id: contactId,
+      partyId: contactId,
+      name: mapped.name,
+      email: mapped.email,
+      phone: mapped.phone,
+      kind: "lead",
+      tags: ["facebook", "meta_lead"],
+      notes: [
+        "Source: Facebook Lead Ads",
+        normalized.formId ? `Form: ${normalized.formId}` : null,
+        `Leadgen: ${id}`,
+        mapped.email ? `Email: ${mapped.email}` : null,
+        mapped.phone ? `Phone: ${mapped.phone}` : null,
+      ].filter(Boolean).join("\n"),
+    },
+    addToPipeline: true,
+    cardId: `card_meta_${id}`.slice(0, 64),
+    cardTitle: mapped.name,
+    dualWriteSource: "meta_lead",
   });
+  crm = ensured.crm;
+  const cardId = ensured.cardId;
 
   let automation = null;
   if (workspaceService?.emitSpecialtyBusinessEvent) {

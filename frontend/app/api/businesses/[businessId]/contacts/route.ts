@@ -6,10 +6,36 @@ import { platformStore } from "@/lib/server/compose";
 import {
   readCrmState,
   writeCrmState,
-  upsertContact,
   removeContact,
   CONTACT_KINDS,
 } from "../../../../../../backend/core/crm/CrmStore.js";
+import {
+  ensureCrmContactPersisted,
+  findContact,
+} from "../../../../../../backend/core/crm/ensureCrmContactAndOptionalCard.js";
+import { RUNTIME_SNAPSHOT_KINDS } from "../../../../../../backend/core/persistence/RuntimeSnapshotKinds.js";
+import { persistAffectedRuntimes } from "../../../../../../backend/core/persistence/PersistedMutationCoordinator.js";
+
+function graphFromCtx(ctx: any) {
+  return ctx?.service?.connected?.ctx?.businessGraphRuntime
+    ?? ctx?.service?.businessGraphRuntime
+    ?? null;
+}
+
+function persistGraphFromCtx(ctx: any, businessId: string) {
+  const stack = ctx?.service?.connected?.operatingStack
+    ?? ctx?.service?.connected?.ctx
+    ?? null;
+  if (!stack?.businessGraphRuntime) return null;
+  return async () => {
+    await persistAffectedRuntimes({
+      workspaceId: businessId,
+      stack,
+      integrationPlatform: ctx?.service?.connected?.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.BUSINESS_GRAPH],
+    });
+  };
+}
 
 export async function GET(
   _request: Request,
@@ -46,40 +72,54 @@ export async function POST(
     if (!name) return NextResponse.json({ ok: false, error: "name required" }, { status: 400 });
 
     const actorId = String((ctx as any)?.authz?.user?.id ?? "owner");
-    let crm = readCrmState(installation);
-    crm = upsertContact(crm, body);
-    await writeCrmState({ platformStore, installation, crm, actorId });
+    const result = await ensureCrmContactPersisted({
+      platformStore,
+      installation,
+      actorId,
+      businessGraphRuntime: graphFromCtx(ctx),
+      persistGraph: persistGraphFromCtx(ctx, businessId) ?? undefined,
+      contact: {
+        id: body.id,
+        partyId: body.partyId,
+        name,
+        email: body.email,
+        phone: body.phone,
+        kind: body.kind,
+        tags: body.tags,
+        notes: body.notes,
+        ownerUserId: body.ownerUserId,
+      },
+      addToPipeline: Boolean(body.addToPipeline),
+      pipelineId: body.pipelineId ?? null,
+      stageId: body.stageId ?? null,
+      dualWriteSource: "crm_contacts",
+    });
 
-    // Best-effort: also register in business graph when available
-    try {
-      const graph = (ctx.service as any)?.connected?.ctx?.businessGraphRuntime;
-      if (graph?.applyEvent) {
-        const partyId = crm.contacts[crm.contacts.length - 1]?.partyId;
-        graph.applyEvent({
-          id: `evt_party_${partyId}_${Date.now()}`,
-          timestampISO: new Date().toISOString(),
-          type: "PARTY_REGISTERED",
-          source: "crm_contacts",
-          payload: {
-            party: {
-              id: partyId,
-              displayName: name,
-              partyType: "PERSON",
-              metadata: {
-                email: body.email,
-                phone: body.phone,
-                kind: body.kind,
-                tags: body.tags,
-              },
-            },
+    if (result.created) {
+      try {
+        await (ctx.service as any).emitSpecialtyBusinessEvent?.({
+          eventType: "CONTACT_CREATED",
+          forceManual: false,
+          brief: `New contact created: ${result.contact?.name ?? name}`,
+          actorId,
+          eventPayload: {
+            contactId: result.contact?.id,
+            contact: result.contact,
+            source: "manual",
           },
         });
+      } catch {
+        /* optional */
       }
-    } catch {
-      /* graph optional */
     }
 
-    return NextResponse.json({ ok: true, contacts: crm.contacts });
+    return NextResponse.json({
+      ok: true,
+      contacts: result.crm.contacts,
+      contact: result.contact,
+      cardId: result.cardId,
+      created: result.created,
+    });
   } catch (error) {
     return authorizationErrorResponse(error);
   }
@@ -101,10 +141,21 @@ export async function PATCH(
       return NextResponse.json({ ok: false, error: "id required" }, { status: 400 });
     }
     const actorId = String((ctx as any)?.authz?.user?.id ?? "owner");
-    let crm = readCrmState(installation);
-    crm = upsertContact(crm, body);
-    await writeCrmState({ platformStore, installation, crm, actorId });
-    return NextResponse.json({ ok: true, contacts: crm.contacts });
+    const result = await ensureCrmContactPersisted({
+      platformStore,
+      installation,
+      actorId,
+      businessGraphRuntime: graphFromCtx(ctx),
+      persistGraph: persistGraphFromCtx(ctx, businessId) ?? undefined,
+      contact: body,
+      addToPipeline: false,
+      dualWriteSource: "crm_contacts",
+    });
+    return NextResponse.json({
+      ok: true,
+      contacts: result.crm.contacts,
+      contact: result.contact,
+    });
   } catch (error) {
     return authorizationErrorResponse(error);
   }
@@ -128,7 +179,8 @@ export async function DELETE(
     }
     const actorId = String((ctx as any)?.authz?.user?.id ?? "owner");
     let crm = readCrmState(installation);
-    crm = removeContact(crm, { contactId });
+    const existing = findContact(crm, { id: contactId });
+    crm = removeContact(crm, { contactId: existing?.id ?? contactId });
     await writeCrmState({ platformStore, installation, crm, actorId });
     return NextResponse.json({ ok: true, contacts: crm.contacts });
   } catch (error) {

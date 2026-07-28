@@ -159,6 +159,12 @@ export async function POST(
             stageId: String(body.stageId),
             stageLabel: stage?.label ?? null,
             contactId: movedCard?.contactId ?? null,
+            pipeline: {
+              id: String(body.pipelineId),
+              name: stage?.pipelineName ?? null,
+              stageId: String(body.stageId),
+              stageLabel: stage?.label ?? null,
+            },
           },
         });
       } catch {

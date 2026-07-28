@@ -14,6 +14,8 @@ export const SPECIALTY_EVENT_CATALOG = Object.freeze([
   { id: "SOCIAL_SCREEN_REQUESTED", label: "Social background screen requested" },
   { id: "FORM_SUBMIT", label: "Form submitted" },
   { id: "META_LEAD", label: "Meta / Facebook lead" },
+  { id: "CONTACT_CREATED", label: "New contact created" },
+  { id: "CONTACT_IMPORTED", label: "Lead list imported" },
   { id: "INTERACTION_OUTCOME_RECORDED", label: "Interaction recorded" },
 ]);
 

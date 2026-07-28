@@ -44,9 +44,7 @@ export async function emitSpecialtyBusinessEvent({
   if (!type) {
     return deepFreeze({ ok: false, reason: "event_type_required", fired: [], skipped: [] });
   }
-  if (!workRuntime) {
-    return deepFreeze({ ok: false, reason: "work_runtime_required", fired: [], skipped: [] });
-  }
+  // Specialty teammate paths need workRuntime; Zapier-style workflows can still run without it.
 
   const employees = Array.isArray(installation?.configuration?.employees)
     ? installation.configuration.employees
@@ -73,7 +71,12 @@ export async function emitSpecialtyBusinessEvent({
   const fired = [];
   const skipped = [];
 
+  if (!workRuntime) {
+    skipped.push({ employeeId: "*", reason: "work_runtime_required" });
+  }
+
   for (const employee of employees) {
+    if (!workRuntime) continue;
     const employeeId = String(employee?.employeeId ?? employee?.id ?? "").trim();
     if (!employeeId) continue;
 
@@ -158,6 +161,23 @@ export async function emitSpecialtyBusinessEvent({
     }
   }
 
+  let workflowResult = null;
+  if (platformStore && installation) {
+    try {
+      const { runWorkflowsForEvent } = await import("../../workflows/WorkflowAutomationRunner.js");
+      workflowResult = await runWorkflowsForEvent({
+        platformStore,
+        installation,
+        eventType: type,
+        payload,
+        actorId,
+        workRuntime,
+      });
+    } catch {
+      workflowResult = { ok: false, reason: "workflow_runner_error", ran: [] };
+    }
+  }
+
   return deepFreeze({
     ok: true,
     eventType: type,
@@ -165,5 +185,6 @@ export async function emitSpecialtyBusinessEvent({
     fired,
     skipped,
     firedCount: fired.length,
+    workflows: workflowResult,
   });
 }

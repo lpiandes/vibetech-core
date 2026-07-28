@@ -2,12 +2,7 @@ import { NextResponse } from "next/server";
 
 import { platformStore } from "@/lib/server/compose";
 import { getSystemWorkspaceForBusiness } from "@/lib/platform/getSystemWorkspaceForBusiness";
-import {
-  readCrmState,
-  writeCrmState,
-  upsertContact,
-  upsertPipelineCard,
-} from "../../../../../../../backend/core/crm/CrmStore.js";
+import { ensureCrmContactPersisted } from "../../../../../../../backend/core/crm/ensureCrmContactAndOptionalCard.js";
 
 /** In-memory rate limit: businessId → timestamps (last minute). */
 const RATE = new Map<string, number[]>();
@@ -106,45 +101,30 @@ export async function POST(
     }
 
     const contactId = `contact_form_${Date.now().toString(36)}`;
-    let crm = readCrmState(installation);
-    crm = upsertContact(crm, {
-      id: contactId,
-      partyId: contactId,
-      name: name || email || phone || "Website lead",
-      email,
-      phone,
-      kind: "lead",
-      tags: [
-        "website_form",
-        body.source === "embed" ? "embed" : "hosted",
-        ...(appointmentRequest ? ["appointment_request"] : []),
-      ],
-      notes: message || "Submitted via VIBETech intake form",
-    });
-
-    const pipe = (crm.pipelines ?? [])[0] ?? null;
-    let cardId = null;
-    if (pipe?.stages?.[0]?.id) {
-      const upserted = upsertPipelineCard(crm, {
-        pipelineId: pipe.id,
-        card: {
-          id: `card_form_${contactId}`.slice(0, 64),
-          title: name || email || "Website lead",
-          stageId: pipe.stages[0].id,
-          contactId,
-          value: 0,
-        },
-      });
-      crm = upserted.crm;
-      cardId = upserted.cardId;
-    }
-
-    await writeCrmState({
+    const ensured = await ensureCrmContactPersisted({
       platformStore,
       installation,
-      crm,
       actorId: "website_form",
+      contact: {
+        id: contactId,
+        partyId: contactId,
+        name: name || email || phone || "Website lead",
+        email,
+        phone,
+        kind: "lead",
+        tags: [
+          "website_form",
+          body.source === "embed" ? "embed" : "hosted",
+          ...(appointmentRequest ? ["appointment_request"] : []),
+        ],
+        notes: message || "Submitted via VIBETech intake form",
+      },
+      addToPipeline: true,
+      cardId: `card_form_${contactId}`.slice(0, 64),
+      cardTitle: name || email || "Website lead",
+      dualWriteSource: "website_form",
     });
+    const cardId = ensured.cardId;
 
     let automation = null;
     try {
@@ -169,6 +149,14 @@ export async function POST(
           phone,
           message,
           source: "website_forms",
+          contact: ensured.contact ?? {
+            id: contactId,
+            name: name || email || phone || "Website lead",
+            email,
+            phone,
+            kind: "lead",
+            tags: ["website_form"],
+          },
         },
       });
     } catch {
