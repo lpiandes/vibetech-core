@@ -211,7 +211,7 @@ export default function AiTeammateDetail({ model }: { model: AiTeammateDetailMod
           <div style={{ display: "flex", flexWrap: "wrap", gap: spacing.sm }}>
             {model.setupHref ? <SecondaryButton href={model.setupHref}>Finish setup</SecondaryButton> : null}
             <SecondaryButton href={`/b/${model.businessId}/knowledge?add=1`}>Add Knowledge</SecondaryButton>
-            <SecondaryButton href={`/b/${model.businessId}/integrations`}>Connections</SecondaryButton>
+            <SecondaryButton href={`/b/${model.businessId}/integrations`}>Integrations</SecondaryButton>
           </div>
         </section>
       ) : null}

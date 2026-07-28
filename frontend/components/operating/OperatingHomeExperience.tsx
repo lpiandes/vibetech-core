@@ -528,14 +528,16 @@ function mergeHomeWorkforce(liveWorkforce: any[] = [], bosEmployees: any[] = [],
       role: emp.role,
       description: emp.description,
     });
+    const autos = Array.isArray(emp.automationDefinitions) ? emp.automationDefinitions : [];
+    const live = autos.some((a: any) => String(a?.status ?? "").toUpperCase() === "ACTIVE");
     byId.set(id, {
       id,
       employeeId: id,
       name: String(emp.label ?? emp.name ?? id),
       responsibility: glance,
       role: glance,
-      status: emp.packDefault ? "READY" : (emp.status ?? "READY"),
-      statusLabel: emp.packDefault ? "Pack teammate" : "Active",
+      status: live ? "READY" : "idle",
+      statusLabel: live ? "LIVE" : "Off",
       specialtyHref,
       detailHref: specialtyHref ?? (base ? `${base}/team` : null),
       runJobHref: specialtyHref,

@@ -6,7 +6,6 @@ import CommunicationCard, {
 } from "./CommunicationCard";
 import CommunicationTimeline from "./CommunicationTimeline";
 import EmployeeReasoningCard from "./EmployeeReasoningCard";
-import FeedbackCard from "./FeedbackCard";
 import ReviewHeader from "./ReviewHeader";
 
 export default function ReviewWorkspaceRuntime({
@@ -56,8 +55,6 @@ export default function ReviewWorkspaceRuntime({
 
       <CommunicationCard communication={communication} />
       <CommunicationTimeline timeline={communication.timeline} />
-
-      <FeedbackCard />
 
       <ActionBar
         workItemId={workItemId}

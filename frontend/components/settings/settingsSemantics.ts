@@ -44,7 +44,7 @@ export function settingsHubLinks({
   if (canManageIntegrations) {
     links.push({
       id: "integrations",
-      title: "Connections",
+      title: "Integrations",
       description: "",
       href: `/b/${businessId}/integrations`,
     });

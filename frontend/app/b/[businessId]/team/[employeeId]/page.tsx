@@ -16,10 +16,12 @@ export default async function AiTeammatePage({
   const { businessId, employeeId: rawEmployeeId } = await params;
   const employeeId = decodeURIComponent(rawEmployeeId);
 
-  // Custom AIs use the specialty surface host as their product page.
+  // Pack / specialty AIs always use the specialty path editor — not the weaker AiTeammateDetail page.
   if (
     employeeId.startsWith("owner_emp_")
     || employeeId.startsWith("specialty_ai_")
+    || employeeId.startsWith("emp_pack_")
+    || employeeId.startsWith("emp_")
   ) {
     redirect(`/b/${businessId}/specialty/${encodeURIComponent(
       employeeId.startsWith("specialty_ai_")

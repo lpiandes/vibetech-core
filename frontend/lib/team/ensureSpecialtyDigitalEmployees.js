@@ -16,16 +16,18 @@ function isOwnerAdded(employee, employeeId) {
   );
 }
 
+function specialtyHrefFor(businessId, employeeId) {
+  const base = businessId ? `/b/${encodeURIComponent(String(businessId))}` : "";
+  return base ? `${base}/specialty/${encodeURIComponent(employeeId)}` : null;
+}
+
 function projectEmployee(employee, { businessId = null, knowledgeCount = 0 } = {}) {
   const employeeId = String(employee?.employeeId ?? employee?.id ?? "").trim();
   if (!employeeId) return null;
-  const base = businessId ? `/b/${encodeURIComponent(String(businessId))}` : "";
   const ownerAdded = isOwnerAdded(employee, employeeId);
   const packDefault = Boolean(employee.packDefault || employeeId.startsWith("emp_pack_"));
   // Every installed AI teammate gets a specialty workspace — not Architect.
-  const specialtyHref = base
-    ? `${base}/specialty/${encodeURIComponent(employeeId)}`
-    : null;
+  const specialtyHref = specialtyHrefFor(businessId, employeeId);
 
   const publicStatus = ownerAdded
     ? resolveCustomAiPublicStatus(employee, {
@@ -77,6 +79,7 @@ function projectEmployee(employee, { businessId = null, knowledgeCount = 0 } = {
 /**
  * Ensure installed BOS employees (pack + specialty) appear on Team even when
  * readiness was built from an empty/outdated package roster.
+ * Also patch existing roster rows so specialtyHref always opens the path editor.
  *
  * @param {{digitalEmployees?: Record<string, any>[], bosEmployees?: Record<string, any>[], businessId?: string | null, knowledgeCount?: number}} input
  */
@@ -87,9 +90,32 @@ export function ensureSpecialtyDigitalEmployees({
   knowledgeCount = 0,
 } = {}) {
   const existing = Array.isArray(digitalEmployees) ? [...digitalEmployees] : [];
-  const byId = new Set(
-    existing.map((entry) => String(entry?.employeeId ?? entry?.id ?? "")).filter(Boolean),
+  const byId = new Map(
+    existing
+      .map((entry) => {
+        const id = String(entry?.employeeId ?? entry?.id ?? "").trim();
+        return id ? [id, entry] : null;
+      })
+      .filter(Boolean),
   );
+
+  // Patch existing rows that are missing specialty links (common for pack teammates).
+  for (let i = 0; i < existing.length; i += 1) {
+    const entry = existing[i];
+    const id = String(entry?.employeeId ?? entry?.id ?? "").trim();
+    if (!id) continue;
+    const specialtyHref = specialtyHrefFor(businessId, id);
+    if (!specialtyHref) continue;
+    if (entry.specialtyHref && entry.detailHref && entry.runJobHref) continue;
+    existing[i] = {
+      ...entry,
+      specialtyHref: entry.specialtyHref || specialtyHref,
+      detailHref: entry.detailHref || specialtyHref,
+      runJobHref: entry.runJobHref || specialtyHref,
+      canRunJobs: true,
+    };
+    byId.set(id, existing[i]);
+  }
 
   for (const employee of Array.isArray(bosEmployees) ? bosEmployees : []) {
     const employeeId = String(employee?.employeeId ?? employee?.id ?? "").trim();
@@ -98,7 +124,7 @@ export function ensureSpecialtyDigitalEmployees({
     const projected = projectEmployee(employee, { businessId, knowledgeCount });
     if (!projected) continue;
     existing.push(projected);
-    byId.add(employeeId);
+    byId.set(employeeId, projected);
   }
 
   return existing;

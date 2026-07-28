@@ -64,3 +64,18 @@ test("injects pack-default AI teammates even when not owner-added", () => {
   assert.ok(next.every((entry) => entry.packDefault === true));
   assert.ok(next.some((entry) => entry.name === "Club Intake Coordinator"));
 });
+
+test("patches existing roster rows missing specialtyHref", () => {
+  const next = ensureSpecialtyDigitalEmployees({
+    businessId: "biz_1",
+    digitalEmployees: [
+      { id: "emp_pack_front", employeeId: "emp_pack_front", name: "Front Desk", packDefault: true },
+    ],
+    bosEmployees: [
+      { employeeId: "emp_pack_front", label: "Front Desk", packDefault: true },
+    ],
+  });
+  assert.equal(next.length, 1);
+  assert.equal(next[0].specialtyHref, "/b/biz_1/specialty/emp_pack_front");
+  assert.equal(next[0].detailHref, "/b/biz_1/specialty/emp_pack_front");
+});

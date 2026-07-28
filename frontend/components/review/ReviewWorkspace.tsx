@@ -6,7 +6,6 @@ import CommunicationCard, {
 } from "./CommunicationCard";
 import CommunicationTimeline from "./CommunicationTimeline";
 import EmployeeReasoningCard from "./EmployeeReasoningCard";
-import FeedbackCard from "./FeedbackCard";
 import ReviewHeader from "./ReviewHeader";
 
 export { default } from "./ReviewWorkspaceRuntime";
@@ -222,7 +221,6 @@ export function ReviewWorkspaceLegacy({
           </>
         );
       })()}
-      <FeedbackCard />
       <ActionBar
         workItemId={String(workItemId ?? defaultId)}
         approval={workItem.approval}

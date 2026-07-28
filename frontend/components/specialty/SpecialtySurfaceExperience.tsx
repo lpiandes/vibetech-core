@@ -398,7 +398,7 @@ export default function SpecialtySurfaceExperience({ model }: { model: Specialty
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="button" onClick={() => setTab("path")} style={tabChip(tab === "path")}>Path</button>
         <button type="button" onClick={() => setTab("logs")} style={tabChip(tab === "logs")}>
-          Logs{model.workItems.length ? ` (${model.workItems.length})` : ""}
+          This session{model.workItems.length ? ` (${model.workItems.length})` : ""}
         </button>
       </div>
 
@@ -475,10 +475,10 @@ export default function SpecialtySurfaceExperience({ model }: { model: Specialty
       ) : null}
 
       {tab === "logs" ? (
-        <VtPanel title="Execution logs">
+        <VtPanel title="This session">
           {activity.length === 0 && model.workItems.length === 0 ? (
             <p style={{ margin: 0, color: cockpitColors.textMuted, fontWeight: 650 }}>
-              No runs yet. Click Run now, or turn LIVE on and create a Calendar event.
+              No runs in this browser session yet. Click Run now, or turn LIVE on so this path can start from its configured events.
             </p>
           ) : (
             <div style={{ display: "grid", gap: 8 }}>

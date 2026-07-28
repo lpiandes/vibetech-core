@@ -257,7 +257,7 @@ export default function ConnectionsExecutiveLayout() {
 
   return (
     <div style={simplePageStyle}>
-      <PageHeader title="Connections" />
+      <PageHeader title="Integrations" />
 
       {connectError === "access_denied" ? (
         <div

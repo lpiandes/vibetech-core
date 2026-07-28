@@ -213,7 +213,23 @@ export default function AutomationPathEditor({
       if (next.runMode == null) next.runMode = "manual";
       next.requiresApproval = next.runMode !== "auto";
     }
-    updateStep(step.id, next);
+    const nextSteps = steps.map((s) => (s.id === step.id ? { ...s, ...next } : s));
+    setSteps(nextSteps);
+    // Destination / channel / audience toggles should persist like MANUAL/AUTO — not wait for Save step.
+    const structuralKeys = [
+      "direction",
+      "channels",
+      "channel",
+      "audience",
+      "type",
+      "runMode",
+      "requiresApproval",
+      "people",
+      "customRecipients",
+    ];
+    if (Object.keys(patch).some((k) => structuralKeys.includes(k))) {
+      void save(nextSteps);
+    }
   }
 
   function removeStep(id: string) {
@@ -399,7 +415,13 @@ export default function AutomationPathEditor({
                     <input
                       type="checkbox"
                       checked={step.enabled !== false}
-                      onChange={(e) => updateStep(step.id, { enabled: e.target.checked })}
+                      disabled={busy}
+                      onChange={(e) => {
+                        const enabled = e.target.checked;
+                        const nextSteps = steps.map((s) => (s.id === step.id ? { ...s, enabled } : s));
+                        setSteps(nextSteps);
+                        void save(nextSteps);
+                      }}
                     />
                     Enabled
                   </label>

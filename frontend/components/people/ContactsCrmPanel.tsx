@@ -294,7 +294,7 @@ export default function ContactsCrmPanel({ businessId }: { businessId: string })
     <VtPage>
       <VtHero
         eyebrow="Mission · People"
-        title="Roster"
+        title="People"
         right={<VtStatusChip label={`${contacts.length} CONTACTS`} tone={contacts.length > 0 ? "live" : "neutral"} />}
       >
         <VtDock>

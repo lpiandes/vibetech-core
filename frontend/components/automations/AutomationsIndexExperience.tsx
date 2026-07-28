@@ -69,17 +69,17 @@ export default function AutomationsIndexExperience({
     <VtPage>
       <VtHero
         eyebrow="Mission · Automations"
-        title="Workflows"
+        title="Automations"
         right={<VtStatusChip label={`${activeCount}/${rows.length} LIVE`} tone={activeCount > 0 ? "live" : "off"} />}
       >
         <VtDock>
-          <VtDockLink href={`/b/${encodeURIComponent(businessId)}/team`}>Roster</VtDockLink>
+          <VtDockLink href={`/b/${encodeURIComponent(businessId)}/team`}>Team</VtDockLink>
           <VtDockLink href={`/b/${encodeURIComponent(businessId)}/work`}>Work</VtDockLink>
         </VtDock>
       </VtHero>
 
       <VtPanel title="Workflows">
-        {rows.length === 0 ? <VtEmpty label="No AI teammates yet — open Roster" /> : null}
+        {rows.length === 0 ? <VtEmpty label="No AI teammates yet — open Team" /> : null}
         <div style={{ display: "grid", gap: 10 }}>
           {rows.map((row) => (
             <VtCard
@@ -92,6 +92,7 @@ export default function AutomationsIndexExperience({
                 <div style={{ fontWeight: 900, fontSize: 16 }}>{row.label}</div>
                 <div style={{ fontSize: 12, color: cockpitColors.textSecondary, marginTop: 4, fontWeight: 700 }}>
                   {row.stepCount} steps
+                  {row.triggerLabel ? ` · ${row.triggerLabel}` : ""}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>

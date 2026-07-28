@@ -41,6 +41,7 @@ export default function CrmReportingStrip({
 }) {
   // Always paint the strip on first frame — never return null (that caused the home flicker).
   const [strip, setStrip] = useState<StripStats>(EMPTY_STRIP);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +56,11 @@ export default function CrmReportingStrip({
         const pipes = await pipesRes.json().catch(() => ({}));
         const cal = await calRes.json().catch(() => ({}));
         if (cancelled) return;
+        if (!contactsRes.ok || !pipesRes.ok) {
+          setLoadError("Couldn’t refresh People / Pipelines counts — try again.");
+          return;
+        }
+        setLoadError(null);
         const cards = (pipes.pipelines ?? []).flatMap((p: any) => p.cards ?? []);
         const open = cards.filter((c: any) => !String(c.stageId).includes("won") && !String(c.stageId).includes("lost"));
         const upcoming = (cal.events ?? []).filter((e: any) => e.start && String(e.start) >= new Date().toISOString());
@@ -65,7 +71,7 @@ export default function CrmReportingStrip({
           nextEventTitle: upcoming[0]?.title ?? null,
         });
       } catch {
-        /* keep empty strip */
+        if (!cancelled) setLoadError("Couldn’t refresh reporting strip.");
       }
     })();
     return () => {
@@ -83,10 +89,13 @@ export default function CrmReportingStrip({
           { label: "Inbox", value: "→", hint: "Threads" },
         ]}
       />
+      {loadError ? (
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: cockpitColors.critical }}>{loadError}</p>
+      ) : null}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {showCalendar ? <QuickLink href={calendarHref}>Calendar</QuickLink> : null}
         {showPipelines ? <QuickLink href={pipelinesHref}>Pipelines</QuickLink> : null}
-        {showAutomations ? <QuickLink href={automationsHref}>Loadouts</QuickLink> : null}
+        {showAutomations ? <QuickLink href={automationsHref}>Automations</QuickLink> : null}
         <QuickLink href={inboxHref}>Inbox</QuickLink>
       </div>
     </div>
