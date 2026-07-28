@@ -6,8 +6,8 @@ import CrmContactDetail from "@/components/people/CrmContactDetail";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
 import { platformStore } from "@/lib/server/compose";
-import { readCrmState } from "../../../../../backend/core/crm/CrmStore.js";
-import { findContact } from "../../../../../backend/core/crm/ensureCrmContactAndOptionalCard.js";
+import { readCrmState } from "../../../../../../backend/core/crm/CrmStore.js";
+import { findContact } from "../../../../../../backend/core/crm/ensureCrmContactAndOptionalCard.js";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 
 export default async function PeopleDetailPage({
