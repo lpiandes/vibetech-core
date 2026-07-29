@@ -274,6 +274,22 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     sellable: true,
   },
   {
+    id: "ai_prospecting",
+    label: "AI Prospecting",
+    description: "Research agent: industry/criteria → company + decision-maker leads in People, onto a pipeline stage you choose.",
+    moduleIds: ["home", "people", "integrations", "knowledge", "settings", "work"],
+    canonicalNavIds: ["home", "needs_attention", "people", "work", "knowledge", "automations", "integrations", "settings"],
+    discoveryTopics: ["identity", "industry", "customers", "services", "integrations", "outcomes"],
+    launchMissionIds: ["knowledge_consult"],
+    packageAskQuestionIds: ["q_customers", "q_integrations", "q_desired_outcomes"],
+    packageAskConnectionOptions: ["prospecting_enrichment", "none_yet"],
+    honestyNote: "Public web research only. Every lead must include a phone + name + short brief; email only when found free in search snippets. No paid enrichment. Candidates without a public phone are dropped.",
+    commercialStatus: "product",
+    sellable: true,
+    maxProspectingRunsPerDay: 5,
+    maxProspectingLeadsPerRun: 25,
+  },
+  {
     id: "website_native_chat",
     label: "Website Chatbot (native)",
     description: "Real-time website chat widget with Knowledge answers and lead capture.",
@@ -653,6 +669,8 @@ export function listSalesPackagesForAdmin({ includeRoadmap = true } = {}) {
         sellable: pkg.sellable !== false,
         maxWorkers: pkg.maxWorkers ?? null,
         maxWorkflows: pkg.maxWorkflows ?? null,
+        maxProspectingRunsPerDay: pkg.maxProspectingRunsPerDay ?? null,
+        maxProspectingLeadsPerRun: pkg.maxProspectingLeadsPerRun ?? null,
       })),
   );
 }
@@ -668,10 +686,17 @@ export function listSellableSalesPackagesForAdmin() {
 export function resolvePackageSoftCaps(purchasedPackages = []) {
   const packages = normalizePurchasedPackages(purchasedPackages);
   if (!packages.length || isFullOsPurchasedScope(packages)) {
-    return deepFreeze({ maxWorkers: null, maxWorkflows: null });
+    return deepFreeze({
+      maxWorkers: null,
+      maxWorkflows: null,
+      maxProspectingRunsPerDay: null,
+      maxProspectingLeadsPerRun: null,
+    });
   }
   let maxWorkers = null;
   let maxWorkflows = null;
+  let maxProspectingRunsPerDay = null;
+  let maxProspectingLeadsPerRun = null;
   for (const id of packages) {
     const pkg = BY_ID.get(id);
     if (!pkg) continue;
@@ -681,8 +706,32 @@ export function resolvePackageSoftCaps(purchasedPackages = []) {
     if (Number.isFinite(pkg.maxWorkflows)) {
       maxWorkflows = maxWorkflows == null ? pkg.maxWorkflows : Math.max(maxWorkflows, pkg.maxWorkflows);
     }
+    if (Number.isFinite(pkg.maxProspectingRunsPerDay)) {
+      maxProspectingRunsPerDay = maxProspectingRunsPerDay == null
+        ? pkg.maxProspectingRunsPerDay
+        : Math.max(maxProspectingRunsPerDay, pkg.maxProspectingRunsPerDay);
+    }
+    if (Number.isFinite(pkg.maxProspectingLeadsPerRun)) {
+      maxProspectingLeadsPerRun = maxProspectingLeadsPerRun == null
+        ? pkg.maxProspectingLeadsPerRun
+        : Math.max(maxProspectingLeadsPerRun, pkg.maxProspectingLeadsPerRun);
+    }
   }
-  return deepFreeze({ maxWorkers, maxWorkflows });
+  return deepFreeze({
+    maxWorkers,
+    maxWorkflows,
+    maxProspectingRunsPerDay,
+    maxProspectingLeadsPerRun,
+  });
+}
+
+/**
+ * AI Prospecting is never free by accident — requires explicit package purchase
+ * (even when the workspace is otherwise full-OS / empty purchasedPackages).
+ */
+export function businessHasAiProspecting(purchasedPackages = []) {
+  const packages = normalizePurchasedPackages(purchasedPackages);
+  return packages.includes("ai_prospecting");
 }
 
 /**
@@ -958,7 +1007,7 @@ const CONNECTION_OPTION_LABELS = Object.freeze({
   google_ads: "Google Ads",
   google_search_console: "Google Search Console",
   meta_platform: "Meta lead forms",
-  social_screening: "Social screening",
+  prospecting_enrichment: "Prospecting enrichment",
   none_yet: "None yet",
 });
 
@@ -972,6 +1021,7 @@ export const PACKAGE_ASK_OPTION_TO_CONNECTION = Object.freeze({
   google_search_console: "google_search_console",
   meta_platform: "meta_lead_ads",
   social_screening: "social_screening",
+  prospecting_enrichment: "prospecting_enrichment",
 });
 
 /**

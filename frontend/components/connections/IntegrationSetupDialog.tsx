@@ -36,6 +36,8 @@ export default function IntegrationSetupDialog({
     twimlUrl: "",
     serperApiKey: "",
     scrapingBeeApiKey: "",
+    apolloApiKey: "",
+    hunterApiKey: "",
     usePlatformKeys: false,
   });
   const [metaForm, setMetaForm] = useState({ pageId: "", pageAccessToken: "" });
@@ -201,6 +203,8 @@ export default function IntegrationSetupDialog({
             ? `/api/businesses/${businessId}/integrations/voice`
             : integration.id === "social_screening"
               ? `/api/businesses/${businessId}/integrations/social-screening`
+              : integration.id === "prospecting_enrichment"
+                ? `/api/businesses/${businessId}/integrations/prospecting-enrichment`
               : `/api/businesses/${businessId}/integrations/sms`;
       const res = await fetch(path, {
         method: "POST",
@@ -218,6 +222,16 @@ export default function IntegrationSetupDialog({
                     scrapingBeeApiKey: apiKeyForm.scrapingBeeApiKey,
                   }),
               }
+              : integration.id === "prospecting_enrichment"
+                ? {
+                  usePlatformKeys: apiKeyForm.usePlatformKeys,
+                  ...(apiKeyForm.usePlatformKeys
+                    ? {}
+                    : {
+                      apolloApiKey: apiKeyForm.apolloApiKey,
+                      hunterApiKey: apiKeyForm.hunterApiKey,
+                    }),
+                }
               : integration.id === "sms_channel"
                 ? { ...apiKeyForm }
                 : apiKeyForm,
@@ -789,6 +803,48 @@ export default function IntegrationSetupDialog({
                       type="password"
                       value={apiKeyForm.scrapingBeeApiKey}
                       onChange={(e) => setApiKeyForm((s) => ({ ...s, scrapingBeeApiKey: e.target.value }))}
+                      style={fieldInputStyle}
+                    />
+                  </label>
+                </>
+              ) : null}
+            </div>
+          ) : canConnect && setupMode === "api_key" && integration.id === "prospecting_enrichment" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
+              <div style={{ fontWeight: 600, fontSize: typography.caption.fontSize, color: cockpitColors.textPrimary }}>
+                Prospecting enrichment keys
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
+                Optional. Company discovery uses platform Serper. Enrichment verifies emails when Apollo or Hunter is connected.
+                Without keys, Find leads still runs with public research and unverified pattern guesses.
+              </p>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 650 }}>
+                <input
+                  type="checkbox"
+                  checked={apiKeyForm.usePlatformKeys}
+                  onChange={(e) => setApiKeyForm((s) => ({ ...s, usePlatformKeys: e.target.checked }))}
+                />
+                Use platform keys (APOLLO_API_KEY or HUNTER_API_KEY)
+              </label>
+              {!apiKeyForm.usePlatformKeys ? (
+                <>
+                  <label style={fieldLabelStyle}>
+                    Apollo API key
+                    <input
+                      placeholder="Apollo key (optional if Hunter set)"
+                      type="password"
+                      value={apiKeyForm.apolloApiKey}
+                      onChange={(e) => setApiKeyForm((s) => ({ ...s, apolloApiKey: e.target.value }))}
+                      style={fieldInputStyle}
+                    />
+                  </label>
+                  <label style={fieldLabelStyle}>
+                    Hunter API key
+                    <input
+                      placeholder="Hunter key (optional if Apollo set)"
+                      type="password"
+                      value={apiKeyForm.hunterApiKey}
+                      onChange={(e) => setApiKeyForm((s) => ({ ...s, hunterApiKey: e.target.value }))}
                       style={fieldInputStyle}
                     />
                   </label>

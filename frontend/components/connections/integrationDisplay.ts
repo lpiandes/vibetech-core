@@ -83,6 +83,15 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
     listed: false,
     unlocks: "People → Run social background screen → Needs Attention report",
   },
+  prospecting_enrichment: {
+    title: "Prospecting enrichment",
+    description: "Optional. AI Prospecting uses free public search for phones; paid Apollo/Hunter is not required for Find leads.",
+    tier: "live",
+    icon: Target,
+    setupMode: "api_key",
+    listed: false,
+    unlocks: "Reserved for future paid enrichment — Find leads already requires a public phone",
+  },
   meta_lead_ads: {
     title: "Meta Lead Forms",
     description: "Connect your Facebook Page. New Lead Ad submissions land in People and fire intake automations.",
@@ -140,6 +149,7 @@ export type LiveIntegrationFlags = {
   sms_channel?: boolean;
   voice_channel?: boolean;
   social_screening?: boolean;
+  prospecting_enrichment?: boolean;
   meta_lead_ads?: boolean;
   google_search_console?: boolean;
   google_ads?: boolean;
@@ -162,6 +172,7 @@ export function isIntegrationListed(connectionId: string, liveFlags: LiveIntegra
     if (id === "sms_channel") return Boolean(liveFlags.sms_channel);
     if (id === "voice_channel") return Boolean(liveFlags.voice_channel);
     if (id === "social_screening") return Boolean(liveFlags.social_screening);
+    if (id === "prospecting_enrichment") return Boolean(liveFlags.prospecting_enrichment);
     if (id === "meta_lead_ads") return Boolean(liveFlags.meta_lead_ads);
     if (id === "google_search_console") return Boolean(liveFlags.google_search_console);
     if (id === "google_ads") return Boolean(liveFlags.google_ads);
@@ -188,6 +199,7 @@ export function getIntegrationDisplay(
     if (id === "sms_channel" && liveFlags.sms_channel) setupMode = "api_key";
     if (id === "voice_channel" && liveFlags.voice_channel) setupMode = "api_key";
     if (id === "social_screening" && liveFlags.social_screening) setupMode = "api_key";
+    if (id === "prospecting_enrichment" && liveFlags.prospecting_enrichment) setupMode = "api_key";
     if (id === "meta_lead_ads" && liveFlags.meta_lead_ads) setupMode = "api_key";
     if (id === "google_search_console" && liveFlags.google_search_console) setupMode = "oauth";
     if (id === "google_ads" && liveFlags.google_ads) setupMode = "api_key";

@@ -16,6 +16,7 @@ import {
   vtInputStyle,
 } from "@/components/product/VtChrome";
 import { cockpitColors } from "@/design/tokens";
+import ProspectingFindLeadsPanel from "@/components/people/ProspectingFindLeadsPanel";
 
 const KINDS = ["lead", "client", "family", "contractor", "vendor", "employee", "other"] as const;
 
@@ -39,7 +40,13 @@ type PipelineCard = {
   stageLabel?: string;
 };
 
-export default function ContactsCrmPanel({ businessId }: { businessId: string }) {
+export default function ContactsCrmPanel({
+  businessId,
+  aiProspectingEnabled = false,
+}: {
+  businessId: string;
+  aiProspectingEnabled?: boolean;
+}) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [kindFilter, setKindFilter] = useState<string>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -58,6 +65,7 @@ export default function ContactsCrmPanel({ businessId }: { businessId: string })
   const [busy, setBusy] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [prospectingOpen, setProspectingOpen] = useState(false);
   const [pipelines, setPipelines] = useState<Array<{ id: string; name: string; stages: Array<{ id: string; label: string }> }>>([]);
   const [importPipelineId, setImportPipelineId] = useState("");
   const [importStageId, setImportStageId] = useState("");
@@ -300,6 +308,18 @@ export default function ContactsCrmPanel({ businessId }: { businessId: string })
         <VtDock>
           <VtDockLink href={`/b/${encodeURIComponent(businessId)}/pipelines`}>Pipelines</VtDockLink>
           <VtDockLink href={`/b/${encodeURIComponent(businessId)}/inbox`}>Inbox</VtDockLink>
+          {aiProspectingEnabled ? (
+            <button
+              type="button"
+              onClick={() => {
+                setProspectingOpen((v) => !v);
+                setImportOpen(false);
+              }}
+              style={dockBtnStyle}
+            >
+              {prospectingOpen ? "Close find leads" : "Find leads"}
+            </button>
+          ) : null}
           <button type="button" onClick={() => setImportOpen((v) => !v)} style={dockBtnStyle}>
             {importOpen ? "Close import" : "Import leads"}
           </button>
@@ -308,6 +328,17 @@ export default function ContactsCrmPanel({ businessId }: { businessId: string })
           </button>
         </VtDock>
       </VtHero>
+
+      {aiProspectingEnabled ? (
+        <ProspectingFindLeadsPanel
+          businessId={businessId}
+          open={prospectingOpen}
+          onClose={() => setProspectingOpen(false)}
+          onAccepted={() => {
+            void load().catch(() => undefined);
+          }}
+        />
+      ) : null}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         <VtFilterChip active={kindFilter === "all"} onClick={() => setKindFilter("all")}>All</VtFilterChip>

@@ -65,6 +65,13 @@ export default function CrmContactDetail({
   const [notes, setNotes] = useState(contact.notes || "");
   const [tags, setTags] = useState((contact.tags ?? []).join(", "));
 
+  const isAiProspect = (contact.tags ?? []).some((t) => String(t) === "ai_prospect");
+  const prospectingNotes = isAiProspect ? String(contact.notes ?? "") : "";
+  const sourceLines = prospectingNotes
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => /^Sources:/i.test(l) || /^Website:/i.test(l) || /^Overview:/i.test(l) || /^Email:/i.test(l) || /^Phone:/i.test(l) || /^Size:/i.test(l) || /^Company:/i.test(l));
+
   async function save() {
     setBusy(true);
     setError(null);
@@ -193,6 +200,28 @@ export default function CrmContactDetail({
                 <Field label="Notes" value={String(contact.notes ?? "")} />
                 <Field label="Tags" value={(contact.tags ?? []).join(", ")} />
                 <Field label="Contact ID" value={contact.id} />
+                {isAiProspect ? (
+                  <div style={{
+                    marginTop: 8,
+                    padding: 12,
+                    borderRadius: 12,
+                    border: `1px solid ${cockpitColors.panelBorder}`,
+                    background: "#f8fafc",
+                    display: "grid",
+                    gap: 6,
+                  }}>
+                    <div style={{ fontWeight: 800, fontSize: 13 }}>AI Prospecting sources</div>
+                    {sourceLines.length ? sourceLines.map((line) => (
+                      <div key={line} style={{ fontSize: 12, fontWeight: 650, color: cockpitColors.textSecondary, wordBreak: "break-word" }}>
+                        {line}
+                      </div>
+                    )) : (
+                      <div style={{ fontSize: 12, color: cockpitColors.textMuted, fontWeight: 650 }}>
+                        Tagged ai_prospect — see notes for research trail.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </>
             )}
           </div>

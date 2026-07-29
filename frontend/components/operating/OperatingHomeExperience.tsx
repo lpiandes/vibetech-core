@@ -191,6 +191,7 @@ export default function OperatingHomeExperience() {
             sms_channel: true,
             voice_channel: true,
             social_screening: true,
+            prospecting_enrichment: true,
             meta_lead_ads: true,
           }}
         />
