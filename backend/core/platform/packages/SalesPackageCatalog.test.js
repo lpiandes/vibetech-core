@@ -129,6 +129,20 @@ test("receptionist + CRM launch missions exclude Meta and sports golden path", (
   assert.ok(!missions.some((m) => m.id === "calendar_scheduling"));
 });
 
+test("full OS does not surface Meta unless lead_follow_up was purchased", () => {
+  const pool = [
+    { id: "customer_email_send" },
+    { id: "meta_lead_intake" },
+    { id: "knowledge_consult" },
+  ];
+  const fullOs = filterLaunchMissionsForPurchasedPackages(pool, ["ai_business_os"]);
+  assert.ok(!fullOs.some((m) => m.id === "meta_lead_intake"));
+  assert.ok(fullOs.some((m) => m.id === "customer_email_send"));
+
+  const withLeads = filterLaunchMissionsForPurchasedPackages(pool, ["lead_follow_up"]);
+  assert.ok(withLeads.some((m) => m.id === "meta_lead_intake"));
+});
+
 test("launch path label comes from packages or industry — never a hardcoded Sports-only map", () => {
   assert.equal(
     presentLaunchPathLabel({ purchasedPackages: ["ai_receptionist", "crm_automation"] }),

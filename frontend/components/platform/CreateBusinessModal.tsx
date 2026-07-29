@@ -198,7 +198,8 @@ export default function CreateBusinessModal({
                   lineHeight: 1.4,
                 }}
               >
-                Check what they bought. Hover a row for the short scope note.
+                Check what they bought. Full OS is right for running your own company.
+                Facebook / Meta leads only appear if you also select Lead qualification &amp; follow-up.
               </p>
             </div>
             <div

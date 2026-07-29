@@ -25,10 +25,19 @@ export class ResendInvitationDeliveryProvider extends InvitationDeliveryProvider
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      const providerDetail = String(data?.message ?? data?.error ?? "").trim();
+      const isTestModeRecipient =
+        /only send testing emails to your own email address/i.test(providerDetail)
+        || /verify a domain/i.test(providerDetail);
       return {
         sent: false,
-        reason: "provider_error",
-        message: "We could not send the invitation email. Try again in a moment.",
+        reason: isTestModeRecipient ? "resend_domain_unverified" : "provider_error",
+        message: isTestModeRecipient
+          ? `${providerDetail} Until the sending domain is verified in Resend, use Copy invitation link, or invite the Resend account email.`
+          : (providerDetail
+            ? `Invitation email failed: ${providerDetail}`
+            : "We could not send the invitation email. Try again in a moment."),
+        providerStatus: response.status,
       };
     }
 

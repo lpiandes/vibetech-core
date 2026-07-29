@@ -1221,12 +1221,32 @@ export function filterModulesForPurchasedPackages(modules = [], purchasedPackage
 
 /**
  * Keep only Launch Center missions entitled by purchased packages.
- * Full OS / empty packages = no filtering (legacy).
+ * Full OS / empty packages = broad OS, but optional lead-gen (Meta) stays opt-in
+ * unless lead_follow_up (or another package that lists meta_lead_intake) was purchased.
  */
 export function filterLaunchMissionsForPurchasedPackages(missions = [], purchasedPackages = []) {
-  const scope = resolvePurchasedPackageScope(purchasedPackages);
-  if (scope.fullOs || !scope.launchMissionIds) return missions;
-  return (missions ?? []).filter((mission) => scope.launchMissionIds.has(String(mission?.id ?? "")));
+  const packages = normalizePurchasedPackages(purchasedPackages);
+  const scope = resolvePurchasedPackageScope(packages);
+  let rows = Array.isArray(missions) ? missions : [];
+
+  if (!scope.fullOs && scope.launchMissionIds) {
+    rows = rows.filter((mission) => scope.launchMissionIds.has(String(mission?.id ?? "")));
+  }
+
+  // Meta Lead Ads is a purchasable lead product — never dump it on Full OS by accident.
+  const metaEntitled = packages.some((id) => {
+    const pkg = BY_ID.get(id);
+    if (!pkg) return false;
+    if (Array.isArray(pkg.launchMissionIds) && pkg.launchMissionIds.includes("meta_lead_intake")) {
+      return true;
+    }
+    return false;
+  });
+  if (!metaEntitled) {
+    rows = rows.filter((mission) => String(mission?.id ?? "") !== "meta_lead_intake");
+  }
+
+  return rows;
 }
 
 /**
