@@ -71,6 +71,8 @@ const DEEP_NETWORK_SPECS = Object.freeze([
       handle ? `"@${handle}" (site:instagram.com/p OR site:instagram.com/reel)` : null,
       handle ? `"@${handle}" site:instagram.com` : null,
       handle ? `"tagged" "@${handle}" site:instagram.com` : null,
+      handle ? `"with @${handle}" site:instagram.com` : null,
+      handle ? `"photo of @${handle}" OR "featuring @${handle}" site:instagram.com` : null,
       `"${name}" (tagged OR "photo of" OR "with @" OR mention) (site:instagram.com/p OR site:instagram.com/reel)`,
       `"${name}" site:instagram.com/p`,
     ].filter(Boolean),
@@ -675,6 +677,8 @@ async function discoverDeepSocialPresence({
 
     let foundSubjectProfile = false;
     for (const hit of hits) {
+      // Serper often returns off-platform pages for social queries — ignore for this network
+      if (hit.network !== spec.network) continue;
       if (hit.kind !== "profile") continue;
       if (!profileLooksLikeSubject({
         title: hit.title,
@@ -690,7 +694,10 @@ async function discoverDeepSocialPresence({
       }
       foundSubjectProfile = true;
       hit.relation = "own";
-      if (hit.handle) trustHandle(spec.network, hit.handle);
+      // Only trust the handle extracted from THIS profile URL (not random path noise)
+      if (hit.handle && extractHandleFromUrl(hit.url) === hit.handle) {
+        trustHandle(spec.network, hit.handle);
+      }
     }
 
     if (!foundSubjectProfile && seedHandle) {
@@ -757,8 +764,8 @@ async function discoverDeepSocialPresence({
         primary && h !== primary ? `"@${h}" site:${spec.network === "x" ? "x.com OR twitter.com" : `${spec.network}.com`}` : null,
       ]),
     ].filter(Boolean);
-    for (const q of [...new Set(qs)].slice(0, 6)) {
-      const hits = await runQuery(spec.network, q, "mention", Math.min(10, maxPerNetwork + 2));
+    for (const q of [...new Set(qs)].slice(0, 8)) {
+      const hits = await runQuery(spec.network, q, "mention", Math.min(12, maxPerNetwork + 4));
       for (const hit of hits) {
         if (hit.kind === "profile") {
           if (!profileLooksLikeSubject({
@@ -844,9 +851,22 @@ function pushHit(profiles, seen, row, networkHint, preferredKind) {
   const url = String(row?.link ?? "").trim();
   if (!url || seen.has(url) || isNoiseUrl(url)) return null;
   seen.add(url);
-  const network = networkHint && networkHint !== "handle" ? networkHint : guessNetwork(url);
+  // Always trust the URL host over the Serper query network.
+  // site:instagram.com queries often return hockey sites, news, etc. — never label those as Instagram.
+  const fromUrl = guessNetwork(url);
+  const hint = networkHint && networkHint !== "handle" ? String(networkHint) : null;
+  let network = fromUrl;
+  if (fromUrl === "web" && hint && hint !== "web") {
+    // Off-platform organic result from a social query → keep as web, never fake the platform
+    network = "web";
+  } else if (fromUrl !== "web") {
+    network = fromUrl;
+  } else if (hint) {
+    network = hint;
+  }
   const title = String(row?.title ?? "");
   const snippet = String(row?.snippet ?? "");
+  const imageUrl = String(row?.imageUrl ?? row?.thumbnailUrl ?? "").trim() || null;
   const kind = classifyHitKind(url, title, snippet, preferredKind);
   const hit = {
     network,
@@ -854,6 +874,7 @@ function pushHit(profiles, seen, row, networkHint, preferredKind) {
     title,
     url,
     snippet,
+    imageUrl,
     handle: extractHandleFromUrl(url),
   };
   profiles.push(hit);

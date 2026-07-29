@@ -26,6 +26,10 @@ type Platform = {
   posts?: Hit[];
   tags?: Hit[];
   mentions?: Hit[];
+  visibility?: string;
+  postsEmptyReason?: string | null;
+  tagsEmptyReason?: string | null;
+  tagsNote?: string | null;
 };
 
 function pushHit(lines: string[], hit: Hit, label: string) {
@@ -72,16 +76,22 @@ export function buildSocialCheckerPdf(report: {
   if (platforms.length) {
     for (const platform of platforms) {
       lines.push(String(platform.label || platform.network).toUpperCase());
+      if (platform.visibility === "private") lines.push("  [PRIVATE PROFILE]");
       lines.push("--------");
       if (platform.profile) pushHit(lines, platform.profile, "PROFILE");
       else lines.push("  (No clear profile URL found)", "");
       if (platform.posts?.length) {
         lines.push("  Posts / media");
         for (const hit of platform.posts.slice(0, 25)) pushHit(lines, hit, "POST");
+      } else if (platform.postsEmptyReason) {
+        lines.push(`  Posts: ${platform.postsEmptyReason}`, "");
       }
       if (platform.tags?.length) {
         lines.push("  Tags (@mentions of them)");
+        if (platform.tagsNote) lines.push(`  Note: ${platform.tagsNote}`);
         for (const hit of platform.tags.slice(0, 25)) pushHit(lines, hit, "TAG");
+      } else if (platform.tagsEmptyReason) {
+        lines.push(`  Tags: ${platform.tagsEmptyReason}`, "");
       }
       if (platform.mentions?.length) {
         lines.push("  Name mentions");

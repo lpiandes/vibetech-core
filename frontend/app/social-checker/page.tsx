@@ -23,6 +23,10 @@ type Platform = {
   tags?: Hit[];
   mentions: Hit[];
   all: Hit[];
+  visibility?: "private" | "public" | "unknown";
+  postsEmptyReason?: string | null;
+  tagsEmptyReason?: string | null;
+  tagsNote?: string | null;
 };
 
 type Report = {
@@ -323,10 +327,14 @@ function PlatformSection({ platform }: { platform: Platform }) {
   const postCount = platform.posts?.length ?? 0;
   const tagCount = platform.tags?.length ?? 0;
   const mentionCount = platform.mentions?.length ?? 0;
+  const isPrivate = platform.visibility === "private";
   return (
     <section style={platformCard}>
       <header style={platformHeader}>
-        <h3 style={platformTitle}>{platform.label}</h3>
+        <h3 style={platformTitle}>
+          {platform.label}
+          {isPrivate ? <span style={privateBadge}>Private</span> : null}
+        </h3>
         <span style={platformMeta}>
           {platform.profile ? "Profile" : "No profile"}
           {postCount ? ` · ${postCount} posts` : ""}
@@ -353,12 +361,18 @@ function PlatformSection({ platform }: { platform: Platform }) {
             ))}
           </div>
         ) : (
-          <p style={emptySoft}>No indexed posts from this profile yet.</p>
+          <p style={isPrivate ? privateMsg : emptySoft}>
+            {platform.postsEmptyReason
+              || (isPrivate
+                ? "Private profile — can't extract their posts."
+                : "No indexed posts from this profile yet.")}
+          </p>
         )}
       </div>
 
       <div style={subsection}>
         <h4 style={subsectionTitle}>Tags (@mentions of them)</h4>
+        {platform.tagsNote ? <p style={privateMsg}>{platform.tagsNote}</p> : null}
         {tagCount ? (
           <div style={hitStack}>
             {(platform.tags ?? []).map((hit, i) => (
@@ -366,7 +380,12 @@ function PlatformSection({ platform }: { platform: Platform }) {
             ))}
           </div>
         ) : (
-          <p style={emptySoft}>No @tags of this person found on this platform.</p>
+          <p style={isPrivate ? privateMsg : emptySoft}>
+            {platform.tagsEmptyReason
+              || (isPrivate
+                ? "Private profile — can't extract their Tagged tab."
+                : "No @tags of this person found on this platform.")}
+          </p>
         )}
       </div>
 
@@ -853,6 +872,28 @@ const platformTitle: CSSProperties = {
   fontSize: 20,
   fontWeight: 850,
   letterSpacing: "-0.01em",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 10,
+};
+
+const privateBadge: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: "#fda4af",
+  border: "1px solid rgba(244,63,94,0.4)",
+  borderRadius: 999,
+  padding: "3px 8px",
+};
+
+const privateMsg: CSSProperties = {
+  margin: 0,
+  color: "#fda4af",
+  fontSize: 13,
+  fontWeight: 650,
+  lineHeight: 1.45,
 };
 
 const platformMeta: CSSProperties = {

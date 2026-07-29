@@ -169,6 +169,30 @@ test("isDirectTag requires @handle not bare name", () => {
   }), false);
 });
 
+test("pushHit / guessNetwork does not label hockey sites as Instagram", async () => {
+  const { guessNetwork } = await import("../integrations/social-screening/serperSocialDiscovery.js");
+  assert.equal(guessNetwork("https://www.assumptiongreyhounds.com/sports/mhockey/2026-27/bios/piandes_leo_mhk"), "web");
+  assert.equal(guessNetwork("https://www.instagram.com/p/AbCd/"), "instagram");
+  assert.equal(guessNetwork("https://www.eliteprospects.com/player/123/leo-piandes"), "web");
+});
+
+test("organizePlatformSections marks private empty states", () => {
+  const sections = organizePlatformSections([
+    {
+      network: "instagram",
+      kind: "profile",
+      title: "Leo (@lpiandes)",
+      url: "https://www.instagram.com/lpiandes/",
+      snippet: "Private",
+      handle: "lpiandes",
+      confidence: 90,
+    },
+  ], { instagram: "private" });
+  assert.equal(sections[0].visibility, "private");
+  assert.match(sections[0].postsEmptyReason, /Private profile/i);
+  assert.match(sections[0].tagsEmptyReason, /Private profile/i);
+});
+
 test("runPublicSocialCheck requires name or handle", async () => {
   const res = await runPublicSocialCheck({ name: "", handle: "", serperApiKey: "k" });
   assert.equal(res.ok, false);

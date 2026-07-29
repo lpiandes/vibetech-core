@@ -16,6 +16,14 @@ import {
   profileLooksLikeSubject,
   looksLikeRosterOcrPollution,
 } from "../integrations/social-screening/serperSocialDiscovery.js";
+import {
+  detectProfileVisibility,
+  privatePostsMessage,
+  privateTagsMessage,
+  unknownEmptyPostsMessage,
+  unknownEmptyTagsMessage,
+} from "../integrations/social-screening/profileVisibility.js";
+import { readSocialScreeningKeys } from "../integrations/social-screening/socialScreeningKeys.js";
 
 export const PLATFORM_ORDER = Object.freeze([
   "instagram",
@@ -206,9 +214,11 @@ export function rankProfiles(profiles = [], subject = {}) {
 
 /**
  * Group ranked hits: profile, posts, tags, mentions.
+ * @param {object[]} [profiles]
+ * @param {Record<string, "private"|"public"|"unknown">} [visibilityByNetwork]
  */
-export function organizePlatformSections(profiles = []) {
-  /** @type {Map<string, { network: string, label: string, profile: object|null, posts: object[], tags: object[], mentions: object[], all: object[] }>} */
+export function organizePlatformSections(profiles = [], visibilityByNetwork = {}) {
+  /** @type {Map<string, { network: string, label: string, profile: object|null, posts: object[], tags: object[], mentions: object[], all: object[], visibility: string, postsEmptyReason: string|null, tagsEmptyReason: string|null }>} */
   const byNet = new Map();
 
   for (const hit of profiles) {
@@ -222,6 +232,9 @@ export function organizePlatformSections(profiles = []) {
         tags: [],
         mentions: [],
         all: [],
+        visibility: visibilityByNetwork[network] || "unknown",
+        postsEmptyReason: null,
+        tagsEmptyReason: null,
       });
     }
     const bucket = byNet.get(network);
@@ -243,6 +256,26 @@ export function organizePlatformSections(profiles = []) {
     }
   }
 
+  // Ensure platforms with a known handle/profile visibility still appear even with zero hits
+  for (const [network, visibility] of Object.entries(visibilityByNetwork || {})) {
+    if (!byNet.has(network)) {
+      byNet.set(network, {
+        network,
+        label: PLATFORM_LABELS[network] || network,
+        profile: null,
+        posts: [],
+        tags: [],
+        mentions: [],
+        all: [],
+        visibility,
+        postsEmptyReason: null,
+        tagsEmptyReason: null,
+      });
+    } else {
+      byNet.get(network).visibility = visibility;
+    }
+  }
+
   const ordered = [];
   for (const id of PLATFORM_ORDER) {
     if (byNet.has(id)) ordered.push(byNet.get(id));
@@ -255,10 +288,40 @@ export function organizePlatformSections(profiles = []) {
     bucket.posts.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
     bucket.tags.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
     bucket.mentions.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+
+    const vis = bucket.visibility || "unknown";
+    const privacyAware = ["instagram", "tiktok", "facebook", "threads"].includes(bucket.network);
+    bucket.tagsNote = null;
+    if (!bucket.posts.length) {
+      if (privacyAware && vis === "private") {
+        bucket.postsEmptyReason = privatePostsMessage(bucket.network);
+      } else if (privacyAware) {
+        bucket.postsEmptyReason = unknownEmptyPostsMessage();
+      } else {
+        bucket.postsEmptyReason = "No indexed posts from this profile yet.";
+      }
+    } else {
+      bucket.postsEmptyReason = null;
+    }
+    if (!bucket.tags.length) {
+      if (privacyAware && vis === "private") {
+        bucket.tagsEmptyReason = privateTagsMessage();
+      } else if (privacyAware) {
+        bucket.tagsEmptyReason = unknownEmptyTagsMessage();
+      } else {
+        bucket.tagsEmptyReason = "No @tags of this person found on this platform.";
+      }
+    } else {
+      bucket.tagsEmptyReason = null;
+      if (privacyAware && vis === "private") {
+        bucket.tagsNote = "Showing public posts that @tagged them (indexed only). Their private Tagged tab can't be opened.";
+      }
+    }
   }
 
   return ordered.filter(
-    (b) => b.profile || b.posts.length || b.tags.length || b.mentions.length,
+    (b) => b.profile || b.posts.length || b.tags.length || b.mentions.length
+      || b.visibility === "private",
   );
 }
 
@@ -268,6 +331,7 @@ export function organizePlatformSections(profiles = []) {
  *   handle?: string,
  *   handlesByPlatform?: Record<string, string>,
  *   serperApiKey?: string,
+ *   scrapingBeeApiKey?: string,
  *   fetchImpl?: typeof fetch,
  * }} [opts]
  */
@@ -276,6 +340,7 @@ export async function runPublicSocialCheck({
   handle = "",
   handlesByPlatform = null,
   serperApiKey = process.env.SERPER_API_KEY,
+  scrapingBeeApiKey = process.env.SCRAPINGBEE_API_KEY,
   fetchImpl = globalThis.fetch?.bind(globalThis),
 } = {}) {
   const subjectName = String(name ?? "").trim();
@@ -304,6 +369,14 @@ export async function runPublicSocialCheck({
   if (!String(serperApiKey ?? "").trim()) {
     return { ok: false, reason: "serper_api_key_missing", profiles: [], platforms: [], searches: [] };
   }
+
+  const keys = readSocialScreeningKeys({
+    env: process.env,
+    secrets: {
+      serperApiKey,
+      scrapingBeeApiKey,
+    },
+  });
 
   const subject = {
     name: subjectName || uniqueHandles[0] || "",
@@ -345,7 +418,35 @@ export async function runPublicSocialCheck({
       ...(discovered.discoveredHandles ?? []),
     ],
   });
-  const platforms = organizePlatformSections(profiles);
+
+  /** @type {Record<string, "private"|"public"|"unknown">} */
+  const visibilityByNetwork = {};
+  const privacyNetworks = ["instagram", "tiktok", "facebook", "threads"];
+  for (const network of privacyNetworks) {
+    const handleForNet = byPlatform[network]
+      || profiles.find((p) => p.network === network && p.kind === "profile" && p.handle)?.handle
+      || "";
+    const profileHit = profiles.find((p) => p.network === network && p.kind === "profile");
+    const profileUrl = profileHit?.url
+      || (network === "instagram" && handleForNet ? `https://www.instagram.com/${handleForNet}/` : "")
+      || (network === "tiktok" && handleForNet ? `https://www.tiktok.com/@${handleForNet}` : "")
+      || (network === "threads" && handleForNet ? `https://www.threads.net/@${handleForNet}` : "")
+      || (network === "facebook" && handleForNet ? `https://www.facebook.com/${handleForNet}` : "");
+
+    if (!profileUrl && !handleForNet) continue;
+
+    visibilityByNetwork[network] = await detectProfileVisibility({
+      network,
+      profileUrl,
+      handle: handleForNet,
+      existingHits: profiles,
+      scrapingBeeApiKey: keys.scrapingBeeApiKey || String(scrapingBeeApiKey ?? "").trim(),
+      serperApiKey: String(serperApiKey).trim(),
+      fetchImpl,
+    });
+  }
+
+  const platforms = organizePlatformSections(profiles, visibilityByNetwork);
 
   return {
     ok: true,
@@ -356,10 +457,11 @@ export async function runPublicSocialCheck({
     },
     profiles,
     platforms,
+    visibilityByNetwork,
     discoveredHandles: discovered.discoveredHandles ?? [],
     searches: discovered.searches ?? [],
     generatedAt: new Date().toISOString(),
     disclaimer:
-      "Public OSINT-style social presence only. Not an employment or FCRA background screen. Only the subject's profile, their own posts, @tags of them, and clear name mentions are shown — unrelated results are dropped.",
+      "Public OSINT-style social presence only. Not an employment or FCRA background screen. Only the subject's profile, their own posts, @tags of them, and clear name mentions are shown — unrelated results are dropped. Private profiles can't have their posts or Tagged tab extracted.",
   };
 }
