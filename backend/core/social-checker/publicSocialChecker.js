@@ -15,6 +15,7 @@ import {
   isLikelyOwnPost,
   profileLooksLikeSubject,
   looksLikeRosterOcrPollution,
+  titleLeadsWithDifferentPerson,
 } from "../integrations/social-screening/serperSocialDiscovery.js";
 import {
   detectProfileVisibility,
@@ -150,6 +151,16 @@ export function filterSubjectRelevant(profiles = [], subject = {}) {
       continue;
     }
 
+    if (name && titleLeadsWithDifferentPerson(title, name) && kindIn !== "mention" && kindIn !== "tag") {
+      // Teammate profile/posts — only keep if it's a clear name mention/tag of the subject
+      if (isDirectTag({ title, snippet, url, handles: handleList })) {
+        out.push({ ...hit, kind: "tag", relation: "tagged" });
+      } else if (isDirectMention({ title, snippet, name, handles: handleList })) {
+        out.push({ ...hit, kind: "mention", relation: "mentioned" });
+      }
+      continue;
+    }
+
     const own = hit.relation === "own" || isLikelyOwnPost({
       title,
       snippet,
@@ -218,7 +229,7 @@ export function rankProfiles(profiles = [], subject = {}) {
  * @param {Record<string, "private"|"public"|"unknown">} [visibilityByNetwork]
  */
 export function organizePlatformSections(profiles = [], visibilityByNetwork = {}) {
-  /** @type {Map<string, { network: string, label: string, profile: object|null, posts: object[], tags: object[], mentions: object[], all: object[], visibility: string, postsEmptyReason: string|null, tagsEmptyReason: string|null }>} */
+  /** @type {Map<string, any>} */
   const byNet = new Map();
 
   for (const hit of profiles) {
@@ -228,6 +239,7 @@ export function organizePlatformSections(profiles = [], visibilityByNetwork = {}
         network,
         label: PLATFORM_LABELS[network] || network,
         profile: null,
+        profiles: [],
         posts: [],
         tags: [],
         mentions: [],
@@ -241,12 +253,11 @@ export function organizePlatformSections(profiles = [], visibilityByNetwork = {}
     bucket.all.push(hit);
     const kind = String(hit.kind || "mention");
     if (kind === "profile") {
-      if (!bucket.profile || (hit.confidence ?? 0) > (bucket.profile.confidence ?? 0)) {
-        if (bucket.profile) bucket.mentions.push(bucket.profile);
-        bucket.profile = hit;
-      } else {
-        bucket.mentions.push(hit);
-      }
+      const already = bucket.profiles.some((p) => p.url === hit.url);
+      if (!already) bucket.profiles.push(hit);
+      // Primary = highest confidence
+      bucket.profiles.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+      bucket.profile = bucket.profiles[0] || null;
     } else if (kind === "post" && hit.relation === "own") {
       bucket.posts.push(hit);
     } else if (kind === "tag" || hit.relation === "tagged") {
@@ -263,6 +274,7 @@ export function organizePlatformSections(profiles = [], visibilityByNetwork = {}
         network,
         label: PLATFORM_LABELS[network] || network,
         profile: null,
+        profiles: [],
         posts: [],
         tags: [],
         mentions: [],
@@ -314,13 +326,13 @@ export function organizePlatformSections(profiles = [], visibilityByNetwork = {}
     } else {
       bucket.tagsEmptyReason = null;
       if (privacyAware && vis === "private") {
-        bucket.tagsNote = "Showing public posts that @tagged them (indexed only). Their private Tagged tab can't be opened.";
+        bucket.tagsNote = "Showing public posts that @tagged them. Their private Tagged tab can't be opened.";
       }
     }
   }
 
   return ordered.filter(
-    (b) => b.profile || b.posts.length || b.tags.length || b.mentions.length
+    (b) => b.profile || (b.profiles && b.profiles.length) || b.posts.length || b.tags.length || b.mentions.length
       || b.visibility === "private",
   );
 }

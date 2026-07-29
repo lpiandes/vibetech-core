@@ -114,7 +114,7 @@ export function privatePostsMessage(network) {
 }
 
 export function privateTagsMessage() {
-  return "Private profile — can't extract their Tagged tab. Only public posts that @mention them (if Google indexed them) can appear here.";
+  return "Private profile — can't extract their Tagged tab. Only public posts that @mention them can appear here.";
 }
 
 export function unknownEmptyPostsMessage() {

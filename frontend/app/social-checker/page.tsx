@@ -19,6 +19,7 @@ type Platform = {
   network: string;
   label: string;
   profile: Hit | null;
+  profiles?: Hit[];
   posts: Hit[];
   tags?: Hit[];
   mentions: Hit[];
@@ -324,6 +325,9 @@ export default function SocialCheckerPage() {
 }
 
 function PlatformSection({ platform }: { platform: Platform }) {
+  const profileList = platform.profiles?.length
+    ? platform.profiles
+    : (platform.profile ? [platform.profile] : []);
   const postCount = platform.posts?.length ?? 0;
   const tagCount = platform.tags?.length ?? 0;
   const mentionCount = platform.mentions?.length ?? 0;
@@ -336,7 +340,9 @@ function PlatformSection({ platform }: { platform: Platform }) {
           {isPrivate ? <span style={privateBadge}>Private</span> : null}
         </h3>
         <span style={platformMeta}>
-          {platform.profile ? "Profile" : "No profile"}
+          {profileList.length
+            ? `${profileList.length} profile${profileList.length === 1 ? "" : "s"}`
+            : "No profile"}
           {postCount ? ` · ${postCount} posts` : ""}
           {tagCount ? ` · ${tagCount} tags` : ""}
           {mentionCount ? ` · ${mentionCount} mentions` : ""}
@@ -344,9 +350,15 @@ function PlatformSection({ platform }: { platform: Platform }) {
       </header>
 
       <div style={subsection}>
-        <h4 style={subsectionTitle}>Profile</h4>
-        {platform.profile ? (
-          <HitCard hit={platform.profile} emphasis />
+        <h4 style={subsectionTitle}>
+          {profileList.length > 1 ? "Profiles" : "Profile"}
+        </h4>
+        {profileList.length ? (
+          <div style={hitStack}>
+            {profileList.map((hit, i) => (
+              <HitCard key={`${hit.url}-profile-${i}`} hit={hit} emphasis={i === 0} />
+            ))}
+          </div>
         ) : (
           <p style={emptySoft}>No public profile found yet for this name on this platform.</p>
         )}

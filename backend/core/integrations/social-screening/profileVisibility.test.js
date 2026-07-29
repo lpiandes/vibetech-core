@@ -55,3 +55,8 @@ test("privatePostsMessage is explicit", () => {
   assert.match(privatePostsMessage("instagram"), /Private profile/i);
   assert.match(privatePostsMessage("instagram"), /can't extract/i);
 });
+
+test("privateTagsMessage does not mention Google", async () => {
+  const { privateTagsMessage } = await import("./profileVisibility.js");
+  assert.equal(/google/i.test(privateTagsMessage()), false);
+});

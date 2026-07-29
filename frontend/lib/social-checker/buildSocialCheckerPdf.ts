@@ -23,6 +23,7 @@ type Platform = {
   network: string;
   label: string;
   profile?: Hit | null;
+  profiles?: Hit[];
   posts?: Hit[];
   tags?: Hit[];
   mentions?: Hit[];
@@ -78,8 +79,14 @@ export function buildSocialCheckerPdf(report: {
       lines.push(String(platform.label || platform.network).toUpperCase());
       if (platform.visibility === "private") lines.push("  [PRIVATE PROFILE]");
       lines.push("--------");
-      if (platform.profile) pushHit(lines, platform.profile, "PROFILE");
-      else lines.push("  (No clear profile URL found)", "");
+      const profileList = platform.profiles?.length
+        ? platform.profiles
+        : (platform.profile ? [platform.profile] : []);
+      if (profileList.length) {
+        for (const hit of profileList) pushHit(lines, hit, "PROFILE");
+      } else {
+        lines.push("  (No clear profile URL found)", "");
+      }
       if (platform.posts?.length) {
         lines.push("  Posts / media");
         for (const hit of platform.posts.slice(0, 25)) pushHit(lines, hit, "POST");

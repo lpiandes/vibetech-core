@@ -41,6 +41,7 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     network: "linkedin",
     profileQueries: (name, handle) => [
       `"${name}" site:linkedin.com/in`,
+      `"${name}" (site:linkedin.com/in OR site:linkedin.com/pub)`,
       handle ? `site:linkedin.com/in/${handle}` : null,
     ].filter(Boolean),
     ownPostQueries: (name, handle) => [
@@ -73,8 +74,10 @@ const DEEP_NETWORK_SPECS = Object.freeze([
       handle ? `"tagged" "@${handle}" site:instagram.com` : null,
       handle ? `"with @${handle}" site:instagram.com` : null,
       handle ? `"photo of @${handle}" OR "featuring @${handle}" site:instagram.com` : null,
-      `"${name}" (tagged OR "photo of" OR "with @" OR mention) (site:instagram.com/p OR site:instagram.com/reel)`,
+      `"${name}" (tagged OR "photo of" OR "with @" OR mention OR congratulations) (site:instagram.com/p OR site:instagram.com/reel)`,
       `"${name}" site:instagram.com/p`,
+      `"${name}" site:instagram.com/reel`,
+      `"${name}" site:instagram.com`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://www.instagram.com/${handle}/`,
   },
@@ -128,6 +131,7 @@ const DEEP_NETWORK_SPECS = Object.freeze([
       handle ? `"@${handle}" (site:x.com OR site:twitter.com)` : null,
       `"${name}" (tagged OR mentioning OR "shout out") (site:x.com/status OR site:twitter.com/status)`,
       `"${name}" (site:x.com/status OR site:twitter.com/status)`,
+      `"${name}" (site:x.com OR site:twitter.com)`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://x.com/${handle}`,
   },
@@ -452,6 +456,28 @@ export function isDirectMention({ title = "", snippet = "", name = "", handles =
 }
 
 /**
+ * True when the title leads with a different person's name, e.g.
+ * "Ron Paragallo (@ironx11) / Posts / X" while searching Leo Piandes.
+ * Teammates often mention the subject in snippets — that must NOT claim their profile.
+ */
+export function titleLeadsWithDifferentPerson(title, name) {
+  const t = String(title ?? "").trim();
+  const subjectTokens = nameTokens(name);
+  if (!subjectTokens.length || !t) return false;
+
+  // "Name Name (@handle)" or "Name Name / Posts" or "Name Name on X"
+  const lead = t.match(
+    /^([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,3})\s*(?:\(|\/|•|·|-|\||on\s+)/i,
+  );
+  if (!lead?.[1]) return false;
+  const leadName = lead[1].trim();
+  if (nameTokens(leadName).length < 2) return false;
+  if (nameMatchesSubject(leadName, name)) return false;
+  // Subject name appears later in the title (e.g. co-headline) — still a different person's profile card
+  return true;
+}
+
+/**
  * Heuristic: is this post authored by the subject (vs merely about them)?
  */
 export function isLikelyOwnPost({ title = "", snippet = "", url = "", name = "", handle = "" } = {}) {
@@ -461,11 +487,24 @@ export function isLikelyOwnPost({ title = "", snippet = "", url = "", name = "",
   const h = String(handle ?? "").replace(/^@/, "").toLowerCase();
   const blob = `${t} ${s}`.toLowerCase();
 
+  // Never treat a teammate's post as the subject's just because Leo is named in the text
+  if (name && titleLeadsWithDifferentPerson(t, name)) return false;
+
   if (h) {
-    if (u.includes(`/${h}/`) || u.includes(`/@${h}`)) return true;
+    if (u.includes(`/${h}/`) || u.includes(`/@${h}`)) {
+      // URL is under that handle — still reject if title is clearly someone else's name card
+      if (name && titleLeadsWithDifferentPerson(t, name)) return false;
+      return true;
+    }
     if (new RegExp(`${escapeRegex(h)}['']s (profile|post|reel|video|photo)`, "i").test(blob)) return true;
-    if (new RegExp(`^@?${escapeRegex(h)}[\\s.•·|:]`, "i").test(t.trim())) return true;
-    if (new RegExp(`\\(@?${escapeRegex(h)}\\)`, "i").test(t)) return true;
+    if (new RegExp(`^@?${escapeRegex(h)}[\\s.•·|:]`, "i").test(t.trim())) {
+      if (name && titleLeadsWithDifferentPerson(t, name)) return false;
+      return true;
+    }
+    if (new RegExp(`\\(@?${escapeRegex(h)}\\)`, "i").test(t)) {
+      if (name && titleLeadsWithDifferentPerson(t, name)) return false;
+      return true;
+    }
   }
   if (name && new RegExp(`${escapeRegex(name)}\\s+on\\s+(instagram|tiktok|facebook|linkedin|youtube|x|twitter)`, "i").test(t)) {
     return true;
@@ -473,9 +512,12 @@ export function isLikelyOwnPost({ title = "", snippet = "", url = "", name = "",
   return false;
 }
 
+/**
+ * Profile attribution: title (or user-provided handle) must identify the subject.
+ * Never accept a profile just because the snippet mentions the subject (teammate posts).
+ */
 export function profileLooksLikeSubject({ title = "", snippet = "", url = "", name = "", handles = [] } = {}) {
   const t = String(title ?? "");
-  const s = String(snippet ?? "");
   const handle = extractHandleFromUrl(url);
   const provided = new Set(
     (Array.isArray(handles) ? handles : [])
@@ -483,16 +525,17 @@ export function profileLooksLikeSubject({ title = "", snippet = "", url = "", na
       .filter(Boolean),
   );
 
-  if (handle && provided.has(handle.toLowerCase())) return true;
-  if (name && nameMatchesSubject(t, name)) return true;
-  // Profile titles often look like "Name (@handle)" — require name in title OR name+handle pairing
-  if (name && nameMatchesSubject(`${t} ${s}`, name) && !looksLikeRosterOcrPollution(s, name)) {
-    // Avoid trusting random profiles that only match via polluted snippet
-    if (nameMatchesSubject(t, name)) return true;
-    if (handle && (t.toLowerCase().includes(handle.toLowerCase()) || s.toLowerCase().includes(handle.toLowerCase()))) {
-      return nameMatchesSubject(`${t} ${s}`, name);
-    }
+  if (handle && provided.has(handle.toLowerCase())) {
+    // User typed this handle — trust it even if the title is sparse
+    return true;
   }
+
+  if (name && titleLeadsWithDifferentPerson(t, name)) return false;
+
+  if (name && nameMatchesSubject(t, name) && !looksLikeRosterOcrPollution(t, name)) {
+    return true;
+  }
+
   return false;
 }
 

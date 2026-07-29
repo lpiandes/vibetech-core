@@ -90,6 +90,38 @@ test("profileLooksLikeSubject requires name on profile", () => {
     url: "https://www.tiktok.com/@postmalone",
     name: "Leo Piandes",
   }), false);
+  // Teammate X profile that only mentions Leo in the snippet must NOT win
+  assert.equal(profileLooksLikeSubject({
+    title: "Ron Paragallo (@ironx11) / Posts / X",
+    snippet: "Ronny Paragallo and Leo Piandes help @GoAssumptionU to a big weekend sweep",
+    url: "https://x.com/ironx11",
+    name: "Leo Piandes",
+  }), false);
+});
+
+test("organizePlatformSections keeps multiple LinkedIn profiles", () => {
+  const sections = organizePlatformSections([
+    {
+      network: "linkedin",
+      kind: "profile",
+      title: "Leo Piandes - Student at Tilton School",
+      url: "https://www.linkedin.com/in/leo-piandes-26a760222",
+      snippet: "Tilton",
+      handle: "leo-piandes-26a760222",
+      confidence: 90,
+    },
+    {
+      network: "linkedin",
+      kind: "profile",
+      title: "Leo Piandes - Hockey Player",
+      url: "https://www.linkedin.com/in/leo-piandes-other",
+      snippet: "Assumption",
+      handle: "leo-piandes-other",
+      confidence: 85,
+    },
+  ]);
+  assert.equal(sections[0].profiles.length, 2);
+  assert.equal(sections[0].profile?.url, "https://www.linkedin.com/in/leo-piandes-26a760222");
 });
 
 test("filterSubjectRelevant drops Utah Mammoth OCR ghosts and celebrities", () => {
