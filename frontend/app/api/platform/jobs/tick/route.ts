@@ -2,7 +2,7 @@
  * Hosted job tick — drains due platform_jobs without a separate long-running worker.
  *
  * Call via:
- * - Vercel Cron / external cron every 1–2 minutes
+ * - Vercel Cron / GitHub Actions / external cron every few minutes
  * - Local: curl -X POST http://localhost:3000/api/platform/jobs/tick -H "Authorization: Bearer $CRON_SECRET"
  *
  * Optional dedicated `npm run worker` is still better for high volume; this makes
@@ -10,9 +10,7 @@
  */
 import { NextResponse } from "next/server";
 
-import { withClient, platformStore } from "@/lib/server/compose";
-import { PostgresPlatformJobQueue } from "../../../../../../backend/core/platform/jobs/PostgresPlatformJobQueue.js";
-import { runPlatformJobTick } from "../../../../../../backend/core/platform/jobs/createPlatformJobExecutor.js";
+import { runHostedPlatformJobTick } from "@/lib/server/runHostedPlatformJobTick";
 
 function authorized(request: Request) {
   const secret = String(process.env.CRON_SECRET || process.env.PLATFORM_JOB_TICK_SECRET || "").trim();
@@ -34,29 +32,11 @@ export async function POST(request: Request) {
   try {
     const url = new URL(request.url);
     const limit = Number(url.searchParams.get("limit") || 8);
-    const queue = new PostgresPlatformJobQueue({ withClient });
-    const result = await runPlatformJobTick({
-      queue,
-      platformStore,
+    const result = await runHostedPlatformJobTick({
       limit,
       workerId: "http_tick",
+      via: "api_tick",
     });
-    // Best-effort heartbeat so admin “worker missing” clears when ticks run
-    try {
-      await withClient((client) =>
-        client.query(
-          `INSERT INTO platform_worker_heartbeat (worker_id, status, detail, last_seen_at)
-           VALUES ($1, 'ok', $2::jsonb, NOW())
-           ON CONFLICT (worker_id) DO UPDATE SET
-             status = EXCLUDED.status,
-             detail = EXCLUDED.detail,
-             last_seen_at = NOW()`,
-          ["http_tick", JSON.stringify({ processed: result.processed, via: "api_tick" })],
-        ),
-      );
-    } catch {
-      /* table may not exist in older envs */
-    }
     return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json(

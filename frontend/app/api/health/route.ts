@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withClient, getPlatformStore } from "@/lib/server/compose";
+import { runHostedPlatformJobTick } from "@/lib/server/runHostedPlatformJobTick";
 
 /**
  * Production health probe for load balancers and uptime monitors.
@@ -8,12 +9,16 @@ import { withClient, getPlatformStore } from "@/lib/server/compose";
  * In production (or HEALTH_REQUIRE_WORKER=1), worker + jobs schema are required
  * for ok=true / HTTP 200 — reminders and deferred sends die without them.
  * Local/dev: set HEALTH_REQUIRE_WORKER=0 to keep DB-only green while iterating.
+ *
+ * Hobby Vercel cannot run per-minute cron. When the worker heartbeat is stale,
+ * this probe self-heals by draining a small batch of jobs (same as /jobs/tick).
  */
 export async function GET() {
   const started = Date.now();
   let database: "ok" | "unavailable" = "unavailable";
   let jobsSchema: "ok" | "missing" | "unavailable" = "unavailable";
   let worker: "ok" | "stale" | "missing" | "unavailable" = "unavailable";
+  let selfHealed = false;
 
   try {
     await withClient((client) => client.query("SELECT 1 AS ok"));
@@ -40,7 +45,20 @@ export async function GET() {
 
     try {
       const maxAge = Number(process.env.WORKER_HEARTBEAT_MAX_AGE_SECONDS) || 360;
-      const hb = await getPlatformStore().getLatestWorkerHeartbeat({ maxAgeSeconds: maxAge });
+      let hb = await getPlatformStore().getLatestWorkerHeartbeat({ maxAgeSeconds: maxAge });
+      if (!hb.ok && process.env.HEALTH_SELF_HEAL_TICK !== "0" && jobsSchema === "ok") {
+        try {
+          await runHostedPlatformJobTick({
+            limit: 3,
+            workerId: "http_tick",
+            via: "health_self_heal",
+          });
+          selfHealed = true;
+          hb = await getPlatformStore().getLatestWorkerHeartbeat({ maxAgeSeconds: maxAge });
+        } catch {
+          /* keep prior worker status */
+        }
+      }
       if (hb.ok) worker = "ok";
       else if (hb.reason === "no_heartbeat") worker = "missing";
       else worker = "stale";
@@ -70,6 +88,7 @@ export async function GET() {
       jobsSchema,
       worker,
       requireWorker,
+      selfHealed: selfHealed || undefined,
       checkedAt: new Date().toISOString(),
       latencyMs: Date.now() - started,
     },
