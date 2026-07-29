@@ -10,13 +10,12 @@ import {
   SOCIAL_NETWORKS,
   isNoiseUrl,
   nameMatchesSubject,
-  isDirectMention,
-  isDirectTag,
-  isLikelyOwnPost,
-  profileLooksLikeSubject,
-  looksLikeRosterOcrPollution,
-  titleLeadsWithDifferentPerson,
 } from "../integrations/social-screening/serperSocialDiscovery.js";
+import {
+  classifySubjectRelation,
+  isSubjectProfile,
+  MAX_SUBJECT_PROFILES_PER_NETWORK,
+} from "../integrations/social-screening/subjectIdentity.js";
 import {
   detectProfileVisibility,
   privatePostsMessage,
@@ -102,8 +101,8 @@ function normalizeHandleList(handles = []) {
 }
 
 /**
- * Keep only: their profile, posts they authored, @tags of them, or clear name mentions.
- * Drops Serper OCR roster ghosts and any hit without a subject signal.
+ * Keep only: their profile(s), posts they authored, @tags of them, or clear name mentions.
+ * Uses the same subject-identity gate for every person and every platform.
  */
 export function filterSubjectRelevant(profiles = [], subject = {}) {
   const name = String(subject.name ?? "").trim();
@@ -113,76 +112,26 @@ export function filterSubjectRelevant(profiles = [], subject = {}) {
   for (const hit of profiles) {
     if (String(hit.kind) !== "profile") continue;
     if (isNoiseUrl(hit.url)) continue;
-    if (profileLooksLikeSubject({
-      title: hit.title,
-      snippet: hit.snippet,
-      url: hit.url,
-      name,
-      handles,
-    }) && hit.handle) {
+    if (isSubjectProfile(hit, { name, handles }) && hit.handle) {
       handleSet.add(String(hit.handle).toLowerCase());
     }
   }
 
   const handleList = [...handleSet];
+  const subjectCtx = { name, handles: handleList };
   const out = [];
 
   for (const hit of profiles) {
     if (isNoiseUrl(hit.url)) continue;
-    const title = String(hit.title ?? "");
-    const snippet = String(hit.snippet ?? "");
-    const url = String(hit.url ?? "");
-    const handle = String(hit.handle ?? "").toLowerCase();
-    const kindIn = String(hit.kind || "mention");
-
-    if (looksLikeRosterOcrPollution(snippet, name) || looksLikeRosterOcrPollution(title, name)) {
-      // Still allow if title is a clear name mention / tag (not OCR junk)
-      if (!nameMatchesSubject(title, name) && !isDirectTag({ title, snippet, url, handles: handleList })) {
-        continue;
-      }
-      if (looksLikeRosterOcrPollution(snippet, name) && !nameMatchesSubject(title, name)) {
-        continue;
-      }
-    }
-
-    if (kindIn === "profile") {
-      if (!profileLooksLikeSubject({ title, snippet, url, name, handles: handleList })) continue;
+    const relation = classifySubjectRelation(hit, subjectCtx);
+    if (!relation) continue;
+    if (relation === "profile") {
       out.push({ ...hit, kind: "profile", relation: "own" });
-      continue;
-    }
-
-    if (name && titleLeadsWithDifferentPerson(title, name) && kindIn !== "mention" && kindIn !== "tag") {
-      // Teammate profile/posts — only keep if it's a clear name mention/tag of the subject
-      if (isDirectTag({ title, snippet, url, handles: handleList })) {
-        out.push({ ...hit, kind: "tag", relation: "tagged" });
-      } else if (isDirectMention({ title, snippet, name, handles: handleList })) {
-        out.push({ ...hit, kind: "mention", relation: "mentioned" });
-      }
-      continue;
-    }
-
-    const own = hit.relation === "own" || isLikelyOwnPost({
-      title,
-      snippet,
-      url,
-      name,
-      handle: handle || handleList[0] || "",
-    });
-    if (own && (kindIn === "post" || hit.relation === "own")) {
-      const subjectSignal = (handle && handleSet.has(handle))
-        || handleList.some((h) => url.toLowerCase().includes(`/${h}/`) || url.toLowerCase().includes(`/@${h}`))
-        || isLikelyOwnPost({ title, snippet, url, name, handle: handle || handleList[0] || "" });
-      if (!subjectSignal) continue;
+    } else if (relation === "post") {
       out.push({ ...hit, kind: "post", relation: "own" });
-      continue;
-    }
-
-    if (isDirectTag({ title, snippet, url, handles: handleList }) || kindIn === "tag" || hit.relation === "tagged") {
+    } else if (relation === "tag") {
       out.push({ ...hit, kind: "tag", relation: "tagged" });
-      continue;
-    }
-
-    if (isDirectMention({ title, snippet, name, handles: handleList })) {
+    } else {
       out.push({ ...hit, kind: "mention", relation: "mentioned" });
     }
   }
@@ -255,8 +204,9 @@ export function organizePlatformSections(profiles = [], visibilityByNetwork = {}
     if (kind === "profile") {
       const already = bucket.profiles.some((p) => p.url === hit.url);
       if (!already) bucket.profiles.push(hit);
-      // Primary = highest confidence
+      // Keep every matching subject profile (capped), same for IG / LinkedIn / X / …
       bucket.profiles.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+      bucket.profiles = bucket.profiles.slice(0, MAX_SUBJECT_PROFILES_PER_NETWORK);
       bucket.profile = bucket.profiles[0] || null;
     } else if (kind === "post" && hit.relation === "own") {
       bucket.posts.push(hit);

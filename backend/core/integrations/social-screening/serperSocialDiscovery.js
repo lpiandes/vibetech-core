@@ -60,7 +60,8 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     network: "instagram",
     profileQueries: (name, handle) => [
       `"${name}" site:instagram.com -inurl:/p/ -inurl:/reel/ -inurl:/tv/ -inurl:/stories/`,
-      `"${name}" Instagram`,
+      `"${name}" Instagram profile`,
+      `"${name}" site:instagram.com`,
       handle ? `site:instagram.com/${handle}` : null,
     ].filter(Boolean),
     ownPostQueries: (name, handle) => [
@@ -487,7 +488,7 @@ export function isLikelyOwnPost({ title = "", snippet = "", url = "", name = "",
   const h = String(handle ?? "").replace(/^@/, "").toLowerCase();
   const blob = `${t} ${s}`.toLowerCase();
 
-  // Never treat a teammate's post as the subject's just because Leo is named in the text
+  // Never treat another person's post as the subject's just because the subject is named in the text
   if (name && titleLeadsWithDifferentPerson(t, name)) return false;
 
   if (h) {
@@ -632,6 +633,7 @@ function normalizeHandlesByNetwork(raw) {
 
 /**
  * Profile → own posts → direct tags/mentions, per platform.
+ * Subject-identity rules are universal (same for every person / every network).
  */
 async function discoverDeepSocialPresence({
   name,
@@ -642,6 +644,7 @@ async function discoverDeepSocialPresence({
   fetchImpl,
   maxPerNetwork,
 }) {
+  const { isSubjectProfile, MAX_SUBJECT_PROFILES_PER_NETWORK } = await import("./subjectIdentity.js");
   const handleSeed = handles.map((h) => String(h).replace(/^@/, "")).filter(Boolean);
   const byNet = handlesByNetwork && typeof handlesByNetwork === "object" ? handlesByNetwork : {};
   const wanted = Array.isArray(networks) && networks.length
@@ -704,7 +707,7 @@ async function discoverDeepSocialPresence({
     });
   }
 
-  // ── PHASE 1: find profiles first (per platform) ──────────────────────────
+  // ── PHASE 1: find ALL subject profiles per platform (same gate everywhere) ─
   for (const spec of wanted) {
     // Prefer the handle the user typed for THIS platform — never reuse IG handle on TikTok.
     const seedHandle = byNet[spec.network] || "";
@@ -714,22 +717,17 @@ async function discoverDeepSocialPresence({
     }
     const qs = spec.profileQueries(name || seedHandle, seedHandle) || [];
     const hits = [];
-    for (const q of qs.slice(0, 3)) {
-      hits.push(...await runQuery(spec.network, q, "profile", maxPerNetwork));
+    for (const q of qs.slice(0, 4)) {
+      hits.push(...await runQuery(spec.network, q, "profile", Math.max(maxPerNetwork, 10)));
     }
 
     let foundSubjectProfile = false;
+    const subjectHandlesForNet = [seedHandle, ...handleSeed].filter(Boolean);
     for (const hit of hits) {
       // Serper often returns off-platform pages for social queries — ignore for this network
       if (hit.network !== spec.network) continue;
       if (hit.kind !== "profile") continue;
-      if (!profileLooksLikeSubject({
-        title: hit.title,
-        snippet: hit.snippet,
-        url: hit.url,
-        name,
-        handles: [seedHandle, ...handleSeed].filter(Boolean),
-      })) {
+      if (!isSubjectProfile(hit, { name, handles: subjectHandlesForNet })) {
         const idx = profiles.indexOf(hit);
         if (idx >= 0) profiles.splice(idx, 1);
         seen.delete(hit.url);
@@ -737,7 +735,7 @@ async function discoverDeepSocialPresence({
       }
       foundSubjectProfile = true;
       hit.relation = "own";
-      // Only trust the handle extracted from THIS profile URL (not random path noise)
+      // Trust every matching profile handle on this network (2 Instagrams, 2 LinkedIns, …)
       if (hit.handle && extractHandleFromUrl(hit.url) === hit.handle) {
         trustHandle(spec.network, hit.handle);
       }
@@ -748,16 +746,22 @@ async function discoverDeepSocialPresence({
     }
   }
 
-  // ── PHASE 2: own posts from trusted profiles only ────────────────────────
+  // ── PHASE 2: own posts from ALL trusted subject profiles on each network ─
   for (const spec of wanted) {
     const netHandles = [...(trustedByNetwork.get(spec.network) || [])];
     if (!netHandles.length) continue;
-    for (const handle of netHandles.slice(0, 3)) {
+    for (const handle of netHandles.slice(0, MAX_SUBJECT_PROFILES_PER_NETWORK)) {
       const qs = spec.ownPostQueries?.(name, handle) || [];
       for (const q of qs.slice(0, 3)) {
         const hits = await runQuery(spec.network, q, "post", maxPerNetwork);
         for (const hit of hits) {
           if (hit.kind === "profile") continue;
+          if (hit.network !== spec.network) {
+            const idx = profiles.indexOf(hit);
+            if (idx >= 0) profiles.splice(idx, 1);
+            seen.delete(hit.url);
+            continue;
+          }
           if (isLikelyOwnPost({
             title: hit.title,
             snippet: hit.snippet,
@@ -802,22 +806,22 @@ async function discoverDeepSocialPresence({
     const primary = mentionHandles[0] || "";
     const qs = [
       ...(spec.mentionQueries?.(name, primary) || []),
-      // Extra tag queries for each known handle on this network
-      ...mentionHandles.slice(0, 2).flatMap((h) => [
-        primary && h !== primary ? `"@${h}" site:${spec.network === "x" ? "x.com OR twitter.com" : `${spec.network}.com`}` : null,
+      // Extra tag queries for each known subject handle on this network
+      ...mentionHandles.slice(0, MAX_SUBJECT_PROFILES_PER_NETWORK).flatMap((h) => [
+        h ? `"@${h}" site:${spec.network === "x" ? "x.com OR twitter.com" : `${spec.network}.com`}` : null,
       ]),
     ].filter(Boolean);
     for (const q of [...new Set(qs)].slice(0, 8)) {
       const hits = await runQuery(spec.network, q, "mention", Math.min(12, maxPerNetwork + 4));
       for (const hit of hits) {
+        if (hit.network !== spec.network && hit.network !== "web") {
+          const idx = profiles.indexOf(hit);
+          if (idx >= 0) profiles.splice(idx, 1);
+          seen.delete(hit.url);
+          continue;
+        }
         if (hit.kind === "profile") {
-          if (!profileLooksLikeSubject({
-            title: hit.title,
-            snippet: hit.snippet,
-            url: hit.url,
-            name,
-            handles: [...allTrusted],
-          })) {
+          if (!isSubjectProfile(hit, { name, handles: [...allTrusted] })) {
             const idx = profiles.indexOf(hit);
             if (idx >= 0) profiles.splice(idx, 1);
             seen.delete(hit.url);
