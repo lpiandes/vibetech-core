@@ -49,11 +49,9 @@ const DEEP_NETWORK_SPECS = Object.freeze([
       handle ? `site:linkedin.com/in/${handle} (posts OR activity)` : null,
     ].filter(Boolean),
     mentionQueries: (name, handle) => [
-      handle ? `"@${handle}" (site:linkedin.com/posts OR site:linkedin.com/feed)` : null,
-      handle ? `"${name}" "@${handle}" site:linkedin.com` : null,
-      `"${name}" (tagged OR mentioned OR featuring OR congratulations) (site:linkedin.com/posts OR site:linkedin.com/pulse)`,
       `"${name}" (site:linkedin.com/posts OR site:linkedin.com/pulse)`,
       `"${name}" site:linkedin.com`,
+      handle ? `"@${handle}" site:linkedin.com` : null,
     ].filter(Boolean),
     profileUrl: (handle) => `https://www.linkedin.com/in/${handle}/`,
   },
@@ -71,16 +69,10 @@ const DEEP_NETWORK_SPECS = Object.freeze([
       handle ? `"${name}" on Instagram site:instagram.com` : null,
     ].filter(Boolean),
     mentionQueries: (name, handle) => [
-      handle ? `"@${handle}" (site:instagram.com/p OR site:instagram.com/reel)` : null,
-      handle ? `"@${handle}" site:instagram.com` : null,
-      handle ? `"tagged" "@${handle}" site:instagram.com` : null,
-      handle ? `"with @${handle}" site:instagram.com` : null,
-      handle ? `"photo of @${handle}" OR "featuring @${handle}" site:instagram.com` : null,
-      `"${name}" (tagged OR "photo of" OR "with @" OR mention OR congratulations OR captain) (site:instagram.com/p OR site:instagram.com/reel)`,
-      `"${name}" (scored OR goal OR assist OR highlight) site:instagram.com`,
-      `"${name}" site:instagram.com/p`,
-      `"${name}" site:instagram.com/reel`,
       `"${name}" site:instagram.com`,
+      `"${name}" (site:instagram.com/p OR site:instagram.com/reel)`,
+      handle ? `"@${handle}" site:instagram.com` : null,
+      `"${name}" (congratulations OR captain OR tagged OR scored) site:instagram.com`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://www.instagram.com/${handle}/`,
   },
@@ -637,8 +629,9 @@ function normalizeHandlesByNetwork(raw) {
 }
 
 /**
- * Profile → own posts → direct tags/mentions, per platform.
- * Subject-identity rules are universal (same for every person / every network).
+ * Profile → own posts → tags/mentions across EVERY requested platform.
+ * Always searches by name on all platforms (handles only improve match quality).
+ * Runs Serper queries in parallel with a hard budget so the request finishes.
  */
 async function discoverDeepSocialPresence({
   name,
@@ -659,7 +652,7 @@ async function discoverDeepSocialPresence({
   const searches = [];
   const profiles = [];
   const seen = new Set();
-  /** @type {Map<string, Set<string>>} network -> trusted handles */
+  /** @type {Map<string, Set<string>>} */
   const trustedByNetwork = new Map();
   const allTrusted = new Set(handleSeed.map((h) => h.toLowerCase()));
 
@@ -671,28 +664,8 @@ async function discoverDeepSocialPresence({
     allTrusted.add(h.toLowerCase());
   }
 
-  // Seed user-provided per-platform handles as trusted immediately
   for (const [network, handle] of Object.entries(byNet)) {
     trustHandle(network, handle);
-  }
-
-  async function runQuery(network, query, preferredKind, num = maxPerNetwork) {
-    if (!query) return [];
-    searches.push({ network, query, kind: preferredKind });
-    const rows = await serperSearch({
-      query,
-      apiKey: serperApiKey,
-      fetchImpl,
-      num,
-    });
-    const hits = [];
-    for (const row of rows) {
-      const url = String(row?.link ?? "").trim();
-      if (!url || isNoiseUrl(url)) continue;
-      const hit = pushHit(profiles, seen, row, network, preferredKind);
-      if (hit) hits.push(hit);
-    }
-    return hits;
   }
 
   function ensureSynthesizedProfile(network, handle, nameHint) {
@@ -712,198 +685,160 @@ async function discoverDeepSocialPresence({
     });
   }
 
-  // ── PHASE 1: find ALL subject profiles per platform (same gate everywhere) ─
+  // Seed typed handles immediately (does not skip other platforms)
   for (const spec of wanted) {
-    // Prefer the handle the user typed for THIS platform — never reuse IG handle on TikTok.
     const seedHandle = byNet[spec.network] || "";
     if (seedHandle) {
       trustHandle(spec.network, seedHandle);
       ensureSynthesizedProfile(spec.network, seedHandle, name);
     }
-    const qs = spec.profileQueries(name || seedHandle, seedHandle) || [];
-    const hits = [];
-    for (const q of qs.slice(0, 4)) {
-      hits.push(...await runQuery(spec.network, q, "profile", Math.max(maxPerNetwork, 10)));
-    }
-
-    let foundSubjectProfile = false;
-    const subjectHandlesForNet = [seedHandle, ...handleSeed].filter(Boolean);
-    for (const hit of hits) {
-      // Serper often returns off-platform pages for social queries — ignore for this network
-      if (hit.network !== spec.network) continue;
-      if (hit.kind !== "profile") continue;
-      if (!isSubjectProfile(hit, { name, handles: subjectHandlesForNet })) {
-        const idx = profiles.indexOf(hit);
-        if (idx >= 0) profiles.splice(idx, 1);
-        seen.delete(hit.url);
-        continue;
-      }
-      foundSubjectProfile = true;
-      hit.relation = "own";
-      // Trust every matching profile handle on this network (2 Instagrams, 2 LinkedIns, …)
-      if (hit.handle && extractHandleFromUrl(hit.url) === hit.handle) {
-        trustHandle(spec.network, hit.handle);
-      }
-    }
-
-    if (!foundSubjectProfile && seedHandle) {
-      ensureSynthesizedProfile(spec.network, seedHandle, name);
-    }
   }
 
-  // ── PHASE 2: own posts from ALL trusted subject profiles on each network ─
-  for (const spec of wanted) {
-    const netHandles = [...(trustedByNetwork.get(spec.network) || [])];
-    if (!netHandles.length) continue;
-    for (const handle of netHandles.slice(0, MAX_SUBJECT_PROFILES_PER_NETWORK)) {
-      const qs = spec.ownPostQueries?.(name, handle) || [];
-      for (const q of qs.slice(0, 4)) {
-        const hits = await runQuery(spec.network, q, "post", Math.max(maxPerNetwork, 12));
-        for (const hit of hits) {
-          if (hit.kind === "profile") continue;
-          if (hit.network !== spec.network) {
-            const idx = profiles.indexOf(hit);
-            if (idx >= 0) profiles.splice(idx, 1);
-            seen.delete(hit.url);
-            continue;
-          }
-          if (isLikelyOwnPost({
-            title: hit.title,
-            snippet: hit.snippet,
-            url: hit.url,
-            name,
-            handle,
-          })) {
-            hit.kind = "post";
-            hit.relation = "own";
-            hit.handle = hit.handle || handle;
-          } else if (isDirectTag({
-            title: hit.title,
-            snippet: hit.snippet,
-            url: hit.url,
-            handles: [handle, ...allTrusted],
-          })) {
-            hit.kind = "tag";
-            hit.relation = "tagged";
-          } else if (isDirectMention({
-            title: hit.title,
-            snippet: hit.snippet,
-            name,
-            handles: [handle, ...allTrusted],
-          })) {
-            hit.kind = "mention";
-            hit.relation = "mentioned";
-          } else {
-            const idx = profiles.indexOf(hit);
-            if (idx >= 0) profiles.splice(idx, 1);
-            seen.delete(hit.url);
-          }
-        }
+  /** @type {{ network: string, query: string, preferredKind: string, num: number }[]} */
+  const jobs = [];
+  const CORE_FIRST = [
+    "linkedin", "instagram", "tiktok", "youtube", "x", "facebook", "threads", "reddit", "github",
+  ];
+  const orderedSpecs = [
+    ...CORE_FIRST.map((id) => wanted.find((s) => s.network === id)).filter(Boolean),
+    ...wanted.filter((s) => !CORE_FIRST.includes(s.network)),
+  ];
+
+  for (const spec of orderedSpecs) {
+    const seedHandle = byNet[spec.network] || "";
+    const netTrusted = [...(trustedByNetwork.get(spec.network) || [])];
+    const primaryHandle = seedHandle || netTrusted[0] || "";
+
+    // ALWAYS search profiles + mentions by name on every platform (handles optional)
+    for (const q of (spec.profileQueries(name || primaryHandle, primaryHandle) || []).slice(0, 2)) {
+      jobs.push({ network: spec.network, query: q, preferredKind: "profile", num: Math.min(8, maxPerNetwork) });
+    }
+    for (const q of (spec.mentionQueries?.(name, primaryHandle) || []).slice(0, 3)) {
+      jobs.push({ network: spec.network, query: q, preferredKind: "mention", num: Math.min(10, maxPerNetwork) });
+    }
+    // Own posts only when we have a handle for THIS platform
+    for (const handle of netTrusted.slice(0, MAX_SUBJECT_PROFILES_PER_NETWORK)) {
+      for (const q of (spec.ownPostQueries?.(name, handle) || []).slice(0, 2)) {
+        jobs.push({ network: spec.network, query: q, preferredKind: "post", num: Math.min(8, maxPerNetwork) });
       }
     }
   }
 
-  // ── PHASE 3: direct @tags / name-in-title mentions only ──────────────────
-  for (const spec of wanted) {
-    const netHandles = [...(trustedByNetwork.get(spec.network) || [])];
-    const mentionHandles = netHandles.length ? netHandles : [];
-    // Without a trusted handle for this network, still search name mentions on the platform
-    const primary = mentionHandles[0] || "";
-    const qs = [
-      ...(spec.mentionQueries?.(name, primary) || []),
-      // Extra tag queries for each known subject handle on this network
-      ...mentionHandles.slice(0, MAX_SUBJECT_PROFILES_PER_NETWORK).flatMap((h) => [
-        h ? `"@${h}" site:${spec.network === "x" ? "x.com OR twitter.com" : `${spec.network}.com`}` : null,
-      ]),
-    ].filter(Boolean);
-    for (const q of [...new Set(qs)].slice(0, 12)) {
-      const hits = await runQuery(spec.network, q, "mention", Math.min(15, Math.max(maxPerNetwork + 6, 12)));
-      for (const hit of hits) {
-        if (hit.network !== spec.network && hit.network !== "web") {
-          const idx = profiles.indexOf(hit);
-          if (idx >= 0) profiles.splice(idx, 1);
-          seen.delete(hit.url);
-          continue;
-        }
-        if (hit.kind === "profile") {
-          if (!isSubjectProfile(hit, { name, handles: [...allTrusted] })) {
-            const idx = profiles.indexOf(hit);
-            if (idx >= 0) profiles.splice(idx, 1);
-            seen.delete(hit.url);
-          }
-          continue;
-        }
-        if (isLikelyOwnPost({
-          title: hit.title,
-          snippet: hit.snippet,
-          url: hit.url,
-          name,
-          handle: primary,
-        })) {
-          hit.kind = "post";
-          hit.relation = "own";
-          continue;
-        }
-        if (isDirectTag({
-          title: hit.title,
-          snippet: hit.snippet,
-          url: hit.url,
-          handles: [...allTrusted],
-        })) {
-          hit.kind = "tag";
-          hit.relation = "tagged";
-          continue;
-        }
-        if (isDirectMention({
-          title: hit.title,
-          snippet: hit.snippet,
-          name,
-          handles: [...allTrusted],
-        })) {
+  if (name) {
+    for (const q of [
+      `"${name}"`,
+      `"${name}" (news OR athlete OR player OR student OR captain OR congratulations)`,
+      `"${name}" (instagram OR tiktok OR linkedin OR twitter OR facebook)`,
+    ]) {
+      jobs.push({ network: "web", query: q, preferredKind: "mention", num: 10 });
+    }
+  }
+
+  // Hard cap — finishes in production time limits while covering every platform
+  const cappedJobs = jobs.slice(0, 72);
+
+  async function runPool(list, concurrency, worker) {
+    let cursor = 0;
+    async function run() {
+      while (cursor < list.length) {
+        const idx = cursor;
+        cursor += 1;
+        await worker(list[idx], idx);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(concurrency, list.length) || 1 }, () => run()));
+  }
+
+  await runPool(cappedJobs, 8, async (job) => {
+    if (!job?.query) return;
+    searches.push({ network: job.network, query: job.query, kind: job.preferredKind });
+    const rows = await serperSearch({
+      query: job.query,
+      apiKey: serperApiKey,
+      fetchImpl,
+      num: job.num,
+    });
+    for (const row of rows) {
+      const url = String(row?.link ?? "").trim();
+      if (!url || isNoiseUrl(url)) continue;
+      pushHit(profiles, seen, row, job.network, job.preferredKind);
+    }
+  });
+
+  // Classify / drop with the universal identity gate
+  const subjectHandles = [...allTrusted];
+  for (let i = profiles.length - 1; i >= 0; i -= 1) {
+    const hit = profiles[i];
+    const title = String(hit.title ?? "");
+    const snippet = String(hit.snippet ?? "");
+    const url = String(hit.url ?? "");
+
+    if (hit.kind === "profile") {
+      if (!isSubjectProfile(hit, { name, handles: subjectHandles })) {
+        // Might still be a mention of the subject on someone else's page
+        if (isDirectMention({ title, snippet, name, handles: subjectHandles })) {
           hit.kind = "mention";
           hit.relation = "mentioned";
+        } else if (isDirectTag({ title, snippet, url, handles: subjectHandles })) {
+          hit.kind = "tag";
+          hit.relation = "tagged";
         } else {
-          const idx = profiles.indexOf(hit);
-          if (idx >= 0) profiles.splice(idx, 1);
+          profiles.splice(i, 1);
           seen.delete(hit.url);
         }
+      } else {
+        hit.relation = "own";
+        if (hit.handle && extractHandleFromUrl(hit.url) === hit.handle) {
+          trustHandle(hit.network, hit.handle);
+        }
       }
+      continue;
     }
-  }
 
-  // Web / news mentions (name must pass identity gate — usually title)
-  if (name) {
-    const webQueries = [
-      `"${name}"`,
-      `"${name}" (news OR athlete OR player OR student OR captain OR profile)`,
-      `"${name}" (instagram OR tiktok OR linkedin OR twitter OR "x.com")`,
-      `"${name}" (congratulations OR inducted OR scored OR highlight OR roster)`,
-    ];
-    for (const wq of webQueries) {
-      const webHits = await runQuery("web", wq, "mention", Math.max(10, maxPerNetwork));
-      for (const hit of webHits) {
-        if (nameMatchesSubject(hit.title, name) || isDirectMention({
-          title: hit.title,
-          snippet: hit.snippet,
-          name,
-          handles: [...allTrusted],
-        })) {
-          // Never keep web hits that are clearly someone else's social profile card
-          if (titleLeadsWithDifferentPerson(hit.title, name)) {
-            const idx = profiles.indexOf(hit);
-            if (idx >= 0) profiles.splice(idx, 1);
-            seen.delete(hit.url);
-            continue;
-          }
-          hit.kind = hit.kind === "profile" ? "profile" : "mention";
-          hit.relation = "mentioned";
-        } else {
-          const idx = profiles.indexOf(hit);
-          if (idx >= 0) profiles.splice(idx, 1);
-          seen.delete(hit.url);
-        }
+    if (titleLeadsWithDifferentPerson(title, name)) {
+      if (isDirectTag({ title, snippet, url, handles: [...allTrusted] })) {
+        hit.kind = "tag";
+        hit.relation = "tagged";
+      } else if (isDirectMention({ title, snippet, name, handles: [...allTrusted] })) {
+        hit.kind = "mention";
+        hit.relation = "mentioned";
+      } else {
+        profiles.splice(i, 1);
+        seen.delete(hit.url);
       }
+      continue;
     }
+
+    const netHandles = [...(trustedByNetwork.get(hit.network) || [])];
+    const ownHandle = netHandles.find((h) => {
+      const u = url.toLowerCase();
+      return u.includes(`/${h}/`) || u.includes(`/@${h}`) || String(hit.handle || "").toLowerCase() === h;
+    }) || "";
+
+    if (ownHandle && isLikelyOwnPost({ title, snippet, url, name, handle: ownHandle })) {
+      hit.kind = "post";
+      hit.relation = "own";
+      hit.handle = hit.handle || ownHandle;
+      continue;
+    }
+    if (isLikelyOwnPost({ title, snippet, url, name, handle: ownHandle || "" })) {
+      hit.kind = "post";
+      hit.relation = "own";
+      continue;
+    }
+    if (isDirectTag({ title, snippet, url, handles: [...allTrusted] })) {
+      hit.kind = "tag";
+      hit.relation = "tagged";
+      continue;
+    }
+    if (isDirectMention({ title, snippet, name, handles: [...allTrusted] })) {
+      hit.kind = "mention";
+      hit.relation = "mentioned";
+      continue;
+    }
+
+    profiles.splice(i, 1);
+    seen.delete(hit.url);
   }
 
   return {

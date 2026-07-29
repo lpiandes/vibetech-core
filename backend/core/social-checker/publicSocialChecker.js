@@ -23,7 +23,6 @@ import {
   unknownEmptyPostsMessage,
   unknownEmptyTagsMessage,
 } from "../integrations/social-screening/profileVisibility.js";
-import { readSocialScreeningKeys } from "../integrations/social-screening/socialScreeningKeys.js";
 
 export const PLATFORM_ORDER = Object.freeze([
   "instagram",
@@ -332,14 +331,6 @@ export async function runPublicSocialCheck({
     return { ok: false, reason: "serper_api_key_missing", profiles: [], platforms: [], searches: [] };
   }
 
-  const keys = readSocialScreeningKeys({
-    env: process.env,
-    secrets: {
-      serperApiKey,
-      scrapingBeeApiKey,
-    },
-  });
-
   const subject = {
     name: subjectName || uniqueHandles[0] || "",
     handles: uniqueHandles,
@@ -351,7 +342,7 @@ export async function runPublicSocialCheck({
     subject,
     serperApiKey: String(serperApiKey).trim(),
     fetchImpl,
-    maxPerNetwork: 12,
+    maxPerNetwork: 10,
     depth: "deep",
     networks: [...SOCIAL_NETWORKS],
   });
@@ -402,8 +393,9 @@ export async function runPublicSocialCheck({
       profileUrl,
       handle: handleForNet,
       existingHits: profiles,
-      scrapingBeeApiKey: keys.scrapingBeeApiKey || String(scrapingBeeApiKey ?? "").trim(),
-      serperApiKey: String(serperApiKey).trim(),
+      // Fast path: don't burn Serper/ScrapingBee budget during search (timeouts kill recall)
+      scrapingBeeApiKey: "",
+      serperApiKey: "",
       fetchImpl,
     });
   }

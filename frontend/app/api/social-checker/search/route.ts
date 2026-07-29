@@ -7,6 +7,7 @@ import {
 } from "../../../../../backend/core/social-checker/publicSocialChecker.js";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const ALLOWED_PLATFORMS = new Set([
   "instagram",
