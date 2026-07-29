@@ -475,7 +475,7 @@ const page: CSSProperties = {
   overflow: "hidden",
   background: "radial-gradient(1200px 600px at 10% -10%, #1e3a8a55, transparent), radial-gradient(900px 500px at 90% 0%, #7c3aed33, transparent), #070b16",
   color: "#e8eefc",
-  fontFamily: '"Segoe UI", "Helvetica Neue", sans-serif",
+  fontFamily: '"Segoe UI", "Helvetica Neue", sans-serif',
 };
 
 const glowA: CSSProperties = {
