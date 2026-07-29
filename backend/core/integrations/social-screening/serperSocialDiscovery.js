@@ -457,9 +457,9 @@ export function isDirectMention({ title = "", snippet = "", name = "", handles =
 }
 
 /**
- * True when the title leads with a different person's name, e.g.
- * "Ron Paragallo (@ironx11) / Posts / X" while searching Leo Piandes.
- * Teammates often mention the subject in snippets — that must NOT claim their profile.
+ * True when the title leads with a different person's name than the one searched,
+ * e.g. "Alex Other (@handle) / Posts / X" while searching "Sam Subject".
+ * Other people often mention the subject in snippets — that must not claim their profile.
  */
 export function titleLeadsWithDifferentPerson(title, name) {
   const t = String(title ?? "").trim();

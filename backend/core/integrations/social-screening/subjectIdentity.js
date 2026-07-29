@@ -1,23 +1,18 @@
 /**
- * Universal subject-identity rules for Social Checker / screening discovery.
+ * Universal subject-identity criteria for Social Checker / screening discovery.
  *
- * These rules are the same for EVERY person and EVERY platform
- * (Instagram, TikTok, LinkedIn, X, Facebook, …). Nothing is name- or brand-specific.
+ * Same logic for every search: uses only the name/handles the user entered.
+ * No person-specific special cases. Same criteria on every platform.
  *
- * HARD RULES
- * 1. A PROFILE belongs to the subject only if:
- *    - the user typed that platform handle, OR
- *    - the result TITLE contains the subject's full name, AND
- *    - the title does not lead with a different person's name
- *    Snippet-only name matches NEVER claim a profile (teammates mention each other).
- *
- * 2. Keep EVERY profile that passes rule 1 on a platform (2 LinkedIns, 2 Instagrams, etc.).
- *
- * 3. OWN POSTS only from trusted subject handles on that platform, and never when the
- *    title leads with someone else's name.
- *
- * 4. TAGS / MENTIONS may come from other people's public posts, but only when the
- *    subject is clearly @tagged or named in the title (or tagged language + name).
+ * Criteria (driven by the searched subject, never a fixed person):
+ * 1. PROFILE — user-typed handle for that platform, OR title contains the
+ *    searched full name, and does not lead with a different person's name.
+ *    Snippet-only name matches never claim a profile.
+ * 2. Keep every profile that passes (1) on a platform (multiple accounts OK).
+ * 3. OWN POSTS — only from trusted subject handles; never when the title
+ *    leads with someone else's name.
+ * 4. TAGS / MENTIONS — other people's public posts OK only when the searched
+ *    person is clearly @tagged or named in the title (or tagged language + name).
  */
 
 import {

@@ -90,7 +90,7 @@ test("profileLooksLikeSubject requires name on profile", () => {
     url: "https://www.tiktok.com/@postmalone",
     name: "Leo Piandes",
   }), false);
-  // Teammate X profile that only mentions Leo in the snippet must NOT win
+  // Another account that only mentions the subject in the snippet must NOT win
   assert.equal(profileLooksLikeSubject({
     title: "Ron Paragallo (@ironx11) / Posts / X",
     snippet: "Ronny Paragallo and Leo Piandes help @GoAssumptionU to a big weekend sweep",
