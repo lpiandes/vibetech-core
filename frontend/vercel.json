@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/platform/jobs/tick",
-      "schedule": "* * * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }

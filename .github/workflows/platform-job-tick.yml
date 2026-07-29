@@ -1,0 +1,31 @@
+# Hobby Vercel plans only allow daily cron. This workflow keeps the platform
+# job heartbeat fresh and drains due jobs every 5 minutes.
+name: Platform job tick
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Drain platform jobs
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET GitHub secret is required"
+            exit 1
+          fi
+          BASE_URL="${APP_URL:-https://app.vtechdevelopment.com}"
+          BASE_URL="${BASE_URL%/}"
+          curl -fsS -X POST "${BASE_URL}/api/platform/jobs/tick" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            --max-time 90 \
+            -d '{}'

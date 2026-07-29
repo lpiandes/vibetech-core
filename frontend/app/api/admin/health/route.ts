@@ -39,7 +39,7 @@ export async function GET() {
     }
 
     try {
-      const maxAge = Number(process.env.WORKER_HEARTBEAT_MAX_AGE_SECONDS) || 90;
+      const maxAge = Number(process.env.WORKER_HEARTBEAT_MAX_AGE_SECONDS) || 360;
       heartbeat = await getPlatformStore().getLatestWorkerHeartbeat({ maxAgeSeconds: maxAge });
       if (heartbeat?.ok) worker = "ok";
       else if (heartbeat?.reason === "no_heartbeat") worker = "missing";
