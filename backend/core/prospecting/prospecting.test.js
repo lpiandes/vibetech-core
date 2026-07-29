@@ -29,10 +29,11 @@ import { acceptProspectingCandidates, rejectProspectingCandidates } from "./acce
 import { runProspectingJob } from "./runProspectingJob.js";
 import { OpenAIProvider } from "../providers/OpenAIProvider.js";
 
-test("ai_prospecting package exists and is never free by accident", () => {
-  assert.equal(businessHasAiProspecting([]), false);
-  assert.equal(businessHasAiProspecting(["ai_business_os"]), false);
+test("ai_prospecting unlocks on Full OS or explicit package", () => {
+  assert.equal(businessHasAiProspecting([]), true);
+  assert.equal(businessHasAiProspecting(["ai_business_os"]), true);
   assert.equal(businessHasAiProspecting(["ai_prospecting"]), true);
+  assert.equal(businessHasAiProspecting(["ai_receptionist"]), false);
   assert.equal(businessHasAiProspecting(["ai_business_os", "ai_prospecting"]), true);
   const caps = resolvePackageSoftCaps(["ai_prospecting"]);
   assert.equal(caps.maxProspectingRunsPerDay, 5);
@@ -132,9 +133,15 @@ test("qualifiesProspectLead requires phone + name + brief", () => {
   }), false);
 });
 
-test("package gate throws without purchase", () => {
+test("package gate allows Full OS; blocks thin SKUs without prospecting", () => {
+  assert.doesNotThrow(() =>
+    assertAiProspectingPurchased({ configuration: { purchasedPackages: [] } }),
+  );
+  assert.doesNotThrow(() =>
+    assertAiProspectingPurchased({ configuration: { purchasedPackages: ["ai_business_os"] } }),
+  );
   assert.throws(
-    () => assertAiProspectingPurchased({ configuration: { purchasedPackages: [] } }),
+    () => assertAiProspectingPurchased({ configuration: { purchasedPackages: ["ai_receptionist"] } }),
     /not purchased/i,
   );
   assert.doesNotThrow(() =>

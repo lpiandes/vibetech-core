@@ -726,12 +726,13 @@ export function resolvePackageSoftCaps(purchasedPackages = []) {
 }
 
 /**
- * AI Prospecting is never free by accident — requires explicit package purchase
- * (even when the workspace is otherwise full-OS / empty purchasedPackages).
+ * AI Prospecting unlocks when explicitly purchased OR when the workspace is Full OS
+ * (ai_business_os / empty purchasedPackages legacy = full product).
  */
 export function businessHasAiProspecting(purchasedPackages = []) {
   const packages = normalizePurchasedPackages(purchasedPackages);
-  return packages.includes("ai_prospecting");
+  if (packages.includes("ai_prospecting")) return true;
+  return isFullOsPurchasedScope(packages);
 }
 
 /**

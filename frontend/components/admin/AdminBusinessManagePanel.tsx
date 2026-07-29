@@ -47,17 +47,12 @@ export default function AdminBusinessManagePanel({
   const archived = String(status).toUpperCase() === "ARCHIVED";
 
   function togglePackage(id: string) {
-    const selected = packages.find((pkg) => pkg.id === id);
     setPurchasedPackages((current) => {
       if (current.includes(id)) {
         return current.filter((entry) => entry !== id);
       }
-      if (selected?.fullOs) return [id];
-      const withoutFullOs = current.filter((entry) => {
-        const pkg = packages.find((row) => row.id === entry);
-        return !pkg?.fullOs;
-      });
-      return [...withoutFullOs, id];
+      // Full OS can combine with add-ons (e.g. AI Prospecting).
+      return [...current, id];
     });
   }
 

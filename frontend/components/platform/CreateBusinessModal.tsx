@@ -58,19 +58,12 @@ export default function CreateBusinessModal({
   const [copied, setCopied] = useState(false);
 
   function togglePackage(id: string) {
-    const selected = packages.find((pkg) => pkg.id === id);
     setPurchasedPackages((current) => {
       if (current.includes(id)) {
         return current.filter((entry) => entry !== id);
       }
-      if (selected?.fullOs) {
-        return [id];
-      }
-      const withoutFullOs = current.filter((entry) => {
-        const pkg = packages.find((row) => row.id === entry);
-        return !pkg?.fullOs;
-      });
-      return [...withoutFullOs, id];
+      // Full OS can combine with add-ons (e.g. AI Prospecting soft-cap tracking).
+      return [...current, id];
     });
   }
 
@@ -198,8 +191,9 @@ export default function CreateBusinessModal({
                   lineHeight: 1.4,
                 }}
               >
-                Check what they bought. Full OS is right for running your own company.
-                Facebook / Meta leads only appear if you also select Lead qualification &amp; follow-up.
+                Check what they bought. Full OS unlocks the whole product (including Find leads).
+                You can also check add-ons alongside Full OS. Facebook / Meta leads still only appear
+                if Lead qualification &amp; follow-up is checked.
               </p>
             </div>
             <div
