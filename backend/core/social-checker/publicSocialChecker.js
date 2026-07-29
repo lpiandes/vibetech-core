@@ -8,11 +8,14 @@
 import {
   discoverSocialProfiles,
   SOCIAL_NETWORKS,
+  isDirectMention,
+  isDirectTag,
   isNoiseUrl,
   nameMatchesSubject,
 } from "../integrations/social-screening/serperSocialDiscovery.js";
 import {
   classifySubjectRelation,
+  isSubjectOwnPost,
   isSubjectProfile,
   MAX_SUBJECT_PROFILES_PER_NETWORK,
 } from "../integrations/social-screening/subjectIdentity.js";
@@ -102,6 +105,8 @@ function normalizeHandleList(handles = []) {
 /**
  * Keep only: their profile(s), posts they authored, @tags of them, or clear name mentions.
  * Uses the same subject-identity gate for every person and every platform.
+ * Discovery-classified mention/tag/own posts are kept when the same checks still pass
+ * (no stricter second pass that drops them).
  */
 export function filterSubjectRelevant(profiles = [], subject = {}) {
   const name = String(subject.name ?? "").trim();
@@ -122,6 +127,36 @@ export function filterSubjectRelevant(profiles = [], subject = {}) {
 
   for (const hit of profiles) {
     if (isNoiseUrl(hit.url)) continue;
+    const title = String(hit.title ?? "");
+    const snippet = String(hit.snippet ?? "");
+    const url = String(hit.url ?? "");
+    const kindIn = String(hit.kind || "").toLowerCase();
+    const relationIn = String(hit.relation || "").toLowerCase();
+
+    // Keep discovery classifications when the same mention/tag/own checks still pass.
+    if (
+      (kindIn === "mention" || relationIn === "mentioned")
+      && isDirectMention({ title, snippet, name, handles: handleList })
+    ) {
+      out.push({ ...hit, kind: "mention", relation: "mentioned" });
+      continue;
+    }
+    if (
+      (kindIn === "tag" || relationIn === "tagged")
+      && isDirectTag({ title, snippet, url, handles: handleList })
+    ) {
+      out.push({ ...hit, kind: "tag", relation: "tagged" });
+      continue;
+    }
+    if (
+      kindIn === "post"
+      && relationIn === "own"
+      && isSubjectOwnPost(hit, subjectCtx)
+    ) {
+      out.push({ ...hit, kind: "post", relation: "own" });
+      continue;
+    }
+
     const relation = classifySubjectRelation(hit, subjectCtx);
     if (!relation) continue;
     if (relation === "profile") {
@@ -354,6 +389,7 @@ export async function runPublicSocialCheck({
       profiles: [],
       platforms: [],
       searches: discovered.searches ?? [],
+      meta: discovered.meta ?? null,
     };
   }
 
@@ -414,6 +450,7 @@ export async function runPublicSocialCheck({
     visibilityByNetwork,
     discoveredHandles: discovered.discoveredHandles ?? [],
     searches: discovered.searches ?? [],
+    meta: discovered.meta ?? null,
     generatedAt: new Date().toISOString(),
     disclaimer:
       "Public OSINT-style social presence only. Not an employment or FCRA background screen. Only the subject's profile, their own posts, @tags of them, and clear name mentions are shown — unrelated results are dropped. Private profiles can't have their posts or Tagged tab extracted.",

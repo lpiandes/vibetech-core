@@ -336,3 +336,151 @@ test("filterSubjectRelevant keeps tags separate from name mentions", () => {
   assert.ok(filtered.some((h) => h.kind === "mention" && /Jane Doe/i.test(h.title)));
   assert.equal(filtered.some((h) => /Noise/i.test(h.url)), false);
 });
+
+test("handles-only seed does not monopolize multi-platform recall", async () => {
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}"));
+    const q = String(body.q ?? "");
+    if (q.includes("Jane Doe") && q.includes("linkedin")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          organic: [{
+            title: "Jane Doe - Product Manager",
+            link: "https://www.linkedin.com/in/jane-doe-pm",
+            snippet: "San Francisco · Product",
+          }],
+        }),
+      };
+    }
+    if (q.includes("@jane") && q.includes("instagram")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          organic: [{
+            title: "Team shoutout featuring @jane",
+            link: "https://www.instagram.com/p/MentionJane1/",
+            snippet: "Congrats to @jane on the win",
+          }],
+        }),
+      };
+    }
+    if (q === '"Jane Doe"' || (q.includes('"Jane Doe"') && !q.includes("site:"))) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          organic: [{
+            title: "Jane Doe named captain",
+            link: "https://news.example.com/jane-doe-captain",
+            snippet: "Jane Doe led the team this season",
+          }],
+        }),
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ organic: [] }) };
+  };
+
+  const res = await runPublicSocialCheck({
+    name: "Jane Doe",
+    handlesByPlatform: { instagram: "jane" },
+    serperApiKey: "test-key",
+    fetchImpl,
+  });
+  assert.equal(res.ok, true);
+  assert.ok(res.meta?.networksSearched?.includes("linkedin"), "linkedin was searched");
+  assert.ok(res.meta?.networksSearched?.includes("instagram"), "instagram was searched");
+  assert.ok(res.meta?.searchesCount >= 7, "core sweep ran multiple queries");
+  assert.ok(
+    res.profiles.some((p) => p.network === "linkedin" && /linkedin\.com\/in\//i.test(p.url)),
+    "linkedin profile present",
+  );
+  assert.ok(
+    res.profiles.some((p) => /MentionJane1|@jane/i.test(`${p.url} ${p.title} ${p.snippet}`)),
+    "instagram mention/tag present",
+  );
+  assert.ok(
+    res.profiles.some((p) => /news\.example\.com|named captain/i.test(`${p.url} ${p.title}`)),
+    "web hit present",
+  );
+  assert.ok(
+    res.profiles.some((p) => p.network === "instagram" && p.kind === "profile"),
+    "seeded instagram profile still present",
+  );
+});
+
+test("core discovery jobs cover every core network with a name site query", async () => {
+  const {
+    CORE_DISCOVERY_NETWORKS,
+    buildCoreDiscoveryJobs,
+  } = await import("../integrations/social-screening/serperSocialDiscovery.js");
+  const jobs = buildCoreDiscoveryJobs({
+    name: "Jane Doe",
+    handlesByNetwork: { instagram: "jane" },
+  });
+  for (const network of CORE_DISCOVERY_NETWORKS) {
+    if (network === "web") {
+      assert.ok(jobs.some((j) => j.network === "web" && /"Jane Doe"/.test(j.query)));
+      continue;
+    }
+    assert.ok(
+      jobs.some((j) => j.network === network && j.query.includes('"Jane Doe"') && /site:/i.test(j.query)),
+      `missing site query for ${network}`,
+    );
+  }
+  assert.ok(jobs.some((j) => j.network === "instagram" && /@jane/i.test(j.query)));
+});
+
+test("serperSearchWithMeta retries once after 429", async () => {
+  const { serperSearchWithMeta } = await import("../integrations/social-screening/serperSocialDiscovery.js");
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return { ok: false, status: 429, json: async () => ({}) };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        organic: [{ title: "Jane Doe", link: "https://www.linkedin.com/in/jane", snippet: "bio" }],
+      }),
+    };
+  };
+  const result = await serperSearchWithMeta({
+    query: '"Jane Doe" site:linkedin.com',
+    apiKey: "k",
+    fetchImpl,
+    num: 5,
+  });
+  assert.equal(calls, 2);
+  assert.equal(result.ok, true);
+  assert.equal(result.rows.length, 1);
+});
+
+test("wrong-person X profile stays blocked after filter", () => {
+  const filtered = filterSubjectRelevant([
+    {
+      network: "x",
+      kind: "profile",
+      title: "Ron Paragallo (@ironx11) / Posts / X",
+      url: "https://x.com/ironx11",
+      snippet: "Ronny Paragallo and Leo Piandes help @GoAssumptionU to a big weekend sweep",
+      handle: "ironx11",
+    },
+    {
+      network: "x",
+      kind: "mention",
+      relation: "mentioned",
+      title: "Leo Piandes scores twice",
+      url: "https://x.com/someone/status/1",
+      snippet: "Leo Piandes with the brace",
+      handle: null,
+    },
+  ], { name: "Leo Piandes", handles: ["lpiandes"] });
+
+  assert.equal(filtered.some((h) => /ironx11/i.test(h.url)), false);
+  assert.ok(filtered.some((h) => h.kind === "mention" && /Leo Piandes/i.test(h.title)));
+});

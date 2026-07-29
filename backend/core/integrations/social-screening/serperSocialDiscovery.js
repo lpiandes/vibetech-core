@@ -632,9 +632,8 @@ function normalizeHandlesByNetwork(raw) {
 }
 
 /**
- * Profile → own posts → tags/mentions across EVERY requested platform.
- * Always searches by name on all platforms (handles only improve match quality).
- * Runs Serper queries in parallel with a hard budget so the request finishes.
+ * Core-first deep discovery: Wave A must finish; Wave B only if time remains.
+ * Handles only improve matches — every core platform is always name-searched.
  */
 async function discoverDeepSocialPresence({
   name,
@@ -644,7 +643,8 @@ async function discoverDeepSocialPresence({
   networks,
   fetchImpl,
   maxPerNetwork,
-}) {
+  budgetMs = 25000,
+} = {}) {
   const { isSubjectProfile, MAX_SUBJECT_PROFILES_PER_NETWORK } = await import("./subjectIdentity.js");
   const handleSeed = handles.map((h) => String(h).replace(/^@/, "")).filter(Boolean);
   const byNet = handlesByNetwork && typeof handlesByNetwork === "object" ? handlesByNetwork : {};
@@ -652,12 +652,15 @@ async function discoverDeepSocialPresence({
     ? DEEP_NETWORK_SPECS.filter((n) => networks.map(String).map((x) => x.toLowerCase()).includes(n.network))
     : DEEP_NETWORK_SPECS;
 
+  const startedAt = Date.now();
   const searches = [];
   const profiles = [];
   const seen = new Set();
   /** @type {Map<string, Set<string>>} */
   const trustedByNetwork = new Map();
   const allTrusted = new Set(handleSeed.map((h) => h.toLowerCase()));
+  const serperMeta = { attempted: 0, succeeded: 0, failed: 0, statuses: [] };
+  const networksSearched = new Set();
 
   function trustHandle(network, handle) {
     const h = String(handle || "").replace(/^@/, "").trim();
@@ -688,7 +691,6 @@ async function discoverDeepSocialPresence({
     });
   }
 
-  // Seed typed handles immediately (does not skip other platforms)
   for (const spec of wanted) {
     const seedHandle = byNet[spec.network] || "";
     if (seedHandle) {
@@ -696,79 +698,6 @@ async function discoverDeepSocialPresence({
       ensureSynthesizedProfile(spec.network, seedHandle, name);
     }
   }
-
-  /** @type {{ network: string, query: string, preferredKind: string, num: number }[]} */
-  const jobs = [];
-  const CORE_FIRST = [
-    "linkedin", "instagram", "tiktok", "youtube", "x", "facebook", "threads", "reddit", "github",
-  ];
-  const orderedSpecs = [
-    ...CORE_FIRST.map((id) => wanted.find((s) => s.network === id)).filter(Boolean),
-    ...wanted.filter((s) => !CORE_FIRST.includes(s.network)),
-  ];
-
-  for (const spec of orderedSpecs) {
-    const seedHandle = byNet[spec.network] || "";
-    const netTrusted = [...(trustedByNetwork.get(spec.network) || [])];
-    const primaryHandle = seedHandle || netTrusted[0] || "";
-
-    // Guaranteed name sweep on every platform + richer follow-ups
-    if (name) {
-      const site = spec.network === "x"
-        ? "(site:x.com OR site:twitter.com)"
-        : spec.network === "threads"
-          ? "site:threads.net"
-          : spec.network === "twitch"
-            ? "site:twitch.tv"
-            : `site:${spec.network}.com`;
-      jobs.push({
-        network: spec.network,
-        query: `"${name}" ${site}`,
-        preferredKind: "mention",
-        num: 20,
-      });
-    }
-
-    for (const q of (spec.profileQueries(name || primaryHandle, primaryHandle) || []).slice(0, 3)) {
-      jobs.push({ network: spec.network, query: q, preferredKind: "profile", num: 15 });
-    }
-    for (const q of (spec.mentionQueries?.(name, primaryHandle) || []).slice(0, 4)) {
-      jobs.push({ network: spec.network, query: q, preferredKind: "mention", num: 20 });
-    }
-    for (const handle of netTrusted.slice(0, MAX_SUBJECT_PROFILES_PER_NETWORK)) {
-      jobs.push({
-        network: spec.network,
-        query: `"@${handle}"`,
-        preferredKind: "mention",
-        num: 15,
-      });
-      for (const q of (spec.ownPostQueries?.(name, handle) || []).slice(0, 2)) {
-        jobs.push({ network: spec.network, query: q, preferredKind: "post", num: 15 });
-      }
-    }
-  }
-
-  if (name) {
-    for (const q of [
-      `"${name}"`,
-      `"${name}" (news OR athlete OR player OR student OR captain OR congratulations OR inducted)`,
-      `"${name}" (instagram OR tiktok OR linkedin OR twitter OR facebook OR youtube)`,
-      `"${name}" (sports OR school OR university OR college OR team OR roster OR profile)`,
-    ]) {
-      jobs.push({ network: "web", query: q, preferredKind: "mention", num: 20 });
-    }
-  }
-
-  // Prefer unique queries; keep enough to cover every platform thoroughly
-  const seenQ = new Set();
-  const uniqueJobs = [];
-  for (const job of jobs) {
-    const key = `${job.network}::${job.query}`;
-    if (seenQ.has(key)) continue;
-    seenQ.add(key);
-    uniqueJobs.push(job);
-  }
-  const cappedJobs = uniqueJobs.slice(0, 96);
 
   async function runPool(list, concurrency, worker) {
     let cursor = 0;
@@ -779,28 +708,34 @@ async function discoverDeepSocialPresence({
         await worker(list[idx], idx);
       }
     }
-    await Promise.all(Array.from({ length: Math.min(concurrency, list.length) || 1 }, () => run()));
+    await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(list.length, 1)) }, () => run()));
   }
 
-  async function executeJobs(list) {
-    await runPool(list, 10, async (job) => {
+  async function executeJobs(list, concurrency, { respectBudget = false } = {}) {
+    await runPool(list, concurrency, async (job) => {
       if (!job?.query) return;
+      if (respectBudget && Date.now() - startedAt > budgetMs) return;
       searches.push({ network: job.network, query: job.query, kind: job.preferredKind });
-      const rows = await serperSearch({
+      networksSearched.add(job.network);
+      const result = await serperSearchWithMeta({
         query: job.query,
         apiKey: serperApiKey,
         fetchImpl,
-        num: job.num,
+        num: job.num ?? Math.min(10, maxPerNetwork || 10),
       });
-      for (const row of rows) {
+      serperMeta.attempted += 1;
+      if (result.ok) serperMeta.succeeded += 1;
+      else {
+        serperMeta.failed += 1;
+        serperMeta.statuses.push(result.status);
+      }
+      for (const row of result.rows) {
         const url = String(row?.link ?? "").trim();
         if (!url || isNoiseUrl(url)) continue;
         pushHit(profiles, seen, row, job.network, job.preferredKind);
       }
     });
   }
-
-  await executeJobs(cappedJobs);
 
   function classifyAll() {
     const subjectHandles = [...allTrusted];
@@ -878,35 +813,61 @@ async function discoverDeepSocialPresence({
     }
   }
 
+  // Wave A: core platforms (must complete)
+  const coreJobs = buildCoreDiscoveryJobs({ name, handlesByNetwork: byNet });
+  await executeJobs(coreJobs, 3, { respectBudget: false });
   classifyAll();
 
-  // Second wave: own-posts for profiles discovered in wave 1 (LinkedIn etc.)
-  const followUp = [];
-  for (const spec of orderedSpecs) {
-    const seedHandle = byNet[spec.network] || "";
-    for (const handle of [...(trustedByNetwork.get(spec.network) || [])]) {
-      if (handle === seedHandle) continue; // already queried in wave 1
-      for (const q of (spec.ownPostQueries?.(name, handle) || []).slice(0, 2)) {
-        followUp.push({ network: spec.network, query: q, preferredKind: "post", num: 15 });
+  // Wave B: enrichment if budget remains
+  let partial = false;
+  const elapsed = Date.now() - startedAt;
+  if (elapsed < budgetMs) {
+    const enrich = buildEnrichmentDiscoveryJobs({
+      name,
+      handlesByNetwork: byNet,
+      discoveredHandles: [...allTrusted].slice(0, MAX_SUBJECT_PROFILES_PER_NETWORK),
+    });
+    for (const spec of wanted) {
+      const seed = String(byNet[spec.network] || "").toLowerCase();
+      for (const handle of [...(trustedByNetwork.get(spec.network) || [])].slice(0, 3)) {
+        if (handle === seed) continue;
+        for (const q of (spec.ownPostQueries?.(name, handle) || []).slice(0, 1)) {
+          enrich.push({ network: spec.network, query: q, preferredKind: "post", num: 8 });
+        }
       }
-      followUp.push({
-        network: spec.network,
-        query: `"@${handle}"`,
-        preferredKind: "mention",
-        num: 15,
-      });
     }
-  }
-  if (followUp.length) {
-    await executeJobs(followUp.slice(0, 24));
+    const planned = enrich.slice(0, 24);
+    const before = searches.length;
+    await executeJobs(planned, 3, { respectBudget: true });
+    if (Date.now() - startedAt > budgetMs && searches.length < before + planned.length) {
+      partial = true;
+    }
     classifyAll();
+  } else {
+    partial = true;
   }
+
+  for (const n of CORE_DISCOVERY_NETWORKS) networksSearched.add(n);
 
   return {
     ok: true,
     profiles,
     searches,
     discoveredHandles: [...allTrusted],
+    meta: {
+      partial,
+      durationMs: Date.now() - startedAt,
+      budgetMs,
+      serper: {
+        attempted: serperMeta.attempted,
+        succeeded: serperMeta.succeeded,
+        failed: serperMeta.failed,
+        statuses: serperMeta.statuses.slice(0, 20),
+      },
+      networksSearched: [...networksSearched],
+      coreNetworks: [...CORE_DISCOVERY_NETWORKS],
+      searchesCount: searches.length,
+    },
   };
 }
 
@@ -944,22 +905,250 @@ function pushHit(profiles, seen, row, networkHint, preferredKind) {
   return hit;
 }
 
-async function serperSearch({ query, apiKey, fetchImpl, num = 5 }) {
-  const res = await fetchImpl("https://google.serper.dev/search", {
-    method: "POST",
-    headers: {
-      "X-API-KEY": apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ q: query, num }),
-  });
-  if (!res.ok) {
-    return [];
+async function serperSearch({ query, apiKey, fetchImpl, num = 5, meta = null }) {
+  const result = await serperSearchWithMeta({ query, apiKey, fetchImpl, num });
+  if (meta && typeof meta === "object") {
+    meta.attempted = (meta.attempted || 0) + 1;
+    if (result.ok) meta.succeeded = (meta.succeeded || 0) + 1;
+    else {
+      meta.failed = (meta.failed || 0) + 1;
+      if (!Array.isArray(meta.statuses)) meta.statuses = [];
+      meta.statuses.push(result.status);
+    }
   }
-  const data = await res.json().catch(() => ({}));
-  return Array.isArray(data.organic) ? data.organic : [];
+  return result.rows;
+}
+
+/**
+ * Serper search with status + one retry on 429/5xx.
+ * @returns {Promise<{ rows: object[], ok: boolean, status: number }>}
+ */
+export async function serperSearchWithMeta({ query, apiKey, fetchImpl, num = 5 }) {
+  const q = String(query ?? "").trim();
+  if (!q || !apiKey || typeof fetchImpl !== "function") {
+    return { rows: [], ok: false, status: 0 };
+  }
+
+  async function once() {
+    try {
+      const res = await fetchImpl("https://google.serper.dev/search", {
+        method: "POST",
+        headers: {
+          "X-API-KEY": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ q, num }),
+      });
+      const status = Number(res.status || 0);
+      if (!res.ok) {
+        return { rows: [], ok: false, status };
+      }
+      const data = await res.json().catch(() => ({}));
+      const rows = Array.isArray(data.organic) ? data.organic : [];
+      return { rows, ok: true, status };
+    } catch {
+      return { rows: [], ok: false, status: 0 };
+    }
+  }
+
+  let result = await once();
+  if (!result.ok && (result.status === 429 || result.status >= 500 || result.status === 0)) {
+    await new Promise((r) => setTimeout(r, 350));
+    result = await once();
+  }
+  return result;
 }
 
 // Backward-compatible alias used by older screening imports
 const NETWORK_QUERIES = BASIC_NETWORK_QUERIES;
 export { NETWORK_QUERIES, serperSearch };
+
+export const CORE_DISCOVERY_NETWORKS = Object.freeze([
+  "linkedin",
+  "instagram",
+  "tiktok",
+  "youtube",
+  "x",
+  "facebook",
+  "web",
+]);
+
+export function siteOperatorForNetwork(network) {
+  const n = String(network || "").toLowerCase();
+  if (n === "x") return "(site:x.com OR site:twitter.com)";
+  if (n === "threads") return "site:threads.net";
+  if (n === "twitch") return "site:twitch.tv";
+  if (n === "web") return "";
+  return `site:${n}.com`;
+}
+
+/**
+ * Wave A job list — one name+site sweep per core network (plus handle boosts).
+ * Exported for audit tests.
+ */
+export function buildCoreDiscoveryJobs({ name, handlesByNetwork = {} } = {}) {
+  const byNet = handlesByNetwork && typeof handlesByNetwork === "object" ? handlesByNetwork : {};
+  const nameClean = String(name ?? "").trim();
+  /** @type {{ network: string, query: string, preferredKind: string, num: number }[]} */
+  const jobs = [];
+
+  for (const network of CORE_DISCOVERY_NETWORKS) {
+    if (network === "web") {
+      if (nameClean) {
+        jobs.push({ network: "web", query: `"${nameClean}"`, preferredKind: "mention", num: 10 });
+        jobs.push({
+          network: "web",
+          query: `"${nameClean}" (news OR profile OR student OR athlete OR congratulations)`,
+          preferredKind: "mention",
+          num: 10,
+        });
+      }
+      continue;
+    }
+
+    const site = siteOperatorForNetwork(network);
+    const handle = String(byNet[network] ?? "").replace(/^@/, "").trim();
+
+    if (nameClean) {
+      jobs.push({
+        network,
+        query: `"${nameClean}" ${site}`,
+        preferredKind: "mention",
+        num: 10,
+      });
+      if (network === "linkedin") {
+        jobs.push({
+          network,
+          query: `"${nameClean}" site:linkedin.com/in`,
+          preferredKind: "profile",
+          num: 8,
+        });
+      } else if (network === "instagram") {
+        jobs.push({
+          network,
+          query: `"${nameClean}" site:instagram.com -inurl:/p/ -inurl:/reel/`,
+          preferredKind: "profile",
+          num: 8,
+        });
+      } else if (network === "tiktok") {
+        jobs.push({
+          network,
+          query: `"${nameClean}" site:tiktok.com/@`,
+          preferredKind: "profile",
+          num: 8,
+        });
+      } else if (network === "x") {
+        jobs.push({
+          network,
+          query: `"${nameClean}" (site:x.com OR site:twitter.com) -inurl:/status/`,
+          preferredKind: "profile",
+          num: 8,
+        });
+      } else if (network === "youtube") {
+        jobs.push({
+          network,
+          query: `"${nameClean}" (site:youtube.com/@ OR site:youtube.com/channel)`,
+          preferredKind: "profile",
+          num: 8,
+        });
+      } else if (network === "facebook") {
+        jobs.push({
+          network,
+          query: `"${nameClean}" (site:facebook.com/people OR site:facebook.com/profile.php)`,
+          preferredKind: "profile",
+          num: 8,
+        });
+      }
+    }
+
+    if (handle) {
+      jobs.push({
+        network,
+        query: `"@${handle}" ${site}`,
+        preferredKind: "mention",
+        num: 10,
+      });
+      if (network === "instagram") {
+        jobs.push({
+          network,
+          query: `site:instagram.com/${handle}`,
+          preferredKind: "post",
+          num: 8,
+        });
+      } else if (network === "tiktok") {
+        jobs.push({
+          network,
+          query: `site:tiktok.com/@${handle}`,
+          preferredKind: "post",
+          num: 8,
+        });
+      } else if (network === "x") {
+        jobs.push({
+          network,
+          query: `(site:x.com/${handle}/status OR site:twitter.com/${handle}/status)`,
+          preferredKind: "post",
+          num: 8,
+        });
+      } else if (network === "linkedin") {
+        jobs.push({
+          network,
+          query: `site:linkedin.com/in/${handle}`,
+          preferredKind: "profile",
+          num: 5,
+        });
+      }
+    }
+  }
+
+  return jobs;
+}
+
+/**
+ * Wave B enrichment jobs (secondary networks + extra phrasings).
+ */
+export function buildEnrichmentDiscoveryJobs({ name, handlesByNetwork = {}, discoveredHandles = [] } = {}) {
+  const nameClean = String(name ?? "").trim();
+  const byNet = handlesByNetwork && typeof handlesByNetwork === "object" ? handlesByNetwork : {};
+  /** @type {{ network: string, query: string, preferredKind: string, num: number }[]} */
+  const jobs = [];
+  const secondary = ["threads", "reddit", "github"];
+
+  for (const network of secondary) {
+    const site = siteOperatorForNetwork(network);
+    if (nameClean) {
+      jobs.push({ network, query: `"${nameClean}" ${site}`, preferredKind: "mention", num: 8 });
+    }
+    const handle = String(byNet[network] ?? "").replace(/^@/, "").trim();
+    if (handle) {
+      jobs.push({ network, query: `"@${handle}" ${site}`, preferredKind: "mention", num: 8 });
+    }
+  }
+
+  if (nameClean) {
+    jobs.push({
+      network: "instagram",
+      query: `"${nameClean}" (congratulations OR captain OR tagged OR scored) site:instagram.com`,
+      preferredKind: "mention",
+      num: 10,
+    });
+    jobs.push({
+      network: "web",
+      query: `"${nameClean}" (sports OR school OR university OR college OR team OR roster)`,
+      preferredKind: "mention",
+      num: 10,
+    });
+  }
+
+  for (const h of (Array.isArray(discoveredHandles) ? discoveredHandles : []).slice(0, 4)) {
+    const handle = String(h).replace(/^@/, "").trim();
+    if (!handle) continue;
+    jobs.push({
+      network: "web",
+      query: `"@${handle}"`,
+      preferredKind: "mention",
+      num: 8,
+    });
+  }
+
+  return jobs;
+}

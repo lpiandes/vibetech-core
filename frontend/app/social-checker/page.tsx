@@ -30,6 +30,21 @@ type Platform = {
   tagsNote?: string | null;
 };
 
+type SearchMeta = {
+  partial?: boolean;
+  durationMs?: number;
+  budgetMs?: number;
+  serper?: {
+    attempted?: number;
+    succeeded?: number;
+    failed?: number;
+    statuses?: number[];
+  };
+  networksSearched?: string[];
+  coreNetworks?: string[];
+  searchesCount?: number;
+};
+
 type Report = {
   subject: {
     name?: string;
@@ -43,6 +58,8 @@ type Report = {
   disclaimer?: string;
   remaining?: number;
   limit?: number;
+  meta?: SearchMeta | null;
+  searches?: { network?: string; query?: string }[];
 };
 
 const HANDLE_PLATFORMS = [
@@ -58,6 +75,23 @@ const HANDLE_PLATFORMS = [
 ] as const;
 
 type PlatformId = (typeof HANDLE_PLATFORMS)[number]["id"];
+
+function formatSearchMetaLine(meta: SearchMeta): string {
+  const queries = Number(meta.searchesCount ?? 0);
+  const networks = Array.isArray(meta.networksSearched) ? meta.networksSearched.length : 0;
+  const parts = [
+    `Searched ${queries} quer${queries === 1 ? "y" : "ies"} across ${networks || "several"} platform${networks === 1 ? "" : "s"}`,
+  ];
+  if (meta.partial) {
+    parts.push("partial run (time budget)");
+  }
+  const failed = Number(meta.serper?.failed ?? 0);
+  const attempted = Number(meta.serper?.attempted ?? 0);
+  if (failed > 0 && attempted > 0) {
+    parts.push(`${failed}/${attempted} search calls failed`);
+  }
+  return parts.join(" · ");
+}
 
 export default function SocialCheckerPage() {
   const [name, setName] = useState("");
@@ -274,6 +308,11 @@ export default function SocialCheckerPage() {
                     ? ` · ${report.remaining} searches left today`
                     : ""}
                 </p>
+                {report.meta ? (
+                  <p style={resultsMeta}>
+                    {formatSearchMetaLine(report.meta)}
+                  </p>
+                ) : null}
                 {report.subject?.handlesByPlatform
                 && Object.keys(report.subject.handlesByPlatform).length ? (
                   <p style={handlesRow}>
