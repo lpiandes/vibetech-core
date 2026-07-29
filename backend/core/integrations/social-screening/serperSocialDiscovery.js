@@ -51,8 +51,9 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     mentionQueries: (name, handle) => [
       handle ? `"@${handle}" (site:linkedin.com/posts OR site:linkedin.com/feed)` : null,
       handle ? `"${name}" "@${handle}" site:linkedin.com` : null,
-      `"${name}" (tagged OR mentioned OR featuring) (site:linkedin.com/posts OR site:linkedin.com/pulse)`,
+      `"${name}" (tagged OR mentioned OR featuring OR congratulations) (site:linkedin.com/posts OR site:linkedin.com/pulse)`,
       `"${name}" (site:linkedin.com/posts OR site:linkedin.com/pulse)`,
+      `"${name}" site:linkedin.com`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://www.linkedin.com/in/${handle}/`,
   },
@@ -75,7 +76,8 @@ const DEEP_NETWORK_SPECS = Object.freeze([
       handle ? `"tagged" "@${handle}" site:instagram.com` : null,
       handle ? `"with @${handle}" site:instagram.com` : null,
       handle ? `"photo of @${handle}" OR "featuring @${handle}" site:instagram.com` : null,
-      `"${name}" (tagged OR "photo of" OR "with @" OR mention OR congratulations) (site:instagram.com/p OR site:instagram.com/reel)`,
+      `"${name}" (tagged OR "photo of" OR "with @" OR mention OR congratulations OR captain) (site:instagram.com/p OR site:instagram.com/reel)`,
+      `"${name}" (scored OR goal OR assist OR highlight) site:instagram.com`,
       `"${name}" site:instagram.com/p`,
       `"${name}" site:instagram.com/reel`,
       `"${name}" site:instagram.com`,
@@ -95,8 +97,9 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     mentionQueries: (name, handle) => [
       handle ? `"@${handle}" site:tiktok.com` : null,
       handle ? `"tagged" "@${handle}" site:tiktok.com` : null,
-      `"${name}" (tagged OR featuring OR "duet with") site:tiktok.com`,
+      `"${name}" (tagged OR featuring OR "duet with" OR congratulations) site:tiktok.com`,
       `"${name}" site:tiktok.com/video`,
+      `"${name}" site:tiktok.com`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://www.tiktok.com/@${handle}`,
   },
@@ -112,8 +115,9 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     ].filter(Boolean),
     mentionQueries: (name, handle) => [
       handle ? `"@${handle}" (site:youtube.com/watch OR site:youtu.be)` : null,
-      `"${name}" (featuring OR tagged OR "ft." OR mentioned) (site:youtube.com/watch OR site:youtube.com/shorts)`,
+      `"${name}" (featuring OR tagged OR "ft." OR mentioned OR highlights) (site:youtube.com/watch OR site:youtube.com/shorts)`,
       `"${name}" (site:youtube.com/watch OR site:youtu.be OR site:youtube.com/shorts)`,
+      `"${name}" site:youtube.com`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://www.youtube.com/@${handle}`,
   },
@@ -130,7 +134,7 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     mentionQueries: (name, handle) => [
       handle ? `"@${handle}" (site:x.com/status OR site:twitter.com/status)` : null,
       handle ? `"@${handle}" (site:x.com OR site:twitter.com)` : null,
-      `"${name}" (tagged OR mentioning OR "shout out") (site:x.com/status OR site:twitter.com/status)`,
+      `"${name}" (tagged OR mentioning OR "shout out" OR congratulations) (site:x.com/status OR site:twitter.com/status)`,
       `"${name}" (site:x.com/status OR site:twitter.com/status)`,
       `"${name}" (site:x.com OR site:twitter.com)`,
     ].filter(Boolean),
@@ -147,8 +151,9 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     ].filter(Boolean),
     mentionQueries: (name, handle) => [
       handle ? `"@${handle}" site:facebook.com` : null,
-      `"${name}" (tagged OR "was tagged" OR with) (site:facebook.com/posts OR site:facebook.com/photos)`,
+      `"${name}" (tagged OR "was tagged" OR with OR congratulations) (site:facebook.com/posts OR site:facebook.com/photos)`,
       `"${name}" (site:facebook.com/posts OR site:facebook.com/photos OR site:facebook.com/watch)`,
+      `"${name}" site:facebook.com`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://www.facebook.com/${handle}`,
   },
@@ -445,9 +450,9 @@ export function isDirectMention({ title = "", snippet = "", name = "", handles =
 
   if (name && nameMatchesSubject(s, name)) {
     if (looksLikeRosterOcrPollution(s, name)) return false;
-    // Require explicit tagging / attribution language — bare name in a long snippet is too noisy
-    if (/\b(tagged|was tagged|mention(?:ed|s)?|featuring|congratulat(?:es|ions)?|photo of|shout\s*out|with @)\b/i.test(s)
-      && nameMatchesSubject(s.slice(0, 180), name)) {
+    // Explicit attribution language near the name — still not bare OCR ghosts
+    if (/\b(tagged|was tagged|mention(?:ed|s)?|featuring|congratulat(?:es|ions)?|photo of|shout\s*out|with @|captain|induct(?:ed|ion)|scored|goal|assist|highlight)\b/i.test(s)
+      && nameMatchesSubject(s.slice(0, 220), name)) {
       return true;
     }
     return false;
@@ -574,7 +579,7 @@ export async function discoverSocialProfiles({
       serperApiKey,
       networks,
       fetchImpl,
-      maxPerNetwork: Math.max(maxPerNetwork, 8),
+      maxPerNetwork: Math.max(maxPerNetwork, 12),
     });
   }
 
@@ -752,8 +757,8 @@ async function discoverDeepSocialPresence({
     if (!netHandles.length) continue;
     for (const handle of netHandles.slice(0, MAX_SUBJECT_PROFILES_PER_NETWORK)) {
       const qs = spec.ownPostQueries?.(name, handle) || [];
-      for (const q of qs.slice(0, 3)) {
-        const hits = await runQuery(spec.network, q, "post", maxPerNetwork);
+      for (const q of qs.slice(0, 4)) {
+        const hits = await runQuery(spec.network, q, "post", Math.max(maxPerNetwork, 12));
         for (const hit of hits) {
           if (hit.kind === "profile") continue;
           if (hit.network !== spec.network) {
@@ -811,8 +816,8 @@ async function discoverDeepSocialPresence({
         h ? `"@${h}" site:${spec.network === "x" ? "x.com OR twitter.com" : `${spec.network}.com`}` : null,
       ]),
     ].filter(Boolean);
-    for (const q of [...new Set(qs)].slice(0, 8)) {
-      const hits = await runQuery(spec.network, q, "mention", Math.min(12, maxPerNetwork + 4));
+    for (const q of [...new Set(qs)].slice(0, 12)) {
+      const hits = await runQuery(spec.network, q, "mention", Math.min(15, Math.max(maxPerNetwork + 6, 12)));
       for (const hit of hits) {
         if (hit.network !== spec.network && hit.network !== "web") {
           const idx = profiles.indexOf(hit);
@@ -866,22 +871,37 @@ async function discoverDeepSocialPresence({
     }
   }
 
-  // Web / news mentions (name must be in the TITLE — no OCR ghosts)
+  // Web / news mentions (name must pass identity gate — usually title)
   if (name) {
-    const webHits = await runQuery("web", `"${name}"`, "mention", 8);
-    for (const hit of webHits) {
-      if (nameMatchesSubject(hit.title, name) || isDirectMention({
-        title: hit.title,
-        snippet: hit.snippet,
-        name,
-        handles: [...allTrusted],
-      })) {
-        hit.kind = hit.kind === "profile" ? "profile" : "mention";
-        hit.relation = "mentioned";
-      } else {
-        const idx = profiles.indexOf(hit);
-        if (idx >= 0) profiles.splice(idx, 1);
-        seen.delete(hit.url);
+    const webQueries = [
+      `"${name}"`,
+      `"${name}" (news OR athlete OR player OR student OR captain OR profile)`,
+      `"${name}" (instagram OR tiktok OR linkedin OR twitter OR "x.com")`,
+      `"${name}" (congratulations OR inducted OR scored OR highlight OR roster)`,
+    ];
+    for (const wq of webQueries) {
+      const webHits = await runQuery("web", wq, "mention", Math.max(10, maxPerNetwork));
+      for (const hit of webHits) {
+        if (nameMatchesSubject(hit.title, name) || isDirectMention({
+          title: hit.title,
+          snippet: hit.snippet,
+          name,
+          handles: [...allTrusted],
+        })) {
+          // Never keep web hits that are clearly someone else's social profile card
+          if (titleLeadsWithDifferentPerson(hit.title, name)) {
+            const idx = profiles.indexOf(hit);
+            if (idx >= 0) profiles.splice(idx, 1);
+            seen.delete(hit.url);
+            continue;
+          }
+          hit.kind = hit.kind === "profile" ? "profile" : "mention";
+          hit.relation = "mentioned";
+        } else {
+          const idx = profiles.indexOf(hit);
+          if (idx >= 0) profiles.splice(idx, 1);
+          seen.delete(hit.url);
+        }
       }
     }
   }

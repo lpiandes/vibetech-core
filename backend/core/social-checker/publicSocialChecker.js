@@ -351,7 +351,7 @@ export async function runPublicSocialCheck({
     subject,
     serperApiKey: String(serperApiKey).trim(),
     fetchImpl,
-    maxPerNetwork: 8,
+    maxPerNetwork: 12,
     depth: "deep",
     networks: [...SOCIAL_NETWORKS],
   });
