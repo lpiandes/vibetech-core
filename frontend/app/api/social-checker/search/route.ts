@@ -8,14 +8,45 @@ import {
 
 export const runtime = "nodejs";
 
+const ALLOWED_PLATFORMS = new Set([
+  "instagram",
+  "tiktok",
+  "linkedin",
+  "youtube",
+  "x",
+  "facebook",
+  "threads",
+  "reddit",
+  "github",
+  "pinterest",
+  "twitch",
+  "snapchat",
+]);
+
+function parseHandlesByPlatform(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  /** @type {Record<string, string>} */
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const network = String(key).toLowerCase().trim();
+    if (!ALLOWED_PLATFORMS.has(network)) continue;
+    const handle = String(value ?? "").trim().replace(/^@/, "");
+    if (handle.length >= 2) out[network] = handle;
+  }
+  return out;
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const name = String(body.name ?? "").trim();
   const handle = String(body.handle ?? body.username ?? "").trim();
+  const handlesByPlatform = parseHandlesByPlatform(
+    body.handlesByPlatform ?? body.handlesByNetwork ?? {},
+  );
 
-  if (!name && !handle) {
+  if (!name && !handle && Object.keys(handlesByPlatform).length === 0) {
     return NextResponse.json(
-      { ok: false, error: "Enter a name (and optionally a username/handle)." },
+      { ok: false, error: "Enter a name (handles are optional but recommended)." },
       { status: 400 },
     );
   }
@@ -35,13 +66,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await runPublicSocialCheck({ name, handle });
+  const result = await runPublicSocialCheck({ name, handle, handlesByPlatform });
   if (!result.ok) {
     const status = result.reason === "serper_api_key_missing" ? 503 : 400;
     const error = result.reason === "serper_api_key_missing"
       ? "Social Checker is not configured yet (missing SERPER_API_KEY)."
       : result.reason === "name_required"
-        ? "Enter a name (and optionally a username/handle)."
+        ? "Enter a name (handles are optional but recommended)."
         : "Could not complete social search.";
     return NextResponse.json({ ok: false, error, reason: result.reason }, { status });
   }

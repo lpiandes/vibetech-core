@@ -49,6 +49,8 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     ].filter(Boolean),
     mentionQueries: (name, handle) => [
       handle ? `"@${handle}" (site:linkedin.com/posts OR site:linkedin.com/feed)` : null,
+      handle ? `"${name}" "@${handle}" site:linkedin.com` : null,
+      `"${name}" (tagged OR mentioned OR featuring) (site:linkedin.com/posts OR site:linkedin.com/pulse)`,
       `"${name}" (site:linkedin.com/posts OR site:linkedin.com/pulse)`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://www.linkedin.com/in/${handle}/`,
@@ -68,7 +70,9 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     mentionQueries: (name, handle) => [
       handle ? `"@${handle}" (site:instagram.com/p OR site:instagram.com/reel)` : null,
       handle ? `"@${handle}" site:instagram.com` : null,
-      `"${name}" (tagged OR "photo of" OR with) (site:instagram.com/p OR site:instagram.com/reel)`,
+      handle ? `"tagged" "@${handle}" site:instagram.com` : null,
+      `"${name}" (tagged OR "photo of" OR "with @" OR mention) (site:instagram.com/p OR site:instagram.com/reel)`,
+      `"${name}" site:instagram.com/p`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://www.instagram.com/${handle}/`,
   },
@@ -84,6 +88,8 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     ].filter(Boolean),
     mentionQueries: (name, handle) => [
       handle ? `"@${handle}" site:tiktok.com` : null,
+      handle ? `"tagged" "@${handle}" site:tiktok.com` : null,
+      `"${name}" (tagged OR featuring OR "duet with") site:tiktok.com`,
       `"${name}" site:tiktok.com/video`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://www.tiktok.com/@${handle}`,
@@ -100,6 +106,7 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     ].filter(Boolean),
     mentionQueries: (name, handle) => [
       handle ? `"@${handle}" (site:youtube.com/watch OR site:youtu.be)` : null,
+      `"${name}" (featuring OR tagged OR "ft." OR mentioned) (site:youtube.com/watch OR site:youtube.com/shorts)`,
       `"${name}" (site:youtube.com/watch OR site:youtu.be OR site:youtube.com/shorts)`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://www.youtube.com/@${handle}`,
@@ -116,6 +123,8 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     ].filter(Boolean),
     mentionQueries: (name, handle) => [
       handle ? `"@${handle}" (site:x.com/status OR site:twitter.com/status)` : null,
+      handle ? `"@${handle}" (site:x.com OR site:twitter.com)` : null,
+      `"${name}" (tagged OR mentioning OR "shout out") (site:x.com/status OR site:twitter.com/status)`,
       `"${name}" (site:x.com/status OR site:twitter.com/status)`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://x.com/${handle}`,
@@ -131,6 +140,7 @@ const DEEP_NETWORK_SPECS = Object.freeze([
     ].filter(Boolean),
     mentionQueries: (name, handle) => [
       handle ? `"@${handle}" site:facebook.com` : null,
+      `"${name}" (tagged OR "was tagged" OR with) (site:facebook.com/posts OR site:facebook.com/photos)`,
       `"${name}" (site:facebook.com/posts OR site:facebook.com/photos OR site:facebook.com/watch)`,
     ].filter(Boolean),
     profileUrl: (handle) => `https://www.facebook.com/${handle}`,
@@ -393,35 +403,44 @@ export function looksLikeRosterOcrPollution(snippet, name) {
 }
 
 /**
+ * Direct @tag / u/handle only (strongest mention signal).
+ */
+export function isDirectTag({ title = "", snippet = "", url = "", handles = [] } = {}) {
+  const blob = `${title} ${snippet} ${url}`;
+  const handleList = (Array.isArray(handles) ? handles : [])
+    .map((h) => String(h).replace(/^@/, "").trim())
+    .filter((h) => h.length >= 2);
+  for (const h of handleList) {
+    if (new RegExp(`(^|[^A-Za-z0-9_])@${escapeRegex(h)}\\b`, "i").test(blob)) return true;
+    if (new RegExp(`\\bu/${escapeRegex(h)}\\b`, "i").test(blob)) return true;
+    // Instagram/TikTok tagged-in-URL patterns are rare; keep text-based.
+  }
+  return false;
+}
+
+/**
  * Direct mention / tag only — not polluted snippet ghosts.
  * Accept when:
- *  - @handle appears in title or snippet
- *  - full name appears in the TITLE
+ *  - @handle appears in title or snippet (tag)
+ *  - full name appears in the TITLE (clear headline mention)
  *  - snippet has clear tag language + name, and is not OCR roster junk
+ * Never accept "name buried in OCR garbage" alone.
  */
 export function isDirectMention({ title = "", snippet = "", name = "", handles = [] } = {}) {
   const t = String(title ?? "");
   const s = String(snippet ?? "");
-  const blob = `${t} ${s}`;
-  const handleList = (Array.isArray(handles) ? handles : [])
-    .map((h) => String(h).replace(/^@/, "").trim())
-    .filter((h) => h.length >= 2);
 
-  for (const h of handleList) {
-    if (new RegExp(`(^|[^A-Za-z0-9_])@${escapeRegex(h)}\\b`, "i").test(blob)) return true;
-    if (new RegExp(`\\bu/${escapeRegex(h)}\\b`, "i").test(blob)) return true;
+  if (isDirectTag({ title: t, snippet: s, handles })) return true;
+
+  if (name && nameMatchesSubject(t, name) && !looksLikeRosterOcrPollution(t, name)) {
+    return true;
   }
-
-  if (name && nameMatchesSubject(t, name)) return true;
 
   if (name && nameMatchesSubject(s, name)) {
     if (looksLikeRosterOcrPollution(s, name)) return false;
-    if (/\b(tagged|mention(?:ed|s)?|featuring|congratulat(?:es|ions)?|photo of|with @)\b/i.test(s)) {
-      return true;
-    }
-    // Name must appear early and not be buried after another subject headline
-    const early = s.slice(0, 140);
-    if (nameMatchesSubject(early, name) && !looksLikeRosterOcrPollution(early, name)) {
+    // Require explicit tagging / attribution language — bare name in a long snippet is too noisy
+    if (/\b(tagged|was tagged|mention(?:ed|s)?|featuring|congratulat(?:es|ions)?|photo of|shout\s*out|with @)\b/i.test(s)
+      && nameMatchesSubject(s.slice(0, 180), name)) {
       return true;
     }
     return false;
@@ -484,13 +503,17 @@ export async function discoverSocialProfiles({
   depth = "basic",
 } = {}) {
   const name = String(subject.name ?? "").trim();
-  const handles = Array.isArray(subject.handles)
-    ? subject.handles.map(String).filter(Boolean)
-    : [];
+  const handlesByNetwork = normalizeHandlesByNetwork(subject.handlesByNetwork ?? subject.handlesByPlatform);
+  const handles = [
+    ...(Array.isArray(subject.handles) ? subject.handles.map(String).filter(Boolean) : []),
+    ...Object.values(handlesByNetwork),
+  ];
+  const uniqueHandles = [...new Set(handles.map((h) => String(h).replace(/^@/, "").trim()).filter(Boolean))];
+
   if (!serperApiKey) {
     return { ok: false, reason: "serper_api_key_missing", profiles: [], searches: [] };
   }
-  if (!name && handles.length === 0) {
+  if (!name && uniqueHandles.length === 0) {
     return { ok: false, reason: "subject_name_required", profiles: [], searches: [] };
   }
   if (typeof fetchImpl !== "function") {
@@ -500,11 +523,12 @@ export async function discoverSocialProfiles({
   if (depth === "deep") {
     return discoverDeepSocialPresence({
       name,
-      handles,
+      handles: uniqueHandles,
+      handlesByNetwork,
       serperApiKey,
       networks,
       fetchImpl,
-      maxPerNetwork: Math.max(maxPerNetwork, 6),
+      maxPerNetwork: Math.max(maxPerNetwork, 8),
     });
   }
 
@@ -516,7 +540,7 @@ export async function discoverSocialProfiles({
   const profiles = [];
   const seen = new Set();
 
-  for (const handle of handles.slice(0, 6)) {
+  for (const handle of uniqueHandles.slice(0, 8)) {
     const q = String(handle).replace(/^@/, "");
     searches.push({ network: "handle", query: q });
     const rows = await serperSearch({
@@ -549,18 +573,32 @@ export async function discoverSocialProfiles({
   return { ok: true, profiles, searches };
 }
 
+function normalizeHandlesByNetwork(raw) {
+  if (!raw || typeof raw !== "object") return {};
+  /** @type {Record<string, string>} */
+  const out = {};
+  for (const [network, value] of Object.entries(raw)) {
+    const h = String(value ?? "").trim().replace(/^@/, "");
+    if (!h) continue;
+    out[String(network).toLowerCase()] = h;
+  }
+  return out;
+}
+
 /**
  * Profile → own posts → direct tags/mentions, per platform.
  */
 async function discoverDeepSocialPresence({
   name,
   handles,
+  handlesByNetwork = {},
   serperApiKey,
   networks,
   fetchImpl,
   maxPerNetwork,
 }) {
   const handleSeed = handles.map((h) => String(h).replace(/^@/, "")).filter(Boolean);
+  const byNet = handlesByNetwork && typeof handlesByNetwork === "object" ? handlesByNetwork : {};
   const wanted = Array.isArray(networks) && networks.length
     ? DEEP_NETWORK_SPECS.filter((n) => networks.map(String).map((x) => x.toLowerCase()).includes(n.network))
     : DEEP_NETWORK_SPECS;
@@ -578,6 +616,11 @@ async function discoverDeepSocialPresence({
     if (!trustedByNetwork.has(network)) trustedByNetwork.set(network, new Set());
     trustedByNetwork.get(network).add(h.toLowerCase());
     allTrusted.add(h.toLowerCase());
+  }
+
+  // Seed user-provided per-platform handles as trusted immediately
+  for (const [network, handle] of Object.entries(byNet)) {
+    trustHandle(network, handle);
   }
 
   async function runQuery(network, query, preferredKind, num = maxPerNetwork) {
@@ -618,7 +661,12 @@ async function discoverDeepSocialPresence({
 
   // ── PHASE 1: find profiles first (per platform) ──────────────────────────
   for (const spec of wanted) {
-    const seedHandle = handleSeed[0] || "";
+    // Prefer the handle the user typed for THIS platform — never reuse IG handle on TikTok.
+    const seedHandle = byNet[spec.network] || "";
+    if (seedHandle) {
+      trustHandle(spec.network, seedHandle);
+      ensureSynthesizedProfile(spec.network, seedHandle, name);
+    }
     const qs = spec.profileQueries(name || seedHandle, seedHandle) || [];
     const hits = [];
     for (const q of qs.slice(0, 3)) {
@@ -627,18 +675,14 @@ async function discoverDeepSocialPresence({
 
     let foundSubjectProfile = false;
     for (const hit of hits) {
-      if (hit.kind !== "profile") {
-        // Profile queries sometimes return posts — ignore here; phase 2/3 handle content
-        continue;
-      }
+      if (hit.kind !== "profile") continue;
       if (!profileLooksLikeSubject({
         title: hit.title,
         snippet: hit.snippet,
         url: hit.url,
         name,
-        handles: handleSeed,
+        handles: [seedHandle, ...handleSeed].filter(Boolean),
       })) {
-        // Drop unrelated profile hits early (celebrities, random accounts)
         const idx = profiles.indexOf(hit);
         if (idx >= 0) profiles.splice(idx, 1);
         seen.delete(hit.url);
@@ -646,55 +690,11 @@ async function discoverDeepSocialPresence({
       }
       foundSubjectProfile = true;
       hit.relation = "own";
-      if (hit.handle) {
-        trustHandle(spec.network, hit.handle);
-        ensureSynthesizedProfile(spec.network, hit.handle, name);
-      }
+      if (hit.handle) trustHandle(spec.network, hit.handle);
     }
 
-    // User-supplied handle: if this platform's profile search found them, or a
-    // direct site:platform/handle query matched, materialize the profile URL.
-    // Never invent the same handle on every other network.
-    if (seedHandle && foundSubjectProfile) {
-      trustHandle(spec.network, seedHandle);
+    if (!foundSubjectProfile && seedHandle) {
       ensureSynthesizedProfile(spec.network, seedHandle, name);
-    } else if (seedHandle) {
-      // Direct handle probe — only trust if the result looks like the subject
-      const probeQs = (spec.profileQueries(name || seedHandle, seedHandle) || [])
-        .filter((q) => q.toLowerCase().includes(seedHandle.toLowerCase()));
-      for (const q of probeQs.slice(0, 1)) {
-        const probeHits = await runQuery(spec.network, q, "profile", 3);
-        for (const hit of probeHits) {
-          if (hit.kind !== "profile") continue;
-          if (!profileLooksLikeSubject({
-            title: hit.title,
-            snippet: hit.snippet,
-            url: hit.url,
-            name,
-            handles: handleSeed,
-          }) && !(hit.handle && hit.handle.toLowerCase() === seedHandle.toLowerCase() && nameMatchesSubject(`${hit.title} ${hit.snippet}`, name))) {
-            const idx = profiles.indexOf(hit);
-            if (idx >= 0) profiles.splice(idx, 1);
-            seen.delete(hit.url);
-            continue;
-          }
-          foundSubjectProfile = true;
-          hit.relation = "own";
-          trustHandle(spec.network, seedHandle);
-          if (hit.handle) trustHandle(spec.network, hit.handle);
-          ensureSynthesizedProfile(spec.network, seedHandle, name);
-        }
-      }
-      // Last resort for provided handle: if URL shape is exact, keep a clickable profile
-      // even when Serper returns thin snippets (common for Instagram).
-      if (!foundSubjectProfile && seedHandle) {
-        const exact = hits.find((h) => h.handle && h.handle.toLowerCase() === seedHandle.toLowerCase() && h.kind === "profile");
-        if (exact) {
-          trustHandle(spec.network, seedHandle);
-          ensureSynthesizedProfile(spec.network, seedHandle, name);
-          foundSubjectProfile = true;
-        }
-      }
     }
   }
 
@@ -702,9 +702,9 @@ async function discoverDeepSocialPresence({
   for (const spec of wanted) {
     const netHandles = [...(trustedByNetwork.get(spec.network) || [])];
     if (!netHandles.length) continue;
-    for (const handle of netHandles.slice(0, 2)) {
+    for (const handle of netHandles.slice(0, 3)) {
       const qs = spec.ownPostQueries?.(name, handle) || [];
-      for (const q of qs.slice(0, 2)) {
+      for (const q of qs.slice(0, 3)) {
         const hits = await runQuery(spec.network, q, "post", maxPerNetwork);
         for (const hit of hits) {
           if (hit.kind === "profile") continue;
@@ -718,6 +718,14 @@ async function discoverDeepSocialPresence({
             hit.kind = "post";
             hit.relation = "own";
             hit.handle = hit.handle || handle;
+          } else if (isDirectTag({
+            title: hit.title,
+            snippet: hit.snippet,
+            url: hit.url,
+            handles: [handle, ...allTrusted],
+          })) {
+            hit.kind = "tag";
+            hit.relation = "tagged";
           } else if (isDirectMention({
             title: hit.title,
             snippet: hit.snippet,
@@ -727,7 +735,6 @@ async function discoverDeepSocialPresence({
             hit.kind = "mention";
             hit.relation = "mentioned";
           } else {
-            // Drop unrelated posts that merely appeared in a site:handle crawl
             const idx = profiles.indexOf(hit);
             if (idx >= 0) profiles.splice(idx, 1);
             seen.delete(hit.url);
@@ -740,14 +747,20 @@ async function discoverDeepSocialPresence({
   // ── PHASE 3: direct @tags / name-in-title mentions only ──────────────────
   for (const spec of wanted) {
     const netHandles = [...(trustedByNetwork.get(spec.network) || [])];
-    const mentionHandles = netHandles.length ? netHandles : handleSeed;
+    const mentionHandles = netHandles.length ? netHandles : [];
+    // Without a trusted handle for this network, still search name mentions on the platform
     const primary = mentionHandles[0] || "";
-    const qs = spec.mentionQueries?.(name, primary) || [];
-    for (const q of qs.slice(0, 2)) {
-      const hits = await runQuery(spec.network, q, "mention", Math.min(5, maxPerNetwork));
+    const qs = [
+      ...(spec.mentionQueries?.(name, primary) || []),
+      // Extra tag queries for each known handle on this network
+      ...mentionHandles.slice(0, 2).flatMap((h) => [
+        primary && h !== primary ? `"@${h}" site:${spec.network === "x" ? "x.com OR twitter.com" : `${spec.network}.com`}` : null,
+      ]),
+    ].filter(Boolean);
+    for (const q of [...new Set(qs)].slice(0, 6)) {
+      const hits = await runQuery(spec.network, q, "mention", Math.min(10, maxPerNetwork + 2));
       for (const hit of hits) {
         if (hit.kind === "profile") {
-          // Don't let mention queries promote random profiles
           if (!profileLooksLikeSubject({
             title: hit.title,
             snippet: hit.snippet,
@@ -772,6 +785,16 @@ async function discoverDeepSocialPresence({
           hit.relation = "own";
           continue;
         }
+        if (isDirectTag({
+          title: hit.title,
+          snippet: hit.snippet,
+          url: hit.url,
+          handles: [...allTrusted],
+        })) {
+          hit.kind = "tag";
+          hit.relation = "tagged";
+          continue;
+        }
         if (isDirectMention({
           title: hit.title,
           snippet: hit.snippet,
@@ -789,7 +812,7 @@ async function discoverDeepSocialPresence({
     }
   }
 
-  // Web / sports / news mentions (name must be in the TITLE — no OCR ghosts)
+  // Web / news mentions (name must be in the TITLE — no OCR ghosts)
   if (name) {
     const webHits = await runQuery("web", `"${name}"`, "mention", 8);
     for (const hit of webHits) {

@@ -12,6 +12,7 @@ import {
   classifyHitKind,
   extractHandleFromUrl,
   isDirectMention,
+  isDirectTag,
   looksLikeRosterOcrPollution,
   profileLooksLikeSubject,
 } from "../integrations/social-screening/serperSocialDiscovery.js";
@@ -139,17 +140,33 @@ test("extractHandleFromUrl pulls platform handles", () => {
   assert.equal(extractHandleFromUrl("https://www.linkedin.com/in/sample-user-123"), "sample-user-123");
 });
 
-test("organizePlatformSections groups profile then posts then mentions", () => {
+test("organizePlatformSections groups profile posts tags mentions", () => {
   const sections = organizePlatformSections(rankProfiles([
     { network: "instagram", kind: "post", relation: "own", title: "Reel", url: "https://instagram.com/reel/abc", snippet: "goal", handle: "jane" },
     { network: "instagram", kind: "profile", title: "Jane", url: "https://instagram.com/jane", snippet: "780 followers", handle: "jane" },
+    { network: "instagram", kind: "tag", relation: "tagged", title: "Night out with @jane", url: "https://instagram.com/p/tag1", snippet: "Congrats @jane", handle: null },
     { network: "instagram", kind: "mention", relation: "mentioned", title: "News about Jane Doe", url: "https://instagram.com/p/xyz", snippet: "about jane", handle: null },
     { network: "tiktok", kind: "profile", title: "Jane TT", url: "https://tiktok.com/@jane", snippet: "bio", handle: "jane" },
   ], { name: "Jane Doe", handles: ["jane"] }));
   assert.equal(sections[0].network, "instagram");
   assert.equal(sections[0].profile?.url, "https://instagram.com/jane");
   assert.ok(sections[0].posts.length >= 1);
+  assert.ok(sections[0].tags.length >= 1);
+  assert.ok(sections[0].mentions.length >= 1);
   assert.ok(sections.some((s) => s.network === "tiktok"));
+});
+
+test("isDirectTag requires @handle not bare name", () => {
+  assert.equal(isDirectTag({
+    title: "Tagged",
+    snippet: "Photo with @lpiandes tonight",
+    handles: ["lpiandes"],
+  }), true);
+  assert.equal(isDirectTag({
+    title: "Leo Piandes scored",
+    snippet: "great game",
+    handles: ["lpiandes"],
+  }), false);
 });
 
 test("runPublicSocialCheck requires name or handle", async () => {
@@ -214,7 +231,7 @@ test("runPublicSocialCheck profile-first finds instagram then own content", asyn
   };
   const res = await runPublicSocialCheck({
     name: "Jane Doe",
-    handle: "janedoe",
+    handlesByPlatform: { instagram: "janedoe" },
     serperApiKey: "test-key",
     fetchImpl,
   });
@@ -222,5 +239,44 @@ test("runPublicSocialCheck profile-first finds instagram then own content", asyn
   const ig = res.platforms.find((p) => p.network === "instagram");
   assert.ok(ig, "instagram platform present");
   assert.ok(ig.profile?.url?.includes("janedoe"), "instagram profile resolved");
+  assert.ok(
+    (ig.tags?.length ?? 0) >= 1 || (ig.mentions?.length ?? 0) >= 1,
+    "instagram tags or mentions present",
+  );
+  assert.equal(res.subject.handlesByPlatform?.instagram, "janedoe");
   assert.match(res.disclaimer, /Not an employment/i);
+});
+
+test("filterSubjectRelevant keeps tags separate from name mentions", () => {
+  const filtered = filterSubjectRelevant([
+    {
+      network: "instagram",
+      kind: "tag",
+      relation: "tagged",
+      title: "Team night with @janedoe",
+      url: "https://www.instagram.com/p/TagPost1/",
+      snippet: "Congrats to @janedoe",
+      handle: null,
+    },
+    {
+      network: "instagram",
+      kind: "mention",
+      title: "Congratulations to Captain Jane Doe",
+      url: "https://www.instagram.com/p/Mention1/",
+      snippet: "Well deserved",
+      handle: null,
+    },
+    {
+      network: "instagram",
+      kind: "post",
+      title: "Unrelated celebrity news",
+      url: "https://www.instagram.com/p/Noise/",
+      snippet: "someone else entirely",
+      handle: null,
+    },
+  ], { name: "Jane Doe", handles: ["janedoe"] });
+
+  assert.ok(filtered.some((h) => h.kind === "tag" && /@janedoe/i.test(h.title)));
+  assert.ok(filtered.some((h) => h.kind === "mention" && /Jane Doe/i.test(h.title)));
+  assert.equal(filtered.some((h) => /Noise/i.test(h.url)), false);
 });

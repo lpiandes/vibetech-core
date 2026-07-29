@@ -24,6 +24,7 @@ type Platform = {
   label: string;
   profile?: Hit | null;
   posts?: Hit[];
+  tags?: Hit[];
   mentions?: Hit[];
 };
 
@@ -36,19 +37,31 @@ function pushHit(lines: string[], hit: Hit, label: string) {
 }
 
 export function buildSocialCheckerPdf(report: {
-  subject: { name?: string; handle?: string | null };
+  subject: {
+    name?: string;
+    handle?: string | null;
+    handlesByPlatform?: Record<string, string>;
+  };
   profiles?: Hit[];
   platforms?: Platform[];
   discoveredHandles?: string[];
   generatedAt?: string;
   disclaimer?: string;
 }): Blob {
+  const handleBits = report.subject?.handlesByPlatform
+    ? Object.entries(report.subject.handlesByPlatform).map(([net, h]) => `${net}:@${h}`)
+    : [];
   const lines: string[] = [
     "VibeTech Social Checker",
     `Subject: ${report.subject?.name || "—"}${report.subject?.handle ? ` (@${report.subject.handle})` : ""}`,
     `Generated: ${report.generatedAt || new Date().toISOString()}`,
     "",
   ];
+
+  if (handleBits.length) {
+    lines.push(`Handles used: ${handleBits.join(", ")}`);
+    lines.push("");
+  }
 
   if (report.discoveredHandles?.length) {
     lines.push(`Handles found: ${report.discoveredHandles.map((h) => `@${h}`).join(", ")}`);
@@ -66,8 +79,12 @@ export function buildSocialCheckerPdf(report: {
         lines.push("  Posts / media");
         for (const hit of platform.posts.slice(0, 25)) pushHit(lines, hit, "POST");
       }
+      if (platform.tags?.length) {
+        lines.push("  Tags (@mentions of them)");
+        for (const hit of platform.tags.slice(0, 25)) pushHit(lines, hit, "TAG");
+      }
       if (platform.mentions?.length) {
-        lines.push("  Mentions & related");
+        lines.push("  Name mentions");
         for (const hit of platform.mentions.slice(0, 25)) pushHit(lines, hit, "MENTION");
       }
       lines.push("");

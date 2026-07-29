@@ -2,7 +2,8 @@
  * Public Social Checker — deep multi-platform presence discovery.
  * Uses Serper discovery only (not the full FCRA screening pipeline).
  *
- * Display order per platform: profile → their posts → direct tags/mentions.
+ * Display order per platform: profile → their posts → tags → mentions.
+ * Hard rule: never show content that does not clearly involve the subject.
  */
 import {
   discoverSocialProfiles,
@@ -10,6 +11,7 @@ import {
   isNoiseUrl,
   nameMatchesSubject,
   isDirectMention,
+  isDirectTag,
   isLikelyOwnPost,
   profileLooksLikeSubject,
   looksLikeRosterOcrPollution,
@@ -84,17 +86,19 @@ export function checkSocialCheckerRateLimit({
   return { ok: true, remaining: Math.max(0, limit - used - 1), limit, day };
 }
 
+function normalizeHandleList(handles = []) {
+  return (Array.isArray(handles) ? handles : [])
+    .map((h) => String(h).replace(/^@/, "").trim().toLowerCase())
+    .filter((h) => h.length >= 2);
+}
+
 /**
- * Keep only: their profile, posts they authored, or posts that directly tag/mention them.
- * Drops Serper OCR roster ghosts (e.g. "LEO PIANDES (A) NICK DEMIO (A)" on unrelated reels).
- * @param {object[]} profiles
- * @param {{ name?: string, handles?: string[] }} subject
+ * Keep only: their profile, posts they authored, @tags of them, or clear name mentions.
+ * Drops Serper OCR roster ghosts and any hit without a subject signal.
  */
 export function filterSubjectRelevant(profiles = [], subject = {}) {
   const name = String(subject.name ?? "").trim();
-  const handles = (Array.isArray(subject.handles) ? subject.handles : [])
-    .map((h) => String(h).replace(/^@/, "").toLowerCase())
-    .filter(Boolean);
+  const handles = normalizeHandleList(subject.handles);
   const handleSet = new Set(handles);
 
   for (const hit of profiles) {
@@ -122,18 +126,22 @@ export function filterSubjectRelevant(profiles = [], subject = {}) {
     const handle = String(hit.handle ?? "").toLowerCase();
     const kindIn = String(hit.kind || "mention");
 
-    if (looksLikeRosterOcrPollution(snippet, name) && !nameMatchesSubject(title, name)) {
-      continue;
+    if (looksLikeRosterOcrPollution(snippet, name) || looksLikeRosterOcrPollution(title, name)) {
+      // Still allow if title is a clear name mention / tag (not OCR junk)
+      if (!nameMatchesSubject(title, name) && !isDirectTag({ title, snippet, url, handles: handleList })) {
+        continue;
+      }
+      if (looksLikeRosterOcrPollution(snippet, name) && !nameMatchesSubject(title, name)) {
+        continue;
+      }
     }
 
-    // Profile: must look like the subject
     if (kindIn === "profile") {
       if (!profileLooksLikeSubject({ title, snippet, url, name, handles: handleList })) continue;
       out.push({ ...hit, kind: "profile", relation: "own" });
       continue;
     }
 
-    // Own posts (already tagged by discovery, or heuristic)
     const own = hit.relation === "own" || isLikelyOwnPost({
       title,
       snippet,
@@ -142,7 +150,6 @@ export function filterSubjectRelevant(profiles = [], subject = {}) {
       handle: handle || handleList[0] || "",
     });
     if (own && (kindIn === "post" || hit.relation === "own")) {
-      // Still require some subject signal so random site:handle crawl junk doesn't slip in
       const subjectSignal = (handle && handleSet.has(handle))
         || handleList.some((h) => url.toLowerCase().includes(`/${h}/`) || url.toLowerCase().includes(`/@${h}`))
         || isLikelyOwnPost({ title, snippet, url, name, handle: handle || handleList[0] || "" });
@@ -151,7 +158,11 @@ export function filterSubjectRelevant(profiles = [], subject = {}) {
       continue;
     }
 
-    // Mentions: @tag or name in title / clear direct mention — never OCR ghosts
+    if (isDirectTag({ title, snippet, url, handles: handleList }) || kindIn === "tag" || hit.relation === "tagged") {
+      out.push({ ...hit, kind: "tag", relation: "tagged" });
+      continue;
+    }
+
     if (isDirectMention({ title, snippet, name, handles: handleList })) {
       out.push({ ...hit, kind: "mention", relation: "mentioned" });
     }
@@ -160,22 +171,13 @@ export function filterSubjectRelevant(profiles = [], subject = {}) {
   return out;
 }
 
-/**
- * @param {Array<{ network?: string, kind?: string, title?: string, url?: string, snippet?: string, handle?: string|null, relation?: string }>} [profiles]
- * @param {{ name?: string, handles?: string[] }} [subject]
- */
 export function rankProfiles(profiles = [], subject = {}) {
   const name = String(subject.name ?? "").trim();
-  const handles = new Set(
-    (Array.isArray(subject.handles) ? subject.handles : [])
-      .map((h) => String(h).replace(/^@/, "").toLowerCase())
-      .filter(Boolean),
-  );
+  const handles = new Set(normalizeHandleList(subject.handles));
   const scored = (Array.isArray(profiles) ? profiles : []).map((p, index) => {
     const network = String(p.network ?? "web").toLowerCase();
     const kind = String(p.kind ?? "mention").toLowerCase();
     const title = String(p.title ?? "");
-    const snippet = String(p.snippet ?? "");
     const url = String(p.url ?? "");
     const handle = String(p.handle ?? "").toLowerCase();
     let score = 40;
@@ -183,6 +185,7 @@ export function rankProfiles(profiles = [], subject = {}) {
     if (orderIdx >= 0) score += (PLATFORM_ORDER.length - orderIdx);
     if (kind === "profile") score += 35;
     else if (kind === "post" && p.relation === "own") score += 20;
+    else if (kind === "tag") score += 14;
     else if (kind === "mention") score += 8;
     if (name && nameMatchesSubject(title, name)) score += 22;
     if (handle && handles.has(handle)) score += 18;
@@ -202,12 +205,10 @@ export function rankProfiles(profiles = [], subject = {}) {
 }
 
 /**
- * Group ranked hits into per-platform sections: profile, posts, mentions.
- * Empty platforms are dropped.
- * @param {ReturnType<typeof rankProfiles>} profiles
+ * Group ranked hits: profile, posts, tags, mentions.
  */
 export function organizePlatformSections(profiles = []) {
-  /** @type {Map<string, { network: string, label: string, profile: object|null, posts: object[], mentions: object[], all: object[] }>} */
+  /** @type {Map<string, { network: string, label: string, profile: object|null, posts: object[], tags: object[], mentions: object[], all: object[] }>} */
   const byNet = new Map();
 
   for (const hit of profiles) {
@@ -218,6 +219,7 @@ export function organizePlatformSections(profiles = []) {
         label: PLATFORM_LABELS[network] || network,
         profile: null,
         posts: [],
+        tags: [],
         mentions: [],
         all: [],
       });
@@ -234,6 +236,8 @@ export function organizePlatformSections(profiles = []) {
       }
     } else if (kind === "post" && hit.relation === "own") {
       bucket.posts.push(hit);
+    } else if (kind === "tag" || hit.relation === "tagged") {
+      bucket.tags.push(hit);
     } else {
       bucket.mentions.push(hit);
     }
@@ -249,16 +253,20 @@ export function organizePlatformSections(profiles = []) {
 
   for (const bucket of ordered) {
     bucket.posts.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+    bucket.tags.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
     bucket.mentions.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
   }
 
-  return ordered.filter((b) => b.profile || b.posts.length || b.mentions.length);
+  return ordered.filter(
+    (b) => b.profile || b.posts.length || b.tags.length || b.mentions.length,
+  );
 }
 
 /**
  * @param {{
  *   name?: string,
  *   handle?: string,
+ *   handlesByPlatform?: Record<string, string>,
  *   serperApiKey?: string,
  *   fetchImpl?: typeof fetch,
  * }} [opts]
@@ -266,12 +274,31 @@ export function organizePlatformSections(profiles = []) {
 export async function runPublicSocialCheck({
   name,
   handle = "",
+  handlesByPlatform = null,
   serperApiKey = process.env.SERPER_API_KEY,
   fetchImpl = globalThis.fetch?.bind(globalThis),
 } = {}) {
   const subjectName = String(name ?? "").trim();
   const handleClean = String(handle ?? "").trim().replace(/^@/, "");
-  if (!subjectName && !handleClean) {
+  /** @type {Record<string, string>} */
+  const byPlatform = {};
+  if (handlesByPlatform && typeof handlesByPlatform === "object") {
+    for (const [network, value] of Object.entries(handlesByPlatform)) {
+      const h = String(value ?? "").trim().replace(/^@/, "");
+      if (h) byPlatform[String(network).toLowerCase()] = h;
+    }
+  }
+  if (handleClean && !Object.keys(byPlatform).length) {
+    // Legacy single-handle field — do not invent per-network; still seed discovery
+  }
+
+  const flatHandles = [
+    ...Object.values(byPlatform),
+    ...(handleClean ? [handleClean] : []),
+  ];
+  const uniqueHandles = [...new Set(flatHandles.map((h) => h.toLowerCase()))];
+
+  if (!subjectName && uniqueHandles.length === 0) {
     return { ok: false, reason: "name_required", profiles: [], platforms: [], searches: [] };
   }
   if (!String(serperApiKey ?? "").trim()) {
@@ -279,15 +306,17 @@ export async function runPublicSocialCheck({
   }
 
   const subject = {
-    name: subjectName || handleClean,
-    handles: handleClean ? [handleClean] : [],
+    name: subjectName || uniqueHandles[0] || "",
+    handles: uniqueHandles,
+    handlesByNetwork: byPlatform,
+    handlesByPlatform: byPlatform,
   };
 
   const discovered = await discoverSocialProfiles({
     subject,
     serperApiKey: String(serperApiKey).trim(),
     fetchImpl,
-    maxPerNetwork: 6,
+    maxPerNetwork: 8,
     depth: "deep",
     networks: [...SOCIAL_NETWORKS],
   });
@@ -305,34 +334,32 @@ export async function runPublicSocialCheck({
   const relevant = filterSubjectRelevant(discovered.profiles, {
     name: subjectName,
     handles: [
-      ...subject.handles,
+      ...uniqueHandles,
       ...(discovered.discoveredHandles ?? []),
     ],
   });
   const profiles = rankProfiles(relevant, {
     name: subjectName,
     handles: [
-      ...subject.handles,
+      ...uniqueHandles,
       ...(discovered.discoveredHandles ?? []),
     ],
   });
   const platforms = organizePlatformSections(profiles);
-  /** @type {Record<string, typeof profiles>} */
-  const byNetwork = {};
-  for (const p of platforms) {
-    byNetwork[p.network] = p.all;
-  }
 
   return {
     ok: true,
-    subject: { name: subjectName, handle: handleClean || null },
+    subject: {
+      name: subjectName,
+      handle: handleClean || uniqueHandles[0] || null,
+      handlesByPlatform: byPlatform,
+    },
     profiles,
     platforms,
-    byNetwork,
     discoveredHandles: discovered.discoveredHandles ?? [],
     searches: discovered.searches ?? [],
     generatedAt: new Date().toISOString(),
     disclaimer:
-      "Public OSINT-style social presence context only. Not an employment, tenant, or FCRA background screen. Only the subject's profile, their own posts, and posts that directly tag or mention them are shown.",
+      "Public OSINT-style social presence only. Not an employment or FCRA background screen. Only the subject's profile, their own posts, @tags of them, and clear name mentions are shown — unrelated results are dropped.",
   };
 }
