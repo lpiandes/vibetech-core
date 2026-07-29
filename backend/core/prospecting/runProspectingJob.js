@@ -22,7 +22,7 @@ import { qualifiesProspectLead } from "./publicContactExtract.js";
 import { discoverCompaniesViaSerper } from "./serperCompanyDiscovery.js";
 
 function emptyField() {
-  return { value: null, confidence: "none", source: null, verified: false };
+  return { value: null, rank: null, reason: null, source: null };
 }
 
 /**
@@ -124,7 +124,7 @@ export async function runProspectingJob({
       });
       costMeta.serperQueries += contact.serperQueries ?? 0;
 
-      if (!contact.phone?.value) {
+      if (!contact.phone?.value && !(contact.phones?.length)) {
         costMeta.skippedNoPhone += 1;
         continue;
       }
@@ -140,7 +140,12 @@ export async function runProspectingJob({
 
       const name = String(brief.decisionMakerName || company.companyName || "").trim();
       const overview = String(brief.overview || company.snippet || "").trim();
-      if (!qualifiesProspectLead({ phone: contact.phone, name, overview })) {
+      if (!qualifiesProspectLead({
+        phone: contact.phone,
+        phones: contact.phones,
+        name,
+        overview,
+      })) {
         costMeta.skippedNoPhone += 1;
         continue;
       }
@@ -156,8 +161,10 @@ export async function runProspectingJob({
         sizeEstimated: brief.sizeEstimated,
         decisionMakerName: name,
         decisionMakerTitle: brief.decisionMakerTitle,
+        phones: contact.phones ?? [],
+        emails: contact.emails ?? [],
+        phone: contact.phone ?? emptyField(),
         email: contact.email ?? emptyField(),
-        phone: contact.phone,
         sources: [...new Set([
           ...(company.sources ?? []),
           ...(brief.sources ?? []),

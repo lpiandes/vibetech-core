@@ -90,16 +90,33 @@ test("dedupe against existing CRM by email", () => {
   assert.ok(dup.contactId);
 });
 
-test("public extract finds phone and free email; no invent", () => {
+test("public extract finds phone and free email; ranks multiples best-first", () => {
   const found = extractPublicContactFields([
-    "Call Mile High HVAC at (303) 555-0199 or email hello@milehighhvac.example",
-  ]);
-  assert.equal(found.phone?.value, "(303) 555-0199");
+    {
+      text: "Call us at (800) 555-0100 or visit",
+      url: "https://directory.example/listing",
+    },
+    {
+      text: "Call Mile High HVAC at (303) 555-0199 or email hello@milehighhvac.example",
+      url: "https://milehighhvac.example/contact",
+    },
+    {
+      text: "Also (303) 555-0111 for billing",
+      url: "https://milehighhvac.example/billing",
+    },
+  ], { companyHost: "milehighhvac.example" });
+
+  assert.ok(found.phones.length >= 2);
+  assert.equal(found.phones[0].rank, 1);
+  assert.equal(found.phones[0].value, "(303) 555-0199");
+  assert.ok(!String(found.phones[0].reason ?? "").match(/low|medium|high/i));
   assert.equal(found.email?.value, "hello@milehighhvac.example");
-  assert.equal(found.phone?.source, "serper_snippet");
+  assert.equal(found.emails[0].value, "hello@milehighhvac.example");
+
   const empty = extractPublicContactFields(["Great company in Denver"]);
   assert.equal(empty.phone, null);
   assert.equal(empty.email, null);
+  assert.equal(empty.phones.length, 0);
 });
 
 test("qualifiesProspectLead requires phone + name + brief", () => {

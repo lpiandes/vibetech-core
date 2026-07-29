@@ -80,21 +80,53 @@ export async function writeProspectingState({
   return next;
 }
 
-function normalizeFieldMeta(raw) {
-  if (!raw || typeof raw !== "object") {
-    return { value: null, confidence: "none", source: null, verified: false };
-  }
+function normalizeRankedContact(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw.value != null ? String(raw.value).trim() : "";
+  if (!value) return null;
+  const rank = Number.isFinite(Number(raw.rank)) ? Math.max(1, Math.floor(Number(raw.rank))) : 1;
   return {
-    value: raw.value != null ? String(raw.value) : null,
-    confidence: String(raw.confidence ?? "low"),
+    value,
+    rank,
+    reason: raw.reason != null ? String(raw.reason) : null,
     source: raw.source != null ? String(raw.source) : null,
-    verified: Boolean(raw.verified),
+  };
+}
+
+function normalizeRankedList(rawList, primary = null) {
+  const list = Array.isArray(rawList) ? rawList.map(normalizeRankedContact).filter(Boolean) : [];
+  if (!list.length && primary) {
+    const one = normalizeRankedContact(typeof primary === "object" ? primary : { value: primary, rank: 1 });
+    if (one) list.push(one);
+  }
+  // Dedupe by value, keep best rank order
+  const seen = new Set();
+  const out = [];
+  for (const row of list.sort((a, b) => a.rank - b.rank)) {
+    const key = row.value.includes("@") ? row.value.toLowerCase() : row.value.replace(/\D/g, "");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...row, rank: out.length + 1 });
+  }
+  return out.slice(0, 6);
+}
+
+function primaryFromList(list) {
+  if (!list?.length) return { value: null, rank: null, reason: null, source: null };
+  const top = list[0];
+  return {
+    value: top.value,
+    rank: 1,
+    reason: top.reason,
+    source: top.source,
   };
 }
 
 export function normalizeCandidate(raw) {
   if (!raw || typeof raw !== "object") return null;
   const id = String(raw.id ?? "").trim() || `cand_${crypto.randomUUID().slice(0, 10)}`;
+  const phones = normalizeRankedList(raw.phones, raw.phone);
+  const emails = normalizeRankedList(raw.emails, raw.email);
   return {
     id,
     status: CANDIDATE_STATUSES.includes(String(raw.status)) ? String(raw.status) : "pending",
@@ -106,8 +138,11 @@ export function normalizeCandidate(raw) {
     sizeEstimated: raw.sizeEstimated !== false,
     decisionMakerName: String(raw.decisionMakerName ?? "").trim() || null,
     decisionMakerTitle: String(raw.decisionMakerTitle ?? "").trim() || null,
-    email: normalizeFieldMeta(raw.email),
-    phone: normalizeFieldMeta(raw.phone),
+    phones,
+    emails,
+    // Primary = rank 1 (CRM write + dedupe)
+    phone: primaryFromList(phones),
+    email: primaryFromList(emails),
     sources: Array.isArray(raw.sources)
       ? raw.sources.map((s) => String(s ?? "").trim()).filter(Boolean).slice(0, 12)
       : [],

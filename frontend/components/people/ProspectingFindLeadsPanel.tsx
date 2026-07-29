@@ -14,11 +14,18 @@ import { cockpitColors } from "@/design/tokens";
 
 type Pipeline = { id: string; name: string; stages: Array<{ id: string; label: string }> };
 
+type RankedContact = {
+  value: string;
+  rank?: number;
+  reason?: string | null;
+  source?: string | null;
+};
+
 type FieldMeta = {
   value?: string | null;
-  confidence?: string;
+  reason?: string | null;
   source?: string | null;
-  verified?: boolean;
+  rank?: number | null;
 };
 
 type Candidate = {
@@ -33,6 +40,8 @@ type Candidate = {
   decisionMakerTitle?: string | null;
   email?: FieldMeta;
   phone?: FieldMeta;
+  phones?: RankedContact[];
+  emails?: RankedContact[];
   sources?: string[];
   duplicateOfContactId?: string | null;
   acceptedContactId?: string | null;
@@ -46,22 +55,51 @@ type Run = {
   criteria?: { pipelineId?: string | null; stageId?: string | null };
 };
 
-function confidenceTone(confidence?: string, verified?: boolean): "live" | "warn" | "neutral" {
-  if (verified || confidence === "high") return "live";
-  if (confidence === "medium") return "warn";
-  return "neutral";
+function rankedList(list: RankedContact[] | undefined, primary?: FieldMeta | null): RankedContact[] {
+  if (Array.isArray(list) && list.length) {
+    return [...list].sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99));
+  }
+  if (primary?.value) return [{ value: primary.value, rank: 1, reason: primary.reason }];
+  return [];
 }
 
-function ConfidenceChip({ field, label }: { field?: FieldMeta; label: string }) {
-  if (!field?.value) {
+function RankedContacts({
+  label,
+  list,
+  primary,
+}: {
+  label: string;
+  list?: RankedContact[];
+  primary?: FieldMeta | null;
+}) {
+  const rows = rankedList(list, primary);
+  if (!rows.length) {
     return <span style={{ color: cockpitColors.textMuted, fontSize: 12 }}>{label}: —</span>;
   }
-  const conf = field.verified ? "verified" : (field.confidence ?? "low");
+  if (rows.length === 1) {
+    return (
+      <div style={{ fontSize: 13, fontWeight: 650 }}>
+        {label}: {rows[0].value}
+        {rows[0].reason ? (
+          <span style={{ color: cockpitColors.textMuted, fontWeight: 600 }}> · {rows[0].reason}</span>
+        ) : null}
+      </div>
+    );
+  }
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-      <span style={{ fontSize: 13, fontWeight: 650 }}>{label}: {field.value}</span>
-      <VtStatusChip label={String(conf).toUpperCase()} tone={confidenceTone(field.confidence, field.verified)} />
-    </span>
+    <div style={{ display: "grid", gap: 2 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: cockpitColors.textSecondary }}>
+        {label}s (best first)
+      </div>
+      {rows.map((row) => (
+        <div key={`${label}-${row.value}`} style={{ fontSize: 13, fontWeight: 650 }}>
+          {row.rank ?? ""}. {row.value}
+          {row.reason ? (
+            <span style={{ color: cockpitColors.textMuted, fontWeight: 600 }}> · {row.reason}</span>
+          ) : null}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -248,7 +286,7 @@ export default function ProspectingFindLeadsPanel({
       <div style={{ display: "grid", gap: 12 }}>
         <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: 13, fontWeight: 600 }}>
           Every lead includes a public phone, a name, and a short brief.
-          Email is included only when found free in public search — no paid enrichment.
+          Email only when found free in public search. Multiple phones/emails are listed best-first.
           Companies without a findable phone are skipped
           {caps?.maxLeadsPerRun ? ` (up to ${caps.maxLeadsPerRun}/run)` : ""}.
         </p>
@@ -418,8 +456,8 @@ export default function ProspectingFindLeadsPanel({
                               {c.overview}
                             </p>
                           ) : null}
-                          <ConfidenceChip field={c.email} label="Email" />
-                          <ConfidenceChip field={c.phone} label="Phone" />
+                          <RankedContacts label="Phone" list={c.phones} primary={c.phone} />
+                          <RankedContacts label="Email" list={c.emails} primary={c.email} />
                           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12 }}>
                             {c.website ? (
                               <a href={c.website} target="_blank" rel="noreferrer" style={{ color: cockpitColors.accent, fontWeight: 700 }}>

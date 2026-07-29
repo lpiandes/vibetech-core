@@ -17,6 +17,17 @@ function fieldValue(field) {
   return field ? String(field) : "";
 }
 
+function rankedLines(label, list, primary) {
+  const rows = Array.isArray(list) && list.length
+    ? list
+    : (primary?.value ? [{ value: primary.value, rank: 1, reason: primary.reason }] : []);
+  if (!rows.length) return null;
+  if (rows.length === 1) {
+    return `${label}: ${rows[0].value}${rows[0].reason ? ` (${rows[0].reason})` : ""}`;
+  }
+  return `${label}s (best first):\n${rows.map((r) => `  ${r.rank}. ${r.value}${r.reason ? ` — ${r.reason}` : ""}`).join("\n")}`;
+}
+
 function buildProspectNotes(candidate, runId) {
   const lines = [
     `AI prospect (run ${runId})`,
@@ -27,20 +38,10 @@ function buildProspectNotes(candidate, runId) {
       ? `Size: ${candidate.sizeEstimate}${candidate.sizeEstimated ? " (estimated)" : ""}`
       : null,
     candidate.decisionMakerTitle ? `Title: ${candidate.decisionMakerTitle}` : null,
+    rankedLines("Phone", candidate.phones, candidate.phone),
+    rankedLines("Email", candidate.emails, candidate.email),
   ].filter(Boolean);
 
-  const emailConf = candidate.email?.confidence;
-  const phoneConf = candidate.phone?.confidence;
-  if (candidate.email?.value) {
-    lines.push(
-      `Email: ${candidate.email.value} [${emailConf ?? "unknown"}${candidate.email.verified ? ", verified" : ", unverified"}] via ${candidate.email.source ?? "unknown"}`,
-    );
-  }
-  if (candidate.phone?.value) {
-    lines.push(
-      `Phone: ${candidate.phone.value} [${phoneConf ?? "unknown"}${candidate.phone.verified ? ", verified" : ", unverified"}] via ${candidate.phone.source ?? "unknown"}`,
-    );
-  }
   if (Array.isArray(candidate.sources) && candidate.sources.length) {
     lines.push(`Sources: ${candidate.sources.join(" | ")}`);
   }
