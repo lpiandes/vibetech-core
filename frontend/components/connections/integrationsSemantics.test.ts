@@ -19,6 +19,7 @@ const liveFlags = {
   voice_channel: true,
   social_screening: true,
   meta_lead_ads: true,
+  property_management: true,
 };
 
 const presentation = {

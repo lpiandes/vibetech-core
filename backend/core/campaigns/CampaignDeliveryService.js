@@ -36,9 +36,13 @@ function resolveEmailProvider({ integrationPlatform, emailProvider, nowISO }) {
   if (integrationProvider?.communicationProvider) {
     return { provider: integrationProvider.communicationProvider, reason: null, connection };
   }
-  // Mock email connections without CommunicationProvider still allow deterministic campaign send in-app.
-  if (String(connection.providerType ?? connection.providerId ?? "").includes("mock")
-    || String(integrationProvider?.id ?? "").includes("mock")) {
+  // Mock email is for tests/dev only — never pretend campaigns sent in production.
+  const isMock = String(connection.providerType ?? connection.providerId ?? "").includes("mock")
+    || String(integrationProvider?.id ?? "").includes("mock");
+  if (isMock) {
+    if (process.env.NODE_ENV === "production") {
+      return { provider: null, reason: "mock_email_forbidden_in_production", connection };
+    }
     return {
       provider: new DeterministicCampaignEmailProvider({ nowISO, id: "campaign_mock_email" }),
       reason: null,

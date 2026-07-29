@@ -252,10 +252,8 @@ export default function PeopleDetailLayout({
             </ShellPanel>
           ) : null}
 
-          <ShellPanel title="Property interest">
-            {viewModel.subjects.length === 0 ? (
-              <PanelEmpty description="No linked properties for this contact yet." />
-            ) : (
+          {viewModel.subjects.length > 0 ? (
+            <ShellPanel title="Linked records">
               <div style={{ display: "flex", flexDirection: "column" }}>
                 {viewModel.subjects.map((subject) => (
                   <Link
@@ -273,8 +271,8 @@ export default function PeopleDetailLayout({
                   </Link>
                 ))}
               </div>
-            )}
-          </ShellPanel>
+            </ShellPanel>
+          ) : null}
 
           <ShellPanel title="Open requests and work">
             {viewModel.openRequests.length === 0 && viewModel.openWork.length === 0 ? (

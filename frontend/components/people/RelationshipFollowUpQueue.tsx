@@ -54,7 +54,7 @@ function EvidenceDetails({ candidate }: { candidate: RelationshipFollowUpCandida
       >
         {qualification.decisionTimeline ? <span>Decision timeline: {String(qualification.decisionTimeline)}</span> : null}
         {qualification.intent ? <span>Intent: {String(qualification.intent)}</span> : null}
-        {propertyInterest?.value ? <span>Property interest: {String(propertyInterest.value)}</span> : null}
+        {propertyInterest?.value ? <span>Linked interest: {String(propertyInterest.value)}</span> : null}
         {importedNotes.length > 0 ? <span>Imported notes: {importedNotes.length} evidence-only record{importedNotes.length === 1 ? "" : "s"}</span> : null}
       </div>
     </details>

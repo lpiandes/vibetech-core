@@ -62,6 +62,7 @@ import { CampaignDeliveryService } from "../../../backend/core/campaigns/Campaig
 import { businessCampaignTemplateService } from "@/lib/server/compose";
 import { businessKnowledgeService } from "@/lib/server/compose";
 import { buildMcBrideReadinessProjection } from "../../../backend/core/campaigns/McBrideReadinessProjection.js";
+import { isPropertyManagementWorkspace } from "../../../backend/core/platform/vertical/SurfaceInventory.js";
 import { recordReferralIntroduction, buildReferralOperationsSummary } from "../../../backend/core/campaigns/ReferralLoopService.js";
 import { PM_CAMPAIGN_SECTION_TYPES } from "../../../industries/property-management/config/campaignSectionCatalog.js";
 import { MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE } from "../../../industries/property-management/config/mcbrideClientTemplate.js";
@@ -2037,6 +2038,15 @@ export class WorkspaceService {
     } catch {
       knowledgeDocumentCount = 0;
     }
+    const installationModules = Array.isArray(this.connected.installationResult?.modules)
+      ? this.connected.installationResult.modules.map((m: any) => String(m?.moduleId ?? m?.id ?? m))
+      : [];
+    const includePropertyChecks = isPropertyManagementWorkspace({
+      installedModuleIds: installationModules,
+      industryPackageId: this.connected.activation?.industryPackageId ?? null,
+      industry: (this.connected.activation as any)?.industry ?? null,
+      operatingPackId: (this.connected.activation as any)?.operatingPackId ?? null,
+    });
     return (buildMcBrideReadinessProjection as any)({
       businessId: this.workspaceId,
       stack,
@@ -2044,7 +2054,8 @@ export class WorkspaceService {
       knowledgeDocumentCount,
       knowledgeDocuments,
       membershipCount,
-      template: MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE as any,
+      template: includePropertyChecks ? (MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE as any) : undefined,
+      includePropertyChecks,
     });
   }
 

@@ -31,7 +31,7 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
   },
   business_email: {
     title: "Send approved customer email",
-    description: "Draft freely; send only after approval. Not a full inbound inbox reader yet.",
+    description: "Draft freely; send only after approval. Outbound email only — not a full Gmail inbox reader.",
     tier: "live",
     icon: Mail,
     setupMode: "oauth",
@@ -49,11 +49,11 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
   },
   zoom: {
     title: "Zoom",
-    description: "Paste Zoom join links on events today. Auto-create meetings when Zoom OAuth ships.",
+    description: "Paste Zoom join links on calendar events. Auto-create meetings when Zoom OAuth ships.",
     tier: "live",
     icon: Video,
     setupMode: "manual",
-    listed: true,
+    listed: false, // hidden until OAuth auto-create is finished product
     unlocks: "Zoom links on calendar events",
   },
   sms_channel: {

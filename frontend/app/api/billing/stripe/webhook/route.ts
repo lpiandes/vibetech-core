@@ -5,29 +5,58 @@ import {
   isStripeBillingConfigured,
 } from "../../../../../../backend/core/platform/billing/StripeBillingScaffold.js";
 
+function isProductionRuntime() {
+  return process.env.NODE_ENV === "production"
+    || String(process.env.VERCEL_ENV ?? "").toLowerCase() === "production";
+}
+
 /**
- * Stripe webhook / sandbox entitlements.
- * Production: verify Stripe-Signature when STRIPE_WEBHOOK_SECRET is set.
- * Sandbox: POST { businessId, status, packageIds } with header x-vibetech-billing-sandbox: 1
+ * Stripe webhook / controlled sandbox entitlements.
+ * Production: requires Stripe config + stripe-signature header (SDK verify lands next).
+ * Sandbox: only allowed outside production, or with matching BILLING_SANDBOX_SECRET.
  */
 export async function POST(request: Request) {
-  const sandbox = request.headers.get("x-vibetech-billing-sandbox") === "1";
+  const sandboxHeader = request.headers.get("x-vibetech-billing-sandbox") === "1";
+  const sandboxSecret = String(process.env.BILLING_SANDBOX_SECRET ?? "").trim();
+  const providedSandboxSecret = String(request.headers.get("x-vibetech-billing-sandbox-secret") ?? "").trim();
   const secret = String(process.env.STRIPE_WEBHOOK_SECRET ?? "").trim();
+  const production = isProductionRuntime();
 
-  if (!sandbox && secret) {
+  let sandbox = false;
+  if (sandboxHeader) {
+    if (production) {
+      if (!sandboxSecret || providedSandboxSecret !== sandboxSecret) {
+        return NextResponse.json(
+          { ok: false, error: "billing_sandbox_forbidden_in_production" },
+          { status: 403 },
+        );
+      }
+      sandbox = true;
+    } else {
+      sandbox = true;
+    }
+  }
+
+  if (!sandbox) {
+    if (!isStripeBillingConfigured() && !secret) {
+      return NextResponse.json({
+        ok: false,
+        error: "stripe_not_configured",
+        note: "Invoices/packages are assigned by admin. In-app Stripe Checkout is not enabled.",
+      }, { status: 503 });
+    }
     // Signature verification lands with Stripe SDK; refuse unsigned live traffic.
     const sig = request.headers.get("stripe-signature");
     if (!sig) {
       return NextResponse.json({ ok: false, error: "stripe_signature_required" }, { status: 400 });
     }
-  }
-
-  if (!sandbox && !isStripeBillingConfigured() && !secret) {
-    return NextResponse.json({
-      ok: false,
-      error: "stripe_not_configured",
-      note: "Set STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET, or use sandbox header for staging.",
-    }, { status: 503 });
+    if (!secret) {
+      return NextResponse.json({
+        ok: false,
+        error: "stripe_webhook_secret_required",
+        note: "Refusing to mutate entitlements without STRIPE_WEBHOOK_SECRET.",
+      }, { status: 503 });
+    }
   }
 
   const body = await request.json().catch(() => ({}));

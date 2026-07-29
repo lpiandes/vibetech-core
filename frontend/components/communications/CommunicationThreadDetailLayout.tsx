@@ -250,10 +250,10 @@ export default function CommunicationThreadDetailLayout({
           </ShellPanel>
 
           {detail.subject ? (
-            <ShellPanel title="Property interest">
+            <ShellPanel title="Linked record">
               <div style={{ padding: spacing.md, display: "grid", gap: spacing.md }}>
                 <ContextField
-                  label="Property"
+                  label="Record"
                   value={
                     <Link
                       href={`/b/${businessId}/properties/${detail.subject.id}`}

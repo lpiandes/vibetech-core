@@ -36,25 +36,27 @@ export function createLiveIntegrationProviders({
 
 export function liveIntegrationAvailability() {
   const googleOAuth = isGoogleOAuthAppConfigured();
+  const metaConfigured = isMetaLeadAdsConfigured();
+  const serperConfigured = Boolean(String(process.env.SERPER_API_KEY ?? "").trim());
   return {
     // Email always listed (oauth when Google app configured, else dev_connect when allowed).
     business_email: true,
     business_email_oauth: googleOAuth,
     calendar: googleOAuth,
     google_search_console: googleOAuth,
-    google_ads: true,
-    meta_ads: true,
+    // Ads / Drive / accounting stay hidden until connect+prove is finished product.
+    google_ads: false,
+    meta_ads: false,
     sms_channel: true,
     voice_channel: true,
-    social_screening: true,
-    prospecting_enrichment: true,
-    meta_lead_ads: true,
-    // Phase C connect patterns — listed as optional SoR bridges (import/read, not clone).
-    document_storage: true,
-    accounting: true,
+    social_screening: serperConfigured,
+    prospecting_enrichment: serperConfigured,
+    meta_lead_ads: metaConfigured,
+    document_storage: false,
+    accounting: false,
     _googleOAuth: googleOAuth,
     _twilioSmsEnv: isTwilioSmsConfigured(),
     _twilioVoiceEnv: isTwilioVoiceConfigured(),
-    _metaEnv: isMetaLeadAdsConfigured(),
+    _metaEnv: metaConfigured,
   };
 }

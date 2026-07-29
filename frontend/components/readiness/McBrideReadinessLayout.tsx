@@ -47,7 +47,7 @@ export default function McBrideReadinessLayout({ businessId }: { businessId: str
     <div style={{ display: "grid", gap: spacing.lg, padding: spacing.lg }}>
       <PageHeader
         title="Launch readiness"
-        description="What is ready for McBride operations, what needs attention, and what remains deferred."
+        description="What is ready for this business, what needs attention, and what remains deferred."
       />
       {error ? <div style={{ color: cockpitColors.warning }}>{error}</div> : null}
       <ShellPanel title="Overall launch state">

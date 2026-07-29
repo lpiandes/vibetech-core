@@ -140,13 +140,13 @@ test("PeopleExecutiveLayout renders compact empty state", () => {
   assert.ok(html.includes("No people yet."));
 });
 
-test("PeopleDetailLayout renders contact, property interest, and open work", () => {
+test("PeopleDetailLayout renders contact, linked records, and open work", () => {
   const html = renderToStaticMarkup(<PeopleDetailLayout businessId="biz_1" viewModel={makeDetail()} />);
 
   assert.ok(html.includes("People"));
   assert.ok(html.includes("Alex Rivera"));
   assert.ok(html.includes("alex@example.com"));
-  assert.ok(html.includes("Property interest"));
+  assert.ok(html.includes("Linked records"));
   assert.ok(html.includes("12 Harbor View"));
   assert.ok(html.includes("Open requests and work"));
   assert.ok(html.includes("Prospect follow-up"));

@@ -172,7 +172,7 @@ test("CommunicationThreadDetailLayout: renders contact, inquiry, outbound respon
   assert.ok(html.includes("Looking for a 2-bedroom near downtown."));
   assert.ok(html.includes("Outbound response"));
   assert.ok(html.includes("Thank you for contacting Magna Mare."));
-  assert.ok(html.includes("Property interest"));
+  assert.ok(html.includes("Linked record"));
   assert.ok(html.includes("12 Harbor View"));
   assert.ok(html.includes("Queued"));
 });
