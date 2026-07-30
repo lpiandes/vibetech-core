@@ -43,3 +43,60 @@ test("Meta Ads always creates an approved campaign as PAUSED", async () => {
   assert.equal(result.status, "completed");
   assert.equal(payload.status, "PAUSED");
 });
+
+test("Meta Ads refuses lead campaign scaffolding without owner approval", async () => {
+  const adapter = new MetaAdsIntegrationAdapter({ nowISO: NOW, graphApiVersion: "v25.0", fetchImpl: async () => { throw new Error("should not call Graph API"); } });
+  const result = await adapter.executeAction({
+    actionRequest: {
+      capability: INTEGRATION_CAPABILITIES.CREATE_EXTERNAL_RECORD,
+      requiresApproval: false,
+      outboundApproved: false,
+      parameters: { recordType: "lead_campaign_scaffold", campaign: { name: "Test" } },
+    },
+    connection: connection(),
+    credentialResolver: resolver({ adAccountId: "123", accessToken: "meta_token" }),
+  });
+  assert.equal(result.error, "owner_approval_required");
+});
+
+test("Meta Ads scaffolds a paused campaign + ad set + creative for managed lead ads", async () => {
+  const calls = [];
+  const adapter = new MetaAdsIntegrationAdapter({
+    nowISO: NOW,
+    graphApiVersion: "v25.0",
+    fetchImpl: async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push({ url: String(url), body });
+      if (String(url).includes("/campaigns")) return { ok: true, json: async () => ({ id: "meta_campaign_1" }) };
+      if (String(url).includes("/adsets")) return { ok: true, json: async () => ({ id: "meta_adset_1" }) };
+      if (String(url).includes("/adcreatives")) return { ok: true, json: async () => ({ id: "meta_creative_1" }) };
+      return { ok: false, json: async () => ({ error: { message: "unexpected_call" } }) };
+    },
+  });
+  const result = await adapter.executeAction({
+    actionRequest: {
+      capability: INTEGRATION_CAPABILITIES.CREATE_EXTERNAL_RECORD,
+      requiresApproval: true,
+      outboundApproved: true,
+      parameters: {
+        recordType: "lead_campaign_scaffold",
+        campaign: { name: "Managed lead ads test" },
+        adSet: { name: "Ad set", dailyBudgetCents: 2500 },
+        creative: { name: "Creative", pageId: "page_1", leadFormId: "form_1" },
+      },
+    },
+    connection: connection(),
+    credentialResolver: resolver({ adAccountId: "123", accessToken: "meta_token" }),
+  });
+  assert.equal(result.status, "completed");
+  assert.equal(result.metadata.campaignId, "meta_campaign_1");
+  assert.equal(result.metadata.campaignStatus, "PAUSED");
+  assert.equal(result.metadata.adSetId, "meta_adset_1");
+  assert.equal(result.metadata.creativeId, "meta_creative_1");
+  assert.equal(result.metadata.managedOps, true);
+  const campaignCall = calls.find((c) => c.url.includes("/campaigns"));
+  assert.equal(campaignCall.body.status, "PAUSED");
+  const adSetCall = calls.find((c) => c.url.includes("/adsets"));
+  assert.equal(adSetCall.body.status, "PAUSED");
+  assert.equal(adSetCall.body.campaign_id, "meta_campaign_1");
+});

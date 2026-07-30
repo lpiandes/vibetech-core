@@ -31,12 +31,12 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
   },
   business_email: {
     title: "Send approved customer email",
-    description: "Draft freely; send only after approval. Outbound email only — not a full Gmail inbox reader.",
+    description: "Draft freely; send only after approval. Reconnect Gmail to also enable inbox sync (manual \"Sync now\", read-only) — replies stay draft-only until approved.",
     tier: "live",
     icon: Mail,
     setupMode: "oauth",
     listed: true,
-    unlocks: "Teammates can draft/send approved email",
+    unlocks: "Teammates can draft/send approved email + sync inbox",
   },
   calendar: {
     title: "Google Calendar",

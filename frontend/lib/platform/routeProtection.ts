@@ -14,13 +14,15 @@ export function isPublicPath(pathname: string): boolean {
   ) {
     return true;
   }
-  // Public Social Checker (rate-limited in-route).
+  // Social Checker landing page stays reachable while signed out so it can
+  // render its own sign-in / book-a-call gate (see app/social-checker/page.tsx)
+  // instead of bouncing straight to /login.
   if (pathname === "/social-checker" || pathname.startsWith("/social-checker/")) {
     return true;
   }
-  if (pathname === "/api/social-checker/search" || pathname.startsWith("/api/social-checker/")) {
-    return true;
-  }
+  // The search API itself requires auth + entitlement — checked in-route
+  // (frontend/app/api/social-checker/search/route.ts) so it can return a
+  // tailored 401/403 payload. NOT listed as public here on purpose.
   // Public intake surfaces (Meta signature / form rate-limit enforced in-route).
   if (/^\/api\/businesses\/[^/]+\/integrations\/meta\/webhook\/?$/.test(pathname)) {
     return true;

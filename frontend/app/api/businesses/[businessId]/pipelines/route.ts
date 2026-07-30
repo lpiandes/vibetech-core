@@ -20,6 +20,31 @@ import {
   setOwnerColor,
   OWNER_COLOR_PALETTE,
 } from "../../../../../../backend/core/crm/CrmStore.js";
+import { findCardAndStage, buildPipelineCardEventPayload } from "@/lib/pipelines/pipelineCardEvents";
+
+async function emitPipelineCardEvent(
+  ctx: any,
+  {
+    eventType,
+    brief,
+    actorId,
+    pipelineId,
+    card,
+    stage,
+  }: { eventType: string; brief: string; actorId: string; pipelineId: string; card: any; stage: any },
+) {
+  try {
+    await ctx.service?.emitSpecialtyBusinessEvent?.({
+      eventType,
+      forceManual: false,
+      brief,
+      actorId,
+      eventPayload: buildPipelineCardEventPayload({ pipelineId, card, stage }),
+    });
+  } catch {
+    /* optional */
+  }
+}
 
 export async function GET(
   _request: Request,
@@ -121,12 +146,34 @@ export async function POST(
         stageId: String(body.stageId),
       });
     } else if (action === "add_card" || action === "rename_card") {
+      const targetPipelineId = String(body.pipelineId ?? crm.pipelines[0]?.id);
       const upserted = upsertPipelineCard(crm, {
-        pipelineId: String(body.pipelineId ?? crm.pipelines[0]?.id),
+        pipelineId: targetPipelineId,
         card: body.card ?? body,
       });
       crm = upserted.crm;
       createdCardId = upserted.cardId;
+      if (action === "add_card" && upserted.cardId) {
+        const { card: newCard, stage } = findCardAndStage(crm, upserted.cardId);
+        await emitPipelineCardEvent(ctx, {
+          eventType: "PIPELINE_CARD_CREATED",
+          brief: `New card “${newCard?.title || "Opportunity"}” added to pipeline`,
+          actorId,
+          pipelineId: targetPipelineId,
+          card: newCard,
+          stage,
+        });
+        // A freshly created card also enters its initial stage — let stage-based
+        // automations (e.g. "When a card enters X") fire the same as on move_card.
+        await emitPipelineCardEvent(ctx, {
+          eventType: "PIPELINE_STAGE_ENTERED",
+          brief: `Opportunity “${newCard?.title || "Opportunity"}” entered stage “${stage?.label ?? newCard?.stageId}”`,
+          actorId,
+          pipelineId: targetPipelineId,
+          card: newCard,
+          stage,
+        });
+      }
     } else if (action === "delete_card" || action === "remove_card") {
       crm = removePipelineCard(crm, {
         pipelineId: String(body.pipelineId),
@@ -139,37 +186,15 @@ export async function POST(
         stageId: String(body.stageId),
         index: body.index ?? null,
       });
-      const movedCard = (crm.pipelines ?? [])
-        .flatMap((p: any) => p.cards ?? [])
-        .find((c: any) => String(c.id) === String(body.cardId));
-      const stage = (crm.pipelines ?? [])
-        .flatMap((p: any) => (p.stages ?? []).map((s: any) => ({ ...s, pipelineId: p.id, pipelineName: p.name })))
-        .find((s: any) => String(s.id) === String(body.stageId));
-      try {
-        await (ctx.service as any).emitSpecialtyBusinessEvent?.({
-          eventType: "PIPELINE_STAGE_ENTERED",
-          forceManual: false,
-          brief: `Opportunity “${movedCard?.title ?? body.cardId}” entered stage “${stage?.label ?? body.stageId}”`,
-          actorId,
-          eventPayload: {
-            pipelineId: String(body.pipelineId),
-            pipelineName: stage?.pipelineName ?? null,
-            cardId: String(body.cardId),
-            title: movedCard?.title ?? null,
-            stageId: String(body.stageId),
-            stageLabel: stage?.label ?? null,
-            contactId: movedCard?.contactId ?? null,
-            pipeline: {
-              id: String(body.pipelineId),
-              name: stage?.pipelineName ?? null,
-              stageId: String(body.stageId),
-              stageLabel: stage?.label ?? null,
-            },
-          },
-        });
-      } catch {
-        /* optional */
-      }
+      const { card: movedCard, stage } = findCardAndStage(crm, String(body.cardId), String(body.stageId));
+      await emitPipelineCardEvent(ctx, {
+        eventType: "PIPELINE_STAGE_ENTERED",
+        brief: `Opportunity “${movedCard?.title ?? body.cardId}” entered stage “${stage?.label ?? body.stageId}”`,
+        actorId,
+        pipelineId: String(body.pipelineId),
+        card: movedCard,
+        stage,
+      });
     } else if (action === "set_owner_color") {
       crm = setOwnerColor(crm, {
         userId: String(body.userId ?? ""),

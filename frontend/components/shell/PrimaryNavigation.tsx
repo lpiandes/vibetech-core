@@ -12,6 +12,7 @@ import {
   Settings,
   Users,
   ClipboardList,
+  TrendingUp,
   Zap,
 } from "lucide-react";
 
@@ -43,6 +44,8 @@ function iconForName(iconName: string): ReactNode {
       return <Kanban size={16} aria-hidden />;
     case "zap":
       return <Zap size={16} aria-hidden />;
+    case "trending-up":
+      return <TrendingUp size={16} aria-hidden />;
     default:
       return <Home size={16} aria-hidden />;
   }

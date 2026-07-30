@@ -91,8 +91,15 @@ test("purchased packages narrow discovery topics and completeness", () => {
     ],
     businessSummary,
   });
+  const full = completeness.evaluate({
+    answers: [],
+    businessSummary: { ...businessSummary, purchasedPackages: [] },
+  });
   assert.equal(thin.fullOsScope, false);
-  assert.ok(thin.requiredTotal < 17);
+  // Thin SKU still narrows required topics relative to full OS scope, even
+  // though "other" industries now also require their default adaptive
+  // follow-ups (q_other_*) whenever the package's topics cover them.
+  assert.ok(thin.requiredTotal < full.requiredTotal);
 });
 
 test("required setup steps include a2p when sms is selected", () => {
@@ -158,7 +165,10 @@ test("estimated discovery depth includes the chosen operating pack", () => {
   const dental = estimateDiscoveryQuestionCount({ industry: "dental" });
   const other = estimateDiscoveryQuestionCount({ industry: "other" });
   assert.ok(dental.estimatedTotal > dental.coreRequired);
-  assert.equal(other.estimatedTotal, other.coreRequired);
   assert.ok(dental.packRequired > 0);
-  assert.equal(other.packRequired, 0);
+  // "Other" industries have no dedicated pack, but still get a sensible
+  // default subset of adaptive follow-ups (OTHER_INDUSTRY_SIGNAL_QUESTIONS.default)
+  // so their estimate isn't stuck at only the universal core.
+  assert.ok(other.estimatedTotal > other.coreRequired);
+  assert.ok(other.packRequired > 0);
 });

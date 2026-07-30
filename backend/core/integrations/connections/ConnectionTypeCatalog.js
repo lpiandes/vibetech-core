@@ -6,7 +6,7 @@ import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
  * No industry-specific logic — connection types are package-declared identifiers.
  */
 export const CONNECTION_TYPE_CAPABILITIES = deepFreeze({
-  business_email: [INTEGRATION_CAPABILITIES.SEND_EMAIL],
+  business_email: [INTEGRATION_CAPABILITIES.SEND_EMAIL, INTEGRATION_CAPABILITIES.RECEIVE_EMAIL],
   sms_channel: [INTEGRATION_CAPABILITIES.SEND_SMS],
   voice_channel: [INTEGRATION_CAPABILITIES.PLACE_VOICE_CALL, INTEGRATION_CAPABILITIES.RECEIVE_VOICE_CALL],
   calendar: [

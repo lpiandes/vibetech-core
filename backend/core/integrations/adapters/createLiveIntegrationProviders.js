@@ -6,6 +6,7 @@ import { TwilioSmsIntegrationAdapter, isTwilioSmsConfigured } from "./TwilioSmsI
 import { TwilioVoiceIntegrationAdapter, isTwilioVoiceConfigured } from "./TwilioVoiceIntegrationAdapter.js";
 import { MetaLeadAdsIntegrationAdapter, isMetaLeadAdsConfigured } from "./MetaLeadAdsIntegrationAdapter.js";
 import { MetaAdsIntegrationAdapter } from "./MetaAdsIntegrationAdapter.js";
+import { TikTokLeadAdsIntegrationAdapter, isTikTokLeadAdsConfigured } from "./TikTokLeadAdsIntegrationAdapter.js";
 import { isGoogleOAuthAppConfigured } from "../oauth/GoogleOAuthClient.js";
 
 /**
@@ -30,6 +31,10 @@ export function createLiveIntegrationProviders({
   providers.push(new MetaLeadAdsIntegrationAdapter({ nowISO }));
   providers.push(new MetaAdsIntegrationAdapter({ nowISO }));
   providers.push(new GoogleAdsIntegrationAdapter({ nowISO }));
+  // TikTok is VIBETech-managed and scaffold-stage — only register when platform credentials exist.
+  if (force || isTikTokLeadAdsConfigured()) {
+    providers.push(new TikTokLeadAdsIntegrationAdapter({ nowISO }));
+  }
 
   return providers;
 }
@@ -37,6 +42,7 @@ export function createLiveIntegrationProviders({
 export function liveIntegrationAvailability() {
   const googleOAuth = isGoogleOAuthAppConfigured();
   const metaConfigured = isMetaLeadAdsConfigured();
+  const tiktokConfigured = isTikTokLeadAdsConfigured();
   const serperConfigured = Boolean(String(process.env.SERPER_API_KEY ?? "").trim());
   return {
     // Email always listed (oauth when Google app configured, else dev_connect when allowed).
@@ -52,11 +58,14 @@ export function liveIntegrationAvailability() {
     social_screening: serperConfigured,
     prospecting_enrichment: serperConfigured,
     meta_lead_ads: metaConfigured,
+    // VIBETech-managed, scaffold stage — never claim available until platform TikTok credentials exist.
+    tiktok_lead_ads: tiktokConfigured,
     document_storage: false,
     accounting: false,
     _googleOAuth: googleOAuth,
     _twilioSmsEnv: isTwilioSmsConfigured(),
     _twilioVoiceEnv: isTwilioVoiceConfigured(),
     _metaEnv: metaConfigured,
+    _tiktokEnv: tiktokConfigured,
   };
 }

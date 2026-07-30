@@ -1,6 +1,7 @@
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 import {
   buildDefaultLeadFollowUpEmployee,
+  buildDefaultAppointmentSetterEmployee,
   buildDefaultSalesAssistantEmployee,
   buildDefaultReceptionistEmployee,
   buildDefaultSocialScreenerEmployee,
@@ -203,6 +204,20 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     sellable: true,
   },
   {
+    id: "appointment_setter",
+    label: "Lead Appointment Setting",
+    description: "VIBETech runs Meta/TikTok lead ads + an SMS setter that instantly qualifies leads and auto-books appointments onto teammate availability (Scale-style setter).",
+    moduleIds: ["home", "for_you", "people", "pipelines", "work", "inbox", "integrations", "settings", "knowledge", "schedule", "digital_workforce"],
+    canonicalNavIds: ["home", "needs_attention", "people", "pipelines", "work", "inbox", "knowledge", "calendar", "team", "automations", "ads", "integrations", "settings"],
+    discoveryTopics: ["identity", "industry", "customers", "communications", "operations", "integrations", "outcomes"],
+    packageAskQuestionIds: ["q_customers", "q_lead_sources", "q_communications", "q_integrations", "q_scheduling"],
+    packageAskConnectionOptions: ["meta_platform", "twilio_sms", "google_calendar"],
+    launchMissionIds: ["meta_lead_intake", "website_forms", "sms_send", "calendar_scheduling", "outbound_approvals", "knowledge_consult"],
+    honestyNote: "Live today: first-touch SMS sends automatically when Twilio SMS is connected (TCPA: include opt-out), durable across restarts; confirmed appointments auto-book onto teammate availability (real Google Calendar event when connected) with no manual HOLD step; Twilio white-glove provisioning (VIBETech buys the number + auto-configures the inbound webhook); Meta lead-form ingest. Rolling out: VIBETech-managed Meta paused-campaign scaffolding (ad set + creative) and TikTok lead ads (platform credentials required, honest not_configured until then). Meta Lead Ads + Calendar are required for the full loop. Not a self-serve ad creative builder.",
+    commercialStatus: "product",
+    sellable: true,
+  },
+  {
     id: "crm_automation",
     label: "CRM automation",
     description: "People, pipelines, and work automation (in-platform CRM).",
@@ -349,6 +364,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
       "work",
       "inbox",
       "campaigns",
+      "ads",
       "knowledge",
       "integrations",
       "settings",
@@ -539,6 +555,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
       "team",
       "automations",
       "calendar",
+      "ads",
       "integrations",
       "settings",
     ],
@@ -1346,6 +1363,17 @@ export function filterEmployeesForPurchasedPackages(employees = [], purchasedPac
       }
     }
   }
+  if (packages.includes("appointment_setter")) {
+    const added = pushMatching(/appointment.?setter|appointment|setter/, 1);
+    if (added === 0) {
+      const def = buildDefaultAppointmentSetterEmployee();
+      const key = String(def.employeeId);
+      if (!seen.has(key)) {
+        seen.add(key);
+        kept.push(def);
+      }
+    }
+  }
 
   // Managed tiers must not install with an empty workforce.
   if (
@@ -1419,6 +1447,7 @@ const PACKAGE_ASK_EXTRAS = Object.freeze({
   scheduling: ["architect.change.enable_scheduling"],
   email_sms_marketing: ["architect.change.enable_sms_messaging"],
   lead_follow_up: ["architect.change.enable_sms_messaging"],
+  appointment_setter: ["architect.change.enable_sms_messaging", "architect.change.enable_scheduling", "architect.change.enable_facebook_leads"],
   essential_managed: ["architect.change.enable_sms_messaging"],
   growth_managed: ["architect.change.enable_sms_messaging", "architect.change.enable_scheduling"],
   ai_receptionist: ["architect.change.enable_phone_voice"],

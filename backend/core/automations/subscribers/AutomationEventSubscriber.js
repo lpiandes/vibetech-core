@@ -52,6 +52,7 @@ export function createAutomationEventSubscriber({
       "SPECIALTY_JOB_REQUESTED",
       "SPECIALTY_SCHEDULE_DUE",
       "PIPELINE_STAGE_ENTERED",
+      "PIPELINE_CARD_CREATED",
       "NEW_INQUIRY",
       "INBOUND_VOICE_CALL",
       "SOCIAL_SCREEN_REQUESTED",

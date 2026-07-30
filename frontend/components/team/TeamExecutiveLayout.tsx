@@ -16,6 +16,8 @@ import StatusBadge from "@/components/product/StatusBadge";
 import EntityAvatar from "@/components/shell/EntityAvatar";
 import OrganizationWorkspace from "@/components/workforce/OrganizationWorkspace";
 import EmployeeWorkerCard from "@/components/team/EmployeeWorkerCard";
+import TeamAvailabilityPanel from "@/components/team/TeamAvailabilityPanel";
+import RoleAccessPanel from "@/components/team/RoleAccessPanel";
 import { copyInviteLink } from "@/lib/platform/inviteLinks";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
 import {
@@ -338,6 +340,16 @@ export default function TeamExecutiveLayout({
           </div>
         )}
       </SimplePanel>
+
+      {platformMembers.length > 0 ? (
+        <TeamAvailabilityPanel
+          businessId={businessId}
+          members={platformMembers.map((m) => ({ id: m.id, name: m.name }))}
+          canManage={canManage}
+        />
+      ) : null}
+
+      <RoleAccessPanel businessId={businessId} canManage={canManage} />
 
       {pending.length > 0 ? (
         <SimplePanel title="Pending invites">

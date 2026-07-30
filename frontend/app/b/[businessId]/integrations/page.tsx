@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
 import { platformStore } from "@/lib/server/compose";
 import { liveIntegrationAvailability } from "@/lib/server/liveIntegrations";
@@ -61,6 +63,54 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ b
     });
     markRequestTiming("VIEW_MODEL", { bytes: JSON.stringify(viewModel).length });
 
-    return <ConnectionsRenderer viewModel={viewModel} />;
+    return (
+      <div style={{ display: "grid", gap: 12 }}>
+        <div
+          style={{
+            borderRadius: 12,
+            border: "1px solid rgba(15,118,110,0.25)",
+            background: "linear-gradient(90deg, #ecfdf5, #fff)",
+            padding: "10px 14px",
+            fontSize: 13,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span>Reconnected Gmail? Sync recent inbox messages (read-only, manual sync).</span>
+          <Link
+            href={`/b/${encodeURIComponent(businessId)}/integrations/gmail/inbox`}
+            style={{ fontWeight: 800, color: "#0f766e", textDecoration: "none" }}
+          >
+            Open Gmail inbox →
+          </Link>
+        </div>
+        <div
+          style={{
+            borderRadius: 12,
+            border: "1px solid rgba(15,118,110,0.25)",
+            background: "linear-gradient(90deg, #ecfdf5, #fff)",
+            padding: "10px 14px",
+            fontSize: 13,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span>Running Meta, Google, or TikTok ads? See spend, clicks, and campaigns in-platform.</span>
+          <Link
+            href={`/b/${encodeURIComponent(businessId)}/ads`}
+            style={{ fontWeight: 800, color: "#0f766e", textDecoration: "none" }}
+          >
+            Open Ad performance →
+          </Link>
+        </div>
+        <ConnectionsRenderer viewModel={viewModel} />
+      </div>
+    );
   });
 }

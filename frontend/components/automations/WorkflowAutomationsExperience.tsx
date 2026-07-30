@@ -78,7 +78,9 @@ export default function WorkflowAutomationsExperience({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [testLog, setTestLog] = useState<string | null>(null);
+  const [runningId, setRunningId] = useState<string | null>(null);
   const [teammateRows, setTeammateRows] = useState(teammates);
+  const [runningTeammateId, setRunningTeammateId] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [chat, setChat] = useState<Array<{ role: "user" | "assistant"; text: string }>>([
@@ -211,6 +213,50 @@ export default function WorkflowAutomationsExperience({
       setError(err instanceof Error ? err.message : "Test failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** Runs a workflow immediately from the list card, without needing to open it in the builder first. */
+  async function runWorkflowNow(id: string) {
+    if (runningId) return;
+    setRunningId(id);
+    setError(null);
+    try {
+      const target = workflows.find((w) => w.id === id);
+      if (target) await api({ action: "save", workflow: target });
+      const data = await api({ action: "test_run", workflowId: id });
+      const log = data.result?.log ?? [];
+      setTestLog(
+        log.length
+          ? log.map((l: any) => `${l.type}${l.action ? `:${l.action}` : ""} → ${l.passed != null ? (l.passed ? "yes" : "no") : (l.ok ? "ok" : l.reason || "done")}`).join("\n")
+          : JSON.stringify(data.result, null, 2),
+      );
+      setSelectedId(id);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Run failed");
+    } finally {
+      setRunningId(null);
+    }
+  }
+
+  /** Runs an AI teammate's automation path immediately — same action as the "Run now" button on its own page. */
+  async function runTeammateNow(employeeId: string) {
+    if (runningTeammateId) return;
+    setRunningTeammateId(employeeId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/team/${encodeURIComponent(employeeId)}/triggers`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ eventType: "SPECIALTY_JOB_REQUESTED", forceManual: true, brief: "Owner ran this now from Automations" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.ok === false) throw new Error(data?.error ?? "Run failed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Run failed");
+    } finally {
+      setRunningTeammateId(null);
     }
   }
 
@@ -360,28 +406,41 @@ export default function WorkflowAutomationsExperience({
           {workflows.length === 0 ? <VtEmpty label="No automations yet" /> : null}
           <div style={{ display: "grid", gap: 8 }}>
             {workflows.map((wf) => (
-              <button
+              <VtCard
                 key={wf.id}
-                type="button"
-                onClick={() => setSelectedId(wf.id)}
+                padding={12}
                 style={{
-                  textAlign: "left",
-                  borderRadius: 12,
                   border: `1px solid ${selectedId === wf.id ? cockpitColors.accent : cockpitColors.panelBorder}`,
                   background: selectedId === wf.id ? "linear-gradient(165deg, #ecfdf5, #fff)" : "#fff",
-                  padding: 12,
-                  cursor: "pointer",
-                  font: "inherit",
                 }}
               >
-                <div style={{ fontWeight: 850 }}>{wf.name}</div>
-                <div style={{ fontSize: 12, color: cockpitColors.textSecondary, marginTop: 4, fontWeight: 650 }}>
-                  {wf.trigger?.label || wf.trigger?.type} · {wf.steps?.length ?? 0} steps
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(wf.id)}
+                  style={{
+                    textAlign: "left",
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    cursor: "pointer",
+                    font: "inherit",
+                    width: "100%",
+                  }}
+                >
+                  <div style={{ fontWeight: 850 }}>{wf.name}</div>
+                  <div style={{ fontSize: 12, color: cockpitColors.textSecondary, marginTop: 4, fontWeight: 650 }}>
+                    {wf.trigger?.label || wf.trigger?.type} · {wf.steps?.length ?? 0} steps
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <VtStatusChip label={wf.status === "live" ? "LIVE" : "OFF"} tone={wf.status === "live" ? "live" : "off"} />
+                  </div>
+                </button>
+                <div style={{ marginTop: 10 }}>
+                  <SecondaryButton onClick={() => void runWorkflowNow(wf.id)} disabled={runningId === wf.id}>
+                    {runningId === wf.id ? "Running…" : "Run now"}
+                  </SecondaryButton>
                 </div>
-                <div style={{ marginTop: 8 }}>
-                  <VtStatusChip label={wf.status === "live" ? "LIVE" : "OFF"} tone={wf.status === "live" ? "live" : "off"} />
-                </div>
-              </button>
+              </VtCard>
             ))}
           </div>
         </VtPanel>
@@ -580,12 +639,17 @@ export default function WorkflowAutomationsExperience({
         <VtPanel title="AI teammate paths (still available)">
           <div style={{ display: "grid", gap: 8 }}>
             {teammateRows.map((row) => (
-              <VtCard key={row.employeeId} padding={12} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+              <VtCard key={row.employeeId} padding={12} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <div>
                   <div style={{ fontWeight: 800 }}>{row.label}</div>
                   <div style={{ fontSize: 12, color: cockpitColors.textSecondary }}>{row.stepCount} steps</div>
                 </div>
-                <SecondaryButton href={row.href}>Open path</SecondaryButton>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <PrimaryButton onClick={() => void runTeammateNow(row.employeeId)} disabled={runningTeammateId === row.employeeId}>
+                    {runningTeammateId === row.employeeId ? "Running…" : "Run now"}
+                  </PrimaryButton>
+                  <SecondaryButton href={row.href}>Open path</SecondaryButton>
+                </div>
               </VtCard>
             ))}
           </div>

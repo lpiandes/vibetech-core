@@ -30,6 +30,7 @@ test("admin catalog lists sales packages", () => {
   assert.ok(rows.some((row) => row.id === "ai_business_os" && row.fullOs));
   const chatbot = rows.find((row) => row.id === "website_chatbot");
   assert.match(String(chatbot?.honestyNote ?? ""), /forms/i);
+  assert.ok(rows.some((row) => row.id === "appointment_setter" && row.sellable));
 });
 
 test("normalize drops unknowns and dedupes", () => {
@@ -384,6 +385,13 @@ test("lead_follow_up guarantees a default follow-up worker", () => {
   assert.ok(
     (kept[0].operatingContract?.trigger?.eventTypes ?? []).includes("FORM_SUBMIT"),
   );
+});
+
+test("appointment setter guarantees its default worker", () => {
+  const kept = filterEmployeesForPurchasedPackages([], ["appointment_setter"]);
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].archetypeId, "appointment_setter");
+  assert.ok(kept[0].operatingContract?.trigger?.eventTypes?.includes("META_LEAD"));
 });
 
 test("essential managed soft caps resolve", () => {

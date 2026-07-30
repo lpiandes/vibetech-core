@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo, useState } from "react";
+
 import ShellMetricStrip from "@/components/shell/ShellMetricStrip";
 import ShellPanel from "@/components/shell/ShellPanel";
 import { SimpleEmpty } from "@/components/product/SimpleUI";
@@ -17,7 +19,7 @@ type OrgView = {
   departments: Array<{ id: string; label: string; purpose?: string }>;
   teams: Array<{ id: string; label: string; departmentId?: string | null }>;
   humanRoles: Array<{ id: string; label: string; membershipRole?: string; reportsTo?: string | null }>;
-  humans: Array<{ id: string; label: string; detail?: string; email?: string | null }>;
+  humans: Array<{ id: string; label: string; detail?: string; email?: string | null; departmentId?: string | null }>;
   aiEmployees: Array<{
     id: string;
     label: string;
@@ -25,6 +27,7 @@ type OrgView = {
     archetypeId?: string | null;
     responsibilities?: string[];
     reportsTo?: string | null;
+    departmentId?: string | null;
   }>;
   reportingLines: Array<Record<string, unknown>>;
   coverageRules: Array<Record<string, unknown>>;
@@ -46,6 +49,23 @@ export default function OrganizationWorkspace({
   organization: OrgView;
   canManageTeam?: boolean;
 }) {
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+
+  const humans = organization?.humans ?? [];
+  const aiEmployees = organization?.aiEmployees ?? [];
+
+  const filteredHumans = useMemo(() => {
+    if (departmentFilter === "all") return humans;
+    if (departmentFilter === "unassigned") return humans.filter((h) => !h.departmentId);
+    return humans.filter((h) => h.departmentId === departmentFilter);
+  }, [humans, departmentFilter]);
+
+  const filteredAiEmployees = useMemo(() => {
+    if (departmentFilter === "all") return aiEmployees;
+    if (departmentFilter === "unassigned") return aiEmployees.filter((e) => !e.departmentId);
+    return aiEmployees.filter((e) => e.departmentId === departmentFilter);
+  }, [aiEmployees, departmentFilter]);
+
   if (!organization?.hasOrganization) {
     return (
       <ShellPanel title="Organization">
@@ -62,7 +82,7 @@ export default function OrganizationWorkspace({
       depth: role.reportsTo ? 1 : 0,
       reportsToLabel: role.reportsTo ?? "",
     })),
-    ...organization.aiEmployees.map((employee) => ({
+    ...filteredAiEmployees.map((employee) => ({
       id: employee.id,
       name: employee.label,
       roleLabel: employee.archetypeId ? String(employee.archetypeId).replace(/_/g, " ") : "AI employee",
@@ -74,6 +94,32 @@ export default function OrganizationWorkspace({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.md }}>
       <ShellMetricStrip metrics={organization.metrics as never} />
+
+      {organization.departments.length > 0 ? (
+        <div style={{ display: "flex", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" }}>
+          <label style={{ ...typography.caption, color: cockpitColors.textSecondary, fontWeight: 700 }}>
+            Filter by department
+          </label>
+          <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            style={{
+              borderRadius: 8,
+              border: `1px solid ${cockpitColors.panelBorder}`,
+              padding: "6px 10px",
+              fontSize: 14,
+              background: cockpitColors.panel,
+              color: cockpitColors.textPrimary,
+            }}
+          >
+            <option value="all">All departments</option>
+            {organization.departments.map((department) => (
+              <option key={department.id} value={department.id}>{department.label}</option>
+            ))}
+            <option value="unassigned">Unassigned</option>
+          </select>
+        </div>
+      ) : null}
 
       <div style={{
         display: "grid",
@@ -112,7 +158,7 @@ export default function OrganizationWorkspace({
         <TeamDirectory
           title="Humans"
           permissions={canManageTeam ? ["team.manage"] : []}
-          items={organization.humans.map((human) => ({
+          items={filteredHumans.map((human) => ({
             id: human.id,
             name: human.label,
             roleLabel: human.detail,
@@ -120,12 +166,12 @@ export default function OrganizationWorkspace({
             kind: "Human",
           }))}
           emptyTitle="No staff"
-          emptyDescription="None yet."
+          emptyDescription={departmentFilter === "all" ? "None yet." : "No staff in this department."}
         />
         <EmployeeCards
           title="AI employees"
           permissions={canManageTeam ? ["team.manage"] : []}
-          items={organization.aiEmployees.map((employee) => ({
+          items={filteredAiEmployees.map((employee) => ({
             id: employee.id,
             name: employee.label,
             purpose: employee.detail,
@@ -133,7 +179,7 @@ export default function OrganizationWorkspace({
             statusLabel: employee.archetypeId ? String(employee.archetypeId).replace(/_/g, " ") : "AI",
           }))}
           emptyTitle="No AI employees"
-          emptyDescription="None yet."
+          emptyDescription={departmentFilter === "all" ? "None yet." : "No AI employees in this department."}
         />
       </div>
 

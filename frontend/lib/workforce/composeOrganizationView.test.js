@@ -47,3 +47,29 @@ test("composeOrganizationView falls back to live roster when org sparse", () => 
   assert.equal(view.humans.length, 1);
   assert.equal(view.aiEmployees.length, 1);
 });
+
+test("composeOrganizationView infers human departmentId from matching role recipe's membership role", () => {
+  const view = composeOrganizationView({
+    workforceOrganization: {
+      departments: [
+        { departmentId: "ops", label: "Operations" },
+        { departmentId: "admin", label: "Administration" },
+      ],
+      humanRoles: [
+        { roleId: "owner", label: "Owner", membershipRole: "OWNER", departmentId: "admin" },
+        { roleId: "manager", label: "Manager", membershipRole: "MANAGER", departmentId: "ops" },
+      ],
+      aiEmployees: [],
+    },
+    platformMembers: [
+      { id: "u1", name: "Alex", email: "alex@x.com", roleLabel: "Owner", membershipRole: "OWNER" },
+      { id: "u2", name: "Sam", email: "sam@x.com", roleLabel: "Manager", membershipRole: "MANAGER" },
+      { id: "u3", name: "Jo", email: "jo@x.com", roleLabel: "Team member", membershipRole: "EMPLOYEE" },
+    ],
+  });
+
+  const byId = Object.fromEntries(view.humans.map((h) => [h.id, h]));
+  assert.equal(byId.u1.departmentId, "admin");
+  assert.equal(byId.u2.departmentId, "ops");
+  assert.equal(byId.u3.departmentId, null, "no role recipe for EMPLOYEE means unassigned, not a guess");
+});

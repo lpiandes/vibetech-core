@@ -39,12 +39,25 @@ export function composeOrganizationView({
     reportsTo: entry.reportsTo ? String(entry.reportsTo) : null,
   }));
 
+  // Best-effort department assignment for real staff: no membership-level
+  // department field exists yet, so infer from the first role recipe that
+  // shares this person's membership role (accurate before real employees
+  // are installed, when humanRoles come from the workforce recommendation;
+  // otherwise falls back to "unassigned" rather than guessing).
+  const departmentIdByMembershipRole = new Map();
+  for (const role of humanRoles) {
+    if (role.departmentId && !departmentIdByMembershipRole.has(role.membershipRole)) {
+      departmentIdByMembershipRole.set(role.membershipRole, role.departmentId);
+    }
+  }
+
   const humans = asArray(platformMembers).map((member) => ({
     id: String(member.id),
     label: String(member.name ?? member.email ?? "Teammate"),
     detail: String(member.roleLabel ?? member.email ?? ""),
     kind: "human",
     email: member.email ?? null,
+    departmentId: departmentIdByMembershipRole.get(String(member.membershipRole ?? "").toUpperCase()) ?? null,
   }));
 
   const aiEmployees = asArray(

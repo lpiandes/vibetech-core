@@ -208,6 +208,33 @@ export async function POST(
       }
     }
 
+    let appointmentSetter: any = null;
+    if (phone) {
+      try {
+        const {
+          businessHasAppointmentSetter,
+          readPurchasedPackagesFromInstallation,
+        } = await import("../../../../../../../backend/core/integrations/appointment-setter/businessHasAppointmentSetter.js");
+        const packages = readPurchasedPackagesFromInstallation(installation);
+        if (businessHasAppointmentSetter(packages)) {
+          const { startAppointmentSetterFromLead } = await import(
+            "../../../../../../../backend/core/integrations/appointment-setter/startAppointmentSetterFromLead.js"
+          );
+          appointmentSetter = await (startAppointmentSetterFromLead as any)({
+            businessId,
+            contact: { name: name || email || phone, email, phone, contactId },
+            source: "website_forms",
+            purchasedPackages: packages,
+            getWorkspace: async (id: string) => (await getSystemWorkspaceForBusiness(id)).service,
+            platformStore,
+            installation,
+          });
+        }
+      } catch {
+        appointmentSetter = { ok: false, reason: "appointment_setter_failed" };
+      }
+    }
+
     return NextResponse.json(
       {
         ok: true,
@@ -217,6 +244,7 @@ export async function POST(
         appointmentRequested: Boolean(appointmentRequest),
         appointmentWorkId: appointment?.work?.workId ?? null,
         calendarHold: Boolean(appointment?.hold?.ok),
+        appointmentSetter,
       },
       { headers: { "Access-Control-Allow-Origin": "*" } },
     );

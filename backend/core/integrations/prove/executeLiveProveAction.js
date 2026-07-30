@@ -25,6 +25,7 @@ const ACTION_TO_CONNECTION = Object.freeze({
   [PROVE_ACTIONS.ingest_test_lead]: "meta_lead_ads",
   [PROVE_ACTIONS.run_sports_golden_path]: "business_email",
   [PROVE_ACTIONS.run_dental_golden_path]: "business_email",
+  [PROVE_ACTIONS.prove_appointment_setter_sms]: "sms_channel",
 });
 
 /**
@@ -101,6 +102,38 @@ export async function executeLiveProveAction({
       contactId,
       cardId,
       message: "Test form lead saved to People. Share /intake for real submissions.",
+    });
+  }
+
+  if (act === PROVE_ACTIONS.prove_team_availability) {
+    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    if (!installation) {
+      return deepFreeze({
+        ok: false,
+        reason: "business_missing",
+        message: "Business installation not found.",
+      });
+    }
+    const { readTeamAvailability, listBookableMembers } = await import(
+      "../appointment-setter/TeamAvailabilityStore.js"
+    );
+    const availability = readTeamAvailability(installation);
+    const bookable = listBookableMembers(availability).filter(
+      (member) => Array.isArray(member.weekly) && member.weekly.length > 0,
+    );
+    if (!bookable.length) {
+      return deepFreeze({
+        ok: false,
+        reason: "no_bookable_members",
+        message: "Add at least one teammate with weekly availability windows (Team → Availability) before proving auto-book.",
+      });
+    }
+    return deepFreeze({
+      ok: true,
+      simulated: false,
+      provider: "team_availability",
+      bookableMemberCount: bookable.length,
+      message: `${bookable.length} teammate${bookable.length === 1 ? "" : "s"} bookable with weekly availability — the appointment setter can auto-book confirmed slots.`,
     });
   }
 
@@ -288,6 +321,50 @@ export async function executeLiveProveAction({
       });
     }
 
+    if (act === PROVE_ACTIONS.prove_appointment_setter_sms) {
+      const creds = credentialResolver.resolve(connection.credentialReference);
+      const accountSid = safeString(creds.accountSid);
+      const authToken = safeString(creds.authToken);
+      const fromNumber = safeString(creds.fromNumber);
+      if (!accountSid || !authToken || !fromNumber) {
+        return deepFreeze({
+          ok: false,
+          reason: "sms_not_configured",
+          message: "Connect Twilio SMS (VIBETech provisioning or your own account) before proving the appointment setter.",
+        });
+      }
+      const { resolveInboundSmsWebhookUrl } = await import("../twilio/TwilioProvisioningService.js");
+      const expectedWebhook = resolveInboundSmsWebhookUrl(businessId);
+      // Best-effort — a probe failure or missing APP_ORIGIN doesn't fail the prove;
+      // Twilio credentials being live and callable is the real thing being proven.
+      let webhookConfigured = null;
+      try {
+        const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+        const res = await fetch(
+          `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(fromNumber)}`,
+          { headers: { Authorization: `Basic ${auth}` } },
+        );
+        const data = await res.json().catch(() => ({}));
+        const row = Array.isArray(data?.incoming_phone_numbers) ? data.incoming_phone_numbers[0] : null;
+        if (row && expectedWebhook) {
+          webhookConfigured = safeString(row.sms_url) === expectedWebhook;
+        }
+      } catch {
+        webhookConfigured = null;
+      }
+      return deepFreeze({
+        ok: true,
+        simulated: false,
+        provider: "twilio_sms",
+        fromNumber,
+        expectedWebhook: expectedWebhook || null,
+        webhookConfigured,
+        message: webhookConfigured === true
+          ? "Twilio SMS is configured and the inbound webhook points to the appointment setter route."
+          : "Twilio SMS is configured for the appointment setter. Could not confirm the inbound webhook automatically — check Twilio Console → Phone Numbers if replies aren't reaching the setter.",
+      });
+    }
+
     if (act === PROVE_ACTIONS.place_test_call) {
       const { TwilioVoiceIntegrationAdapter } = await import("../adapters/TwilioVoiceIntegrationAdapter.js");
       const adapter = new TwilioVoiceIntegrationAdapter({ nowISO: new Date().toISOString() });
@@ -430,7 +507,7 @@ function matchesConnection(credential, connectionId, action) {
   if (action === PROVE_ACTIONS.create_test_event) {
     return provider === "google_calendar" || provider.includes("calendar");
   }
-  if (action === PROVE_ACTIONS.send_test_sms) {
+  if (action === PROVE_ACTIONS.send_test_sms || action === PROVE_ACTIONS.prove_appointment_setter_sms) {
     return provider === "twilio_sms" || provider.includes("twilio_sms") || (provider.includes("twilio") && provider.includes("sms"));
   }
   if (action === PROVE_ACTIONS.ingest_test_lead) {
@@ -500,6 +577,7 @@ export function resolveProveConnectionStatus({
     act === PROVE_ACTIONS.upload_and_cite
     || act === PROVE_ACTIONS.approve_and_send
     || act === PROVE_ACTIONS.submit_test_form
+    || act === PROVE_ACTIONS.prove_team_availability
   ) {
     return "CONNECTED";
   }

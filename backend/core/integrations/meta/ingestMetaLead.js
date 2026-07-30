@@ -7,6 +7,7 @@ import { readCrmState } from "../../crm/CrmStore.js";
 import { ensureCrmContactPersisted } from "../../crm/ensureCrmContactAndOptionalCard.js";
 import { MetaLeadAdsIntegrationAdapter } from "../adapters/MetaLeadAdsIntegrationAdapter.js";
 import { INTEGRATION_CAPABILITIES } from "../capabilities/IntegrationCapability.js";
+import { businessHasAppointmentSetter, readPurchasedPackagesFromInstallation } from "../appointment-setter/businessHasAppointmentSetter.js";
 
 function safeString(v) {
   return v === null || v === undefined ? "" : String(v).trim();
@@ -274,6 +275,24 @@ export async function ingestMetaLead({
     }
   }
 
+  let appointmentSetter = null;
+  if (mapped.phone && businessHasAppointmentSetter(readPurchasedPackagesFromInstallation(install))) {
+    try {
+      const { startAppointmentSetterFromLead } = await import("../appointment-setter/startAppointmentSetterFromLead.js");
+      appointmentSetter = await startAppointmentSetterFromLead({
+        businessId,
+        contact: { name: mapped.name, phone: mapped.phone, email: mapped.email, contactId },
+        source: "meta_lead_ads",
+        purchasedPackages: readPurchasedPackagesFromInstallation(install),
+        getWorkspace: async () => workspaceService,
+        platformStore,
+        installation: install,
+      });
+    } catch (err) {
+      appointmentSetter = { ok: false, reason: err instanceof Error ? err.message : "appointment_setter_failed" };
+    }
+  }
+
   return deepFreeze({
     ok: true,
     contactId,
@@ -287,6 +306,7 @@ export async function ingestMetaLead({
       phone: mapped.phone,
     },
     automation,
+    appointmentSetter,
     prove: prove === true,
   });
 }

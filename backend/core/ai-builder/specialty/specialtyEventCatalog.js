@@ -5,6 +5,7 @@ export const SPECIALTY_EVENT_CATALOG = Object.freeze([
   { id: "SPECIALTY_JOB_REQUESTED", label: "Manual run (you click Test)" },
   { id: "SPECIALTY_SCHEDULE_DUE", label: "Weekly / scheduled digest" },
   { id: "PIPELINE_STAGE_ENTERED", label: "Someone moves a pipeline card" },
+  { id: "PIPELINE_CARD_CREATED", label: "A card is added to a pipeline" },
   { id: "SCHEDULE_CHANGE", label: "Club calendar event created or changed" },
   { id: "EVENT_UPDATE", label: "Calendar event details updated" },
   { id: "EVENT_REMINDER_DUE", label: "Calendar reminder time reached" },

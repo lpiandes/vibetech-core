@@ -132,6 +132,7 @@ export default async function TeamPage({ params }: { params: Promise<{ businessI
       name: m.userName || m.email,
       email: m.email,
       roleLabel: MEMBERSHIP_ROLE_LABELS[m.role as keyof typeof MEMBERSHIP_ROLE_LABELS] ?? m.role,
+      membershipRole: m.role,
     }));
 
     let configuration: any = installation?.configuration

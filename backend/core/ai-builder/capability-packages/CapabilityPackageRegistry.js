@@ -56,6 +56,21 @@ export function resetCapabilityPackageRegistryForTests() {
 export function registerDefaultCapabilityPackages(registry) {
   const packages = [
     {
+      id: "pkg.appointment_setter",
+      label: "Lead Appointment Setting",
+      description: "Qualify Meta and form leads by SMS, then create calendar holds for team confirmation.",
+      industries: [],
+      availability: "available",
+      setupRequirements: ["meta_lead_ads", "sms_channel", "calendar_connection"],
+      discoveryTopics: ["customers", "communications", "operations", "integrations"],
+      askCapabilityIds: ["architect.change.enable_sms_messaging", "architect.change.enable_scheduling", "architect.change.enable_facebook_leads"],
+      workTypes: ["lead_intake", "appointment_request"],
+      modules: ["people", "pipelines", "work", "schedule", "communications"],
+      employeeArchetypes: ["appointment_setter"],
+      ownerPromise: "Connect Meta Lead Forms, Twilio SMS, and Google Calendar. First-touch texts send automatically to book appointments; STOP ends outreach.",
+      neverSilentSend: false,
+    },
+    {
       id: "pkg.weekly_newsletter",
       label: "Weekly newsletter drafts",
       description: "Recurring update drafts for contacts — owner approves before any send.",

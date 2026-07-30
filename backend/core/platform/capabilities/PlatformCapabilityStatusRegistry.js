@@ -24,7 +24,7 @@ export const PLATFORM_CAPABILITIES = deepFreeze([
   {
     id: "customer_email_send",
     label: "Send approved customer email",
-    description: "Draft freely; send only after owner approval. Inbound inbox reading is not claimed until built.",
+    description: "Draft freely; send only after owner approval. Inbound inbox reading is a separate capability below.",
     verticals: ["*"],
     requiredIntegrations: ["business_email"],
     requiredPermissions: ["integrations.manage"],
@@ -32,9 +32,19 @@ export const PLATFORM_CAPABILITIES = deepFreeze([
     honestLabel: "Send approved email (not full inbox)",
   },
   {
+    id: "customer_email_inbox",
+    label: "Gmail inbox sync",
+    description: "Manual \"Sync now\" pulls recent inbox messages into a synced list and matches/creates People by sender email. No automatic polling job yet, and replies are draft-only (never auto-sent).",
+    verticals: ["*"],
+    requiredIntegrations: ["business_email"],
+    requiredPermissions: ["integrations.manage"],
+    proveAction: "sync_gmail_inbox",
+    honestLabel: "Read inbox on demand (reconnect required for existing connections; no auto-reply)",
+  },
+  {
     id: "calendar_scheduling",
     label: "Calendar scheduling",
-    description: "Create appointments on the connected calendar.",
+    description: "Create appointments on the connected calendar. Appointment Setter auto-books confirmed slots onto teammate availability (real calendar event when Google Calendar is connected) — no manual HOLD step for that flow.",
     verticals: ["*"],
     requiredIntegrations: ["calendar"],
     requiredPermissions: ["integrations.manage"],
@@ -43,7 +53,7 @@ export const PLATFORM_CAPABILITIES = deepFreeze([
   {
     id: "sms_send",
     label: "Send approved SMS",
-    description: "Twilio SMS after human approval.",
+    description: "Twilio SMS after human approval. Exception: the Appointment Setter package sends its first-touch qualifying text automatically on a new lead (TCPA opt-out included) — that automation is scoped to that package only.",
     verticals: ["*"],
     requiredIntegrations: ["sms_channel"],
     requiredPermissions: ["integrations.manage"],
@@ -70,7 +80,7 @@ export const PLATFORM_CAPABILITIES = deepFreeze([
   {
     id: "meta_lead_intake",
     label: "Meta lead intake",
-    description: "Lead form → contact → intake pipeline Work.",
+    description: "Lead form → contact → intake pipeline Work. Meta ad-form leads are live; VIBETech-managed paused-campaign scaffolding (ad set + creative) and TikTok lead ads are rolling out — see the Appointment Setter package for managed lead ads.",
     verticals: ["*", "sports", "dental", "property_management"],
     requiredIntegrations: ["meta_lead_ads"],
     requiredPermissions: ["integrations.manage"],

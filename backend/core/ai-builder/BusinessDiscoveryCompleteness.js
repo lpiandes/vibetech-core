@@ -1,6 +1,7 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import {
   DISCOVERY_QUESTION_BANK,
+  defaultOtherQuestionIds,
   questionMatchesIndustry,
   resolveDiscoveryIndustry,
   resolvePackIndustry,
@@ -29,7 +30,10 @@ export const DISCOVERY_MAX_OWNER_ANSWERS = 28;
 export class BusinessDiscoveryCompleteness {
   evaluate({ answers = [], businessSummary = {} } = {}) {
     const packIndustry = resolvePackIndustry(resolveDiscoveryIndustry({ answers, businessSummary }));
-    const activeOtherQuestionIds = null;
+    // Keep in sync with BusinessDiscoveryQuestionPlanner — "other" industries
+    // get the same sensible default follow-up subset counted as required so
+    // completeness/proposal-readiness matches what is actually asked.
+    const activeOtherQuestionIds = defaultOtherQuestionIds(packIndustry);
     const purchasedPackages = businessSummary?.purchasedPackages ?? [];
     const packageAsk = Boolean(businessSummary?.packageAsk);
     const packageAskPackages = businessSummary?.packageAskPackages ?? null;

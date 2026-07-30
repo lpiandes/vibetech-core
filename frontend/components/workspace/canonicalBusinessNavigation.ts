@@ -39,6 +39,7 @@ const CANONICAL_ORDER: Array<{
   { id: "work", label: "Work", path: "work", iconName: "inbox", permission: "work.view" },
   { id: "inbox", label: "Inbox", path: "inbox", iconName: "mail", permission: "work.view" },
   { id: "campaigns", label: "Campaigns", path: "campaigns", iconName: "mail", permission: "work.view" },
+  { id: "ads", label: "Ads", path: "ads", iconName: "trending-up", permission: "performance.view" },
   {
     id: "subjects",
     label: "Properties",

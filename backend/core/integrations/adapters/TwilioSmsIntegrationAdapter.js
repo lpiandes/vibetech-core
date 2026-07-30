@@ -70,20 +70,21 @@ export class TwilioSmsIntegrationAdapter extends IntegrationProvider {
 
   getSetupGuidance() {
     return createProviderSetupGuidance({
-      title: "Set up text messaging",
-      summary: "VIBETech provisions a Twilio number from your business details.",
+      title: "We set up texting for you",
+      summary: "White-glove by default: enter your business details and VIBETech buys a Twilio number, configures the inbound webhook, and tracks carrier approval — no Twilio Console required. Have your own Twilio account? Use the Advanced option to paste credentials instead.",
       estimatedTime: "5 minutes (carrier registration may take days)",
-      prerequisites: ["Legal business name and address"],
+      prerequisites: ["Legal business name and address for A2P registration"],
       steps: [
-        "Enter business details in VIBETech",
-        "We buy and attach a Twilio number",
-        "Carrier A2P registration runs in the background",
-        "Prove with a test text when ready",
+        "Enter business + A2P details in VIBETech (no Twilio account needed)",
+        "VIBETech buys and attaches a Twilio number under the hood",
+        "VIBETech points the number's inbound webhook at your workspace automatically",
+        "Carrier A2P brand/campaign registration runs in the background",
+        "Prove with a test text once the number is ready",
       ],
       permissionsRequested: ["send_sms"],
       verificationMethod: "Credential resolve + Twilio account probe.",
-      commonProblems: ["Carrier A2P still pending", "Area code unavailable"],
-      reconnectInstructions: "Re-run texting setup or paste advanced Twilio credentials.",
+      commonProblems: ["Carrier A2P still pending", "Area code unavailable", "Inbound webhook could not be auto-configured (set APP_ORIGIN/NEXTAUTH_URL)"],
+      reconnectInstructions: "Re-run texting setup, or open Advanced to paste your own Twilio Account SID / Auth Token / From number.",
       documentationReference: "https://www.twilio.com/docs/sms",
     });
   }

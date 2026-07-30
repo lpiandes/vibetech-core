@@ -13,6 +13,8 @@ import {
   isTwilioPlatformConfigured,
   normalizeBrandInput,
   provisionTwilioSmsForBusiness,
+  configureInboundSmsWebhook,
+  resolveInboundSmsWebhookUrl,
 } from "../../../../../../../../backend/core/integrations/twilio/TwilioProvisioningService.js";
 import {
   submitTwilioA2pRegistration,
@@ -146,6 +148,16 @@ export async function POST(
         void notifyA2pOperatorAction(businessId);
       }
 
+      // Best-effort — a business connected before webhook auto-config shipped, or one
+      // whose webhook drifted, still gets pointed at the hosted inbound SMS route.
+      const webhook = await configureInboundSmsWebhook({
+        businessId,
+        accountSid: existing.secrets?.accountSid,
+        authToken: existing.secrets?.authToken,
+        phoneSid: nextMeta.phoneSid ?? null,
+        fromNumber: existing.fromNumber,
+      }).catch((err) => ({ ok: false, message: err instanceof Error ? err.message : String(err) }));
+
       return NextResponse.json({
         ok: true,
         provisioned: false,
@@ -157,6 +169,8 @@ export async function POST(
           brandRegistrationSid: nextMeta.brandRegistrationSid,
           error: a2p.error ?? null,
         },
+        inboundWebhookUrl: resolveInboundSmsWebhookUrl(businessId) || null,
+        inboundWebhookConfigured: (webhook as any).ok === true && (webhook as any).configured !== false,
         message: a2p.message
           || "Business details saved. Carrier brand/campaign registration is pending — you can send a test text next.",
         connection: {
@@ -277,6 +291,8 @@ export async function POST(
         brandRegistrationSid: nextMeta.brandRegistrationSid,
         error: a2p.error ?? null,
       },
+      inboundWebhookUrl: provision.inboundWebhookUrl ?? null,
+      inboundWebhookConfigured: provision.inboundWebhookConfigured === true,
       simulated: provision.simulated === true,
       message: provision.message,
       connection: {

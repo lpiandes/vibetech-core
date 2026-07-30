@@ -112,6 +112,9 @@ function splitProcesses(raw) {
 
 function inferTrigger(triggerPart) {
   const lower = String(triggerPart).toLowerCase();
+  if (/\b(appointment|book)\b/.test(lower) && /\b(lead|facebook|meta|sms|text)\b/.test(lower)) {
+    return { mode: "manual_or_events", summary: "Meta lead or form submit arrives", eventTypes: ["META_LEAD", "FORM_SUBMIT", "SPECIALTY_JOB_REQUESTED"], schedule: null };
+  }
   if (/\b(fb|facebook|meta)\b.*\blead\b|\blead\b.*\b(fb|facebook|meta)\b|\blead\s+comes?\s+in\b/.test(lower)) {
     return {
       mode: "manual_or_events",
@@ -162,6 +165,9 @@ function inferTrigger(triggerPart) {
 
 function inferArchetype(text, index) {
   const lower = String(text).toLowerCase();
+  if (/\b(appointment|book)\b/.test(lower) && /\b(lead|facebook|meta|sms|text)\b/.test(lower)) {
+    return { archetypeId: "appointment_setter", label: "Appointment Setter" };
+  }
   if (/\b(fb|facebook|meta)\b.*\blead\b|\blead\b/.test(lower)) {
     return {
       archetypeId: "facebook_lead_specialist",
@@ -194,6 +200,14 @@ function inferArchetype(text, index) {
 
 function buildStepsFromParts(actionParts, fullText) {
   const lowerAll = String(fullText).toLowerCase();
+  const isAppointmentSetter = /\b(appointment|book)\b/.test(lowerAll) && /\b(lead|facebook|meta|sms|text)\b/.test(lowerAll);
+  if (isAppointmentSetter) {
+    return [
+      normalizePathStep({ id: "step_pipeline", type: PATH_STEP_TYPES.ADD_TO_PIPELINE, label: "Add lead to pipeline", enabled: true, order: 0 }, 0),
+      normalizePathStep({ id: "step_sms", type: PATH_STEP_TYPES.SEND_SMS, label: "Text lead to book", audience: PATH_AUDIENCES.SCOPE_WHO, requiresApproval: false, order: 1 }, 1),
+      normalizePathStep({ id: "step_notify", type: PATH_STEP_TYPES.NOTIFY_TEAM, label: "Notify team", enabled: true, order: 2 }, 2),
+    ];
+  }
   const steps = [
     normalizePathStep({
       id: "step_draft",

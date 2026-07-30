@@ -1,0 +1,26 @@
+import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
+import { PERMISSIONS } from "@/lib/platform/permissions";
+import { platformStore } from "@/lib/server/compose";
+import { runTimedPage } from "@/lib/platform/runTimedPage";
+import AdsMetricsDashboard from "@/components/ads/AdsMetricsDashboard";
+import { fetchAdsMetrics } from "../../../../../backend/core/integrations/ads/AdsMetricsAggregator.js";
+
+/**
+ * Ads performance surface — normalized spend/impressions/clicks/CTR/leads/CPL
+ * across every connected ads provider (Meta / Google / TikTok). Providers
+ * without a stored credential show a Connect-in-Integrations empty state
+ * instead of fabricated numbers.
+ */
+export default async function AdsMetricsPage({ params }: { params: Promise<{ businessId: string }> }) {
+  const { businessId } = await params;
+  return runTimedPage("ads-metrics", async () => {
+    await getAuthorizedWorkspace(businessId, PERMISSIONS.PERFORMANCE_VIEW);
+    const initialData = await fetchAdsMetrics({ businessId, platformStore, days: 30 });
+
+    return (
+      <div style={{ width: "100%", maxWidth: 1200, margin: "0 auto" }}>
+        <AdsMetricsDashboard businessId={businessId} initialData={initialData as any} />
+      </div>
+    );
+  });
+}

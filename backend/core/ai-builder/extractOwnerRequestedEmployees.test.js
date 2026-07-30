@@ -24,6 +24,13 @@ test("extracts voice calling, Meta lead gen, and intake from owner language", ()
   assert.ok(recs.every((entry) => entry.selected));
 });
 
+test("extracts appointment setter language", () => {
+  const matched = extractOwnerRequestedEmployees({
+    answers: [{ questionId: "q_digital_workforce", answer: "We need a Scale My Social appointment setter to fill our calendar" }],
+  });
+  assert.deepEqual(matched.map((entry) => entry.archetypeId), ["appointment_setter"]);
+});
+
 test("assembly planner prioritizes owner-requested digital employees", () => {
   const session = createBuilderSession({
     businessSummary: {

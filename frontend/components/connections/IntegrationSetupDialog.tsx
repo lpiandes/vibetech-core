@@ -7,6 +7,7 @@ import SimpleModal from "@/components/product/SimpleModal";
 import PrimaryButton from "@/components/product/PrimaryButton";
 import SecondaryButton from "@/components/product/SecondaryButton";
 import type { IntegrationDisplay } from "./integrationDisplay";
+import SmsProvisioningStatus, { resolveSmsProvisioningStage } from "./SmsProvisioningStatus";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { resolveOAuthReturnPath } from "@/lib/connections/integrationFocusRouting.js";
@@ -76,6 +77,8 @@ export default function IntegrationSetupDialog({
     fromNumber?: string;
     message?: string;
     simulated?: boolean;
+    a2pRegistrationStatus?: string | null;
+    inboundWebhookConfigured?: boolean | null;
   } | null>(null);
 
   const setupMode = integration.setupMode ?? "manual";
@@ -177,6 +180,8 @@ export default function IntegrationSetupDialog({
           ? String(data.message)
           : (data.brandSaved ? "Business details saved." : undefined),
         simulated: data.simulated === true,
+        a2pRegistrationStatus: data.a2pRegistrationStatus ? String(data.a2pRegistrationStatus) : null,
+        inboundWebhookConfigured: typeof data.inboundWebhookConfigured === "boolean" ? data.inboundWebhookConfigured : null,
       });
       // Keep dialog open so owner sees the number + pending carrier step.
       router.refresh();
@@ -620,7 +625,7 @@ export default function IntegrationSetupDialog({
                   {provisionResult ? (
                     <div style={{
                       display: "grid",
-                      gap: 8,
+                      gap: 10,
                       padding: 12,
                       borderRadius: 12,
                       border: "1px solid #a7f3d0",
@@ -632,6 +637,15 @@ export default function IntegrationSetupDialog({
                           {provisionResult.simulated ? " (simulated — not a live Twilio number)" : ""}
                         </p>
                       ) : null}
+                      <SmsProvisioningStatus
+                        stage={resolveSmsProvisioningStage({
+                          loading,
+                          fromNumber: provisionResult.fromNumber ?? null,
+                          a2pRegistrationStatus: provisionResult.a2pRegistrationStatus ?? null,
+                        })}
+                        fromNumber={provisionResult.fromNumber ?? null}
+                        inboundWebhookConfigured={provisionResult.inboundWebhookConfigured ?? null}
+                      />
                       <p style={{ margin: 0, fontSize: 13, color: "#065f46", fontWeight: 600, lineHeight: 1.45 }}>
                         {provisionResult.message
                           || "Business details saved. Carrier brand/campaign registration is still pending — US customer texts may wait until approval."}

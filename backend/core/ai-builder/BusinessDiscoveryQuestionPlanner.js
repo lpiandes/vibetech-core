@@ -676,10 +676,13 @@ export class BusinessDiscoveryQuestionPlanner {
     );
     const industry = resolveDiscoveryIndustry({ answers, businessSummary });
     const packIndustry = resolvePackIndustry(industry);
-    // Do not infer a third vertical from loose words such as "team" or
-    // "patient." Until its operating pack exists, every other industry stays
-    // on the universal diagnosis and universal core.
-    const activeOtherQuestionIds = null;
+    // No dedicated pack exists for "other" industries yet, so we never infer
+    // a third vertical from loose words such as "team" or "patient" — that
+    // caused false positives. Instead every "other" business gets the same
+    // sensible default subset of adaptive follow-ups (see
+    // OTHER_INDUSTRY_SIGNAL_QUESTIONS.default) so tailored follow-ups still
+    // run instead of silently reducing to zero non-universal questions.
+    const activeOtherQuestionIds = defaultOtherQuestionIds(packIndustry);
 
     const purchasedPackages = businessSummary?.purchasedPackages ?? [];
     const packageAsk = Boolean(businessSummary?.packageAsk);
@@ -743,6 +746,19 @@ export function isUniversalDiscoveryQuestion(question) {
   return !Array.isArray(question?.whenIndustry) || question.whenIndustry.length === 0;
 }
 
+/**
+ * Sensible default set of "other" industry follow-ups (see
+ * OTHER_INDUSTRY_SIGNAL_QUESTIONS.default) for any industry that resolved to
+ * "other" — no vertical-specific inference, just enough tailored follow-ups
+ * to keep discovery useful instead of falling back to only universal
+ * questions. Returns null for pack industries (dental/sports) since they use
+ * their own dedicated questions instead.
+ */
+export function defaultOtherQuestionIds(packIndustry) {
+  if (packIndustry !== "other") return null;
+  return new Set(OTHER_INDUSTRY_SIGNAL_QUESTIONS.default);
+}
+
 export function questionMatchesIndustry(question, industry, activeOtherQuestionIds = null) {
   if (Array.isArray(question.whenIndustry) && question.whenIndustry.length) {
     if (!industry || !question.whenIndustry.includes(String(industry))) return false;
@@ -795,7 +811,7 @@ export function estimateDiscoveryQuestionCount({ industry = null } = {}) {
     question.required && isUniversalDiscoveryQuestion(question)
   )).length;
   const packIndustry = resolvePackIndustry(industry);
-  const activeOtherQuestionIds = null;
+  const activeOtherQuestionIds = defaultOtherQuestionIds(packIndustry);
   const packRequired = DISCOVERY_QUESTION_BANK.filter((question) => (
     question.required
     && !isUniversalDiscoveryQuestion(question)

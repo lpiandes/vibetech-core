@@ -7,8 +7,15 @@ function text(value) { return value === null || value === undefined ? "" : Strin
 function accountId(value) { const id = text(value); return id.startsWith("act_") ? id : `act_${id}`; }
 
 /**
- * Meta Marketing API adapter. Campaigns are always created PAUSED; activating
- * or funding one remains a separate owner action in Meta Ads Manager.
+ * VIBETech-managed lead ads ops workflow (Meta side of ManagedLeadAdsPlaybook):
+ *   1. Owner approves an offer/creative brief (outside this adapter — Ask/Work).
+ *   2. VIBETech creates a PAUSED campaign (objective OUTCOME_LEADS by default).
+ *   3. VIBETech creates a PAUSED ad set (lead-gen optimization goal, daily budget).
+ *   4. VIBETech creates a lead-form creative stub referencing the Page + lead form.
+ *   5. Owner reviews the paused scaffold in Ads Manager and activates when ready —
+ *      this adapter never flips a campaign/ad set to ACTIVE.
+ * Every step requires actionRequest.requiresApproval + outboundApproved; nothing
+ * here spends money without an explicit owner activation step in Meta Ads Manager.
  */
 export class MetaAdsIntegrationAdapter extends IntegrationProvider {
   constructor({ fetchImpl = globalThis.fetch, nowISO = "2026-07-01T00:00:00.000Z", graphApiVersion = process.env.META_GRAPH_API_VERSION || "" } = {}) {
@@ -17,14 +24,28 @@ export class MetaAdsIntegrationAdapter extends IntegrationProvider {
   get id() { return "meta_ads"; }
   get displayName() { return "Meta Ads"; }
   get supportedConnectionTypes() { return ["meta_ads"]; }
-  get supportedCapabilities() { return [INTEGRATION_CAPABILITIES.CREATE_AD_CAMPAIGN, INTEGRATION_CAPABILITIES.READ_AD_PERFORMANCE]; }
+  get supportedCapabilities() {
+    return [
+      INTEGRATION_CAPABILITIES.CREATE_AD_CAMPAIGN,
+      INTEGRATION_CAPABILITIES.READ_AD_PERFORMANCE,
+      INTEGRATION_CAPABILITIES.CREATE_EXTERNAL_RECORD,
+    ];
+  }
   getSetupGuidance() {
     return createProviderSetupGuidance({
-      title: "Connect Meta Ads", summary: "Read ad performance and create owner-approved campaigns as paused drafts.", estimatedTime: "20 minutes",
-      prerequisites: ["Meta Business Portfolio", "Ad account", "System user or user access token with ads permissions"],
-      steps: ["Enter the ad account ID and access token", "Set the supported Graph API version", "Run a read-only account test", "Create a paused test campaign and review it in Ads Manager"],
+      title: "Connect Meta Ads",
+      summary: "Read ad performance and create owner-approved campaigns as paused drafts. VIBETech-managed lead ads can also scaffold a paused campaign + ad set + lead-form creative for review before you activate spend.",
+      estimatedTime: "20 minutes",
+      prerequisites: ["Meta Business Portfolio", "Ad account", "System user or user access token with ads permissions", "Facebook Page + lead form (for managed lead-ads scaffolding)"],
+      steps: [
+        "Enter the ad account ID and access token",
+        "Set the supported Graph API version",
+        "Run a read-only account test",
+        "Create a paused test campaign and review it in Ads Manager",
+        "Optional: scaffold a paused lead-ads campaign (ad set + creative) for VIBETech-managed ops",
+      ],
       permissionsRequested: ["ads_read", "ads_management"], verificationMethod: "Meta ad-account account-status probe.",
-      commonProblems: ["Token is expired", "System user lacks ad-account access", "Graph API version has expired"],
+      commonProblems: ["Token is expired", "System user lacks ad-account access", "Graph API version has expired", "Lead form ID does not belong to the connected Page"],
       reconnectInstructions: "Replace the access token, confirm account permissions, and rerun the test.", documentationReference: "https://developers.facebook.com/docs/marketing-apis/",
     });
   }
@@ -52,6 +73,106 @@ export class MetaAdsIntegrationAdapter extends IntegrationProvider {
       return deepFreeze({ status: "success", verifiedAt: this._nowISO, capabilitiesVerified: this.supportedCapabilities, code: "verified", message: "Meta Ads account connection verified." });
     } catch (error) { return deepFreeze({ status: "failed", verifiedAt: this._nowISO, capabilitiesVerified: [], code: "verification_failed", message: String(error?.message ?? error) }); }
   }
+
+  /** Create a PAUSED ad set under a campaign — lead-gen optimization goal by default. */
+  async #createAdSet({ accessToken, adAccountId, campaignId, adSet }) {
+    const parameters = {
+      name: text(adSet?.name || "VIBETech managed lead ads — ad set"),
+      campaign_id: campaignId,
+      optimization_goal: text(adSet?.optimizationGoal || "LEAD_GENERATION"),
+      billing_event: text(adSet?.billingEvent || "IMPRESSIONS"),
+      bid_strategy: text(adSet?.bidStrategy || "LOWEST_COST_WITHOUT_CAP"),
+      daily_budget: adSet?.dailyBudgetCents ?? adSet?.dailyBudget ?? 2000,
+      targeting: adSet?.targeting ?? { geo_locations: { countries: ["US"] } },
+      status: "PAUSED",
+    };
+    return this.#request({ path: `${adAccountId}/adsets`, method: "POST", accessToken, parameters });
+  }
+
+  /** Create a lead-form creative stub referencing the connected Page + lead form. */
+  async #createCreative({ accessToken, adAccountId, creative }) {
+    const pageId = text(creative?.pageId);
+    const leadFormId = text(creative?.leadFormId);
+    const parameters = {
+      name: text(creative?.name || "VIBETech managed lead ads — creative"),
+      object_story_spec: {
+        page_id: pageId,
+        link_data: {
+          message: text(creative?.message || "Tell us a bit about yourself and we'll be in touch."),
+          link: `https://www.facebook.com/${pageId}`,
+          call_to_action: {
+            type: "SIGN_UP",
+            value: leadFormId ? { lead_gen_form_id: leadFormId } : undefined,
+          },
+        },
+      },
+    };
+    return this.#request({ path: `${adAccountId}/adcreatives`, method: "POST", accessToken, parameters });
+  }
+
+  /**
+   * Orchestrate campaign + ad set + creative for a lead-form managed-ops
+   * launch. Every object is created PAUSED — activation stays a separate,
+   * explicit owner (or VIBETech ops) step in Meta Ads Manager.
+   */
+  async #createLeadCampaignScaffold({ accessToken, adAccountId, params }) {
+    const campaignInput = params?.campaign && typeof params.campaign === "object" ? params.campaign : {};
+    const campaignName = text(campaignInput.name);
+    if (!campaignName) {
+      return deepFreeze({ status: "failed", error: "campaign_name_required", completedAt: this._nowISO });
+    }
+    const { res: campaignRes, data: campaignData } = await this.#request({
+      path: `${adAccountId}/campaigns`,
+      method: "POST",
+      accessToken,
+      parameters: { name: campaignName, objective: text(campaignInput.objective || "OUTCOME_LEADS"), special_ad_categories: campaignInput.specialAdCategories ?? [], status: "PAUSED" },
+    });
+    if (!campaignRes.ok) {
+      return deepFreeze({ status: "failed", error: text(campaignData?.error?.message || `meta_http_${campaignRes.status}`), retryable: campaignRes.status >= 500, completedAt: this._nowISO });
+    }
+    const campaignId = text(campaignData?.id);
+
+    const { res: adSetRes, data: adSetData } = await this.#createAdSet({ accessToken, adAccountId, campaignId, adSet: params?.adSet });
+    if (!adSetRes.ok) {
+      return deepFreeze({
+        status: "failed",
+        error: text(adSetData?.error?.message || `meta_http_${adSetRes.status}`),
+        retryable: adSetRes.status >= 500,
+        completedAt: this._nowISO,
+        metadata: deepFreeze({ campaignId, campaignStatus: "PAUSED", adSetCreated: false, creativeCreated: false }),
+      });
+    }
+    const adSetId = text(adSetData?.id);
+
+    const creativeInput = params?.creative && typeof params.creative === "object" ? params.creative : null;
+    let creativeId = null;
+    let creativeError = null;
+    if (creativeInput?.pageId) {
+      const { res: creativeRes, data: creativeData } = await this.#createCreative({ accessToken, adAccountId, creative: creativeInput });
+      if (creativeRes.ok) {
+        creativeId = text(creativeData?.id);
+      } else {
+        creativeError = text(creativeData?.error?.message || `meta_http_${creativeRes.status}`);
+      }
+    }
+
+    return deepFreeze({
+      externalReference: campaignId,
+      status: "completed",
+      completedAt: this._nowISO,
+      metadata: deepFreeze({
+        campaignId,
+        campaignStatus: "PAUSED",
+        adSetId: adSetId || null,
+        adSetStatus: adSetId ? "PAUSED" : null,
+        creativeId,
+        creativeError,
+        managedOps: true,
+        activationRequired: "Owner (or VIBETech ops) must review and activate in Meta Ads Manager — nothing here spends money.",
+      }),
+    });
+  }
+
   async executeAction({ actionRequest, connection, credentialResolver } = {}) {
     try {
       const creds = this.#creds({ connection, credentialResolver }); const capability = text(actionRequest?.capability); const params = actionRequest?.parameters ?? {};
@@ -68,6 +189,14 @@ export class MetaAdsIntegrationAdapter extends IntegrationProvider {
         const { res, data } = await this.#request({ path: `${creds.adAccountId}/campaigns`, method: "POST", accessToken: creds.accessToken, parameters: { ...campaign, status: "PAUSED" } });
         if (!res.ok) return deepFreeze({ status: "failed", error: text(data?.error?.message || `meta_http_${res.status}`), retryable: res.status >= 500, completedAt: this._nowISO });
         return deepFreeze({ externalReference: text(data?.id), status: "completed", completedAt: this._nowISO, metadata: deepFreeze({ campaignStatus: "PAUSED", id: data?.id ?? null }) });
+      }
+      if (capability === INTEGRATION_CAPABILITIES.CREATE_EXTERNAL_RECORD) {
+        if (text(params.recordType) !== "lead_campaign_scaffold") {
+          return deepFreeze({ status: "failed", error: "unsupported_record_type", completedAt: this._nowISO });
+        }
+        // Same money-safety gate as CREATE_AD_CAMPAIGN — scaffolding still creates real (paused) Meta objects.
+        if (!actionRequest?.requiresApproval || !actionRequest?.outboundApproved) return deepFreeze({ status: "failed", error: "owner_approval_required", completedAt: this._nowISO });
+        return this.#createLeadCampaignScaffold({ accessToken: creds.accessToken, adAccountId: creds.adAccountId, params });
       }
       return deepFreeze({ status: "failed", error: "unsupported_capability", completedAt: this._nowISO });
     } catch (error) { return deepFreeze({ status: "failed", error: String(error?.message ?? error), retryable: true, completedAt: this._nowISO }); }

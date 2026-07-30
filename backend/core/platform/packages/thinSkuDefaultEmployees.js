@@ -102,6 +102,19 @@ function leadFollowUpPath() {
   };
 }
 
+function appointmentSetterPath() {
+  return {
+    version: 1,
+    customized: true,
+    steps: [
+      { id: "step_pipeline", type: PATH_STEP_TYPES.ADD_TO_PIPELINE, enabled: true, runMode: PATH_RUN_MODES.AUTO, audience: PATH_AUDIENCES.SUBMITTER, label: "Add lead to pipeline" },
+      { id: "step_sms", type: PATH_STEP_TYPES.SEND_SMS, enabled: true, runMode: PATH_RUN_MODES.AUTO, audience: PATH_AUDIENCES.SUBMITTER, direction: "external", label: "Text lead to book appointment", body: "Hi {{name}} — thanks for your interest. Reply to this text to book an appointment with {{businessName}}." },
+      { id: "step_notify", type: PATH_STEP_TYPES.NOTIFY_TEAM, enabled: true, runMode: PATH_RUN_MODES.AUTO, audience: PATH_AUDIENCES.TEAM, label: "Notify team lead is being texted", body: "A new lead is receiving appointment-setting SMS follow-up." },
+      { id: "step_draft", type: PATH_STEP_TYPES.CREATE_DRAFT, enabled: true, runMode: PATH_RUN_MODES.MANUAL, label: "Review appointment setter activity", briefHint: "Owner-visible appointment-setting activity and follow-up." },
+    ],
+  };
+}
+
 function socialScreenerPath() {
   return {
     version: 1,
@@ -199,6 +212,29 @@ export function buildDefaultLeadFollowUpEmployee() {
         mode: "manual_or_events",
         summary: "When a website form or Meta lead arrives",
         eventTypes: ["FORM_SUBMIT", "META_LEAD", "NEW_INQUIRY", "SPECIALTY_JOB_REQUESTED"],
+      },
+    },
+  );
+}
+
+export function buildDefaultAppointmentSetterEmployee() {
+  return withRunnableContract(
+    {
+      employeeId: "emp_appointment_setter_default",
+      id: "emp_appointment_setter_default",
+      archetypeId: "appointment_setter",
+      label: "Lead Appointment Setter",
+      displayName: "Lead Appointment Setter",
+      purpose: "Instantly qualifies Meta and form leads by SMS and requests appointment holds for team confirmation.",
+      communicationPermissions: { customerFacingRequiresApproval: false },
+      connectionDependencies: ["sms_channel", "calendar", "meta_lead_ads"],
+    },
+    {
+      automationPath: appointmentSetterPath(),
+      trigger: {
+        mode: "manual_or_events",
+        summary: "When a Meta lead, form, or new inquiry arrives",
+        eventTypes: ["META_LEAD", "FORM_SUBMIT", "NEW_INQUIRY", "SPECIALTY_JOB_REQUESTED"],
       },
     },
   );

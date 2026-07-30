@@ -29,7 +29,7 @@ export class GmailIntegrationAdapter extends IntegrationProvider {
   }
 
   get supportedCapabilities() {
-    return [INTEGRATION_CAPABILITIES.SEND_EMAIL];
+    return [INTEGRATION_CAPABILITIES.SEND_EMAIL, INTEGRATION_CAPABILITIES.RECEIVE_EMAIL];
   }
 
   get communicationProvider() {
@@ -43,7 +43,7 @@ export class GmailIntegrationAdapter extends IntegrationProvider {
       estimatedTime: "5 minutes",
       prerequisites: ["Google Workspace or Gmail account", "Administrator consent for OAuth"],
       steps: ["Click Connect with Google", "Sign in with Google", "Authorize send permissions", "Verify connection"],
-      permissionsRequested: ["send_email", "userinfo.email"],
+      permissionsRequested: ["send_email", "gmail.readonly", "userinfo.email"],
       verificationMethod: "OAuth token exchange and provider health check.",
       commonProblems: ["OAuth consent screen not configured", "Refresh token missing — re-consent with prompt=consent"],
       reconnectInstructions: "Disconnect and Connect with Google again.",
@@ -56,6 +56,16 @@ export class GmailIntegrationAdapter extends IntegrationProvider {
   }
 
   #providerForConnection({ connection, credentialResolver } = {}) {
+    return this.resolveProvider({ connection, credentialResolver });
+  }
+
+  /**
+   * Resolve a GmailCommunicationProvider carrying the per-business vault credentials
+   * for `connection`, falling back to the env-configured/injected default provider.
+   * Public so callers outside executeAction (e.g. GmailInboundSyncService) can reuse
+   * the same credential-resolution rules for read APIs.
+   */
+  resolveProvider({ connection, credentialResolver } = {}) {
     if (!connection?.credentialReference || !credentialResolver) {
       return this._communicationProvider;
     }
@@ -125,6 +135,26 @@ export class GmailIntegrationAdapter extends IntegrationProvider {
   }
 
   async executeAction({ actionRequest, connection, credentialResolver } = {}) {
+    if (actionRequest.capability === INTEGRATION_CAPABILITIES.RECEIVE_EMAIL) {
+      try {
+        const provider = this.#providerForConnection({ connection, credentialResolver });
+        const { query, maxResults, pageToken } = actionRequest.parameters ?? {};
+        const inbox = await provider.listInbox({ query, maxResults, pageToken });
+        return deepFreeze({
+          status: "completed",
+          completedAt: this._nowISO,
+          metadata: { messages: inbox.messages, nextPageToken: inbox.nextPageToken ?? null },
+        });
+      } catch (err) {
+        return deepFreeze({
+          status: "failed",
+          error: String(err?.message ?? err),
+          retryable: false,
+          completedAt: this._nowISO,
+        });
+      }
+    }
+
     if (actionRequest.capability !== INTEGRATION_CAPABILITIES.SEND_EMAIL) {
       return deepFreeze({ status: "failed", error: "unsupported_capability", completedAt: this._nowISO });
     }

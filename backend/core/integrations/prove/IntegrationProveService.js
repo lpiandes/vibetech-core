@@ -18,12 +18,16 @@ export const PROVE_ACTIONS = Object.freeze({
   run_dental_golden_path: "run_dental_golden_path",
   submit_test_form: "submit_test_form",
   run_sample_social_screen: "run_sample_social_screen",
+  prove_appointment_setter_sms: "prove_appointment_setter_sms",
+  prove_team_availability: "prove_team_availability",
 });
 
 const CONNECTIONLESS_ACTIONS = new Set([
   PROVE_ACTIONS.upload_and_cite,
   PROVE_ACTIONS.approve_and_send,
   PROVE_ACTIONS.submit_test_form,
+  // Reads installation state directly — no external provider connection to check.
+  PROVE_ACTIONS.prove_team_availability,
 ]);
 
 /**
@@ -167,6 +171,12 @@ function proveSuccessMessage(action) {
   }
   if (action === PROVE_ACTIONS.place_test_call) {
     return "Prove call placed — AI receptionist answers. Customer outbound calls stay approval-gated.";
+  }
+  if (action === PROVE_ACTIONS.prove_appointment_setter_sms) {
+    return "Twilio SMS is configured for the appointment setter.";
+  }
+  if (action === PROVE_ACTIONS.prove_team_availability) {
+    return "At least one teammate has bookable weekly availability — the appointment setter can auto-book.";
   }
   return "Prove test passed.";
 }

@@ -16,6 +16,18 @@ export function isTwilioPlatformConfigured() {
   return Boolean(safeString(process.env.TWILIO_ACCOUNT_SID) && safeString(process.env.TWILIO_AUTH_TOKEN));
 }
 
+/**
+ * Hosted inbound SMS webhook for a business — appointment setter and any other
+ * SMS automation read from this single route. Never send owners to Twilio Console
+ * to paste a webhook URL when we can set it for them.
+ */
+export function resolveInboundSmsWebhookUrl(businessId) {
+  const origin = safeString(process.env.NEXTAUTH_URL || process.env.APP_ORIGIN || "").replace(/\/$/, "");
+  const id = safeString(businessId);
+  if (!origin || !id) return "";
+  return `${origin}/api/businesses/${encodeURIComponent(id)}/integrations/sms/inbound`;
+}
+
 export function normalizeBrandInput(input = {}) {
   const legalBusinessName = safeString(input.legalBusinessName || input.businessName);
   const dba = safeString(input.dba || input.displayName);
@@ -184,12 +196,14 @@ export async function provisionTwilioSmsForBusiness({
       authToken = sub.authToken;
     }
 
+    const inboundWebhookUrl = resolveInboundSmsWebhookUrl(workspaceId);
     const purchased = await purchaseUsLocalNumber({
       fetchImpl,
       accountSid,
       authToken,
       areaCode: normalized.areaCode || safeString(process.env.TWILIO_PROVISION_AREA_CODE),
       friendlyName: `VIBETech ${normalized.dba}`.slice(0, 64),
+      smsUrl: inboundWebhookUrl,
     });
     if (!purchased.ok) return deepFreeze(purchased);
 
@@ -203,6 +217,8 @@ export async function provisionTwilioSmsForBusiness({
       provisionedBy: "platform",
       a2pRegistrationStatus: "pending",
       brand: normalized,
+      inboundWebhookUrl: inboundWebhookUrl || null,
+      inboundWebhookConfigured: purchased.smsUrlConfigured === true,
       at: nowISO,
       message: "Number ready. Carrier brand/campaign registration is pending — texts to US customers may wait until A2P is approved.",
     });
@@ -239,7 +255,7 @@ async function createTwilioSubaccount({ fetchImpl, parentSid, parentToken, frien
   };
 }
 
-async function purchaseUsLocalNumber({ fetchImpl, accountSid, authToken, areaCode, friendlyName }) {
+async function purchaseUsLocalNumber({ fetchImpl, accountSid, authToken, areaCode, friendlyName, smsUrl = "" }) {
   const pool = safeString(process.env.TWILIO_PROVISION_POOL)
     .split(/[\s,]+/)
     .map((n) => n.trim())
@@ -251,6 +267,7 @@ async function purchaseUsLocalNumber({ fetchImpl, accountSid, authToken, areaCod
       fromNumber,
       phoneSid: null,
       fromPool: true,
+      smsUrlConfigured: false,
     };
   }
 
@@ -286,6 +303,15 @@ async function purchaseUsLocalNumber({ fetchImpl, accountSid, authToken, areaCod
   }
 
   const phoneNumber = safeString(pick.phone_number);
+  const purchaseForm = {
+    PhoneNumber: phoneNumber,
+    FriendlyName: friendlyName || "VIBETech SMS",
+  };
+  if (smsUrl) {
+    // Auto-configure the inbound webhook at purchase time — owners never touch Twilio Console.
+    purchaseForm.SmsUrl = smsUrl;
+    purchaseForm.SmsMethod = "POST";
+  }
   const buyRes = await fetchImpl(
     `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/IncomingPhoneNumbers.json`,
     {
@@ -294,10 +320,7 @@ async function purchaseUsLocalNumber({ fetchImpl, accountSid, authToken, areaCod
         Authorization: basicAuth(accountSid, authToken),
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({
-        PhoneNumber: phoneNumber,
-        FriendlyName: friendlyName || "VIBETech SMS",
-      }).toString(),
+      body: new URLSearchParams(purchaseForm).toString(),
     },
   );
   const bought = await buyRes.json().catch(() => ({}));
@@ -314,7 +337,82 @@ async function purchaseUsLocalNumber({ fetchImpl, accountSid, authToken, areaCod
     fromNumber: safeString(bought.phone_number || phoneNumber),
     phoneSid: safeString(bought.sid),
     fromPool: false,
+    smsUrlConfigured: Boolean(smsUrl) && safeString(bought.sms_url) === smsUrl,
   };
+}
+
+/**
+ * Point an already-owned Twilio number's inbound SMS webhook at the platform
+ * route. Used when a business already had a number connected before this
+ * webhook auto-configuration shipped, or when re-saving brand details.
+ * @param {{
+ *   businessId: string,
+ *   accountSid: string,
+ *   authToken: string,
+ *   phoneSid?: string|null,
+ *   fromNumber?: string|null,
+ *   fetchImpl?: typeof fetch,
+ * }} input
+ */
+export async function configureInboundSmsWebhook({
+  businessId,
+  accountSid,
+  authToken,
+  phoneSid = null,
+  fromNumber = null,
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  const webhookUrl = resolveInboundSmsWebhookUrl(businessId);
+  if (!webhookUrl) {
+    return { ok: false, reason: "webhook_url_unresolved", message: "Set NEXTAUTH_URL or APP_ORIGIN to auto-configure the inbound SMS webhook." };
+  }
+  const sid = safeString(accountSid);
+  const token = safeString(authToken);
+  if (!sid || !token) {
+    return { ok: false, reason: "credentials_required", message: "Twilio Account SID and Auth Token are required." };
+  }
+  try {
+    let resolvedPhoneSid = safeString(phoneSid);
+    if (!resolvedPhoneSid && fromNumber) {
+      const lookupRes = await fetchImpl(
+        `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(fromNumber)}`,
+        { headers: { Authorization: basicAuth(sid, token) } },
+      );
+      const lookup = await lookupRes.json().catch(() => ({}));
+      const row = Array.isArray(lookup?.incoming_phone_numbers) ? lookup.incoming_phone_numbers[0] : null;
+      resolvedPhoneSid = safeString(row?.sid);
+    }
+    if (!resolvedPhoneSid) {
+      return { ok: false, reason: "phone_sid_unresolved", message: "Could not find the Twilio phone number to configure." };
+    }
+    const updateRes = await fetchImpl(
+      `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/IncomingPhoneNumbers/${encodeURIComponent(resolvedPhoneSid)}.json`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: basicAuth(sid, token),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ SmsUrl: webhookUrl, SmsMethod: "POST" }).toString(),
+      },
+    );
+    const updated = await updateRes.json().catch(() => ({}));
+    if (!updateRes.ok) {
+      return {
+        ok: false,
+        reason: "webhook_update_failed",
+        message: safeString(updated?.message) || `Could not set the inbound SMS webhook (HTTP ${updateRes.status}).`,
+      };
+    }
+    return {
+      ok: true,
+      webhookUrl,
+      phoneSid: resolvedPhoneSid,
+      configured: safeString(updated?.sms_url) === webhookUrl,
+    };
+  } catch (err) {
+    return { ok: false, reason: "webhook_update_error", message: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 function basicAuth(sid, token) {

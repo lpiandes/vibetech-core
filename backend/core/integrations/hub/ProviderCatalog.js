@@ -285,6 +285,16 @@ export const PROVIDER_CATALOG = deepFreeze({
     status: "planned",
     setupGuide: "Meta Ads connection is planned. Do not treat campaigns as live until account connection, permissions, and a test campaign are verified.",
   }),
+  tiktok_ads: provider({
+    providerId: "tiktok_ads",
+    label: "TikTok Lead Ads (VIBETech-managed)",
+    category: "advertising",
+    authMethod: "api_key",
+    connectionType: "tiktok_lead_ads",
+    capabilities: ["create_ad_campaign", "webhooks"],
+    status: "planned",
+    setupGuide: "VIBETech-managed TikTok lead ads is rolling out. Platform Marketing API credentials must be configured before any campaign scaffolding is treated as live.",
+  }),
   // Generic
   rest_api: provider({
     providerId: "rest_api",

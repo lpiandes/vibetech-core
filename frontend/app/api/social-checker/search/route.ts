@@ -5,6 +5,9 @@ import {
   clientKeyFromRequest,
   runPublicSocialCheck,
 } from "../../../../../backend/core/social-checker/publicSocialChecker.js";
+import { resolveSocialCheckerEntitlement } from "../../../../../backend/core/platform/packages/socialCheckerEntitlement.js";
+import { getSessionUser } from "@/lib/platform/AuthorizedWorkspaceService";
+import { platformStore } from "@/lib/server/compose";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -38,6 +41,30 @@ function parseHandlesByPlatform(raw: unknown): Record<string, string> {
 }
 
 export async function POST(request: Request) {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, error: "Sign in required.", code: "UNAUTHENTICATED" },
+      { status: 401 },
+    );
+  }
+
+  const businesses = await platformStore.listBusinessesForUser(user.id);
+  const entitlement = resolveSocialCheckerEntitlement({
+    platformRole: (user as { platformRole?: string | null }).platformRole ?? null,
+    businesses,
+  });
+  if (!entitlement.entitled) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Subscribe to Social Background Screening or book a call to unlock searches.",
+        code: "FORBIDDEN",
+      },
+      { status: 403 },
+    );
+  }
+
   const body = await request.json().catch(() => ({}));
   const name = String(body.name ?? "").trim();
   const handle = String(body.handle ?? body.username ?? "").trim();

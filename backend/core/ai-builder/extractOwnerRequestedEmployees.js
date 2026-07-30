@@ -6,6 +6,12 @@ import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
  */
 export const OWNER_REQUESTED_EMPLOYEE_PATTERNS = Object.freeze([
   {
+    archetypeId: "appointment_setter",
+    label: "Appointment Setter",
+    purpose: "Qualify form and Meta leads by text and request appointment holds for team confirmation.",
+    patterns: [/\bappointment\s+sett(?:er|ing)\b/i, /\bbook(?:ed)?\s+appointments?\b/i, /\bscale\s+my\s+social\b/i, /\blead\s+appointment\b/i, /\bfacebook.*appoint/i, /\binsurance.*appoint/i, /\bfill.*(?:calendar|appoint)/i],
+  },
+  {
     archetypeId: "ai_caller",
     label: "Voice Call Assistant",
     purpose: "Prepare approved call scripts and follow-up work. Live conversations require a configured Twilio Voice agent.",
