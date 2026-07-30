@@ -7,7 +7,7 @@ export type SocialCheckerAccess = {
   entitled: boolean;
   /** True when every business the user belongs to is Social Checker-only (never full OS). */
   socialOnly: boolean;
-  reason: "platform_admin" | "full_os" | "social_package" | "none" | "signed_out";
+  reason: "social_package" | "none" | "signed_out";
 };
 
 /**

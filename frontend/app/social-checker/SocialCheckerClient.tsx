@@ -101,7 +101,7 @@ const SUBSCRIBE_MAILTO =
 export type SocialCheckerClientProps = {
   /** Signed in via VibeTech account. */
   signedIn: boolean;
-  /** Signed in AND entitled (full OS scope, social_background_screening package, or platform admin). */
+  /** Signed in AND entitled (explicit social_background_screening package on a business). */
   entitled: boolean;
 };
 
@@ -405,14 +405,14 @@ function AccessGate({ variant }: { variant: "signin" | "subscribe" }) {
   const isSignin = variant === "signin";
   return (
     <div style={paywallCard} role="dialog" aria-modal="true" aria-labelledby="social-gate-title">
-      <p style={paywallKicker}>{isSignin ? "Sign in required" : "Subscription required"}</p>
+      <p style={paywallKicker}>{isSignin ? "Sign in required" : "Access denied"}</p>
       <h3 id="social-gate-title" style={paywallTitle}>
-        {isSignin ? "Sign in to run a search" : "Subscribe to search & unlock results"}
+        {isSignin ? "Sign in to run a search" : "Social Background Screening is not enabled"}
       </h3>
       <p style={paywallBody}>
         {isSignin
           ? "Social Checker is a VibeTech customer tool. Sign in with your account, or book a call to get set up."
-          : "Your account doesn't have Social Background Screening yet. Subscribe or book a call to unlock searches and full reports."}
+          : "Your account does not include the Social Background Screening package. An admin must enable it on your business, or book a call to subscribe."}
       </p>
       <div style={paywallActions}>
         {isSignin ? (
@@ -420,13 +420,19 @@ function AccessGate({ variant }: { variant: "signin" | "subscribe" }) {
             Sign in
           </a>
         ) : (
-          <a href={SUBSCRIBE_MAILTO} style={primaryBtnLink}>
-            Subscribe to use our services
+          <a href={BOOK_A_CALL_URL} style={primaryBtnLink}>
+            Book a call to subscribe
           </a>
         )}
-        <a href={BOOK_A_CALL_URL} style={ghostBtnLink}>
-          Book a call
-        </a>
+        {!isSignin ? (
+          <a href="https://app.vtechdevelopment.com" style={ghostBtnLink}>
+            Back to app
+          </a>
+        ) : (
+          <a href={BOOK_A_CALL_URL} style={ghostBtnLink}>
+            Book a call
+          </a>
+        )}
       </div>
     </div>
   );

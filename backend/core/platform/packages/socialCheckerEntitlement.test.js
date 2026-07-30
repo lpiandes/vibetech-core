@@ -9,41 +9,47 @@ import {
   SOCIAL_BACKGROUND_SCREENING_PACKAGE_ID,
 } from "./socialCheckerEntitlement.js";
 
-test("businessGrantsSocialCheckerAccess: empty packages (full OS) is entitled", () => {
-  assert.equal(businessGrantsSocialCheckerAccess([]), true);
+test("businessGrantsSocialCheckerAccess: empty packages is NOT entitled (must tick social package)", () => {
+  assert.equal(businessGrantsSocialCheckerAccess([]), false);
 });
 
-test("businessGrantsSocialCheckerAccess: full-OS package id is entitled", () => {
-  assert.equal(businessGrantsSocialCheckerAccess(["ai_business_os"]), true);
+test("businessGrantsSocialCheckerAccess: full-OS package alone is NOT entitled", () => {
+  assert.equal(businessGrantsSocialCheckerAccess(["ai_business_os"]), false);
 });
 
 test("businessGrantsSocialCheckerAccess: social_background_screening alone is entitled", () => {
   assert.equal(businessGrantsSocialCheckerAccess([SOCIAL_BACKGROUND_SCREENING_PACKAGE_ID]), true);
 });
 
+test("businessGrantsSocialCheckerAccess: social package alongside other SKUs is entitled", () => {
+  assert.equal(
+    businessGrantsSocialCheckerAccess([SOCIAL_BACKGROUND_SCREENING_PACKAGE_ID, "ai_receptionist"]),
+    true,
+  );
+});
+
 test("businessGrantsSocialCheckerAccess: unrelated thin SKU is not entitled", () => {
   assert.equal(businessGrantsSocialCheckerAccess(["ai_receptionist"]), false);
 });
 
-test("resolveSocialCheckerEntitlement: platform admin is always entitled", () => {
+test("resolveSocialCheckerEntitlement: platform admin is NOT auto-entitled without the package", () => {
   const result = resolveSocialCheckerEntitlement({ platformRole: "PLATFORM_ADMIN", businesses: [] });
-  assert.equal(result.entitled, true);
-  assert.equal(result.reason, "platform_admin");
+  assert.equal(result.entitled, false);
+  assert.equal(result.reason, "none");
 });
 
-test("resolveSocialCheckerEntitlement: no businesses and no admin role is not entitled", () => {
+test("resolveSocialCheckerEntitlement: no businesses is not entitled", () => {
   const result = resolveSocialCheckerEntitlement({ platformRole: null, businesses: [] });
   assert.equal(result.entitled, false);
   assert.equal(result.reason, "none");
 });
 
-test("resolveSocialCheckerEntitlement: business with full-OS scope entitles the user", () => {
+test("resolveSocialCheckerEntitlement: empty packageConfiguration (legacy full OS) is not entitled", () => {
   const result = resolveSocialCheckerEntitlement({
     businesses: [{ id: "biz-1", packageConfiguration: {} }],
   });
-  assert.equal(result.entitled, true);
-  assert.equal(result.reason, "full_os");
-  assert.equal(result.businessId, "biz-1");
+  assert.equal(result.entitled, false);
+  assert.equal(result.reason, "none");
 });
 
 test("resolveSocialCheckerEntitlement: business with social_background_screening entitles the user", () => {
@@ -71,12 +77,11 @@ test("resolveSocialCheckerEntitlement: businesses with unrelated thin SKUs only 
 
 test("isSocialCheckerOnlyPurchasedScope: true only for the lone social SKU", () => {
   assert.equal(isSocialCheckerOnlyPurchasedScope([SOCIAL_BACKGROUND_SCREENING_PACKAGE_ID]), true);
-  assert.equal(isSocialCheckerOnlyPurchasedScope([]), false, "empty scope is full OS, not social-only");
+  assert.equal(isSocialCheckerOnlyPurchasedScope([]), false);
   assert.equal(isSocialCheckerOnlyPurchasedScope(["ai_business_os"]), false);
   assert.equal(
     isSocialCheckerOnlyPurchasedScope([SOCIAL_BACKGROUND_SCREENING_PACKAGE_ID, "ai_receptionist"]),
     false,
-    "additional package alongside social means not social-only",
   );
 });
 
@@ -93,7 +98,6 @@ test("isUserSocialCheckerOnly: true only when every business is social-only", ()
       { packageConfiguration: {} },
     ]),
     false,
-    "any full-OS business disqualifies social-only",
   );
-  assert.equal(isUserSocialCheckerOnly([]), false, "no businesses is not social-only");
+  assert.equal(isUserSocialCheckerOnly([]), false);
 });
