@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
 import { buildSocialCheckerPdf } from "@/lib/social-checker/buildSocialCheckerPdf";
 
@@ -100,9 +100,17 @@ export default function SocialCheckerPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<Report | null>(null);
+  const resultsRef = useRef<HTMLElement | null>(null);
 
   const platforms = useMemo(() => report?.platforms ?? [], [report]);
   const hitCount = report?.profiles?.length ?? 0;
+  // Paywall: full report + PDF stay locked until subscription is wired.
+  const resultsUnlocked = false;
+
+  useEffect(() => {
+    if (!report || resultsUnlocked) return;
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [report, resultsUnlocked]);
   const filledHandles = useMemo(
     () => Object.entries(handlesByPlatform).filter(([, v]) => String(v ?? "").trim().length >= 2),
     [handlesByPlatform],
@@ -159,8 +167,6 @@ export default function SocialCheckerPage() {
   }
 
   const activeMeta = HANDLE_PLATFORMS.find((p) => p.id === activePlatform) ?? null;
-  // Paywall: full report + PDF stay locked until subscription is wired.
-  const resultsUnlocked = false;
 
   return (
     <div style={page}>
@@ -298,8 +304,41 @@ export default function SocialCheckerPage() {
         {error ? <p style={errorBox}>{error}</p> : null}
 
         {report ? (
-          <section style={results}>
-            <div style={paywallShell}>
+          <section ref={resultsRef} style={results} id="social-checker-results">
+            {!resultsUnlocked ? (
+              <div style={paywallCard} role="dialog" aria-modal="true" aria-labelledby="social-paywall-title">
+                <p style={paywallKicker}>Subscription required</p>
+                <h3 id="social-paywall-title" style={paywallTitle}>
+                  Subscribe to unlock full results
+                </h3>
+                <p style={paywallBody}>
+                  We found matching public social data for this search. Subscribe to use our
+                  Social Checker services—full profiles, posts, tags, mentions, and PDF reports.
+                </p>
+                <div style={paywallActions}>
+                  <a
+                    href="mailto:leopiandes@vtechdevelopment.com?subject=Subscribe%20to%20Social%20Checker&body=Hi%20VibeTech%2C%20I%27d%20like%20to%20subscribe%20to%20Social%20Checker."
+                    style={primaryBtnLink}
+                  >
+                    Subscribe to use our services
+                  </a>
+                  <a
+                    href="https://vtechdevelopment.com/#contact"
+                    style={ghostBtnLink}
+                  >
+                    Contact us
+                  </a>
+                </div>
+              </div>
+            ) : null}
+
+            <div
+              style={
+                resultsUnlocked
+                  ? { position: "relative", borderRadius: 20 }
+                  : paywallShell
+              }
+            >
               <div
                 style={resultsUnlocked ? undefined : resultsBlurred}
                 aria-hidden={!resultsUnlocked}
@@ -362,35 +401,6 @@ export default function SocialCheckerPage() {
 
                 {report.disclaimer ? <p style={disclaimer}>{report.disclaimer}</p> : null}
               </div>
-
-              {!resultsUnlocked ? (
-                <div style={paywallOverlay} role="dialog" aria-modal="true" aria-labelledby="social-paywall-title">
-                  <div style={paywallCard}>
-                    <p style={paywallKicker}>Subscription required</p>
-                    <h3 id="social-paywall-title" style={paywallTitle}>
-                      Subscribe to unlock full results
-                    </h3>
-                    <p style={paywallBody}>
-                      We found matching public social data for this search. Subscribe to use our
-                      Social Checker services—full profiles, posts, tags, mentions, and PDF reports.
-                    </p>
-                    <div style={paywallActions}>
-                      <a
-                        href="mailto:leopiandes@vtechdevelopment.com?subject=Subscribe%20to%20Social%20Checker&body=Hi%20VibeTech%2C%20I%27d%20like%20to%20subscribe%20to%20Social%20Checker."
-                        style={primaryBtnLink}
-                      >
-                        Subscribe to use our services
-                      </a>
-                      <a
-                        href="https://vtechdevelopment.com/#contact"
-                        style={ghostBtnLink}
-                      >
-                        Contact us
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
             </div>
           </section>
         ) : null}
@@ -890,6 +900,9 @@ const paywallShell: CSSProperties = {
   position: "relative",
   borderRadius: 20,
   overflow: "hidden",
+  maxHeight: 360,
+  maskImage: "linear-gradient(180deg, #000 55%, transparent)",
+  WebkitMaskImage: "linear-gradient(180deg, #000 55%, transparent)",
 };
 
 const resultsBlurred: CSSProperties = {
@@ -899,19 +912,10 @@ const resultsBlurred: CSSProperties = {
   userSelect: "none",
 };
 
-const paywallOverlay: CSSProperties = {
-  position: "absolute",
-  inset: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 24,
-  background: "linear-gradient(180deg, rgba(7,11,22,0.35), rgba(7,11,22,0.82))",
-  zIndex: 2,
-};
-
 const paywallCard: CSSProperties = {
-  width: "min(440px, 100%)",
+  width: "100%",
+  maxWidth: 520,
+  margin: "0 auto",
   borderRadius: 18,
   border: "1px solid rgba(125,211,252,0.35)",
   background: "linear-gradient(165deg, rgba(15,23,42,0.98), rgba(15,23,42,0.9))",
@@ -920,6 +924,8 @@ const paywallCard: CSSProperties = {
   textAlign: "center",
   display: "grid",
   gap: 12,
+  position: "relative",
+  zIndex: 3,
 };
 
 const paywallKicker: CSSProperties = {
