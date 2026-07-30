@@ -117,8 +117,7 @@ export default function SocialCheckerClient({ signedIn, entitled }: SocialChecke
   const canSearch = signedIn && entitled;
   const platforms = useMemo(() => report?.platforms ?? [], [report]);
   const hitCount = report?.profiles?.length ?? 0;
-  // Full report + PDF unlock once the signed-in user is entitled (full OS,
-  // the Social Background Screening SKU, or platform admin).
+  // Full report + PDF unlock only when social_background_screening is enabled.
   const resultsUnlocked = entitled;
 
   useEffect(() => {
