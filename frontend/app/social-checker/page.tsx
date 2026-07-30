@@ -147,7 +147,7 @@ export default function SocialCheckerPage() {
   }
 
   function downloadPdf() {
-    if (!report) return;
+    if (!report || !resultsUnlocked) return;
     const blob = buildSocialCheckerPdf(report);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -159,6 +159,8 @@ export default function SocialCheckerPage() {
   }
 
   const activeMeta = HANDLE_PLATFORMS.find((p) => p.id === activePlatform) ?? null;
+  // Paywall: full report + PDF stay locked until subscription is wired.
+  const resultsUnlocked = false;
 
   return (
     <div style={page}>
@@ -297,58 +299,99 @@ export default function SocialCheckerPage() {
 
         {report ? (
           <section style={results}>
-            <div style={resultsHead}>
-              <div>
-                <h2 style={resultsTitle}>
-                  Results for {report.subject?.name || "subject"}
-                </h2>
-                <p style={resultsMeta}>
-                  {hitCount} hits · {platforms.length} platforms
-                  {typeof report.remaining === "number"
-                    ? ` · ${report.remaining} searches left today`
-                    : ""}
-                </p>
-                {report.meta ? (
-                  <p style={resultsMeta}>
-                    {formatSearchMetaLine(report.meta)}
-                  </p>
-                ) : null}
-                {report.subject?.handlesByPlatform
-                && Object.keys(report.subject.handlesByPlatform).length ? (
-                  <p style={handlesRow}>
-                    Handles used:{" "}
-                    {Object.entries(report.subject.handlesByPlatform).map(([net, h]) => (
-                      <span key={net} style={handleChip}>
-                        {net}: @{h}
-                      </span>
+            <div style={paywallShell}>
+              <div
+                style={resultsUnlocked ? undefined : resultsBlurred}
+                aria-hidden={!resultsUnlocked}
+              >
+                <div style={resultsHead}>
+                  <div>
+                    <h2 style={resultsTitle}>
+                      Results for {report.subject?.name || "subject"}
+                    </h2>
+                    <p style={resultsMeta}>
+                      {hitCount} hits · {platforms.length} platforms
+                      {typeof report.remaining === "number"
+                        ? ` · ${report.remaining} searches left today`
+                        : ""}
+                    </p>
+                    {report.meta ? (
+                      <p style={resultsMeta}>
+                        {formatSearchMetaLine(report.meta)}
+                      </p>
+                    ) : null}
+                    {report.subject?.handlesByPlatform
+                    && Object.keys(report.subject.handlesByPlatform).length ? (
+                      <p style={handlesRow}>
+                        Handles used:{" "}
+                        {Object.entries(report.subject.handlesByPlatform).map(([net, h]) => (
+                          <span key={net} style={handleChip}>
+                            {net}: @{h}
+                          </span>
+                        ))}
+                      </p>
+                    ) : null}
+                    {report.discoveredHandles?.length ? (
+                      <p style={handlesRow}>
+                        Handles found:{" "}
+                        {report.discoveredHandles.map((h) => (
+                          <span key={h} style={handleChip}>@{h}</span>
+                        ))}
+                      </p>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={downloadPdf}
+                    style={secondaryBtn}
+                    disabled={!resultsUnlocked}
+                  >
+                    Download PDF
+                  </button>
+                </div>
+
+                {platforms.length === 0 ? (
+                  <p style={empty}>No public profiles found for that query.</p>
+                ) : (
+                  <div style={platformStack}>
+                    {platforms.map((platform) => (
+                      <PlatformSection key={platform.network} platform={platform} />
                     ))}
-                  </p>
-                ) : null}
-                {report.discoveredHandles?.length ? (
-                  <p style={handlesRow}>
-                    Handles found:{" "}
-                    {report.discoveredHandles.map((h) => (
-                      <span key={h} style={handleChip}>@{h}</span>
-                    ))}
-                  </p>
-                ) : null}
+                  </div>
+                )}
+
+                {report.disclaimer ? <p style={disclaimer}>{report.disclaimer}</p> : null}
               </div>
-              <button type="button" onClick={downloadPdf} style={secondaryBtn}>
-                Download PDF
-              </button>
+
+              {!resultsUnlocked ? (
+                <div style={paywallOverlay} role="dialog" aria-modal="true" aria-labelledby="social-paywall-title">
+                  <div style={paywallCard}>
+                    <p style={paywallKicker}>Subscription required</p>
+                    <h3 id="social-paywall-title" style={paywallTitle}>
+                      Subscribe to unlock full results
+                    </h3>
+                    <p style={paywallBody}>
+                      We found matching public social data for this search. Subscribe to use our
+                      Social Checker services—full profiles, posts, tags, mentions, and PDF reports.
+                    </p>
+                    <div style={paywallActions}>
+                      <a
+                        href="mailto:leopiandes@vtechdevelopment.com?subject=Subscribe%20to%20Social%20Checker&body=Hi%20VibeTech%2C%20I%27d%20like%20to%20subscribe%20to%20Social%20Checker."
+                        style={primaryBtnLink}
+                      >
+                        Subscribe to use our services
+                      </a>
+                      <a
+                        href="https://vtechdevelopment.com/#contact"
+                        style={ghostBtnLink}
+                      >
+                        Contact us
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
-
-            {platforms.length === 0 ? (
-              <p style={empty}>No public profiles found for that query.</p>
-            ) : (
-              <div style={platformStack}>
-                {platforms.map((platform) => (
-                  <PlatformSection key={platform.network} platform={platform} />
-                ))}
-              </div>
-            )}
-
-            {report.disclaimer ? <p style={disclaimer}>{report.disclaimer}</p> : null}
           </section>
         ) : null}
       </main>
@@ -841,6 +884,101 @@ const results: CSSProperties = {
   marginTop: 40,
   display: "grid",
   gap: 22,
+};
+
+const paywallShell: CSSProperties = {
+  position: "relative",
+  borderRadius: 20,
+  overflow: "hidden",
+};
+
+const resultsBlurred: CSSProperties = {
+  filter: "blur(9px)",
+  opacity: 0.55,
+  pointerEvents: "none",
+  userSelect: "none",
+};
+
+const paywallOverlay: CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 24,
+  background: "linear-gradient(180deg, rgba(7,11,22,0.35), rgba(7,11,22,0.82))",
+  zIndex: 2,
+};
+
+const paywallCard: CSSProperties = {
+  width: "min(440px, 100%)",
+  borderRadius: 18,
+  border: "1px solid rgba(125,211,252,0.35)",
+  background: "linear-gradient(165deg, rgba(15,23,42,0.98), rgba(15,23,42,0.9))",
+  boxShadow: "0 24px 60px rgba(0,0,0,0.45)",
+  padding: "28px 24px",
+  textAlign: "center",
+  display: "grid",
+  gap: 12,
+};
+
+const paywallKicker: CSSProperties = {
+  margin: 0,
+  fontSize: 11,
+  fontWeight: 800,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  color: "#7dd3fc",
+};
+
+const paywallTitle: CSSProperties = {
+  margin: 0,
+  fontSize: 22,
+  fontWeight: 850,
+  letterSpacing: "-0.02em",
+  color: "#e8eefc",
+};
+
+const paywallBody: CSSProperties = {
+  margin: 0,
+  fontSize: 14,
+  lineHeight: 1.55,
+  color: "rgba(232,238,252,0.7)",
+  fontWeight: 550,
+};
+
+const paywallActions: CSSProperties = {
+  display: "grid",
+  gap: 10,
+  marginTop: 8,
+};
+
+const primaryBtnLink: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 12,
+  border: "none",
+  background: "linear-gradient(135deg, #22d3ee, #3b82f6 55%, #8b5cf6)",
+  color: "#04101f",
+  padding: "12px 16px",
+  fontWeight: 850,
+  textDecoration: "none",
+  fontSize: 14,
+};
+
+const ghostBtnLink: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 12,
+  border: "1px solid rgba(148,163,184,0.35)",
+  background: "transparent",
+  color: "rgba(232,238,252,0.85)",
+  padding: "11px 16px",
+  fontWeight: 750,
+  textDecoration: "none",
+  fontSize: 13,
 };
 
 const resultsHead: CSSProperties = {
