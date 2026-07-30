@@ -235,6 +235,7 @@ export async function ingestMetaLead({
     cardId: `card_meta_${id}`.slice(0, 64),
     cardTitle: mapped.name,
     dualWriteSource: "meta_lead",
+    workspaceService,
   });
   crm = ensured.crm;
   const cardId = ensured.cardId;

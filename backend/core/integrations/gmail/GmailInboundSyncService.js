@@ -6,14 +6,17 @@
  * email, and persists everything on `installation.configuration.gmailInbox` (see
  * GmailInboxStore). Approve-first: this service never sends anything.
  *
- * TODO(gmail_inbox_sync platform job): this is currently only triggered by the
- * "Sync now" API route (manual, per-request). Wiring a recurring `gmail_inbox_sync`
- * job into DurableWorkflowExecutor / createPlatformJobExecutor.js would need: a new
- * JOB_TYPES entry, a claimNext dispatch branch, a handler here, AND something to
- * actually enqueue it on a schedule (the existing SPECIALTY_SCHEDULE_DUE /
- * CALENDAR_REMINDER_DUE jobs are both triggered by other domain events, not a cron).
- * Left out of this pass to avoid destabilizing the shared job executor; v1 ships
- * with a manual sync button only.
+ * Triggered from three places:
+ * 1. Manual "Sync now" — `frontend/app/api/businesses/[businessId]/integrations/gmail/sync/route.ts`.
+ * 2. Once, best-effort, right after Gmail OAuth completes — `frontend/app/api/integrations/oauth/google/callback/route.ts`.
+ * 3. A small recurring sweep piggybacked on the hosted platform job tick — see
+ *    `runHostedGmailInboxSyncSweep` in `frontend/lib/server/runHostedPlatformJobTick.ts`
+ *    and `selectDueGmailSyncBusinesses.js`. This is intentionally NOT a first-class
+ *    `platform_jobs` job type: there's no JOB_TYPES entry / claimNext dispatch branch
+ *    here, and no cron-style enqueue path in DurableWorkflowExecutor (the existing
+ *    SPECIALTY_SCHEDULE_DUE / CALENDAR_REMINDER_DUE jobs are both triggered by other
+ *    domain events, not time). A full job-registry entry would need more surgery
+ *    than this pass warrants; the tick sweep is a pragmatic v1 middle ground.
  */
 import { GmailIntegrationAdapter } from "../adapters/GmailIntegrationAdapter.js";
 import { ensureCrmContactPersisted } from "../../crm/ensureCrmContactAndOptionalCard.js";

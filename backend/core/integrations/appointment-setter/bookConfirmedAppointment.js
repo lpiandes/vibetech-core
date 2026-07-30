@@ -92,12 +92,17 @@ export async function bookConfirmedAppointment({
   }
 
   let event = deepFreeze({ ok: false, reason: "calendar_not_connected" });
+  // Only a real, connected calendar create attempt counts toward the ok:false
+  // ("we tried and failed") branch below — an unconnected/misconfigured
+  // calendar is a known, honest work-only fallback, not a failure.
+  let attemptedCreate = false;
   if (workspace && parsed.start) {
-    try {
-      const { hub, connection } = findCalendarConnection(workspace);
-      const credentialResolver = hub?.credentialResolver ?? null;
-      const status = String(connection?.status ?? "").toUpperCase();
-      if (connection && credentialResolver && CONNECTED_STATUSES.has(status)) {
+    const { hub, connection } = findCalendarConnection(workspace);
+    const credentialResolver = hub?.credentialResolver ?? null;
+    const status = String(connection?.status ?? "").toUpperCase();
+    if (connection && credentialResolver && CONNECTED_STATUSES.has(status)) {
+      attemptedCreate = true;
+      try {
         const calendar = adapter ?? new GoogleCalendarIntegrationAdapter({ nowISO: new Date(nowMs).toISOString() });
         const description = [
           `Booked via ${sourceLabel} appointment setter.`,
@@ -129,15 +134,15 @@ export async function bookConfirmedAppointment({
             end: parsed.end.toISOString(),
           }
           : { ok: false, reason: result?.error ?? "calendar_create_failed" });
-      } else if (!connection) {
-        event = deepFreeze({ ok: false, reason: "calendar_not_connected" });
-      } else if (!credentialResolver) {
-        event = deepFreeze({ ok: false, reason: "credential_resolver_missing" });
-      } else {
-        event = deepFreeze({ ok: false, reason: "calendar_not_connected", status });
+      } catch (err) {
+        event = deepFreeze({ ok: false, reason: err instanceof Error ? err.message : "calendar_create_failed" });
       }
-    } catch (err) {
-      event = deepFreeze({ ok: false, reason: err instanceof Error ? err.message : "calendar_create_failed" });
+    } else if (!connection) {
+      event = deepFreeze({ ok: false, reason: "calendar_not_connected" });
+    } else if (!credentialResolver) {
+      event = deepFreeze({ ok: false, reason: "credential_resolver_missing" });
+    } else {
+      event = deepFreeze({ ok: false, reason: "calendar_not_connected", status });
     }
   }
 
@@ -153,23 +158,41 @@ export async function bookConfirmedAppointment({
       callSid: callSid || `appt_${Date.now()}`,
       reply: event.ok
         ? "Appointment booked and added to the calendar."
-        : "Appointment confirmed by the customer; calendar create failed — confirm the time on the calendar manually.",
+        : attemptedCreate
+          ? "Appointment confirmed by the customer; calendar create failed — confirm the time on the calendar manually."
+          : "Appointment confirmed by the customer; no calendar connected — confirm the time manually.",
       getWorkspace,
     });
   } catch (err) {
     work = deepFreeze({ ok: false, reason: err instanceof Error ? err.message : "work_enqueue_failed" });
   }
 
+  const slotSummary = {
+    startISO: parsed.start ? parsed.start.toISOString() : null,
+    endISO: parsed.end ? parsed.end.toISOString() : null,
+    label: parsed.label,
+    memberId: parsed.memberId,
+    memberName: parsed.memberName,
+  };
+
+  // We attempted a real calendar write and it failed — don't tell the caller
+  // the appointment is confirmed; let them message honestly and retry/escalate.
+  if (attemptedCreate && !event.ok) {
+    return deepFreeze({ ok: false, reason: event.reason, event, work, slot: slotSummary });
+  }
+
+  if (event.ok) {
+    return deepFreeze({ ok: true, confirmed: true, event, work, slot: slotSummary });
+  }
+
+  // No calendar connected — honest, intentional work-only fallback so callers
+  // can say "request received, team will confirm" instead of "you're booked".
   return deepFreeze({
     ok: true,
+    confirmed: false,
+    reason: event.reason ?? "calendar_not_connected",
     event,
     work,
-    slot: {
-      startISO: parsed.start ? parsed.start.toISOString() : null,
-      endISO: parsed.end ? parsed.end.toISOString() : null,
-      label: parsed.label,
-      memberId: parsed.memberId,
-      memberName: parsed.memberName,
-    },
+    slot: slotSummary,
   });
 }

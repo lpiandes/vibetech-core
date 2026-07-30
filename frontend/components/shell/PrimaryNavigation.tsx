@@ -79,12 +79,16 @@ export default function PrimaryNavigation({
   const installedModuleIds = specialtyModules
     .map((module) => module.moduleId)
     .filter((moduleId): moduleId is string => typeof moduleId === "string");
+  const roleDefinitions = Array.isArray(scope.installedBusinessOS?.roles)
+    ? (scope.installedBusinessOS!.roles as Array<Record<string, unknown>>)
+    : (scope.installedNavigation?.roles ?? scope.installedNavigation?.roleDefinitions ?? []);
   const items = getCanonicalBusinessNav(scope.businessId, scope.permissions, {
     role: scope.role,
     subjectLabel: subjectLabelFromScope(scope),
     installedModuleIds,
     specialtyModules: specialtyModules as any,
     purchasedPackages: scope.purchasedPackages ?? [],
+    roleDefinitions,
   });
   const supportAccess = scope.supportAccess;
   const activeHref = findActiveNavHref(

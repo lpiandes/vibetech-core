@@ -11,6 +11,7 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
   const [selected, setSelected] = useState("");
   const [form, setForm] = useState({ name: "", email: "", phone: "", notes: "" });
   const [done, setDone] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -34,15 +35,22 @@ export default function BookingPage({ params }: { params: Promise<{ businessId: 
     const res = await fetch(`/api/book/${businessId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, slotStart: selected }) });
     const data = await res.json();
     if (!data.ok) setError(data.error ?? "Could not book your appointment.");
-    else setDone(true);
+    else {
+      setConfirmed(data.confirmed === true);
+      setDone(true);
+    }
   };
 
   if (done) {
     return (
       <main className="min-h-screen bg-zinc-950 px-6 py-20 text-white">
         <section className="mx-auto max-w-lg rounded-2xl border border-emerald-500/40 bg-zinc-900 p-8">
-          <h1 className="text-3xl font-semibold">You&rsquo;re booked</h1>
-          <p className="mt-3 text-zinc-300">Thanks — your appointment with {businessName} is confirmed. We&rsquo;ll see you then.</p>
+          <h1 className="text-3xl font-semibold">{confirmed ? "You\u2019re booked" : "Request received"}</h1>
+          <p className="mt-3 text-zinc-300">
+            {confirmed
+              ? <>Thanks — your appointment with {businessName} is confirmed. We&rsquo;ll see you then.</>
+              : <>Thanks — we have your request for {businessName}. Our team will confirm your appointment shortly.</>}
+          </p>
         </section>
       </main>
     );

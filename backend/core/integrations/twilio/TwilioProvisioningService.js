@@ -127,6 +127,7 @@ export function normalizeBrandInput(input = {}) {
  *   fetchImpl?: typeof fetch,
  *   nowISO?: string,
  *   simulate?: boolean,
+ *   allowSendOnlyWithoutWebhook?: boolean,
  * }} input
  */
 export async function provisionTwilioSmsForBusiness({
@@ -135,6 +136,7 @@ export async function provisionTwilioSmsForBusiness({
   fetchImpl = globalThis.fetch,
   nowISO = new Date().toISOString(),
   simulate = process.env.TWILIO_PROVISION_SIMULATE === "1",
+  allowSendOnlyWithoutWebhook = false,
 } = {}) {
   const workspaceId = safeString(businessId);
   if (!workspaceId) {
@@ -180,6 +182,18 @@ export async function provisionTwilioSmsForBusiness({
   const parentToken = safeString(process.env.TWILIO_AUTH_TOKEN);
   const useSubaccounts = process.env.TWILIO_PROVISION_SUBACCOUNTS === "1";
 
+  // The inbound SMS webhook is how appointment-setter automation ever sees a
+  // reply — fail loudly instead of silently handing out a number nothing can
+  // text back to, unless the caller explicitly opts into send-only mode.
+  const inboundWebhookUrl = resolveInboundSmsWebhookUrl(workspaceId);
+  if (!inboundWebhookUrl && !allowSendOnlyWithoutWebhook) {
+    return deepFreeze({
+      ok: false,
+      reason: "public_origin_required",
+      message: "Set NEXTAUTH_URL or APP_ORIGIN so we can configure the inbound SMS webhook before assigning a number.",
+    });
+  }
+
   let accountSid = parentSid;
   let authToken = parentToken;
 
@@ -196,7 +210,6 @@ export async function provisionTwilioSmsForBusiness({
       authToken = sub.authToken;
     }
 
-    const inboundWebhookUrl = resolveInboundSmsWebhookUrl(workspaceId);
     const purchased = await purchaseUsLocalNumber({
       fetchImpl,
       accountSid,
@@ -204,6 +217,8 @@ export async function provisionTwilioSmsForBusiness({
       areaCode: normalized.areaCode || safeString(process.env.TWILIO_PROVISION_AREA_CODE),
       friendlyName: `VIBETech ${normalized.dba}`.slice(0, 64),
       smsUrl: inboundWebhookUrl,
+      businessId: workspaceId,
+      allowSendOnlyWithoutWebhook,
     });
     if (!purchased.ok) return deepFreeze(purchased);
 
@@ -255,19 +270,40 @@ async function createTwilioSubaccount({ fetchImpl, parentSid, parentToken, frien
   };
 }
 
-async function purchaseUsLocalNumber({ fetchImpl, accountSid, authToken, areaCode, friendlyName, smsUrl = "" }) {
+async function purchaseUsLocalNumber({
+  fetchImpl,
+  accountSid,
+  authToken,
+  areaCode,
+  friendlyName,
+  smsUrl = "",
+  businessId = "",
+  allowSendOnlyWithoutWebhook = false,
+}) {
   const pool = safeString(process.env.TWILIO_PROVISION_POOL)
     .split(/[\s,]+/)
     .map((n) => n.trim())
     .filter(Boolean);
   if (pool.length) {
     const fromNumber = pool[0];
+    // A pool number is pre-existing in the Twilio account — its SmsUrl has to
+    // be set explicitly (there's no purchase call to attach it to).
+    const webhook = smsUrl
+      ? await configureInboundSmsWebhook({ businessId, accountSid, authToken, fromNumber, fetchImpl })
+      : { ok: false, reason: "webhook_url_unresolved", message: "Inbound SMS webhook URL could not be resolved." };
+    if (!webhook.ok && !allowSendOnlyWithoutWebhook) {
+      return {
+        ok: false,
+        reason: webhook.reason || "webhook_configure_failed",
+        message: webhook.message || "Could not configure the inbound SMS webhook for the pool number.",
+      };
+    }
     return {
       ok: true,
       fromNumber,
-      phoneSid: null,
+      phoneSid: webhook.ok ? (webhook.phoneSid ?? null) : null,
       fromPool: true,
-      smsUrlConfigured: false,
+      smsUrlConfigured: webhook.ok && webhook.configured === true,
     };
   }
 

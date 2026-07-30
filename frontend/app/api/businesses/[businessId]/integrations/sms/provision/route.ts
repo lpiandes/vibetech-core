@@ -171,6 +171,7 @@ export async function POST(
         },
         inboundWebhookUrl: resolveInboundSmsWebhookUrl(businessId) || null,
         inboundWebhookConfigured: (webhook as any).ok === true && (webhook as any).configured !== false,
+        inboundWebhookError: (webhook as any).ok === false ? ((webhook as any).message ?? (webhook as any).reason ?? null) : null,
         message: a2p.message
           || "Business details saved. Carrier brand/campaign registration is pending — you can send a test text next.",
         connection: {
@@ -185,11 +186,16 @@ export async function POST(
       businessId,
       brand: brandInput,
       simulate: body?.simulate === true || process.env.TWILIO_PROVISION_SIMULATE === "1",
+      allowSendOnlyWithoutWebhook: body?.allowSendOnlyWithoutWebhook === true,
     });
 
     if (!provision.ok) {
+      const infraNotReady = provision.reason === "platform_twilio_not_configured"
+        || provision.reason === "public_origin_required"
+        || provision.reason === "webhook_configure_failed"
+        || provision.reason === "webhook_url_unresolved";
       const status = provision.reason === "brand_incomplete" ? 400
-        : provision.reason === "platform_twilio_not_configured" ? 503
+        : infraNotReady ? 503
           : 400;
       return NextResponse.json(
         {

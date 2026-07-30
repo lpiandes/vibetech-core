@@ -1,4 +1,5 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
+import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
@@ -14,7 +15,8 @@ import { fetchAdsMetrics } from "../../../../../backend/core/integrations/ads/Ad
 export default async function AdsMetricsPage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   return runTimedPage("ads-metrics", async () => {
-    await getAuthorizedWorkspace(businessId, PERMISSIONS.PERFORMANCE_VIEW);
+    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.PERFORMANCE_VIEW);
+    await redirectIfModuleDenied({ businessId, role: ctx.role, moduleId: "ads" });
     const initialData = await fetchAdsMetrics({ businessId, platformStore, days: 30 });
 
     return (

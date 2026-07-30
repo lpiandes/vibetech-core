@@ -10,6 +10,7 @@ import {
   upsertContact,
   upsertPipelineCard,
 } from "./CrmStore.js";
+import { findCardAndStage, buildPipelineCardEventPayload } from "./pipelineCardEventPayload.js";
 
 function normalizeEmail(value) {
   return String(value ?? "").trim().toLowerCase();
@@ -49,6 +50,8 @@ export function findContact(crm, needle = {}) {
  *   crm: object,
  *   contact: object,
  *   cardId: string|null,
+ *   cardCreated: boolean,
+ *   pipelineId: string|null,
  *   created: boolean,
  *   updated: boolean,
  * }}
@@ -98,12 +101,15 @@ export function ensureCrmContactAndOptionalCard(crm, {
   const updated = Boolean(existing);
 
   let resolvedCardId = null;
+  let resolvedPipelineId = null;
+  let cardCreated = false;
   if (addToPipeline) {
     const pipes = Array.isArray(nextCrm.pipelines) ? nextCrm.pipelines : [];
     const pipe = pipes.find((p) => String(p.id) === String(pipelineId))
       || pipes[0]
       || null;
     if (pipe) {
+      resolvedPipelineId = pipe.id;
       const stage = (pipe.stages ?? []).find((s) => String(s.id) === String(stageId))
         || pipe.stages?.[0]
         || null;
@@ -127,6 +133,9 @@ export function ensureCrmContactAndOptionalCard(crm, {
         });
         nextCrm = upserted.crm;
         resolvedCardId = upserted.cardId;
+        // A new card is created only when there was no pre-existing card for this
+        // contact — a rename/update of an existing card must never fire *_CREATED.
+        cardCreated = !existingCard;
       }
     }
   }
@@ -135,6 +144,8 @@ export function ensureCrmContactAndOptionalCard(crm, {
     crm: nextCrm,
     contact: findContact(nextCrm, { id: saved.id }),
     cardId: resolvedCardId,
+    cardCreated,
+    pipelineId: resolvedPipelineId,
     created,
     updated,
   };
@@ -200,7 +211,46 @@ export function tryDualWriteParty({
 }
 
 /**
+ * Best-effort PIPELINE_CARD_CREATED + PIPELINE_STAGE_ENTERED emission for a
+ * freshly created pipeline card. Non-fatal — callers (Meta ingest, forms
+ * submit, public booking) must not fail the request if automations can't fire.
+ * @returns {{ emitted: boolean, reason?: string }}
+ */
+async function emitPipelineCardCreatedEvents({ workspaceService, actorId, crm, cardId, pipelineId }) {
+  if (!workspaceService?.emitSpecialtyBusinessEvent || !cardId) {
+    return { emitted: false, reason: "workspace_unavailable" };
+  }
+  try {
+    const { card, stage } = findCardAndStage(crm, cardId);
+    const eventPayload = buildPipelineCardEventPayload({ pipelineId, card, stage });
+    await workspaceService.emitSpecialtyBusinessEvent({
+      eventType: "PIPELINE_CARD_CREATED",
+      forceManual: false,
+      brief: `New card "${card?.title || "Opportunity"}" added to pipeline`,
+      actorId: actorId ?? "system",
+      eventPayload,
+    });
+    // A freshly created card also enters its initial stage — let stage-based
+    // automations (e.g. "When a card enters X") fire the same as on move_card.
+    await workspaceService.emitSpecialtyBusinessEvent({
+      eventType: "PIPELINE_STAGE_ENTERED",
+      forceManual: false,
+      brief: `Opportunity "${card?.title || "Opportunity"}" entered stage "${stage?.label ?? card?.stageId ?? ""}"`,
+      actorId: actorId ?? "system",
+      eventPayload,
+    });
+    return { emitted: true };
+  } catch (err) {
+    return { emitted: false, reason: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
  * Read → mutate → write CrmStore, then optional graph dual-write.
+ * When `workspaceService` is provided and a *new* pipeline card was created
+ * (not a reused/updated one), also emits PIPELINE_CARD_CREATED +
+ * PIPELINE_STAGE_ENTERED so form/Meta/booking intake drives the same
+ * automations as the manual pipelines UI.
  */
 export async function ensureCrmContactPersisted({
   platformStore,
@@ -216,6 +266,8 @@ export async function ensureCrmContactPersisted({
   cardTitle = null,
   skipExistingCard = true,
   dualWriteSource = "crm",
+  workspaceService = null,
+  emitPipelineCardEvents = true,
 } = {}) {
   if (!platformStore || !installation) {
     throw new Error("ensureCrmContactPersisted requires platformStore and installation");
@@ -250,9 +302,21 @@ export async function ensureCrmContactPersisted({
     }
   }
 
+  let pipelineCardEvent = null;
+  if (emitPipelineCardEvents && ensured.cardCreated && ensured.cardId) {
+    pipelineCardEvent = await emitPipelineCardCreatedEvents({
+      workspaceService,
+      actorId,
+      crm,
+      cardId: ensured.cardId,
+      pipelineId: ensured.pipelineId,
+    });
+  }
+
   return {
     ...ensured,
     crm,
     party,
+    pipelineCardEvent,
   };
 }

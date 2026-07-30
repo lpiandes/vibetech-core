@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
+import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
 import { PERMISSIONS, MEMBERSHIP_ROLE_LABELS } from "../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { platformStore } from "@/lib/server/compose";
 import SettingsScreen from "@/components/settings/SettingsScreen";
@@ -9,6 +10,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ busin
   const { businessId } = await params;
   const session = await auth();
   const ctx = await getAuthorizedWorkspace(businessId);
+  await redirectIfModuleDenied({ businessId, role: ctx.role, moduleId: "settings" });
   const canManageSettings = ctx.permissions.has(PERMISSIONS.SETTINGS_MANAGE);
 
   const knowledgeDocumentCount = await platformStore.countActiveKnowledgeDocuments(businessId);

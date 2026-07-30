@@ -100,6 +100,13 @@ export async function POST(
       );
     }
 
+    let systemWorkspace: { service: any } | null = null;
+    try {
+      systemWorkspace = await getSystemWorkspaceForBusiness(businessId);
+    } catch {
+      systemWorkspace = null;
+    }
+
     const contactId = `contact_form_${Date.now().toString(36)}`;
     const ensured = await ensureCrmContactPersisted({
       platformStore,
@@ -123,12 +130,13 @@ export async function POST(
       cardId: `card_form_${contactId}`.slice(0, 64),
       cardTitle: name || email || "Website lead",
       dualWriteSource: "website_form",
+      workspaceService: systemWorkspace?.service ?? null,
     });
     const cardId = ensured.cardId;
 
     let automation = null;
     try {
-      const { service } = await getSystemWorkspaceForBusiness(businessId);
+      const service = systemWorkspace?.service ?? (await getSystemWorkspaceForBusiness(businessId)).service;
       automation = await service.emitSpecialtyBusinessEvent({
         eventType: "FORM_SUBMIT",
         brief: [

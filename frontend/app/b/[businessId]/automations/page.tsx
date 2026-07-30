@@ -1,5 +1,6 @@
 import AutomationsIndexExperience from "@/components/automations/AutomationsIndexExperience";
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
+import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
 import { platformStore } from "@/lib/server/compose";
 import { presentAutomationPath } from "../../../../../backend/core/ai-builder/operating-contract/automationPath.js";
 import { buildOperatingContract } from "../../../../../backend/core/ai-builder/operating-contract/buildOperatingContract.js";
@@ -12,6 +13,7 @@ export default async function AutomationsPage({
 }) {
   const { businessId } = await params;
   const ctx = await getAuthorizedWorkspace(businessId);
+  await redirectIfModuleDenied({ businessId, role: ctx.role, moduleId: "automations" });
   const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
   const employees = Array.isArray(installation?.configuration?.employees)
     ? installation.configuration.employees

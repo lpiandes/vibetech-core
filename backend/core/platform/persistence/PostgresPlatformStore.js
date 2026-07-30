@@ -469,6 +469,25 @@ export class PostgresPlatformStore {
     }));
   }
 
+  /**
+   * Distinct workspace ids with a live credential for `providerType` (e.g. "gmail").
+   * Used by lightweight recurring jobs (Gmail inbox sync tick) that need to fan out
+   * across businesses without a full per-workspace job registry entry.
+   */
+  async listWorkspaceIdsWithIntegrationCredentialType(providerType, { limit = 25 } = {}) {
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `SELECT DISTINCT ON (workspace_id) workspace_id, updated_at
+         FROM integration_credentials
+         WHERE provider_type = $1
+         ORDER BY workspace_id ASC, updated_at DESC
+         LIMIT $2`,
+        [String(providerType), Number(limit) || 25],
+      ),
+    );
+    return rows.map((row) => String(row.workspace_id));
+  }
+
   async deleteIntegrationCredential({ workspaceId, credentialId } = {}) {
     await this.withClient((client) =>
       client.query(

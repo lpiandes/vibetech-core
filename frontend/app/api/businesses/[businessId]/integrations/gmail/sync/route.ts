@@ -9,8 +9,9 @@ import { GmailInboundSyncService } from "../../../../../../../../backend/core/in
  * "Sync now" — pulls recent Gmail inbox messages into the synced store
  * (installation.configuration.gmailInbox) and matches/creates People by sender email.
  *
- * v1: manual trigger only. No recurring platform job yet (see TODO in
- * GmailInboundSyncService.js).
+ * Also runs automatically (best-effort, throttled) via the hosted platform job
+ * tick sweep — see `runHostedGmailInboxSyncSweep` in runHostedPlatformJobTick.ts.
+ * This route stays for an on-demand, immediate sync from the Integrations page.
  */
 export async function POST(
   request: Request,

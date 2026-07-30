@@ -12,6 +12,7 @@ import {
 } from "@/lib/server/liveIntegrations";
 import { putDurableCredential } from "../../../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
 import { workspaceCompositionRegistry } from "@/lib/workspace/WorkspaceCompositionRegistry";
+import { GmailInboundSyncService } from "../../../../../../../backend/core/integrations/gmail/GmailInboundSyncService.js";
 
 const OAUTH_STATE_COOKIE = "vt_google_oauth_state";
 
@@ -116,6 +117,27 @@ export async function GET(request: Request) {
         senderEmail: tokens.senderEmail,
         platformActiveKnowledgeCount: knowledgeCount,
       });
+
+      // Best-effort first sync so the inbox isn't empty until the next "Sync now"
+      // click or hosted job tick sweep — never block/fail the OAuth redirect on this.
+      try {
+        const platform = (ctx.service as any)?.connected?.integrationPlatform ?? null;
+        const connection = platform?.connectionRuntime?.getConnectionByType?.("business_email") ?? null;
+        const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+        if (connection && installation) {
+          await new GmailInboundSyncService().sync({
+            businessId,
+            platformStore,
+            installation,
+            connection,
+            credentialResolver: platform?.credentialResolver ?? null,
+            maxResults: 25,
+            actorId: "gmail_oauth_connect",
+          });
+        }
+      } catch {
+        /* non-fatal — the manual "Sync now" button and hosted tick sweep still cover this */
+      }
     } else if (pending.providerType === "google_calendar") {
       const credentialId = `cred_gcal_${businessId}`;
       await putDurableCredential({

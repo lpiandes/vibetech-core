@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
+import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
 import { platformStore } from "@/lib/server/compose";
 import { liveIntegrationAvailability } from "@/lib/server/liveIntegrations";
 import ConnectionsRenderer from "@/components/connections/ConnectionsRenderer";
@@ -19,11 +20,18 @@ import {
 export default async function IntegrationsPage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   return runTimedPage("integrations", async () => {
-    const [{ service }, knowledgeDocumentCount, osInstallation] = await Promise.all([
+    const [ctx, knowledgeDocumentCount, osInstallation] = await Promise.all([
       getAuthorizedWorkspace(businessId),
       platformStore.countActiveKnowledgeDocuments(businessId),
       platformStore.getBusinessOSInstallation(businessId),
     ]);
+    const { service } = ctx;
+    await redirectIfModuleDenied({
+      businessId,
+      role: ctx.role,
+      moduleId: "integrations",
+      installation: osInstallation,
+    });
     markRequestTiming("KNOWLEDGE_DB");
     service.refreshOperationalState(knowledgeDocumentCount);
 

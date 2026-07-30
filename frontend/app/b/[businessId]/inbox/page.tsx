@@ -1,4 +1,5 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
+import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
 import CommunicationRenderer from "@/components/communications/CommunicationRenderer";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
@@ -7,7 +8,9 @@ import Link from "next/link";
 export default async function InboxPage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   return runTimedPage("inbox", async () => {
-    const { service } = await getAuthorizedWorkspace(businessId);
+    const ctx = await getAuthorizedWorkspace(businessId);
+    await redirectIfModuleDenied({ businessId, role: ctx.role, moduleId: "inbox" });
+    const { service } = ctx;
     const viewModel = service.loadCommunicationViewModel({ includeProductContext: false });
     markRequestTiming("VIEW_MODEL", { bytes: JSON.stringify(viewModel).length });
     const peopleHref = `/b/${encodeURIComponent(businessId)}/people`;

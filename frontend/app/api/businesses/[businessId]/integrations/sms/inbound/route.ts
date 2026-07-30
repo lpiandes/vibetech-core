@@ -6,41 +6,56 @@ import { getDurableSession, upsertDurableSession } from "../../../../../../../..
 import { runSmsAppointmentSetterTurn } from "../../../../../../../../backend/core/integrations/appointment-setter/smsAppointmentSetter.js";
 import { readTeamAvailability } from "../../../../../../../../backend/core/integrations/appointment-setter/TeamAvailabilityStore.js";
 import { resolveNextSlots } from "../../../../../../../../backend/core/integrations/appointment-setter/resolveAvailabilitySlots.js";
-import { bookConfirmedAppointment, findCalendarConnection } from "../../../../../../../../backend/core/integrations/appointment-setter/bookConfirmedAppointment.js";
-import { GoogleCalendarIntegrationAdapter } from "../../../../../../../../backend/core/integrations/adapters/GoogleCalendarIntegrationAdapter.js";
-import { INTEGRATION_CAPABILITIES } from "../../../../../../../../backend/core/integrations/capabilities/IntegrationCapability.js";
+import { bookConfirmedAppointment } from "../../../../../../../../backend/core/integrations/appointment-setter/bookConfirmedAppointment.js";
+import { fetchCalendarBusyIntervals } from "../../../../../../../../backend/core/integrations/appointment-setter/fetchCalendarBusyIntervals.js";
+import { resolveInboundSmsWebhookUrl } from "../../../../../../../../backend/core/integrations/twilio/TwilioProvisioningService.js";
+import { verifyTwilioRequestSignature } from "../../../../../../../../backend/core/integrations/twilio/verifyTwilioRequestSignature.js";
 
 function xml(text: string) {
   const escaped = String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response>${escaped ? `<Message>${escaped}</Message>` : ""}</Response>`, { headers: { "Content-Type": "text/xml; charset=utf-8" } });
 }
 
-/** Best-effort: fetch Google Calendar busy intervals so offered slots don't collide with existing events. */
-async function fetchBusyIntervals(workspace: any, timeMinISO: string, timeMaxISO: string) {
+function forbidden() {
+  return new NextResponse(null, { status: 403 });
+}
+
+/** Business's own Twilio auth token if they've connected a number, else the platform token. */
+async function resolveTwilioAuthToken(businessId: string) {
   try {
-    const { hub, connection } = findCalendarConnection(workspace);
-    if (!connection || !hub?.credentialResolver) return [];
-    const calendar = new GoogleCalendarIntegrationAdapter();
-    const result = await calendar.executeAction({
-      actionRequest: {
-        capability: INTEGRATION_CAPABILITIES.READ_CALENDAR_AVAILABILITY,
-        parameters: { timeMin: timeMinISO, timeMax: timeMaxISO, calendarId: "primary" },
-      },
-      connection,
-      credentialResolver: hub.credentialResolver,
+    const rows = await platformStore.listIntegrationCredentialsForWorkspace(businessId).catch(() => []);
+    const row = (Array.isArray(rows) ? rows : []).find((r: any) => {
+      const provider = String(r?.providerType ?? "");
+      const id = String(r?.credentialId ?? "");
+      return provider === "twilio_sms" || id.includes("twilio_sms");
     });
-    const busy = (result as any)?.metadata?.calendars?.primary?.busy;
-    return Array.isArray(busy) ? busy.map((b: any) => ({ start: b.start, end: b.end })) : [];
+    const businessToken = String(row?.secrets?.authToken ?? "").trim();
+    return businessToken || String(process.env.TWILIO_AUTH_TOKEN ?? "").trim() || null;
   } catch {
-    return [];
+    return String(process.env.TWILIO_AUTH_TOKEN ?? "").trim() || null;
   }
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   const form = await request.formData().catch(() => null);
-  const from = String(form?.get("From") ?? "").trim();
-  const inboundText = String(form?.get("Body") ?? "").trim();
+  if (!form) return forbidden();
+
+  const skipValidation = process.env.TWILIO_SKIP_SIGNATURE_VALIDATION === "1" && process.env.NODE_ENV !== "production";
+  if (!skipValidation) {
+    const signature = request.headers.get("x-twilio-signature");
+    const authToken = await resolveTwilioAuthToken(businessId);
+    // Reconstruct the public URL from NEXTAUTH_URL/APP_ORIGIN rather than the
+    // incoming request URL — proxies commonly rewrite the host Twilio never saw.
+    const webhookUrl = resolveInboundSmsWebhookUrl(businessId);
+    const twilioParams: Record<string, string> = {};
+    for (const [key, value] of form.entries()) twilioParams[key] = typeof value === "string" ? value : "";
+    const valid = Boolean(webhookUrl) && verifyTwilioRequestSignature({ url: webhookUrl, params: twilioParams, authToken, signature });
+    if (!valid) return forbidden();
+  }
+
+  const from = String(form.get("From") ?? "").trim();
+  const inboundText = String(form.get("Body") ?? "").trim();
   const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
   const packages = readPurchasedPackagesFromInstallation(installation);
   if (!from || !installation || !businessHasAppointmentSetter(packages)) return xml("");
@@ -66,7 +81,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ bus
     const availability = readTeamAvailability(installation);
     const now = new Date();
     const rangeEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-    const busyIntervals = workspace ? await fetchBusyIntervals(workspace, now.toISOString(), rangeEnd.toISOString()) : [];
+    const busyIntervals = workspace ? await fetchCalendarBusyIntervals(workspace, now.toISOString(), rangeEnd.toISOString()) : [];
     offeredSlots = resolveNextSlots({ availability, count: 3, now, busyIntervals }) as any;
   }
 
@@ -80,8 +95,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ bus
 
   await (upsertDurableSession as any)({ platformStore, businessId, phone: from, ...turn.sessionPatch });
 
+  let replyText = turn.reply;
   if (turn.intent === "book" && turn.bookSlot) {
-    const booking = await bookConfirmedAppointment({
+    const booking: any = await bookConfirmedAppointment({
       businessId,
       name: session?.name ?? "",
       phone: from,
@@ -96,9 +112,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ bus
       platformStore,
       phone: from,
       stage: "booked",
-      selectedSlot: (booking as any)?.slot ?? turn.bookSlot,
+      selectedSlot: booking?.slot ?? turn.bookSlot,
     });
+    // The calendar write may have failed (or no calendar is connected) even
+    // though the customer confirmed — never tell them "you're booked" unless
+    // the appointment is actually confirmed.
+    if (!booking?.confirmed) {
+      const slotLabel = booking?.slot?.label ?? turn.bookSlot?.label ?? "";
+      replyText = `Thanks — request received${slotLabel ? ` for ${slotLabel}` : ""}. Our team will confirm shortly.`;
+    }
   }
 
-  return xml(turn.reply);
+  return xml(replyText);
 }

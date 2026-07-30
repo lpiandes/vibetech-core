@@ -5,6 +5,11 @@
  */
 
 import { filterCanonicalNavForPurchasedPackages } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
+import { resolveRoleAccess as resolveRoleAccessRaw } from "../../../backend/core/business-os/BusinessOSRoleAccess.js";
+
+const resolveRoleAccess = resolveRoleAccessRaw as (input: Record<string, unknown>) => {
+  deniedModuleIds: string[];
+};
 
 export type CanonicalNavItem = {
   id: string;
@@ -110,6 +115,14 @@ export function getCanonicalBusinessNav(
     specialtyModules?: SpecialtyNavSource[] | null;
     /** Commercial SKUs — thin packages hide Calendar/Team/Automations etc. */
     purchasedPackages?: string[] | null;
+    /**
+     * Owner-editable per-role module deny list — `installation.configuration.roles`
+     * entries with `{ membershipRole, deniedModules }` (see BusinessOSRoleAccessConfig.js
+     * / RoleAccessPanel). Applied on top of permission-based visibility so a
+     * denied module never appears in the primary nav for that role, even if
+     * the role otherwise has the underlying permission.
+     */
+    roleDefinitions?: Array<Record<string, unknown>> | null;
   },
 ): CanonicalNavItem[] {
   const base = `/b/${encodeURIComponent(businessId)}`;
@@ -120,9 +133,23 @@ export function getCanonicalBusinessNav(
   // installation must never make a new dental or sports workspace look like
   // a property-management product.
   const hasPropertyPortfolio = installedModuleIds?.has("properties") === true;
+  // Owner and platform admin always see everything — deny lists are not
+  // editable for those roles (see EDITABLE_MEMBERSHIP_ROLES) and must never
+  // lock out the person who configures access in the first place.
+  const isUnrestrictedRole = options?.role === "OWNER" || options?.role === "PLATFORM_ADMIN";
+  const deniedModuleIds = isUnrestrictedRole
+    ? new Set<string>()
+    : new Set(
+      resolveRoleAccess({
+        configuration: { roles: options?.roleDefinitions ?? [] },
+        membershipRole: options?.role ?? "EMPLOYEE",
+        permissions: permissions ?? [],
+      }).deniedModuleIds,
+    );
   const permissionFiltered = CANONICAL_ORDER.filter((item) => (
     hasPermission(permissions ?? [], item.permission, options?.role)
     && (item.id !== "subjects" || hasPropertyPortfolio)
+    && !deniedModuleIds.has(item.id)
   ));
   const packageFiltered = filterCanonicalNavForPurchasedPackages(
     permissionFiltered,

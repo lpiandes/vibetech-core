@@ -1,4 +1,5 @@
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
+import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
 import ModuleRenderer from "@/components/workspace/ModuleRenderer";
 import ContactsCrmPanel from "@/components/people/ContactsCrmPanel";
 import RelationshipFollowUpQueue from "@/components/people/RelationshipFollowUpQueue";
@@ -14,6 +15,7 @@ import {
 export default async function PeoplePage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   const ctx = await getAuthorizedWorkspace(businessId);
+  await redirectIfModuleDenied({ businessId, role: ctx.role, moduleId: "people" });
 
   let followUpCandidates: any[] = [];
   try {
