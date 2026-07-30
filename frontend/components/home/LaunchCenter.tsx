@@ -62,7 +62,7 @@ const INLINE_SETUP_IDS = new Set([
 const SIMPLE_TITLE: Record<string, string> = {
   customer_email_send: "Connect business email",
   calendar_scheduling: "Connect calendar",
-  sms_send: "Connect text messaging",
+  sms_send: "Set up text messaging",
   voice_calls: "Connect phone calling",
   social_screen_prove: "Prove social background screening",
   meta_lead_intake: "Connect Facebook leads",
@@ -76,7 +76,7 @@ const SIMPLE_TITLE: Record<string, string> = {
 const SIMPLE_DETAIL: Record<string, string> = {
   customer_email_send: "Sign in with Google so VIBETech can send approved customer emails.",
   calendar_scheduling: "Connect Google Calendar so scheduling can book real appointments.",
-  sms_send: "Enter your business details — VIBETech sets up a texting number for you (no Twilio Console required).",
+  sms_send: "Enter your legal business name and address once — VIBETech buys a texting number and handles carrier registration. No Twilio Console required.",
   voice_calls: "Connect Twilio Voice for the Knowledge-backed AI receptionist. Prove places a test call. Customer outbound calls stay approval-gated.",
   social_screen_prove: "Connect Serper + ScrapingBee, then run a sample public-web screen. Filtered report lands in Needs Attention.",
   meta_lead_intake: "Connect your Facebook Page, then run a Lead Ad. New leads land in People and fire intake automations (sends still need your approval).",
@@ -88,7 +88,7 @@ const SIMPLE_DETAIL: Record<string, string> = {
 };
 
 const CONNECTED_DETAIL: Record<string, string> = {
-  sms_send: "Business details saved. Send a test text, then confirm you got it. US delivery may wait until carrier approval finishes.",
+  sms_send: "Number is set up. Send a test text, then confirm you got it. US delivery may wait until carrier approval finishes.",
   customer_email_send: "Email is connected. Send a test email, then confirm you got it.",
   calendar_scheduling: "Calendar is connected. Create a test event, then confirm you see it in Google Calendar.",
 };
@@ -112,9 +112,12 @@ function detailFor(mission: LaunchMission) {
     }
     return mission.blockedReason || "Paused — come back whenever you’re ready.";
   }
+  if (mission.id === "sms_send" && mission.needsBrandSetup) {
+    return SIMPLE_DETAIL.sms_send;
+  }
   if (mission.needsBrandSetup) {
     return mission.detail
-      || "Enter your business and messaging details so we can set up texting and carrier registration. You’ll send a test text after that.";
+      || "Enter your legal business details so we can finish setup.";
   }
   const st = String(mission.status ?? "");
   if ((st === "connected" || st === "verified") && CONNECTED_DETAIL[mission.id]) {

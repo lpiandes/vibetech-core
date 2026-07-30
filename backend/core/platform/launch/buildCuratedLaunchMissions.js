@@ -272,7 +272,7 @@ export function buildCuratedLaunchMissions({
       canProveInline: false,
       status: "needs_setup",
       actionLabel: "Set up",
-      detail: "Enter your business and messaging details so we can set up texting and carrier registration. You’ll send a test text after that.",
+      detail: "Enter your legal business name and address once — VIBETech buys a texting number and registers it with carriers. No Twilio Console. Then send yourself a test text.",
       phase: "connect",
     };
   });
