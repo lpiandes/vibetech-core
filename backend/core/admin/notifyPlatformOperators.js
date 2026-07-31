@@ -8,6 +8,7 @@ import {
   createInvitationDeliveryProvider,
   resolveOpsFromAddress,
   resolveOpsFromCandidates,
+  parseResendAllowedRecipient,
 } from "../platform/delivery/createInvitationDeliveryProvider.js";
 
 function safeString(v) {
@@ -20,6 +21,34 @@ const DEDUPE_MS = 15 * 60 * 1000;
 
 /** Default ops inbox when PLATFORM_OPERATOR_EMAIL is unset — white-glove setup requests. */
 export const DEFAULT_PLATFORM_OPERATOR_EMAIL = "leopiandes@vtechdevelopment.com";
+
+/**
+ * Resend account email — required until vtechdevelopment.com is verified.
+ * Without a verified domain, Resend rejects every other recipient.
+ */
+export const RESEND_ACCOUNT_OPS_FALLBACK_EMAIL = "lpiandes27@gmail.com";
+
+function resolveOperatorEmails({ toEmails = null, fallbackDefaultEmail = false } = {}) {
+  const fromEnv = safeString(process.env.PLATFORM_OPERATOR_EMAIL)
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
+  const override = Array.isArray(toEmails)
+    ? toEmails.map((e) => safeString(e)).filter(Boolean)
+    : [];
+  let emails = [...new Set([...fromEnv, ...override])];
+  if (!emails.length && fallbackDefaultEmail) {
+    emails = [DEFAULT_PLATFORM_OPERATOR_EMAIL];
+  }
+  if (fallbackDefaultEmail && !emails.includes(DEFAULT_PLATFORM_OPERATOR_EMAIL)) {
+    emails = [...emails, DEFAULT_PLATFORM_OPERATOR_EMAIL];
+  }
+  // Always include Resend-account fallback so ops mail lands while domain is unverified.
+  if (!emails.includes(RESEND_ACCOUNT_OPS_FALLBACK_EMAIL)) {
+    emails = [...emails, RESEND_ACCOUNT_OPS_FALLBACK_EMAIL];
+  }
+  return emails;
+}
 
 export async function notifyPlatformOperators({
   actions = [],
@@ -39,21 +68,7 @@ export async function notifyPlatformOperators({
     return { ok: true, skipped: true, reason: "no_actions" };
   }
 
-  const fromEnv = safeString(process.env.PLATFORM_OPERATOR_EMAIL)
-    .split(",")
-    .map((e) => e.trim())
-    .filter(Boolean);
-  const override = Array.isArray(toEmails)
-    ? toEmails.map((e) => safeString(e)).filter(Boolean)
-    : [];
-  let emails = [...new Set([...fromEnv, ...override])];
-  if (!emails.length && fallbackDefaultEmail) {
-    emails = [DEFAULT_PLATFORM_OPERATOR_EMAIL];
-  }
-  // Always include Leo for white-glove handoffs when fallback is requested.
-  if (fallbackDefaultEmail && !emails.includes(DEFAULT_PLATFORM_OPERATOR_EMAIL)) {
-    emails = [...emails, DEFAULT_PLATFORM_OPERATOR_EMAIL];
-  }
+  let emails = resolveOperatorEmails({ toEmails, fallbackDefaultEmail });
   const webhook = safeString(process.env.PLATFORM_OPERATOR_WEBHOOK_URL);
 
   if (!emails.length && !webhook) {
@@ -108,8 +123,11 @@ export async function notifyPlatformOperators({
       : resolveOpsFromCandidates(from);
     const replyToAddress = safeString(replyTo) || "support@vtechdevelopment.com";
     const emailResults = [];
+    const triedRecipients = new Set();
 
-    for (const to of emails) {
+    async function tryDeliver(to) {
+      if (!to || triedRecipients.has(to)) return null;
+      triedRecipients.add(to);
       let delivered = null;
       for (const fromAddress of fromCandidates) {
         try {
@@ -134,6 +152,10 @@ export async function notifyPlatformOperators({
             results.from = fromAddress;
             break;
           }
+          const allowed = parseResendAllowedRecipient(sent?.message ?? sent?.providerDetail ?? "");
+          if (allowed && !triedRecipients.has(allowed) && !emails.includes(allowed)) {
+            emails.push(allowed);
+          }
         } catch (err) {
           results.fromAttempts.push({
             to,
@@ -144,6 +166,14 @@ export async function notifyPlatformOperators({
           });
         }
       }
+      return delivered;
+    }
+
+    // Snapshot recipients up front, then drain any Resend-allowed extras discovered mid-loop.
+    const queue = [...emails];
+    while (queue.length) {
+      const to = queue.shift();
+      const delivered = await tryDeliver(to);
       emailResults.push(
         delivered
         ?? {
@@ -153,6 +183,11 @@ export async function notifyPlatformOperators({
           message: "Could not send ops email from any configured From address.",
         },
       );
+      for (const extra of emails) {
+        if (!triedRecipients.has(extra) && !queue.includes(extra)) {
+          queue.push(extra);
+        }
+      }
     }
     results.email = emailResults;
     if (!results.from && fromCandidates[0]) results.from = fromCandidates[0];

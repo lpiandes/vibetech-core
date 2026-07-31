@@ -41,21 +41,35 @@ export function resolveOpsFromAddress() {
 /** Candidate From addresses for ops mail — first success wins.
  * Prefer invitations@ when support@ may be unverified in Resend (common after
  * flipping INVITATION_EMAIL_FROM to support@ without verifying the domain identity).
+ * Last resort: Resend's onboarding@resend.dev (only delivers to the Resend account email
+ * until vtechdevelopment.com is verified at resend.com/domains).
  */
 export function resolveOpsFromCandidates(preferred = null) {
   const list = [
     preferred,
     process.env.OPS_EMAIL_FROM,
-    "VIBETech <invitations@vtechdevelopment.com>",
     process.env.INVITATION_EMAIL_FROM,
     process.env.SUPPORT_EMAIL_FROM,
     process.env.RESEND_FROM,
     process.env.SMTP_FROM,
+    "VIBETech <invitations@vtechdevelopment.com>",
     "VIBETech Support <support@vtechdevelopment.com>",
+    "VIBETech <onboarding@resend.dev>",
   ]
     .map((v) => String(v ?? "").trim())
     .filter(Boolean);
   return [...new Set(list)];
+}
+
+/**
+ * When Resend is in test/unverified-domain mode, extract the only allowed recipient
+ * from an error like: "You can only send testing emails to your own email address (x@y.com)."
+ */
+export function parseResendAllowedRecipient(message = "") {
+  const m = String(message ?? "").match(
+    /only send testing emails to your own email address\s*\(([^)]+)\)/i,
+  );
+  return m?.[1] ? String(m[1]).trim().toLowerCase() : null;
 }
 
 class UnconfiguredProductionDeliveryProvider extends InvitationDeliveryProvider {

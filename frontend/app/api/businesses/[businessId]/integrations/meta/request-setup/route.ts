@@ -14,9 +14,13 @@ import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
 import { putDurableCredential } from "../../../../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
 import {
   DEFAULT_PLATFORM_OPERATOR_EMAIL,
+  RESEND_ACCOUNT_OPS_FALLBACK_EMAIL,
   notifyPlatformOperators,
 } from "../../../../../../../../backend/core/admin/notifyPlatformOperators.js";
-import { resolveOpsFromCandidates } from "../../../../../../../../backend/core/platform/delivery/createInvitationDeliveryProvider.js";
+import {
+  resolveOpsFromCandidates,
+  parseResendAllowedRecipient,
+} from "../../../../../../../../backend/core/platform/delivery/createInvitationDeliveryProvider.js";
 
 async function sendResendEmail({
   apiKey,
@@ -218,33 +222,55 @@ export async function POST(
     ].join("\n");
 
     const apiKey = String(process.env.RESEND_API_KEY ?? "").trim();
-    const to = DEFAULT_PLATFORM_OPERATOR_EMAIL;
+    const recipients = [
+      ...new Set([
+        DEFAULT_PLATFORM_OPERATOR_EMAIL,
+        RESEND_ACCOUNT_OPS_FALLBACK_EMAIL,
+        ...String(process.env.PLATFORM_OPERATOR_EMAIL ?? "")
+          .split(",")
+          .map((e) => e.trim())
+          .filter(Boolean),
+      ]),
+    ];
     const fromAttempts: Array<Record<string, unknown>> = [];
     let emailed = false;
     let usedFrom: string | null = null;
+    let usedTo: string | null = null;
 
     if (apiKey) {
-      // Prefer invitations@ first — support@ often fails Resend domain verification.
-      for (const from of resolveOpsFromCandidates(
-        "VIBETech <invitations@vtechdevelopment.com>",
-      )) {
-        const result = await sendResendEmail({
-          apiKey,
-          from,
-          to,
-          subject,
-          text,
-          replyTo: "support@vtechdevelopment.com",
-        });
-        fromAttempts.push(result);
-        if (result.sent) {
-          emailed = true;
-          usedFrom = from;
-          break;
+      const fromCandidates = resolveOpsFromCandidates(
+        process.env.OPS_EMAIL_FROM || process.env.INVITATION_EMAIL_FROM || "VIBETech <onboarding@resend.dev>",
+      );
+      const queue = [...recipients];
+      const tried = new Set<string>();
+      while (queue.length && !emailed) {
+        const to = queue.shift() as string;
+        if (tried.has(to)) continue;
+        tried.add(to);
+        for (const from of fromCandidates) {
+          const result = await sendResendEmail({
+            apiKey,
+            from,
+            to,
+            subject,
+            text,
+            replyTo: "support@vtechdevelopment.com",
+          });
+          fromAttempts.push(result);
+          if (result.sent) {
+            emailed = true;
+            usedFrom = from;
+            usedTo = to;
+            break;
+          }
+          const allowed = parseResendAllowedRecipient(result.message ?? "");
+          if (allowed && !tried.has(allowed) && !queue.includes(allowed)) {
+            queue.push(allowed);
+          }
         }
       }
     } else {
-      fromAttempts.push({ sent: false, reason: "missing_RESEND_API_KEY", to });
+      fromAttempts.push({ sent: false, reason: "missing_RESEND_API_KEY", to: recipients[0] });
     }
 
     // Secondary notify path (webhook / PLATFORM_OPERATOR_EMAIL merge).
@@ -252,13 +278,17 @@ export async function POST(
       actions: [action],
       force: true,
       fallbackDefaultEmail: true,
-      toEmails: [DEFAULT_PLATFORM_OPERATOR_EMAIL],
+      toEmails: recipients,
       from: usedFrom || process.env.OPS_EMAIL_FROM || process.env.INVITATION_EMAIL_FROM || null,
       replyTo: "support@vtechdevelopment.com",
     }).catch(() => null);
 
     if (!emailed && Array.isArray(notify?.results?.email)) {
-      emailed = notify.results.email.some((row: { sent?: boolean }) => row?.sent === true);
+      const hit = notify.results.email.find((row: { sent?: boolean; to?: string }) => row?.sent === true);
+      if (hit) {
+        emailed = true;
+        usedTo = hit.to ? String(hit.to) : usedTo;
+      }
       usedFrom = usedFrom || notify?.results?.from || null;
     }
 
@@ -273,9 +303,10 @@ export async function POST(
       emailed,
       needEverything,
       from: usedFrom,
+      to: usedTo,
       fromAttempts,
       message: clientMessage,
-      operatorEmail: DEFAULT_PLATFORM_OPERATOR_EMAIL,
+      operatorEmail: usedTo || DEFAULT_PLATFORM_OPERATOR_EMAIL,
       resendConfigured: Boolean(apiKey),
     });
   } catch (err) {
