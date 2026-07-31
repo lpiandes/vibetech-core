@@ -7,6 +7,7 @@
 import {
   createInvitationDeliveryProvider,
   resolveOpsFromAddress,
+  resolveOpsFromCandidates,
 } from "../platform/delivery/createInvitationDeliveryProvider.js";
 
 function safeString(v) {
@@ -29,8 +30,9 @@ export async function notifyPlatformOperators({
   toEmails = null,
   /** When true and no PLATFORM_OPERATOR_EMAIL, fall back to DEFAULT_PLATFORM_OPERATOR_EMAIL. */
   fallbackDefaultEmail = false,
-  /** Override From: (defaults to support@vtechdevelopment.com for ops). */
+  /** Preferred From: — we retry other verified candidates if this fails. */
   from = null,
+  replyTo = "support@vtechdevelopment.com",
 } = {}) {
   const list = Array.isArray(actions) ? actions : [];
   if (!list.length) {
@@ -81,7 +83,7 @@ export async function notifyPlatformOperators({
   }).join("\n\n---\n\n");
 
   const subject = `[VIBETech] ${list.length} operator action(s) need you`;
-  const results = { email: null, webhook: null, from: null };
+  const results = { email: null, webhook: null, from: null, fromAttempts: [] };
 
   if (webhook) {
     try {
@@ -101,29 +103,59 @@ export async function notifyPlatformOperators({
   }
 
   if (emails.length) {
-    const fromAddress = safeString(from) || resolveOpsFromAddress();
-    results.from = fromAddress;
-    const provider = deliveryProvider ?? createInvitationDeliveryProvider({ from: fromAddress });
+    const fromCandidates = deliveryProvider
+      ? [safeString(from) || resolveOpsFromAddress()]
+      : resolveOpsFromCandidates(from);
+    const replyToAddress = safeString(replyTo) || "support@vtechdevelopment.com";
     const emailResults = [];
+
     for (const to of emails) {
-      try {
-        const sent = await provider.send({
-          to,
-          subject,
-          text: bodyText,
-          html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${escapeHtml(bodyText)}</pre>`,
-        });
-        emailResults.push({ to, ...sent });
-      } catch (err) {
-        emailResults.push({
+      let delivered = null;
+      for (const fromAddress of fromCandidates) {
+        try {
+          const provider = deliveryProvider
+            ?? createInvitationDeliveryProvider({ from: fromAddress });
+          const sent = await provider.send({
+            to,
+            subject,
+            text: bodyText,
+            html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${escapeHtml(bodyText)}</pre>`,
+            replyTo: replyToAddress,
+          });
+          results.fromAttempts.push({
+            to,
+            from: fromAddress,
+            sent: Boolean(sent?.sent),
+            reason: sent?.reason ?? null,
+            message: sent?.message ?? null,
+          });
+          if (sent?.sent) {
+            delivered = { to, ...sent, from: fromAddress };
+            results.from = fromAddress;
+            break;
+          }
+        } catch (err) {
+          results.fromAttempts.push({
+            to,
+            from: fromAddress,
+            sent: false,
+            reason: "error",
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+      emailResults.push(
+        delivered
+        ?? {
           to,
           sent: false,
-          reason: "error",
-          message: err instanceof Error ? err.message : String(err),
-        });
-      }
+          reason: "all_from_failed",
+          message: "Could not send ops email from any configured From address.",
+        },
+      );
     }
     results.email = emailResults;
+    if (!results.from && fromCandidates[0]) results.from = fromCandidates[0];
   }
 
   recentlyNotified.set(fingerprint, Date.now());

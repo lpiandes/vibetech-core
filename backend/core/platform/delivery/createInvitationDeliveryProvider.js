@@ -23,13 +23,36 @@ function resolveFromAddress() {
   );
 }
 
-/** Ops / white-glove handoffs — prefer support@ so clients see a real ops mailbox. */
+/** Ops / white-glove handoffs.
+ * Prefer a From address already verified for invitations (Resend rejects unverified senders).
+ * support@ is used as Reply-To when we must send from invitations@.
+ */
 export function resolveOpsFromAddress() {
   return (
     process.env.OPS_EMAIL_FROM ??
     process.env.SUPPORT_EMAIL_FROM ??
+    process.env.INVITATION_EMAIL_FROM ??
+    process.env.RESEND_FROM ??
+    process.env.SMTP_FROM ??
     "VIBETech Support <support@vtechdevelopment.com>"
   );
+}
+
+/** Candidate From addresses for ops mail — first success wins. */
+export function resolveOpsFromCandidates(preferred = null) {
+  const list = [
+    preferred,
+    process.env.OPS_EMAIL_FROM,
+    process.env.SUPPORT_EMAIL_FROM,
+    process.env.INVITATION_EMAIL_FROM,
+    process.env.RESEND_FROM,
+    process.env.SMTP_FROM,
+    "VIBETech Support <support@vtechdevelopment.com>",
+    "VIBETech <invitations@vtechdevelopment.com>",
+  ]
+    .map((v) => String(v ?? "").trim())
+    .filter(Boolean);
+  return [...new Set(list)];
 }
 
 class UnconfiguredProductionDeliveryProvider extends InvitationDeliveryProvider {

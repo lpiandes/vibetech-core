@@ -103,21 +103,19 @@ export async function POST(
       force: true,
       fallbackDefaultEmail: true,
       toEmails: [DEFAULT_PLATFORM_OPERATOR_EMAIL],
-      from: "VIBETech Support <support@vtechdevelopment.com>",
+      // Prefer verified invitation From; retry candidates inside notifyPlatformOperators.
+      from: process.env.OPS_EMAIL_FROM || process.env.INVITATION_EMAIL_FROM || null,
+      replyTo: "support@vtechdevelopment.com",
     });
 
     const emailed = Array.isArray(notify?.results?.email)
       ? notify.results.email.some((row: { sent?: boolean }) => row?.sent === true)
       : false;
-    const emailErrors = Array.isArray(notify?.results?.email)
-      ? notify.results.email
-        .filter((row: { sent?: boolean }) => row?.sent !== true)
-        .map((row: { to?: string; reason?: string; message?: string }) => ({
-          to: row.to,
-          reason: row.reason,
-          message: row.message,
-        }))
-      : [];
+
+    // Client-facing copy only — never mention Resend/API keys. Ops email goes to Leo.
+    const clientMessage = needEverything
+      ? "Our team is on it — we’ll create your Facebook Page and Lead Ads ASAP (usually less than 24 hours)."
+      : "Our team is on it — we’ll connect your Facebook Lead Forms ASAP (usually less than 24 hours).";
 
     return NextResponse.json({
       ok: true,
@@ -126,13 +124,9 @@ export async function POST(
       needEverything,
       notifySkipped: Boolean(notify?.skipped),
       notifyReason: notify?.reason ?? null,
-      from: notify?.results?.from ?? "VIBETech Support <support@vtechdevelopment.com>",
-      emailErrors,
-      message: emailed
-        ? (needEverything
-          ? "VIBETech was notified at leopiandes@vtechdevelopment.com. We’ll help create Facebook + Lead Ads, then connect them."
-          : "VIBETech was notified at leopiandes@vtechdevelopment.com. We’ll connect your Facebook Page.")
-        : "Request recorded. If you don’t see an email in a minute, write leopiandes@vtechdevelopment.com — email delivery may need RESEND_API_KEY + verified support@ domain.",
+      from: notify?.results?.from ?? null,
+      fromAttempts: notify?.results?.fromAttempts ?? [],
+      message: clientMessage,
       operatorEmail: DEFAULT_PLATFORM_OPERATOR_EMAIL,
     });
   } catch (err) {

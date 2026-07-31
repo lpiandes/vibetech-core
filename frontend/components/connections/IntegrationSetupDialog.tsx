@@ -890,12 +890,11 @@ export default function IntegrationSetupDialog({
                     Setup requested
                   </div>
                   <p style={{ margin: 0, fontSize: 13, color: "#065f46", lineHeight: 1.5, fontWeight: 600 }}>
-                    {metaRequestResult.message}
+                    {metaRequestResult.message
+                      || "Our team is on it — we’ll create your Facebook Page ASAP (usually less than 24 hours)."}
                   </p>
                   <p style={{ margin: 0, fontSize: 12, color: "#047857", lineHeight: 1.45 }}>
-                    {metaRequestResult.emailed
-                      ? `Email sent to ${metaRequestResult.operatorEmail ?? "leopiandes@vtechdevelopment.com"} from support@vtechdevelopment.com with the exact connect steps.`
-                      : `We’ll reach ${metaRequestResult.operatorEmail ?? "leopiandes@vtechdevelopment.com"} with the exact steps. If email isn’t configured on the server yet, message that inbox directly.`}
+                    You don’t need to do anything else. We’ll email you when Lead Ads are connected.
                   </p>
                   <PrimaryButton onClick={onClose}>Done</PrimaryButton>
                 </div>
