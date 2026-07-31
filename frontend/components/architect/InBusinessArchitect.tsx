@@ -90,7 +90,19 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
 
       try {
         // Admin added packages → blocking discovery Ask (not continuous chat).
-        if (packageAsk && hasInstalledOs) {
+        if (packageAsk) {
+          if (!hasInstalledOs) {
+            // Stale ?packageAsk=1 on a pre-install business — never show empty prompt loop.
+            await fetch(`/api/businesses/${encodeURIComponent(businessId)}/builder/package-ask`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ action: "clear" }),
+            }).catch(() => null);
+            if (!cancelled) {
+              hardNavigateToBusinessHome(`/b/${encodeURIComponent(businessId)}/home`);
+            }
+            return;
+          }
           // URL already has a session from the previous mint — open it.
           // Never call startPackageAsk again here or we loop: create → replace → boot → create…
           if (sessionFromQuery) {
@@ -425,10 +437,29 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
       <ArchitectShell maxWidth={1100} fullBleed={hasInstalledOs}>
         <ArchitectPanel style={{ display: "grid", gap: 14 }}>
           <div role="status" aria-live="polite">
-            <ThinkingDots label={hasInstalledOs ? "Opening Ask VIBETech" : "Opening business setup"} />
+            <ThinkingDots label={
+              packageAskQuery === "1"
+                ? "Opening package setup"
+                : hasInstalledOs ? "Opening Ask VIBETech" : "Opening business setup"
+            }} />
           </div>
           <ArchitectSkeleton height={28} width="40%" />
           <ArchitectSkeleton height={160} />
+        </ArchitectPanel>
+      </ArchitectShell>
+    );
+  }
+
+  // Stale ?packageAsk=1 with no session — keep loading chrome, never the empty prompt
+  // (that screen + Home redirect was the every-second refresh loop).
+  if (!sessionId && packageAskQuery === "1") {
+    return (
+      <ArchitectShell maxWidth={1100} fullBleed={hasInstalledOs}>
+        <ArchitectPanel style={{ display: "grid", gap: 14 }}>
+          <div role="status" aria-live="polite">
+            <ThinkingDots label="Returning to Home" />
+          </div>
+          <ArchitectSkeleton height={28} width="40%" />
         </ArchitectPanel>
       </ArchitectShell>
     );

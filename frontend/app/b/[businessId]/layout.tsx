@@ -62,15 +62,17 @@ export default async function BusinessScopedLayout({
         packageConfiguration,
         actorId: "layout_heal",
       });
+      // Only treat pending Ask as real when it was written back onto the business row.
+      // Never redirect from installation-only / heal-local pending (refresh loop).
       if (heal?.pendingRestored && heal.pendingPackageAsk) {
         packageConfiguration = {
           ...packageConfiguration,
           pendingPackageAsk: heal.pendingPackageAsk,
         };
         pendingPackageAsk = heal.pendingPackageAsk as typeof pendingPackageAsk;
-      } else if (!pendingPackageAsk && heal?.pendingPackageAsk) {
-        pendingPackageAsk = heal.pendingPackageAsk as typeof pendingPackageAsk;
       }
+      // Re-read after heal — business row is source of truth.
+      pendingPackageAsk = readPendingPackageAsk(packageConfiguration);
     } catch {
       // Non-fatal — page still renders.
     }

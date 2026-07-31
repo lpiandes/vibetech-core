@@ -103,10 +103,11 @@ export async function syncPurchasedPackagesOntoInstallation({
 
   const employees = [...byId.values()];
 
-  let pendingPackageAsk = readPendingPackageAsk(packageConfiguration ?? {})
-    ?? readPendingPackageAsk(installation.configuration ?? {});
+  let pendingPackageAsk = readPendingPackageAsk(packageConfiguration ?? {});
 
   // Prior bug cleared pending Ask on re-save; recover when we just inject missing workers.
+  // Do NOT inherit stale pending from installation when the business row has none — that
+  // resurrected Ask redirects after clear and looped Home ↔ Architect every second.
   if (ensurePendingAsk && packagesInjected.length && !pendingPackageAsk) {
     pendingPackageAsk = {
       status: "required",
