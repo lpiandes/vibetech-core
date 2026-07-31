@@ -94,7 +94,7 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
   },
   meta_lead_ads: {
     title: "Meta Lead Forms",
-    description: "Tell us your Facebook Page — VIBETech connects Lead Ads for you. New leads land in People and fire intake automations.",
+    description: "Most clients just put their Facebook Page name. No Page yet? Say so — VIBETech builds Lead Ads with you. New leads land in People and fire intake automations.",
     tier: "live",
     icon: Share2,
     setupMode: "api_key",

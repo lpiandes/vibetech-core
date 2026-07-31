@@ -41,7 +41,13 @@ export default function IntegrationSetupDialog({
     hunterApiKey: "",
     usePlatformKeys: false,
   });
-  const [metaForm, setMetaForm] = useState({ pageName: "", pageUrl: "", notes: "" });
+  const [metaForm, setMetaForm] = useState({
+    pageName: "",
+    pageUrl: "",
+    notes: "",
+    /** "have_page" | "need_everything" — most clients know their Page name; some have no FB yet. */
+    startingPoint: "have_page" as "have_page" | "need_everything",
+  });
   const [metaRequestResult, setMetaRequestResult] = useState<{
     message?: string;
     emailed?: boolean;
@@ -259,10 +265,16 @@ export default function IntegrationSetupDialog({
     setLoading(true);
     setError(null);
     try {
+      const needEverything = metaForm.startingPoint === "need_everything";
       const res = await fetch(`/api/businesses/${businessId}/integrations/meta/request-setup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(metaForm),
+        body: JSON.stringify({
+          pageName: needEverything ? "" : metaForm.pageName,
+          pageUrl: needEverything ? "" : metaForm.pageUrl,
+          notes: metaForm.notes,
+          needEverything,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -899,36 +911,102 @@ export default function IntegrationSetupDialog({
                     background: "#fafaf9",
                   }}>
                     <p style={{ margin: 0 }}>
-                      You should <strong>not</strong> use Meta Developers or Graph API. Tell us your Facebook Page below and we email ops with the exact connect steps. After we’re done, new Lead Ad submissions land in <strong>People</strong> and fire <strong>META_LEAD</strong> automations (drafts until you GRANT).
+                      You should <strong>not</strong> use Meta Developers or Graph API. Most businesses already have a Facebook Page — just put the name below. If you have no Facebook Page or Lead Ads yet, say so and we’ll set that up with you.
                     </p>
                     <p style={{ margin: "10px 0 0" }}>
-                      If you already run Lead Ads, great — just name the Page. If not, we can also help you set up a first Lead form once the Page is connected.
+                      After we’re done, new Lead Ad submissions land in <strong>People</strong> and fire <strong>META_LEAD</strong> automations (drafts until you GRANT).
                     </p>
                   </div>
-                  <label style={fieldLabelStyle}>
-                    Facebook Page name
-                    <span style={fieldHintStyle}>Optional but helpful — e.g. Mind and Mobility</span>
-                    <input
-                      placeholder="Page name"
-                      value={metaForm.pageName}
-                      onChange={(e) => setMetaForm((s) => ({ ...s, pageName: e.target.value }))}
-                      style={fieldInputStyle}
-                    />
-                  </label>
-                  <label style={fieldLabelStyle}>
-                    Facebook Page URL
-                    <span style={fieldHintStyle}>Optional — facebook.com/…</span>
-                    <input
-                      placeholder="https://facebook.com/your-page"
-                      value={metaForm.pageUrl}
-                      onChange={(e) => setMetaForm((s) => ({ ...s, pageUrl: e.target.value }))}
-                      style={fieldInputStyle}
-                    />
-                  </label>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    <label style={{
+                      ...fieldLabelStyle,
+                      display: "flex",
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      gap: 10,
+                      padding: 10,
+                      borderRadius: 10,
+                      border: `1px solid ${metaForm.startingPoint === "have_page" ? cockpitColors.accent : cockpitColors.panelBorder}`,
+                      background: metaForm.startingPoint === "have_page" ? "#f0fdfa" : "#fff",
+                      cursor: "pointer",
+                    }}>
+                      <input
+                        type="radio"
+                        name="meta-starting-point"
+                        checked={metaForm.startingPoint === "have_page"}
+                        onChange={() => setMetaForm((s) => ({ ...s, startingPoint: "have_page" }))}
+                        style={{ marginTop: 3 }}
+                      />
+                      <span>
+                        <strong style={{ color: cockpitColors.textPrimary }}>We have a Facebook Page</strong>
+                        <span style={{ display: "block", ...fieldHintStyle, marginTop: 2 }}>
+                          Most clients — just the Page name is enough
+                        </span>
+                      </span>
+                    </label>
+                    <label style={{
+                      ...fieldLabelStyle,
+                      display: "flex",
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      gap: 10,
+                      padding: 10,
+                      borderRadius: 10,
+                      border: `1px solid ${metaForm.startingPoint === "need_everything" ? cockpitColors.accent : cockpitColors.panelBorder}`,
+                      background: metaForm.startingPoint === "need_everything" ? "#f0fdfa" : "#fff",
+                      cursor: "pointer",
+                    }}>
+                      <input
+                        type="radio"
+                        name="meta-starting-point"
+                        checked={metaForm.startingPoint === "need_everything"}
+                        onChange={() => setMetaForm((s) => ({ ...s, startingPoint: "need_everything" }))}
+                        style={{ marginTop: 3 }}
+                      />
+                      <span>
+                        <strong style={{ color: cockpitColors.textPrimary }}>We don’t have Facebook / Lead Ads yet</strong>
+                        <span style={{ display: "block", ...fieldHintStyle, marginTop: 2 }}>
+                          We’ll help create the Page + first Lead form, then connect it
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                  {metaForm.startingPoint === "have_page" ? (
+                    <>
+                      <label style={fieldLabelStyle}>
+                        Facebook Page name
+                        <span style={fieldHintStyle}>Usually the business name — e.g. Mind and Mobility</span>
+                        <input
+                          placeholder="Page name"
+                          value={metaForm.pageName}
+                          onChange={(e) => setMetaForm((s) => ({ ...s, pageName: e.target.value }))}
+                          style={fieldInputStyle}
+                        />
+                      </label>
+                      <label style={fieldLabelStyle}>
+                        Facebook Page URL
+                        <span style={fieldHintStyle}>Optional — facebook.com/…</span>
+                        <input
+                          placeholder="https://facebook.com/your-page"
+                          value={metaForm.pageUrl}
+                          onChange={(e) => setMetaForm((s) => ({ ...s, pageUrl: e.target.value }))}
+                          style={fieldInputStyle}
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 13, color: cockpitColors.textSecondary, lineHeight: 1.45 }}>
+                      No Page name needed. Hit request and we’ll email ops to build Facebook + Lead Ads with you from scratch.
+                    </p>
+                  )}
                   <label style={fieldLabelStyle}>
                     Anything else we should know?
                     <textarea
-                      placeholder="Who manages ads, privacy policy URL, etc."
+                      placeholder={
+                        metaForm.startingPoint === "need_everything"
+                          ? "Who should own the Facebook login, website/privacy policy URL, target area, etc."
+                          : "Who manages ads, privacy policy URL, etc."
+                      }
                       value={metaForm.notes}
                       onChange={(e) => setMetaForm((s) => ({ ...s, notes: e.target.value }))}
                       rows={3}

@@ -1,6 +1,6 @@
 /**
- * Client-facing Meta Lead Forms handoff: owner tells us their Page name/URL;
- * VIBETech ops connects Graph API / webhooks — clients never paste tokens.
+ * Client-facing Meta Lead Forms handoff: owner tells us their Page name/URL
+ * (or that they have no Facebook yet); VIBETech ops connects — clients never paste tokens.
  */
 import { NextResponse } from "next/server";
 
@@ -20,8 +20,10 @@ export async function POST(
     const { businessId } = await params;
     const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.INTEGRATIONS_MANAGE);
     const body = await request.json().catch(() => ({}));
-    const pageName = String(body.pageName ?? "").trim();
-    const pageUrl = String(body.pageUrl ?? "").trim();
+    const needEverything = body.needEverything === true
+      || String(body.startingPoint ?? "").trim() === "need_everything";
+    const pageName = needEverything ? "" : String(body.pageName ?? "").trim();
+    const pageUrl = needEverything ? "" : String(body.pageUrl ?? "").trim();
     const notes = String(body.notes ?? "").trim();
     const requestedBy = String(
       (ctx as any)?.user?.email
@@ -36,26 +38,45 @@ export async function POST(
     const integrationsHref = `${origin}/b/${encodeURIComponent(businessId)}/integrations`;
     const adminHref = `/admin/businesses/${encodeURIComponent(businessId)}`;
 
-    const steps = [
-      `Open business “${businessName}” (${businessId}) in Admin / Support access.`,
-      pageName || pageUrl
-        ? `Locate Facebook Page${pageName ? `: “${pageName}”` : ""}${pageUrl ? ` — ${pageUrl}` : ""}.`
-        : "Ask the owner which Facebook Page runs their Lead Ads (they did not provide a name/URL).",
+    const connectSteps = [
       "In Meta Developers → Graph API Explorer (VIBETech app): generate a User token with pages_show_list, pages_read_engagement, leads_retrieval, pages_manage_metadata.",
       "GET /me/accounts → copy Page id + Page access_token for that Page.",
       `POST ${origin}/api/businesses/${encodeURIComponent(businessId)}/integrations/meta with { pageId, pageAccessToken } (ops only — never ask the client to do this).`,
       `Confirm leadgen Page subscribe + Webhooks callback: ${webhookUrl} (verify token = META_LEAD_VERIFY_TOKEN).`,
-      "Create a Lead Form ad if none exists; send a test lead → People + META_LEAD drafts.",
+      "Send a test lead → People + META_LEAD drafts.",
       `Confirm Integrations shows connected: ${integrationsHref}`,
     ];
 
+    const steps = needEverything
+      ? [
+          `Open business “${businessName}” (${businessId}) in Admin / Support access.`,
+          "Client has NO Facebook Page / Lead Ads yet — white-glove from scratch.",
+          "Schedule a short call or gather: who owns the Facebook login, business website, privacy policy URL, service area, offer.",
+          "Create/claim a Facebook Page for the business (or guide them while on a call).",
+          "In Ads Manager: create a Leads campaign → Instant Form collecting name, email, phone + privacy policy URL.",
+          "Publish a small test Lead Ad (even $5–$20/day) so a real leadgen event can fire.",
+          ...connectSteps,
+        ]
+      : [
+          `Open business “${businessName}” (${businessId}) in Admin / Support access.`,
+          pageName || pageUrl
+            ? `Locate Facebook Page${pageName ? `: “${pageName}”` : ""}${pageUrl ? ` — ${pageUrl}` : ""}.`
+            : "Ask the owner which Facebook Page runs their Lead Ads (they did not provide a name/URL).",
+          "Confirm a Lead Form exists; if not, create Instant Form + small test ad.",
+          ...connectSteps,
+        ];
+
     const action = {
       id: `meta_lead_setup:${businessId}:${Date.now()}`,
-      kind: "meta_lead_setup",
+      kind: needEverything ? "meta_lead_setup_from_scratch" : "meta_lead_setup",
       urgency: "high",
-      title: `Connect Meta Lead Forms — ${businessName}`,
+      title: needEverything
+        ? `Build + connect Meta Lead Forms — ${businessName}`
+        : `Connect Meta Lead Forms — ${businessName}`,
       summary: [
-        "Client requested white-glove Meta Lead Forms setup (no Graph API work for them).",
+        needEverything
+          ? "Client has no Facebook Page / Lead Ads yet — build from scratch, then connect (no Graph API for them)."
+          : "Client requested white-glove Meta Lead Forms setup (no Graph API work for them).",
         requestedBy ? `Requested by: ${requestedBy}` : null,
         pageName ? `Page name: ${pageName}` : null,
         pageUrl ? `Page URL: ${pageUrl}` : null,
@@ -66,6 +87,7 @@ export async function POST(
       href: adminHref,
       steps,
       payload: {
+        needEverything,
         pageName: pageName || null,
         pageUrl: pageUrl || null,
         notes: notes || null,
@@ -91,10 +113,13 @@ export async function POST(
       ok: true,
       requested: true,
       emailed,
+      needEverything,
       notifySkipped: Boolean(notify?.skipped),
       notifyReason: notify?.reason ?? null,
       message: emailed
-        ? "VIBETech was notified. We’ll connect your Facebook Page — you don’t need Graph API or tokens."
+        ? (needEverything
+          ? "VIBETech was notified. We’ll help create Facebook + Lead Ads, then connect them — you don’t need Graph API or tokens."
+          : "VIBETech was notified. We’ll connect your Facebook Page — you don’t need Graph API or tokens.")
         : "Request recorded for VIBETech ops. If you need us sooner, email leopiandes@vtechdevelopment.com.",
       operatorEmail: DEFAULT_PLATFORM_OPERATOR_EMAIL,
     });
