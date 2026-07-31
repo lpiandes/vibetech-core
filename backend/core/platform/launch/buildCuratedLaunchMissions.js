@@ -150,6 +150,8 @@ export function buildCuratedLaunchMissions({
   businessName = "",
   smsSetup = null,
   purchasedPackages = [],
+  /** Owner requested white-glove Meta Lead Forms — Mission shows Pending until ops connects. */
+  metaSetupPending = false,
 } = {}) {
   const v = resolveLaunchVertical({
     operatingPackId: vertical,
@@ -246,6 +248,20 @@ export function buildCuratedLaunchMissions({
       detail: "Share your intake form link. Submissions create People contacts and can fire automations.",
       canProveInline: true,
       href: baseHref ? `${baseHref}/intake` : "/intake",
+    };
+  });
+
+  // Meta Lead Forms: after client requests setup, show Pending (ops connects — no Graph API for them).
+  missions = missions.map((m) => {
+    if (m.id !== "meta_lead_intake" || m.complete) return m;
+    if (!metaSetupPending) return m;
+    return {
+      ...m,
+      status: "pending_ops",
+      actionLabel: "Pending",
+      detail: "Setup requested — VIBETech is connecting your Facebook Lead Ads (usually less than 24 hours). We’ll email you when it’s ready.",
+      canProveInline: false,
+      pendingOps: true,
     };
   });
 

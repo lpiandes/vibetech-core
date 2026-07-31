@@ -212,8 +212,8 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       return live ? { ...conn, status: live } : conn;
     });
 
-    const smsCreds = await platformStore.listIntegrationCredentialsForWorkspace(businessId).catch(() => []);
-    const smsCred = (Array.isArray(smsCreds) ? smsCreds : []).find((row: any) => {
+    const integrationCreds = await platformStore.listIntegrationCredentialsForWorkspace(businessId).catch(() => []);
+    const smsCred = (Array.isArray(integrationCreds) ? integrationCreds : []).find((row: any) => {
       const provider = String(row?.providerType ?? "");
       const id = String(row?.credentialId ?? "");
       return provider === "twilio_sms" || id.includes("twilio_sms");
@@ -233,12 +233,29 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       brand: smsBrand,
     };
 
+    const metaConnected = String(connectionStatuses.meta_lead_ads ?? "").toUpperCase() === "CONNECTED";
+    const metaCred = (Array.isArray(integrationCreds) ? integrationCreds : []).find((row: any) => {
+      const provider = String(row?.providerType ?? "");
+      const id = String(row?.credentialId ?? "");
+      return provider === "meta_lead_ads" || id.includes("meta");
+    });
+    const metaCredMeta = metaCred?.metadata && typeof metaCred.metadata === "object" ? metaCred.metadata : {};
+    const businessRow = await platformStore.getBusinessById(businessId).catch(() => null);
+    const pendingOps = businessRow?.packageConfiguration?.pendingOpsRequests?.meta_lead_ads;
+    const metaSetupPending = !metaConnected && (
+      String(metaCredMeta.status ?? "") === "pending_ops"
+      || Boolean(metaCredMeta.setupRequestedAt)
+      || String(pendingOps?.status ?? "") === "pending_ops"
+      || Boolean(pendingOps?.requestedAt)
+    );
+
     const enrichedViewModel = {
       ...missionControlViewModel,
       proofRecords,
       connectionStatuses,
       connections,
       smsSetup,
+      metaSetupPending,
       knowledgeCount: knowledgeDocumentCount,
       liveFlags: liveIntegrationAvailability(),
       bosEmployees,

@@ -38,6 +38,7 @@ export type LaunchMission = {
   missionIndex?: number;
   canDefer?: boolean;
   deferred?: boolean;
+  pendingOps?: boolean;
 };
 
 type ProveDialog = {
@@ -97,6 +98,10 @@ function isDeferredMission(mission: LaunchMission) {
   return Boolean(mission.deferred) || String(mission.status ?? "") === "deferred";
 }
 
+function isPendingOpsMission(mission: LaunchMission) {
+  return Boolean(mission.pendingOps) || String(mission.status ?? "") === "pending_ops";
+}
+
 function isHardBlockedMission(mission: LaunchMission) {
   return Boolean(mission.blocked) && !isDeferredMission(mission);
 }
@@ -106,6 +111,10 @@ function titleFor(mission: LaunchMission) {
 }
 
 function detailFor(mission: LaunchMission) {
+  if (isPendingOpsMission(mission)) {
+    return mission.detail
+      || "Setup requested — VIBETech is connecting your Facebook Lead Ads (usually less than 24 hours). We’ll email you when it’s ready.";
+  }
   if (isDeferredMission(mission)) {
     if (mission.id === "knowledge_consult") {
       return "Paused — add playbooks or FAQs whenever you’re ready. AI teammates work better with your voice.";
@@ -130,6 +139,7 @@ function phaseLabel(mission: LaunchMission) {
   const phase = String(mission.phase ?? "");
   const status = String(mission.status ?? "");
   if (mission.complete) return "Done";
+  if (isPendingOpsMission(mission)) return "Pending";
   if (isDeferredMission(mission)) return "Paused";
   if (mission.blocked) return "Locked";
   if (mission.needsBrandSetup) return "Connect";
@@ -148,6 +158,7 @@ function phaseLabel(mission: LaunchMission) {
 
 function actionLabel(mission: LaunchMission, proveReady: boolean) {
   if (mission.complete) return "Done";
+  if (isPendingOpsMission(mission)) return "Pending";
   if (isDeferredMission(mission)) {
     if (mission.id === "knowledge_consult") return "Add knowledge";
     return "Resume";
@@ -162,7 +173,7 @@ function actionLabel(mission: LaunchMission, proveReady: boolean) {
     return "Run test";
   }
   if (/prove|test/i.test(String(mission.actionLabel ?? ""))) return "Run test";
-  if (/connect|add|upload|set up/i.test(String(mission.actionLabel ?? ""))) return mission.actionLabel;
+  if (/connect|add|upload|set up|pending/i.test(String(mission.actionLabel ?? ""))) return mission.actionLabel;
   return mission.actionLabel || "Open";
 }
 
@@ -183,12 +194,7 @@ export default function LaunchCenter({
   liveFlags?: Record<string, boolean | undefined>;
 }) {
   // Deferred ("I'll do this later") stays in the main list; only unsupported stays under Show later.
-  const visible = missions.filter((m) => !isHardBlockedMission(m));
-  const later = missions.filter((m) => isHardBlockedMission(m));
-  const complete = visible.filter((m) => m.complete).length;
-  const total = visible.length || missions.length;
-  const progress = total > 0 ? Math.round((complete / total) * 100) : 0;
-  const next = visible.find((m) => !m.complete && !isDeferredMission(m)) ?? null;
+  const [missionOverrides, setMissionOverrides] = useState<Record<string, Partial<LaunchMission>>>({});
   const [showLater, setShowLater] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [messageById, setMessageById] = useState<Record<string, string>>({});
@@ -197,9 +203,22 @@ export default function LaunchCenter({
   const [proveDialog, setProveDialog] = useState<ProveDialog | null>(null);
   const { cancelNavigation } = useWorkspaceNavigation();
 
+  const effectiveMissions = missions.map((m) => {
+    const override = missionOverrides[m.id];
+    return override ? { ...m, ...override } : m;
+  });
+  const visible = effectiveMissions.filter((m) => !isHardBlockedMission(m));
+  const later = effectiveMissions.filter((m) => isHardBlockedMission(m));
+  const complete = visible.filter((m) => m.complete).length;
+  const total = visible.length || effectiveMissions.length;
+  const progress = total > 0 ? Math.round((complete / total) * 100) : 0;
+  // Skip pending-ops missions for the hero "next" CTA — they wait on VIBETech, not the owner.
+  const next = visible.find((m) => !m.complete && !isDeferredMission(m) && !isPendingOpsMission(m)) ?? null;
+
   const homeReturnTo = businessId ? `/b/${businessId}/home` : "/";
 
   function resolveInlineSetup(mission: LaunchMission): IntegrationDisplay | null {
+    if (isPendingOpsMission(mission)) return null;
     const integrationId = String(mission.requiredIntegrations?.[0] ?? "");
     if (!integrationId || !INLINE_SETUP_IDS.has(integrationId)) return null;
     const display = getIntegrationDisplay(integrationId, undefined, liveFlags as any);
@@ -208,11 +227,25 @@ export default function LaunchCenter({
   }
 
   function openInlineSetup(mission: LaunchMission): boolean {
+    if (isPendingOpsMission(mission)) return false;
     const display = resolveInlineSetup(mission);
     if (!display) return false;
     cancelNavigation();
     setSetupTarget(display);
     return true;
+  }
+
+  function markMetaSetupPending() {
+    setMissionOverrides((prev) => ({
+      ...prev,
+      meta_lead_intake: {
+        status: "pending_ops",
+        pendingOps: true,
+        actionLabel: "Pending",
+        detail: "Setup requested — VIBETech is connecting your Facebook Lead Ads (usually less than 24 hours). We’ll email you when it’s ready.",
+        canProveInline: false,
+      },
+    }));
   }
 
   function canProve(mission: LaunchMission) {
@@ -665,6 +698,7 @@ export default function LaunchCenter({
           const proveReady = canProve(mission);
           const done = mission.complete;
           const deferred = isDeferredMission(mission);
+          const pendingOps = isPendingOpsMission(mission);
           const locked = isHardBlockedMission(mission);
           const current = next?.id === mission.id;
           const label = titleFor(mission);
@@ -686,11 +720,15 @@ export default function LaunchCenter({
                 borderRadius: 18,
                 background: done
                   ? "linear-gradient(135deg, rgba(16,185,129,.08), #fff 42%)"
+                  : pendingOps
+                    ? "linear-gradient(135deg, rgba(59,130,246,.08), #fff 48%)"
                   : deferred
                     ? "linear-gradient(135deg, rgba(245,158,11,.10), #fff 48%)"
                     : "#fff",
                 border: `1px solid ${done
                   ? "rgba(16,185,129,.28)"
+                  : pendingOps
+                    ? "rgba(59,130,246,.28)"
                   : deferred
                     ? "rgba(245,158,11,.35)"
                     : current
@@ -797,6 +835,18 @@ export default function LaunchCenter({
                       Paused
                     </span>
                   ) : null}
+                  {pendingOps ? (
+                    <span style={{
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 750,
+                      color: "#1d4ed8",
+                      background: "rgba(59,130,246,.12)",
+                    }}>
+                      Pending
+                    </span>
+                  ) : null}
                 </div>
                 <div style={{
                   marginTop: 3,
@@ -835,12 +885,12 @@ export default function LaunchCenter({
                 ) : null}
               </div>
 
-              {done || locked ? (
+              {done || locked || pendingOps ? (
                 <span style={{
                   flexShrink: 0,
                   fontSize: 13,
                   fontWeight: 750,
-                  color: done ? "#047857" : cockpitColors.textMuted,
+                  color: done ? "#047857" : pendingOps ? "#1d4ed8" : cockpitColors.textMuted,
                   padding: "8px 10px",
                 }}>
                   {btn}
@@ -929,6 +979,9 @@ export default function LaunchCenter({
           hasRealConnect
           returnTo={homeReturnTo}
           onClose={() => setSetupTarget(null)}
+          onMetaSetupRequested={() => {
+            markMetaSetupPending();
+          }}
         />
       ) : null}
 

@@ -38,17 +38,20 @@ export function resolveOpsFromAddress() {
   );
 }
 
-/** Candidate From addresses for ops mail — first success wins. */
+/** Candidate From addresses for ops mail — first success wins.
+ * Prefer invitations@ when support@ may be unverified in Resend (common after
+ * flipping INVITATION_EMAIL_FROM to support@ without verifying the domain identity).
+ */
 export function resolveOpsFromCandidates(preferred = null) {
   const list = [
     preferred,
     process.env.OPS_EMAIL_FROM,
-    process.env.SUPPORT_EMAIL_FROM,
+    "VIBETech <invitations@vtechdevelopment.com>",
     process.env.INVITATION_EMAIL_FROM,
+    process.env.SUPPORT_EMAIL_FROM,
     process.env.RESEND_FROM,
     process.env.SMTP_FROM,
     "VIBETech Support <support@vtechdevelopment.com>",
-    "VIBETech <invitations@vtechdevelopment.com>",
   ]
     .map((v) => String(v ?? "").trim())
     .filter(Boolean);

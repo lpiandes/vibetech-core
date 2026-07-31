@@ -203,3 +203,17 @@ test("basic_integration launch includes email calendar and SMS proves", () => {
   assert.ok(ids.has("calendar_scheduling"));
   assert.ok(ids.has("sms_send"));
 });
+
+test("meta setup pending flips Mission to Pending", () => {
+  const launch = buildCuratedLaunchMissions({
+    vertical: "sports",
+    businessId: "biz_1",
+    metaSetupPending: true,
+  });
+  const meta = launch.missions.find((m) => m.id === "meta_lead_intake");
+  assert.ok(meta, "meta mission present");
+  assert.equal(meta?.status, "pending_ops");
+  assert.equal(meta?.actionLabel, "Pending");
+  assert.equal(meta?.pendingOps, true);
+  assert.equal(meta?.canProveInline, false);
+});

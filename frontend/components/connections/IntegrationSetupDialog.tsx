@@ -17,12 +17,15 @@ export default function IntegrationSetupDialog({
   hasRealConnect = false,
   onClose,
   returnTo = null,
+  onMetaSetupRequested,
 }: {
   integration: IntegrationDisplay;
   hasRealConnect?: boolean;
   onClose: () => void;
   /** When set, navigate here after a successful connect (keeps Home → popup → Home). */
   returnTo?: string | null;
+  /** Home Launch Center: flip Mission 6 to Pending without a full refresh. */
+  onMetaSetupRequested?: (() => void) | null;
 }) {
   const Icon = integration.icon;
   const router = useRouter();
@@ -286,8 +289,9 @@ export default function IntegrationSetupDialog({
         emailed: data.emailed === true,
         operatorEmail: data.operatorEmail ? String(data.operatorEmail) : "leopiandes@vtechdevelopment.com",
       });
-      // Do NOT router.refresh() here — a pending package-Ask heal used to soft-nav
-      // this refresh into /architect?packageAsk=1 (white screen + Home bounce).
+      // Flip Mission 6 to Pending immediately (parent). Avoid router.refresh() —
+      // a pending package-Ask heal used to soft-nav into /architect?packageAsk=1.
+      onMetaSetupRequested?.();
     } catch {
       setError("Network error. Please try again.");
     } finally {

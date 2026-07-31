@@ -88,8 +88,34 @@ export async function POST(
         subscribeWarning: subscribed.ok ? null : (subscribed.message ?? subscribed.reason),
         webhookUrl,
         lastWebhookAt: null,
+        status: "connected",
+        setupRequestedAt: null,
       },
     });
+
+    try {
+      if (typeof platformStore.updateBusinessPackageConfiguration === "function") {
+        const business = await platformStore.getBusinessById(businessId).catch(() => null);
+        const current = business?.packageConfiguration && typeof business.packageConfiguration === "object"
+          ? business.packageConfiguration
+          : {};
+        const pendingOpsRequests = {
+          ...(current.pendingOpsRequests && typeof current.pendingOpsRequests === "object"
+            ? current.pendingOpsRequests
+            : {}),
+        };
+        delete pendingOpsRequests.meta_lead_ads;
+        await platformStore.updateBusinessPackageConfiguration({
+          businessId,
+          packageConfiguration: {
+            ...current,
+            pendingOpsRequests,
+          },
+        });
+      }
+    } catch {
+      /* non-blocking */
+    }
 
     return NextResponse.json({
       ok: true,

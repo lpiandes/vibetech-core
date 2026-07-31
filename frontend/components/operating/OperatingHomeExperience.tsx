@@ -135,6 +135,7 @@ export default function OperatingHomeExperience() {
     businessName,
     smsSetup: viewModel?.smsSetup ?? null,
     purchasedPackages: scope?.purchasedPackages ?? [],
+    metaSetupPending: Boolean(viewModel?.metaSetupPending),
   } as any);
   const launchMissions = launch.missions as LaunchMission[];
   const entitledNavIds = resolveCanonicalNavIdsForPackages(scope?.purchasedPackages ?? []);
