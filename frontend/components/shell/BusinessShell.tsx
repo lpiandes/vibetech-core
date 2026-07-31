@@ -12,6 +12,7 @@ import PrimaryNavigation from "@/components/shell/PrimaryNavigation";
 import ShellTopBar from "@/components/shell/ShellTopBar";
 import MobileNavigationDrawer from "@/components/shell/MobileNavigationDrawer";
 import AccountMenu from "@/components/shell/AccountMenu";
+import ProductTour from "@/components/onboarding/ProductTour";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { cockpitColors, spacing } from "@/design/tokens";
 
@@ -24,6 +25,7 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
   const scope = useBusinessScope();
   const pathname = usePathname() ?? "";
   const router = useRouter();
+  const [forceTour, setForceTour] = useState(false);
   const isAskSurface = /\/architect(?:\/|$)/.test(pathname);
   const isHomeSurface = /\/home(?:\/|$|\?)/.test(pathname) || /\/b\/[^/]+\/?$/.test(pathname);
   const hasInstalledOs = Boolean(scope.installedBusinessOS?.drivenByBusinessOS);
@@ -32,6 +34,13 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
   const isSetupBuilder = (!hasInstalledOs && (isAskSurface || isHomeSurface)) || packageAskBlocking;
   const [needsAttentionCount, setNeedsAttentionCount] = useState(0);
   const refreshedAfterInstall = useRef(false);
+  const [tourEpoch, setTourEpoch] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    setForceTour(params.get("tour") === "1");
+  }, [pathname]);
 
   // After client-side Architect install, Next can reuse a stale /b/[id] layout where
   // installedBusinessOS is still null — Home renders live content but chrome stays hidden.
@@ -153,6 +162,19 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
         </div>
       </div>
       <NavPerfDebug />
+      {hasInstalledOs && !isSetupBuilder ? (
+        <ProductTour
+          key={`${scope.businessId}-${tourEpoch}-${forceTour ? "force" : "auto"}`}
+          businessId={scope.businessId}
+          forceOpen={forceTour}
+          onFinished={() => {
+            if (forceTour) {
+              router.replace(pathname);
+            }
+            setTourEpoch((n) => n + 1);
+          }}
+        />
+      ) : null}
     </WorkspaceNavigationProvider>
   );
 }

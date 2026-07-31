@@ -94,36 +94,78 @@ function formatSearchMetaLine(meta: SearchMeta): string {
 }
 
 const SIGN_IN_URL = "/login?callbackUrl=%2Fsocial-checker";
-const BOOK_A_CALL_URL = "https://vtechdevelopment.com/#contact";
+const GET_A_QUOTE_URL = "https://vtechdevelopment.com/#contact";
+const BOOK_A_CALL_URL = GET_A_QUOTE_URL;
 const SUBSCRIBE_MAILTO =
   "mailto:leopiandes@vtechdevelopment.com?subject=Subscribe%20to%20Social%20Checker&body=Hi%20VibeTech%2C%20I%27d%20like%20to%20subscribe%20to%20Social%20Checker.";
+
+function buildTeaserReport(subjectName: string): Report {
+  const label = subjectName.trim() || "Subject";
+  return {
+    subject: { name: label },
+    profiles: [
+      { network: "instagram", title: `${label} · Instagram`, url: "#", snippet: "Public profile signals blurred until you sign in.", confidence: 0.4 },
+      { network: "linkedin", title: `${label} · LinkedIn`, url: "#", snippet: "Career mentions and posts stay locked for guests.", confidence: 0.35 },
+    ],
+    platforms: [
+      {
+        network: "instagram",
+        label: "Instagram",
+        profile: { network: "instagram", title: `${label}`, url: "#", snippet: "••••••••••••••••••" },
+        posts: [{ title: "Recent post", snippet: "••••••••••••••••••••••••", url: "#" }],
+        mentions: [],
+        all: [],
+      },
+      {
+        network: "linkedin",
+        label: "LinkedIn",
+        profile: { network: "linkedin", title: `${label}`, url: "#", snippet: "••••••••••••••••••" },
+        posts: [],
+        mentions: [{ title: "Mention", snippet: "••••••••••••••••", url: "#" }],
+        all: [],
+      },
+    ],
+    generatedAt: new Date().toISOString(),
+    disclaimer: "Preview only — sign in or get a quote to unlock live Social Checker results.",
+  };
+}
 
 export type SocialCheckerClientProps = {
   /** Signed in via VibeTech account. */
   signedIn: boolean;
   /** Signed in AND entitled (explicit social_background_screening package on a business). */
   entitled: boolean;
+  displayName?: string | null;
+  organizationName?: string | null;
+  organizationCode?: string | null;
 };
 
-export default function SocialCheckerClient({ signedIn, entitled }: SocialCheckerClientProps) {
+export default function SocialCheckerClient({
+  signedIn,
+  entitled,
+  displayName = null,
+  organizationName = null,
+  organizationCode = null,
+}: SocialCheckerClientProps) {
   const [name, setName] = useState("");
   const [handlesByPlatform, setHandlesByPlatform] = useState<Partial<Record<PlatformId, string>>>({});
   const [activePlatform, setActivePlatform] = useState<PlatformId | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<Report | null>(null);
+  const [showAuthPanel, setShowAuthPanel] = useState<"login" | "register" | "join" | null>(null);
   const resultsRef = useRef<HTMLElement | null>(null);
 
-  const canSearch = signedIn && entitled;
+  const canSearchLive = signedIn && entitled;
   const platforms = useMemo(() => report?.platforms ?? [], [report]);
   const hitCount = report?.profiles?.length ?? 0;
-  // Full report + PDF unlock only when social_background_screening is enabled.
   const resultsUnlocked = entitled;
+  const lockedPreview = Boolean(report) && !resultsUnlocked;
 
   useEffect(() => {
-    if (!report || resultsUnlocked) return;
+    if (!report) return;
     resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [report, resultsUnlocked]);
+  }, [report]);
   const filledHandles = useMemo(
     () => Object.entries(handlesByPlatform).filter(([, v]) => String(v ?? "").trim().length >= 2),
     [handlesByPlatform],
@@ -141,10 +183,13 @@ export default function SocialCheckerClient({ signedIn, entitled }: SocialChecke
 
   async function onSearch(e: FormEvent) {
     e.preventDefault();
-    if (!canSearch) return;
     setBusy(true);
     setError(null);
     try {
+      if (!canSearchLive) {
+        setReport(buildTeaserReport(name));
+        return;
+      }
       const payloadHandles: Record<string, string> = {};
       for (const [id, value] of Object.entries(handlesByPlatform)) {
         const h = String(value ?? "").trim().replace(/^@/, "");
@@ -191,7 +236,22 @@ export default function SocialCheckerClient({ signedIn, entitled }: SocialChecke
         <a href="https://vtechdevelopment.com" style={brandLink}>
           ← VibeTech Development
         </a>
-        <span style={badge}>Social Checker</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <span style={badge}>Social Checker</span>
+          {entitled && (displayName || organizationName) ? (
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
+              {[displayName, organizationName].filter(Boolean).join(" · ")}
+            </span>
+          ) : (
+            <>
+              <a href={SIGN_IN_URL} style={ghostBtnLink}>Log in</a>
+              <a href={GET_A_QUOTE_URL} style={primaryBtnLink}>Get a quote</a>
+              <button type="button" style={{ ...ghostBtnLink, cursor: "pointer", border: "1px solid #cbd5e1", background: "#fff" }} onClick={() => setShowAuthPanel("register")}>
+                Create org
+              </button>
+            </>
+          )}
+        </div>
       </header>
 
       <main style={main}>
@@ -206,11 +266,14 @@ export default function SocialCheckerClient({ signedIn, entitled }: SocialChecke
           Unrelated results are dropped so the report stays reliable.
         </p>
 
-        {!canSearch ? (
-          <AccessGate variant={signedIn ? "subscribe" : "signin"} />
+        {showAuthPanel ? (
+          <OrgAuthPanel
+            mode={showAuthPanel}
+            onClose={() => setShowAuthPanel(null)}
+            onMode={setShowAuthPanel}
+          />
         ) : null}
 
-        {canSearch ? (
         <form onSubmit={onSearch} style={form}>
           <label style={label}>
             Full name
@@ -319,13 +382,48 @@ export default function SocialCheckerClient({ signedIn, entitled }: SocialChecke
             </p>
           ) : null}
         </form>
-        ) : null}
 
         {error ? <p style={errorBox}>{error}</p> : null}
 
-        {report && resultsUnlocked ? (
-          <section ref={resultsRef} style={results} id="social-checker-results">
-            <div style={{ position: "relative", borderRadius: 20 }}>
+        {report ? (
+          <section ref={resultsRef} style={{ ...results, position: "relative" }} id="social-checker-results">
+            {lockedPreview ? (
+              <div style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 5,
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "center",
+                paddingTop: 24,
+                background: "linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.92))",
+                borderRadius: 20,
+              }}>
+                <div style={{
+                  ...paywallCard,
+                  margin: 0,
+                  maxWidth: 420,
+                  boxShadow: "0 16px 40px rgba(15,23,42,.18)",
+                }}>
+                  <p style={paywallKicker}>Results locked</p>
+                  <h3 style={paywallTitle}>Log in or get a quote to see the full report</h3>
+                  <p style={paywallBody}>
+                    Live Social Checker results and PDF download unlock with a Social Background Screening subscription.
+                  </p>
+                  <div style={paywallActions}>
+                    <a href={SIGN_IN_URL} style={primaryBtnLink}>Log in</a>
+                    <a href={GET_A_QUOTE_URL} style={ghostBtnLink}>Get a quote</a>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            <div style={{
+              position: "relative",
+              borderRadius: 20,
+              filter: lockedPreview ? "blur(7px)" : undefined,
+              userSelect: lockedPreview ? "none" : undefined,
+              pointerEvents: lockedPreview ? "none" : undefined,
+            }}>
               <div>
                 <div style={resultsHead}>
                   <div>
@@ -400,41 +498,125 @@ export default function SocialCheckerClient({ signedIn, entitled }: SocialChecke
   );
 }
 
-function AccessGate({ variant }: { variant: "signin" | "subscribe" }) {
-  const isSignin = variant === "signin";
-  return (
-    <div style={paywallCard} role="dialog" aria-modal="true" aria-labelledby="social-gate-title">
-      <p style={paywallKicker}>{isSignin ? "Sign in required" : "Access denied"}</p>
-      <h3 id="social-gate-title" style={paywallTitle}>
-        {isSignin ? "Sign in to run a search" : "Social Background Screening is not enabled"}
-      </h3>
-      <p style={paywallBody}>
-        {isSignin
-          ? "Social Checker is a VibeTech customer tool. Sign in with your account, or book a call to get set up."
-          : "Your account does not include the Social Background Screening package. An admin must enable it on your business, or book a call to subscribe."}
-      </p>
-      <div style={paywallActions}>
-        {isSignin ? (
-          <a href={SIGN_IN_URL} style={primaryBtnLink}>
-            Sign in
-          </a>
-        ) : (
-          <a href={BOOK_A_CALL_URL} style={primaryBtnLink}>
-            Book a call to subscribe
-          </a>
-        )}
-        {!isSignin ? (
-          <a href="https://app.vtechdevelopment.com" style={ghostBtnLink}>
-            Back to app
-          </a>
-        ) : (
-          <a href={BOOK_A_CALL_URL} style={ghostBtnLink}>
-            Book a call
-          </a>
-        )}
+function OrgAuthPanel({
+  mode,
+  onClose,
+  onMode,
+}: {
+  mode: "login" | "register" | "join";
+  onClose: () => void;
+  onMode: (m: "login" | "register" | "join") => void;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [company, setCompany] = useState("");
+  const [password, setPassword] = useState("");
+  const [orgCode, setOrgCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  if (mode === "login") {
+    return (
+      <div style={paywallCard}>
+        <p style={paywallKicker}>Account</p>
+        <h3 style={paywallTitle}>Log in</h3>
+        <p style={paywallBody}>Use your VibeTech account to unlock Social Checker for your organization.</p>
+        <div style={paywallActions}>
+          <a href={SIGN_IN_URL} style={primaryBtnLink}>Continue to log in</a>
+          <button type="button" style={ghostBtnLink} onClick={onClose}>Close</button>
+        </div>
+        <p style={{ ...paywallBody, marginTop: 12 }}>
+          New org?{" "}
+          <button type="button" style={{ background: "none", border: "none", color: "#0f766e", fontWeight: 700, cursor: "pointer" }} onClick={() => onMode("register")}>
+            Create organization
+          </button>
+          {" · "}
+          <button type="button" style={{ background: "none", border: "none", color: "#0f766e", fontWeight: 700, cursor: "pointer" }} onClick={() => onMode("join")}>
+            Join with org code
+          </button>
+        </p>
       </div>
-    </div>
+    );
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/social-checker/${mode === "register" ? "register" : "join"}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          companyName: company,
+          password,
+          organizationCode: orgCode,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error ?? "Could not complete signup");
+      }
+      setMessage(
+        mode === "register"
+          ? `Organization created. Your company code is ${data.organizationCode}. Share the invite link with your team.`
+          : "Joined organization. You can log in and search.",
+      );
+      if (data.loginUrl) {
+        window.setTimeout(() => {
+          window.location.href = data.loginUrl;
+        }, 1200);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Signup failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} style={{ ...paywallCard, display: "grid", gap: 10 }}>
+      <p style={paywallKicker}>{mode === "register" ? "Create organization" : "Join organization"}</p>
+      <h3 style={paywallTitle}>
+        {mode === "register" ? "Start Social Checker for your company" : "Join with an organization code"}
+      </h3>
+      <input style={input} placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required />
+      <input style={input} placeholder="Work email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+      <input style={input} placeholder="Company name" value={company} onChange={(e) => setCompany(e.target.value)} required />
+      <input style={input} placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+      {mode === "join" ? (
+        <input style={input} placeholder="Organization code" value={orgCode} onChange={(e) => setOrgCode(e.target.value)} required />
+      ) : null}
+      {error ? <p style={errorBox}>{error}</p> : null}
+      {message ? <p style={{ ...paywallBody, color: "#047857", fontWeight: 700 }}>{message}</p> : null}
+      <div style={paywallActions}>
+        <button type="submit" disabled={busy} style={{ ...primaryBtnLink, border: "none", cursor: "pointer" }}>
+          {busy ? "Saving…" : mode === "register" ? "Create org" : "Join org"}
+        </button>
+        <button type="button" style={ghostBtnLink} onClick={onClose}>Close</button>
+      </div>
+      <p style={paywallBody}>
+        {mode === "register" ? (
+          <button type="button" style={{ background: "none", border: "none", color: "#0f766e", fontWeight: 700, cursor: "pointer" }} onClick={() => onMode("join")}>
+            Have a code? Join instead
+          </button>
+        ) : (
+          <button type="button" style={{ background: "none", border: "none", color: "#0f766e", fontWeight: 700, cursor: "pointer" }} onClick={() => onMode("register")}>
+            Create a new organization
+          </button>
+        )}
+      </p>
+    </form>
   );
+}
+
+function AccessGate({ variant }: { variant: "signin" | "subscribe" }) {
+  void variant;
+  return null;
 }
 
 function PlatformSection({ platform }: { platform: Platform }) {

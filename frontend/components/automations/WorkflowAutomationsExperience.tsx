@@ -437,7 +437,7 @@ export default function WorkflowAutomationsExperience({
                 </button>
                 <div style={{ marginTop: 10 }}>
                   <SecondaryButton onClick={() => void runWorkflowNow(wf.id)} disabled={runningId === wf.id}>
-                    {runningId === wf.id ? "Running…" : "Run now"}
+                    {runningId === wf.id ? "Running…" : "Test workflow"}
                   </SecondaryButton>
                 </div>
               </VtCard>
@@ -552,23 +552,29 @@ export default function WorkflowAutomationsExperience({
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <PrimaryButton onClick={() => void saveDraft()} disabled={busy}>Save</PrimaryButton>
-                <SecondaryButton onClick={() => void testRun()} disabled={busy}>Test run</SecondaryButton>
+                <SecondaryButton onClick={() => void testRun()} disabled={busy}>Test workflow</SecondaryButton>
                 <SecondaryButton onClick={() => void removeWorkflow(draft.id)} disabled={busy}>Delete</SecondaryButton>
               </div>
 
               {testLog ? (
-                <pre style={{
-                  margin: 0,
-                  padding: 12,
-                  borderRadius: 10,
-                  background: "#0f172a",
-                  color: "#e2e8f0",
-                  fontSize: 12,
-                  whiteSpace: "pre-wrap",
-                }}
-                >
-                  {testLog}
-                </pre>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13 }}>Execution log</div>
+                  <pre style={{
+                    margin: 0,
+                    padding: 12,
+                    borderRadius: 10,
+                    background: "#0f172a",
+                    color: "#e2e8f0",
+                    fontSize: 12,
+                    whiteSpace: "pre-wrap",
+                  }}
+                  >
+                    {testLog}
+                  </pre>
+                  <div style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.45 }}>
+                    Check People, Needs Attention, and Inbox for drafts or pipeline changes from this Test Lead.
+                  </div>
+                </div>
               ) : null}
             </div>
           )}

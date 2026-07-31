@@ -20,6 +20,12 @@ export function isPublicPath(pathname: string): boolean {
   if (pathname === "/social-checker" || pathname.startsWith("/social-checker/")) {
     return true;
   }
+  if (
+    pathname === "/api/social-checker/register"
+    || pathname === "/api/social-checker/join"
+  ) {
+    return true;
+  }
   // The search API itself requires auth + entitlement — checked in-route
   // (frontend/app/api/social-checker/search/route.ts) so it can return a
   // tailored 401/403 payload. NOT listed as public here on purpose.

@@ -9,6 +9,9 @@ Use these files on Hostinger:
 | `index.with-roi.html` → upload as `index.html` | Homepage + Social Checker section + ROI |
 | `roi-qualifier.css` | Styles for Social Checker + ROI widget |
 | `roi-qualifier.js` | 3 questions → rate-card package + industry-avg ROI math |
+| `privacy.html` + `terms.html` + `legal.css` | Privacy Policy & Terms (A2P / product coverage) — also link from footer |
+
+Public URLs after upload: `https://vtechdevelopment.com/privacy.html` (or rewrite to `/privacy`) and `/terms.html`.
 
 ## Behavior
 

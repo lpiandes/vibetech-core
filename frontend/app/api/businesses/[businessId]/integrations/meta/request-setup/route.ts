@@ -21,6 +21,11 @@ import {
   resolveOpsFromCandidates,
   parseResendAllowedRecipient,
 } from "../../../../../../../../backend/core/platform/delivery/createInvitationDeliveryProvider.js";
+import {
+  buildOpsPlaybook,
+  formatOpsPlaybookEmail,
+  playbookToOperatorAction,
+} from "../../../../../../../../backend/core/admin/opsPlaybooks/OpsPlaybookRegistry.js";
 
 async function sendResendEmail({
   apiKey,
@@ -92,38 +97,33 @@ export async function POST(
     const integrationsHref = `${origin}/b/${encodeURIComponent(businessId)}/integrations`;
     const adminHref = `/admin/businesses/${encodeURIComponent(businessId)}`;
     const requestedAt = new Date().toISOString();
-
-    const connectSteps = [
-      "In Meta Developers → Graph API Explorer (VIBETech app): generate a User token with pages_show_list, pages_read_engagement, leads_retrieval, pages_manage_metadata.",
-      "GET /me/accounts → copy Page id + Page access_token for that Page.",
-      `POST ${origin}/api/businesses/${encodeURIComponent(businessId)}/integrations/meta with { pageId, pageAccessToken } (ops only — never ask the client to do this).`,
-      `Confirm leadgen Page subscribe + Webhooks callback: ${webhookUrl} (verify token = META_LEAD_VERIFY_TOKEN).`,
-      "Send a test lead → People + META_LEAD drafts.",
-      `Confirm Integrations shows connected: ${integrationsHref}`,
-    ];
-
-    const steps = needEverything
-      ? [
-          `Open business “${businessName}” (${businessId}) in Admin / Support access.`,
-          "Client has NO Facebook Page / Lead Ads yet — white-glove from scratch.",
-          "Schedule a short call or gather: who owns the Facebook login, business website, privacy policy URL, service area, offer.",
-          "Create/claim a Facebook Page for the business (or guide them while on a call).",
-          "In Ads Manager: create a Leads campaign → Instant Form collecting name, email, phone + privacy policy URL.",
-          "Publish a small test Lead Ad (even $5–$20/day) so a real leadgen event can fire.",
-          ...connectSteps,
-        ]
-      : [
-          `Open business “${businessName}” (${businessId}) in Admin / Support access.`,
-          pageName || pageUrl
-            ? `Locate Facebook Page${pageName ? `: “${pageName}”` : ""}${pageUrl ? ` — ${pageUrl}` : ""}.`
-            : "Ask the owner which Facebook Page runs their Lead Ads (they did not provide a name/URL).",
-          "Confirm a Lead Form exists; if not, create Instant Form + small test ad.",
-          ...connectSteps,
-        ];
+    const industry = String(
+      business?.packageConfiguration?.industry
+      ?? business?.industry
+      ?? body.industry
+      ?? "",
+    ).trim();
+    const playbookId = needEverything ? "meta_lead_create_from_scratch" : "meta_lead_connect_existing";
+    const playbook = buildOpsPlaybook(playbookId, {
+      origin,
+      businessId,
+      businessName,
+      pageName,
+      pageUrl,
+      webhookUrl,
+      integrationsHref,
+      adminHref,
+      industry,
+      offer: String(body.offer ?? notes ?? "").trim(),
+      geo: String(body.geo ?? "").trim(),
+      website: String(body.website ?? business?.website ?? "").trim(),
+    });
+    const steps = playbook.steps;
 
     const opsRequest = {
       status: "pending_ops",
-      kind: needEverything ? "meta_lead_setup_from_scratch" : "meta_lead_setup",
+      kind: playbook.id,
+      playbookId: playbook.id,
       requestedAt,
       requestedBy: requestedBy || null,
       needEverything,
@@ -133,6 +133,8 @@ export async function POST(
       webhookUrl,
       integrationsHref,
       steps,
+      creativeBrief: playbook.creativeBrief ?? null,
+      verifyChecklist: playbook.verifyChecklist ?? [],
     };
 
     // Persist so Home Mission 6 flips to Pending even if email fails.
@@ -185,41 +187,29 @@ export async function POST(
       /* non-blocking */
     }
 
-    const action = {
-      id: `meta_lead_setup:${businessId}:${Date.now()}`,
-      kind: opsRequest.kind,
-      urgency: "high",
-      title: needEverything
-        ? `Build + connect Meta Lead Forms — ${businessName}`
-        : `Connect Meta Lead Forms — ${businessName}`,
-      summary: [
-        needEverything
-          ? "Client has no Facebook Page / Lead Ads yet — build from scratch, then connect (no Graph API for them)."
-          : "Client requested white-glove Meta Lead Forms setup (no Graph API work for them).",
-        requestedBy ? `Requested by: ${requestedBy}` : null,
-        pageName ? `Page name: ${pageName}` : null,
-        pageUrl ? `Page URL: ${pageUrl}` : null,
-        notes ? `Notes: ${notes}` : null,
-      ].filter(Boolean).join(" "),
+    const action = playbookToOperatorAction(playbook, {
       businessId,
       businessName,
       href: adminHref,
-      steps,
       payload: opsRequest,
-      createdAt: requestedAt,
-    };
+    });
+    action.summary = [
+      playbook.when,
+      requestedBy ? `Requested by: ${requestedBy}` : null,
+      pageName ? `Page name: ${pageName}` : null,
+      pageUrl ? `Page URL: ${pageUrl}` : null,
+      notes ? `Notes: ${notes}` : null,
+    ].filter(Boolean).join(" ");
 
     const subject = `[VIBETech] Meta Lead Forms setup — ${businessName}`;
-    const text = [
-      action.title,
-      action.summary,
-      "",
-      "Steps:",
-      ...steps.map((step, i) => `  ${i + 1}. ${step}`),
-      "",
-      `Admin: ${origin}${adminHref}`,
-      `Integrations: ${integrationsHref}`,
-    ].join("\n");
+    const text = formatOpsPlaybookEmail(playbook, {
+      summary: action.summary,
+      extraLines: [
+        "",
+        `Admin: ${origin}${adminHref}`,
+        `Integrations: ${integrationsHref}`,
+      ],
+    });
 
     const apiKey = String(process.env.RESEND_API_KEY ?? "").trim();
     const recipients = [

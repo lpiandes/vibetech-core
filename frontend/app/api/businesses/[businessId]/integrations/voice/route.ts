@@ -5,6 +5,13 @@ import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
 import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
 import { putDurableCredential } from "../../../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
+import {
+  notifyPlatformOperators,
+} from "../../../../../../../backend/core/admin/notifyPlatformOperators.js";
+import {
+  buildOpsPlaybook,
+  playbookToOperatorAction,
+} from "../../../../../../../backend/core/admin/opsPlaybooks/OpsPlaybookRegistry.js";
 
 export async function POST(
   request: Request,
@@ -53,6 +60,27 @@ export async function POST(
       fromNumber,
       platformActiveKnowledgeCount: knowledgeCount,
     });
+
+    try {
+      const business = await platformStore.getBusinessById(businessId).catch(() => null);
+      const businessName = String(business?.name ?? businessId);
+      const adminHref = `/admin/businesses/${encodeURIComponent(businessId)}`;
+      const integrationsHref = `${origin}/b/${encodeURIComponent(businessId)}/integrations?focus=voice_channel`;
+      const playbook = buildOpsPlaybook("twilio_voice_connect", {
+        origin,
+        businessId,
+        businessName,
+        integrationsHref,
+        adminHref,
+      });
+      await notifyPlatformOperators({
+        actions: [playbookToOperatorAction(playbook, { businessId, businessName, href: adminHref })],
+        force: true,
+        fallbackDefaultEmail: true,
+      });
+    } catch {
+      /* non-blocking */
+    }
 
     return NextResponse.json({
       ok: true,

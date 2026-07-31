@@ -78,8 +78,8 @@ export default function IntegrationSetupDialog({
     messageSample1: "",
     messageSample2: "",
     messageFlow: "",
-    privacyPolicyUrl: "",
-    termsUrl: "",
+    privacyPolicyUrl: "https://vtechdevelopment.com/privacy",
+    termsUrl: "https://vtechdevelopment.com/terms",
   });
   const [provisionResult, setProvisionResult] = useState<{
     fromNumber?: string;

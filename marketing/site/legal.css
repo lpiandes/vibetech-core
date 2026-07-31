@@ -1,0 +1,80 @@
+/* Shared legal pages for Hostinger upload */
+:root {
+  --bg: #0b1220;
+  --panel: #111827;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --accent: #2dd4bf;
+  --link: #5eead4;
+  --border: rgba(148, 163, 184, 0.22);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "DM Sans", system-ui, sans-serif;
+  background: radial-gradient(1200px 600px at 10% -10%, #134e4a 0%, transparent 55%), var(--bg);
+  color: var(--text);
+  line-height: 1.65;
+}
+a { color: var(--link); }
+.legal-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 28px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(17, 24, 39, 0.85);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.legal-top .brand {
+  font-family: Outfit, sans-serif;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: none;
+}
+.legal-top nav { display: flex; gap: 14px; flex-wrap: wrap; }
+.legal-top nav a { text-decoration: none; color: var(--muted); font-weight: 600; font-size: 14px; }
+.legal-top nav a[aria-current="page"] { color: var(--accent); }
+.legal-main {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 40px 24px 72px;
+}
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0 0 8px;
+}
+h1 {
+  font-family: Outfit, sans-serif;
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  line-height: 1.15;
+  margin: 0 0 8px;
+}
+.meta { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+.lede { font-size: 1.05rem; color: #d1d5db; }
+h2 {
+  font-family: Outfit, sans-serif;
+  font-size: 1.2rem;
+  margin: 2rem 0 0.6rem;
+  color: #fff;
+}
+ul { padding-left: 1.2rem; }
+li { margin: 0.35rem 0; }
+.legal-foot {
+  border-top: 1px solid var(--border);
+  padding: 20px 24px 36px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+@media (max-width: 640px) {
+  .legal-top { flex-direction: column; align-items: flex-start; }
+}

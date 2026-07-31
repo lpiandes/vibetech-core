@@ -332,15 +332,45 @@ async function findExistingSmsCredential(businessId: string) {
   };
 }
 
-async function notifyA2pOperatorAction(businessId: string) {
+async function notifyA2pOperatorAction(businessId: string, extras: {
+  fromNumber?: string;
+  a2pStatus?: string;
+  origin?: string;
+} = {}) {
   try {
-    const business = await platformStore.getBusiness?.(businessId).catch?.(() => null)
+    const business = await platformStore.getBusinessById?.(businessId).catch?.(() => null)
+      ?? await platformStore.getBusiness?.(businessId).catch?.(() => null)
       ?? null;
-    const actions = await buildOperatorActions({
-      businesses: [{ id: businessId, name: business?.name ?? businessId }],
-      listCredentials: (id) => platformStore.listIntegrationCredentialsForWorkspace(id),
+    const origin = extras.origin || process.env.APP_URL || "https://app.vtechdevelopment.com";
+    const businessName = String(business?.name ?? businessId);
+    const adminHref = `/admin/businesses/${encodeURIComponent(businessId)}`;
+    const integrationsHref = `${origin}/b/${encodeURIComponent(businessId)}/integrations?focus=sms_channel`;
+    const { buildOpsPlaybook, playbookToOperatorAction } = await import(
+      "../../../../../../../../backend/core/admin/opsPlaybooks/OpsPlaybookRegistry.js"
+    );
+    const playbook = buildOpsPlaybook("twilio_sms_provision", {
+      origin,
+      businessId,
+      businessName,
+      integrationsHref,
+      adminHref,
+      fromNumber: extras.fromNumber ?? "",
+      a2pStatus: extras.a2pStatus ?? "",
     });
-    await notifyPlatformOperators({ actions, force: true });
+    const action = playbookToOperatorAction(playbook, {
+      businessId,
+      businessName,
+      href: adminHref,
+    });
+    const legacy = await buildOperatorActions({
+      businesses: [{ id: businessId, name: businessName }],
+      listCredentials: (id: string) => platformStore.listIntegrationCredentialsForWorkspace(id),
+    }).catch(() => []);
+    await notifyPlatformOperators({
+      actions: [action, ...(Array.isArray(legacy) ? legacy : [])],
+      force: true,
+      fallbackDefaultEmail: true,
+    });
   } catch {
     /* never block provision */
   }

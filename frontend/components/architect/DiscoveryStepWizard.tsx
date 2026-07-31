@@ -84,7 +84,8 @@ export default function DiscoveryStepWizard({
   onAnswer,
   onFinish,
   packageAsk = false,
-}: Props) {
+  persistKey = null,
+}: Props & { persistKey?: string | null }) {
   const steps = buildDiscoverySteps(answers, nextQuestion);
   const [stepIndex, setStepIndex] = useState(() => Math.max(0, steps.length - 1));
   const [draft, setDraft] = useState("");
@@ -97,6 +98,9 @@ export default function DiscoveryStepWizard({
   // Never re-render the last answered step as a "new Question 1" — answered
   // rows are rebuilt from the generic bank and lose package-Ask specialization.
   const step = discoveryComplete ? null : (steps[safeIndex] ?? null);
+  const draftStorageKey = persistKey && step?.questionId
+    ? `vt.builder.draft.${persistKey}.${step.questionId}`
+    : null;
   const askingWebsite = step?.questionId === "q_website";
   const askingDocuments = step?.questionId === "q_documents";
   const isChoice = step?.answerType === "choice";
@@ -123,6 +127,37 @@ export default function DiscoveryStepWizard({
     setStepIndex(Math.max(0, steps.length - 1));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the unanswered question changes
   }, [nextQuestion?.questionId]);
+
+  // Restore unsaved draft when returning to the same question (tab close / refresh).
+  useEffect(() => {
+    if (!draftStorageKey || typeof window === "undefined") return;
+    try {
+      const saved = window.localStorage.getItem(draftStorageKey);
+      if (saved && !step?.answer) setDraft(saved);
+    } catch {
+      /* ignore */
+    }
+  }, [draftStorageKey, step?.answer]);
+
+  useEffect(() => {
+    if (!draftStorageKey || typeof window === "undefined") return;
+    const persist = () => {
+      try {
+        if (draft.trim()) window.localStorage.setItem(draftStorageKey, draft);
+        else window.localStorage.removeItem(draftStorageKey);
+      } catch {
+        /* ignore */
+      }
+    };
+    persist();
+    const onHide = () => persist();
+    window.addEventListener("pagehide", onHide);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      document.removeEventListener("visibilitychange", onHide);
+    };
+  }, [draft, draftStorageKey]);
 
   // Package-Ask: once there is nothing left to ask, finish without forcing another Save click
   // on a stale generic bank question.

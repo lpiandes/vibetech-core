@@ -1,0 +1,329 @@
+/**
+ * Locked ops playbooks for white-glove handoffs.
+ * Every connector request should render steps from here — no ad-hoc email copy.
+ */
+
+function safe(v) {
+  return v == null ? "" : String(v).trim();
+}
+
+function fill(template, vars = {}) {
+  return String(template ?? "").replace(/\{\{(\w+)\}\}/g, (_, key) => safe(vars[key]) || `(${key})`);
+}
+
+/** Industry creative briefs for Meta Lead Ads (paste-ready). */
+export function buildMetaCreativeBrief({
+  industry = "",
+  businessName = "",
+  offer = "",
+  geo = "",
+  website = "",
+} = {}) {
+  const name = safe(businessName) || "the business";
+  const ind = safe(industry).toLowerCase() || "generic";
+  const offerLine = safe(offer) || "your primary offer";
+  const area = safe(geo) || "your service area";
+  const site = safe(website) || "your website";
+
+  const byIndustry = {
+    sports: {
+      headline: `${name}: register for the season`,
+      primaryText: `Spots fill fast. Get schedule, pricing, and next steps for ${offerLine} in ${area}. Reply or submit the form — a coach will follow up.`,
+      imagePrompt: `Photoreal sports action photo, youth or adult athletes training, energetic lighting, jersey colors, clean negative space for text overlay "${name}", no logos of real teams, 1080x1080`,
+      videoScript: [
+        "0–2s: Athlete in motion + logo slate",
+        `2–6s: On-screen: ${offerLine} — ${area}`,
+        "6–10s: Parents/athletes smiling; CTA “Get details”",
+        "10–15s: End card with Lead Form CTA",
+      ],
+    },
+    dental: {
+      headline: `${name}: book your visit`,
+      primaryText: `New patients welcome. ${offerLine} in ${area}. Fast form — we’ll confirm by text or call. No spam.`,
+      imagePrompt: `Bright modern dental office, friendly hygienist silhouette (no faces identifiable), soft teal accents, overlay space for "${name}", 1080x1080`,
+      videoScript: [
+        "0–3s: Smile / clean office B-roll",
+        `3–8s: Text: ${offerLine}`,
+        "8–12s: “Takes 30 seconds to request a time”",
+        "12–15s: Lead Form CTA",
+      ],
+    },
+    wellness: {
+      headline: `${name}: feel better sooner`,
+      primaryText: `${offerLine} for clients in ${area}. Tell us your goals — we’ll reach out with next steps.`,
+      imagePrompt: `Calm wellness studio, natural light, mobility/therapy vibe, brandable space for "${name}", 1080x1080`,
+      videoScript: [
+        "0–3s: Calm movement / stretch",
+        `3–8s: ${offerLine}`,
+        "8–12s: Soft CTA to Instant Form",
+        "12–15s: Logo + Lead Form",
+      ],
+    },
+    generic: {
+      headline: `${name}: get started today`,
+      primaryText: `Interested in ${offerLine}? Serving ${area}. Submit the short form and we’ll follow up quickly.`,
+      imagePrompt: `Professional local business hero image for "${name}", clean modern branding, space for headline text, 1080x1080`,
+      videoScript: [
+        "0–3s: Business intro slate",
+        `3–8s: ${offerLine} · ${area}`,
+        "8–12s: Social proof / trust line",
+        "12–15s: Lead Form CTA",
+      ],
+    },
+  };
+
+  const key = ind.includes("sport") || ind.includes("hockey") || ind.includes("soccer")
+    ? "sports"
+    : ind.includes("dental") || ind.includes("ortho")
+      ? "dental"
+      : ind.includes("well") || ind.includes("physio") || ind.includes("mobility") || ind.includes("therapy")
+        ? "wellness"
+        : "generic";
+
+  const brief = byIndustry[key];
+  return {
+    industryKey: key,
+    businessName: name,
+    website: site,
+    headline: brief.headline,
+    primaryText: brief.primaryText,
+    imagePrompt: brief.imagePrompt,
+    videoScript: brief.videoScript,
+    canvaTips: [
+      "Square 1080×1080 for Feed; 1080×1920 for Stories/Reels.",
+      "Keep text under ~20% of image; put detail in primary text.",
+      "End card must include clear Lead Form CTA.",
+    ],
+  };
+}
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   title: string,
+ *   when: string,
+ *   prerequisites?: string[],
+ *   steps: string[],
+ *   verifyChecklist?: string[],
+ *   creativeBrief?: Record<string, unknown> | null,
+ * }} OpsPlaybook
+ */
+
+const PLAYBOOK_BUILDERS = {
+  meta_lead_connect_existing({ origin, businessId, businessName, pageName, pageUrl, webhookUrl, integrationsHref, adminHref }) {
+    const name = safe(businessName) || businessId;
+    return {
+      id: "meta_lead_connect_existing",
+      title: `Connect existing Meta Lead Forms — ${name}`,
+      when: "Client already has a Facebook Page / Lead Ads and requested VIBETech connect.",
+      prerequisites: [
+        pageName || pageUrl
+          ? `Page: ${[pageName, pageUrl].filter(Boolean).join(" — ")}`
+          : "Confirm which Facebook Page runs Lead Ads with the owner.",
+        "You have access to Meta Developers (VIBETech app) and Ads Manager.",
+      ],
+      steps: [
+        `Open Admin for “${name}”: ${origin}${adminHref}`,
+        "Use Support access if you need owner-level integrations.",
+        "Confirm a Lead Form exists on that Page (Instant Form with name, email, phone + privacy policy URL).",
+        "Meta Developers → Graph API Explorer (VIBETech app): User token with pages_show_list, pages_read_engagement, leads_retrieval, pages_manage_metadata.",
+        "GET /me/accounts → copy Page id + page access_token for the correct Page.",
+        `POST ${origin}/api/businesses/${encodeURIComponent(businessId)}/integrations/meta with JSON { "pageId": "...", "pageAccessToken": "..." } (ops only — never ask the client).`,
+        `Confirm Page subscribed to leadgen + Webhooks callback ${webhookUrl} (verify token = META_LEAD_VERIFY_TOKEN env).`,
+        "Send a test lead from Meta → People + META_LEAD automation drafts.",
+        `Confirm Integrations shows connected: ${integrationsHref}`,
+      ],
+      verifyChecklist: [
+        "Test lead appears in People",
+        "META_LEAD automation created a draft (approval-gated)",
+        "Integrations → Meta Lead Forms = Connected",
+      ],
+      creativeBrief: null,
+    };
+  },
+
+  meta_lead_create_from_scratch({
+    origin, businessId, businessName, webhookUrl, integrationsHref, adminHref, industry, offer, geo, website,
+  }) {
+    const name = safe(businessName) || businessId;
+    const creativeBrief = buildMetaCreativeBrief({
+      industry, businessName: name, offer, geo, website,
+    });
+    return {
+      id: "meta_lead_create_from_scratch",
+      title: `Build + connect Meta Lead Forms — ${name}`,
+      when: "Client has NO Facebook Page / Lead Ads — white-glove from scratch, then connect.",
+      prerequisites: [
+        "Schedule a short call or gather: Facebook login owner, website, privacy policy URL, service area, offer.",
+        `Privacy policy for ads: ${website ? `${website}/privacy` : "https://vtechdevelopment.com/privacy"} (or client site).`,
+      ],
+      steps: [
+        `Open Admin for “${name}”: ${origin}${adminHref}`,
+        "Create/claim a Facebook Page for the business (or guide them on a call).",
+        "Ads Manager → Leads campaign → Instant Form (name, email, phone + privacy policy URL).",
+        "Publish a small test Lead Ad ($5–$20/day) so a real leadgen event can fire.",
+        "CREATIVE — Headline: " + creativeBrief.headline,
+        "CREATIVE — Primary text: " + creativeBrief.primaryText,
+        "CREATIVE — Image prompt (Canva/AI): " + creativeBrief.imagePrompt,
+        "CREATIVE — Video outline: " + creativeBrief.videoScript.join(" | "),
+        "Meta Developers → Graph API Explorer (VIBETech app): User token with pages_show_list, pages_read_engagement, leads_retrieval, pages_manage_metadata.",
+        "GET /me/accounts → copy Page id + page access_token.",
+        `POST ${origin}/api/businesses/${encodeURIComponent(businessId)}/integrations/meta with { pageId, pageAccessToken } (ops only).`,
+        `Webhooks: ${webhookUrl} (META_LEAD_VERIFY_TOKEN).`,
+        "Send a test lead → People + META_LEAD drafts.",
+        `Confirm connected: ${integrationsHref}`,
+      ],
+      verifyChecklist: [
+        "Page + Lead Form live",
+        "Test ad can generate a lead",
+        "Platform connection Connected",
+        "Test lead ingested",
+      ],
+      creativeBrief,
+    };
+  },
+
+  twilio_sms_provision({ origin, businessId, businessName, integrationsHref, adminHref, fromNumber, a2pStatus }) {
+    const name = safe(businessName) || businessId;
+    return {
+      id: "twilio_sms_provision",
+      title: `Finish SMS / A2P for — ${name}`,
+      when: "Client requested or triggered SMS setup; ops must finish Twilio + platform connect.",
+      prerequisites: [
+        "TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN set on the server (or per-business vault).",
+        "Legal business name, address, EIN ready for Trust Hub / Brand.",
+      ],
+      steps: [
+        `Open Admin: ${origin}${adminHref}`,
+        `Integrations focus SMS: ${integrationsHref}`,
+        fromNumber
+          ? `Number already provisioned: ${fromNumber}. Confirm inbound webhook points at VIBETech SMS webhook.`
+          : "In-app SMS setup should buy a number (preferred). If Console: Buy a number → set Messaging webhook to VIBETech inbound SMS URL.",
+        "Trust Hub / A2P: create Customer Profile + Brand with legal name + EIN matching IRS records.",
+        "Campaign: Low Volume Mixed or Standard; sample messages include STOP / HELP; link Privacy + Terms (https://vtechdevelopment.com/privacy , https://vtechdevelopment.com/terms).",
+        `If credentials were set in Console only: POST secrets via Integrations or durable credential for twilio_sms on business ${businessId}.`,
+        "Launch Center → Send test text to the owner phone → confirm delivery.",
+        a2pStatus ? `Current A2P status: ${a2pStatus}. Re-check Twilio Console if pending/rejected.` : "Monitor A2P until approved (US delivery may wait).",
+      ],
+      verifyChecklist: [
+        "fromNumber present on SMS credential",
+        "Test SMS received",
+        "A2P not failed/rejected",
+      ],
+      creativeBrief: null,
+    };
+  },
+
+  twilio_voice_connect({ origin, businessId, businessName, integrationsHref, adminHref }) {
+    const name = safe(businessName) || businessId;
+    return {
+      id: "twilio_voice_connect",
+      title: `Connect Twilio Voice — ${name}`,
+      when: "Client requested AI phone / voice connect.",
+      prerequisites: [
+        "Twilio account with Voice capable number",
+        "TwiML / webhook URL for VIBETech voice (or Studio flow pointing at platform)",
+      ],
+      steps: [
+        `Open Admin: ${origin}${adminHref}`,
+        `Integrations → Voice: ${integrationsHref}`,
+        "Buy or select a Voice number in Twilio Console (or reuse SMS number if voice-enabled).",
+        "Set Voice webhook to the VIBETech voice inbound URL for this business (see Integrations after connect).",
+        `Save Account SID, Auth Token, fromNumber, twimlUrl via Integrations Voice connect (or POST durable credential) for business ${businessId}.`,
+        "Launch Center → Prove voice (test call) with Knowledge loaded.",
+        "Confirm outbound customer calls remain approval-gated.",
+      ],
+      verifyChecklist: [
+        "Voice connection Connected",
+        "Test call places successfully",
+        "Knowledge-backed receptionist responds",
+      ],
+      creativeBrief: null,
+    };
+  },
+};
+
+export function listOpsPlaybookIds() {
+  return Object.keys(PLAYBOOK_BUILDERS);
+}
+
+/**
+ * Build a locked playbook by id with runtime vars.
+ * @returns {OpsPlaybook}
+ */
+export function buildOpsPlaybook(playbookId, vars = {}) {
+  const builder = PLAYBOOK_BUILDERS[playbookId];
+  if (!builder) {
+    throw new Error(`Unknown ops playbook: ${playbookId}`);
+  }
+  const playbook = builder(vars);
+  return {
+    ...playbook,
+    steps: (playbook.steps ?? []).map((s) => fill(s, vars)),
+    prerequisites: (playbook.prerequisites ?? []).map((s) => fill(s, vars)),
+    verifyChecklist: (playbook.verifyChecklist ?? []).map((s) => fill(s, vars)),
+  };
+}
+
+/** Format playbook into plain-text email body. */
+export function formatOpsPlaybookEmail(playbook, { summary = "", extraLines = [] } = {}) {
+  const lines = [
+    playbook.title,
+    playbook.when,
+    summary ? "" : null,
+    summary || null,
+    "",
+    "Prerequisites:",
+    ...(playbook.prerequisites ?? []).map((s, i) => `  ${i + 1}. ${s}`),
+    "",
+    "Steps:",
+    ...(playbook.steps ?? []).map((s, i) => `  ${i + 1}. ${s}`),
+    "",
+    "Verify:",
+    ...(playbook.verifyChecklist ?? []).map((s, i) => `  ${i + 1}. ${s}`),
+  ].filter((x) => x != null);
+
+  if (playbook.creativeBrief) {
+    const c = playbook.creativeBrief;
+    lines.push(
+      "",
+      "Creative brief (locked):",
+      `  Headline: ${c.headline}`,
+      `  Primary text: ${c.primaryText}`,
+      `  Image prompt: ${c.imagePrompt}`,
+      `  Video: ${(c.videoScript ?? []).join(" / ")}`,
+      ...(c.canvaTips ?? []).map((t) => `  Tip: ${t}`),
+    );
+  }
+
+  for (const line of extraLines) lines.push(line);
+  return lines.join("\n");
+}
+
+export function playbookToOperatorAction(playbook, {
+  businessId,
+  businessName,
+  href,
+  urgency = "high",
+  payload = {},
+} = {}) {
+  return {
+    id: `${playbook.id}:${businessId}:${Date.now()}`,
+    kind: playbook.id,
+    urgency,
+    title: playbook.title,
+    summary: playbook.when,
+    businessId,
+    businessName,
+    href,
+    steps: playbook.steps,
+    payload: {
+      playbookId: playbook.id,
+      prerequisites: playbook.prerequisites,
+      verifyChecklist: playbook.verifyChecklist,
+      creativeBrief: playbook.creativeBrief ?? null,
+      ...payload,
+    },
+    createdAt: new Date().toISOString(),
+  };
+}

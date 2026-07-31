@@ -673,6 +673,7 @@ export default function ArchitectWorkspace({
                 setDragOver={setDragOver}
                 onAnswer={answerDiscovery}
                 packageAsk={packageAsk}
+                persistKey={sessionId}
                 onFinish={() => {
                   if (packageAsk) {
                     void finishPackageAskIfReady(true);

@@ -104,17 +104,21 @@ export async function POST(
       const id = String(body.workflowId || body.id || "");
       const wf = state.workflows.find((w: any) => String(w.id) === id);
       if (!wf) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+      const source = String(body.source || body.payload?.source || "manual_test").trim() || "manual_test";
+      const contact = body.contact || body.payload?.contact || {
+        name: source === "meta" ? "Meta Test Lead" : source === "form" ? "Form Test Lead" : "Test Lead",
+        email: "test@example.com",
+        phone: "+15555550100",
+        kind: "lead",
+        tags: ["test", source],
+      };
       const result = await runSingleWorkflow({
         workflow: { ...wf, status: "live" },
         payload: body.payload || {
-          eventType: wf.trigger?.eventType,
-          contact: body.contact || {
-            name: "Test Lead",
-            email: "test@example.com",
-            kind: "lead",
-            tags: ["test"],
-          },
-          source: "manual_test",
+          eventType: wf.trigger?.eventType || (source === "meta" ? "META_LEAD" : source === "form" ? "FORM_SUBMIT" : "MANUAL_RUN"),
+          contact,
+          source,
+          testWorkflow: true,
         },
         env: {
           platformStore,
@@ -123,7 +127,23 @@ export async function POST(
           workRuntime: (ctx.service as any)?.workRuntime ?? null,
         },
       });
-      return NextResponse.json({ ok: true, result });
+      const log = Array.isArray(result?.log) ? result.log : [];
+      return NextResponse.json({
+        ok: true,
+        result: {
+          ...result,
+          log: log.length
+            ? log
+            : [
+                { type: "trigger", passed: true, detail: `Synthetic ${source} payload injected` },
+                { type: "complete", ok: result?.ok !== false, detail: "Workflow finished" },
+              ],
+          artifacts: {
+            peopleHref: `/b/${encodeURIComponent(businessId)}/crm/contacts`,
+            needsAttentionHref: `/b/${encodeURIComponent(businessId)}/needs-attention`,
+          },
+        },
+      });
     }
 
     if (body.action === "fire_event") {

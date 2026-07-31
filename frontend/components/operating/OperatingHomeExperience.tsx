@@ -15,6 +15,7 @@ import {
   buildCuratedLaunchMissions,
   resolveLaunchVertical,
 } from "../../../backend/core/platform/launch/buildCuratedLaunchMissions.js";
+import { businessGrantsSocialCheckerAccess } from "../../../backend/core/platform/packages/socialCheckerEntitlement.js";
 import { presentLaunchPathLabel, resolveCanonicalNavIdsForPackages } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
 import { presentTeammateHomeGlance } from "../../../backend/core/operating-home/presentTeammateHomeGlance.js";
 import {
@@ -169,9 +170,31 @@ export default function OperatingHomeExperience() {
   const showSetupFirst = setupIncomplete && homeView !== "dashboard";
 
   if (showSetupFirst) {
+    const showSocialLink = businessGrantsSocialCheckerAccess(scope?.purchasedPackages ?? []);
     return (
       <HomeCanvas>
         <HomeHero greeting={greeting} />
+        {showSocialLink ? (
+          <a
+            href="https://social.vtechdevelopment.com/"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 12,
+              padding: "10px 14px",
+              borderRadius: 12,
+              background: "rgba(15,118,110,.08)",
+              border: "1px solid rgba(15,118,110,.22)",
+              color: cockpitColors.accent,
+              fontWeight: 750,
+              fontSize: 14,
+              textDecoration: "none",
+            }}
+          >
+            Open Social Checker →
+          </a>
+        ) : null}
         <HomeViewToggle
           mode="setup"
           remainingSetup={remainingSetup}

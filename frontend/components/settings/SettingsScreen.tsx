@@ -1,14 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { ChevronRight } from "lucide-react";
 
 import PrimaryButton from "@/components/product/PrimaryButton";
+import SecondaryButton from "@/components/product/SecondaryButton";
 import { cockpitColors, spacing } from "@/design/tokens";
 import { settingsHubLinks, type SetupChecklistItem } from "./settingsSemantics";
 import AccessRequestsPanel from "./AccessRequestsPanel";
 import BillingUsagePanel from "./BillingUsagePanel";
+import { businessGrantsSocialCheckerAccess } from "../../../backend/core/platform/packages/socialCheckerEntitlement.js";
 
 /**
  * Settings = who you are + a few doors. Setup lives on Home.
@@ -36,7 +40,34 @@ export default function SettingsScreen({
   setupChecklist?: SetupChecklistItem[];
   checklistComplete?: boolean;
 }) {
+  const router = useRouter();
+  const [restartingTour, setRestartingTour] = useState(false);
   const hubLinks = settingsHubLinks({ businessId, canManageTeam, canManageIntegrations, canManageKnowledge });
+  const hasSocial = businessGrantsSocialCheckerAccess(purchasedPackages);
+
+  async function restartTutorial() {
+    setRestartingTour(true);
+    try {
+      await fetch(`/api/businesses/${encodeURIComponent(businessId)}/onboarding/tour`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stepIndex: 0,
+          completedAt: null,
+          restartedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }),
+      });
+      try {
+        window.localStorage.removeItem(`vt.productTour.1.${businessId}.me`);
+      } catch {
+        /* ignore */
+      }
+      router.push(`/b/${encodeURIComponent(businessId)}/home?tour=1`);
+    } finally {
+      setRestartingTour(false);
+    }
+  }
 
   return (
     <div style={{ display: "grid", gap: 28, maxWidth: 480, paddingBottom: spacing.xl }}>
@@ -56,6 +87,34 @@ export default function SettingsScreen({
         <div style={{ fontSize: 18, fontWeight: 750, color: cockpitColors.textPrimary }}>{userName}</div>
         <div style={{ fontSize: 14, color: cockpitColors.textSecondary }}>{userEmail}</div>
         <div style={{ marginTop: 4, fontSize: 13, fontWeight: 700, color: cockpitColors.accent }}>{roleLabel}</div>
+      </section>
+
+      <section style={{ display: "grid", gap: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: cockpitColors.textMuted }}>Tutorial</div>
+        <SecondaryButton onClick={() => void restartTutorial()}>
+          {restartingTour ? "Opening…" : "See tutorial again"}
+        </SecondaryButton>
+        {hasSocial ? (
+          <a
+            href="https://social.vtechdevelopment.com/"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "16px 18px",
+              borderRadius: 16,
+              background: "#fff",
+              border: "1px solid rgba(15,23,42,.08)",
+              textDecoration: "none",
+              color: cockpitColors.textPrimary,
+              fontWeight: 750,
+              fontSize: 17,
+            }}
+          >
+            Open Social Checker
+            <ChevronRight size={20} color={cockpitColors.textMuted} />
+          </a>
+        ) : null}
       </section>
 
       {hubLinks.length ? (
