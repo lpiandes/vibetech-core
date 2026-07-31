@@ -88,7 +88,7 @@ export default function ProposalStudio({
             Tell us what we should change
           </h2>
           <p style={{ margin: 0, color: architect.inkMuted, lineHeight: 1.55 }}>
-            Remove anything that doesn’t belong, or ask for something to add. Nothing goes live until you approve.
+            Remove anything that doesn’t belong, or ask for something to add. Nothing goes live until you open your business.
           </p>
         </div>
 
@@ -192,7 +192,7 @@ export default function ProposalStudio({
   return (
     <div style={{ display: "grid", gap: 22 }}>
       <div style={{ display: "grid", gap: 10 }}>
-        <ArchitectBadge tone="accent">Your plan</ArchitectBadge>
+        <ArchitectBadge tone="accent">What we’ll build</ArchitectBadge>
         <h2 style={{ margin: 0, fontFamily: architect.display, fontSize: "clamp(1.8rem, 3vw, 2.6rem)" }}>
           {resolveBusinessDisplayName(proposal?.businessName, "Your Business Operating System")}
         </h2>
@@ -265,13 +265,13 @@ export default function ProposalStudio({
 
       <div style={{ display: "grid", gap: 10 }}>
         <ArchitectButton disabled={busy} onClick={onApprove}>
-          {continuous ? "Approve this change" : "Approve"}
+          {continuous ? "Apply this change" : "Open your business"}
         </ArchitectButton>
         <ArchitectButton variant="secondary" disabled={busy} onClick={() => {
           setJustUpdated(false);
           setMode("changes");
         }}>
-          Tell us what we should change
+          Suggest a change
         </ArchitectButton>
         {onBack ? (
           <ArchitectButton variant="ghost" disabled={busy} onClick={onBack}>

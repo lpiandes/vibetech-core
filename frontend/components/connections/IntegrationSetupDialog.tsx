@@ -41,12 +41,11 @@ export default function IntegrationSetupDialog({
     hunterApiKey: "",
     usePlatformKeys: false,
   });
-  const [metaForm, setMetaForm] = useState({ pageId: "", pageAccessToken: "" });
-  const [metaConnectResult, setMetaConnectResult] = useState<{
-    webhookUrl?: string | null;
-    subscribed?: boolean;
-    subscribeWarning?: string | null;
-    nextSteps?: string[];
+  const [metaForm, setMetaForm] = useState({ pageName: "", pageUrl: "", notes: "" });
+  const [metaRequestResult, setMetaRequestResult] = useState<{
+    message?: string;
+    emailed?: boolean;
+    operatorEmail?: string;
   } | null>(null);
   const [growthForm, setGrowthForm] = useState({ customerId: "", developerToken: "", adAccountId: "", accessToken: "", loginCustomerId: "" });
   const [smsAdvanced, setSmsAdvanced] = useState(false);
@@ -255,32 +254,27 @@ export default function IntegrationSetupDialog({
     }
   }
 
-  async function connectMeta() {
+  async function requestMetaSetup() {
     if (!businessId) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/businesses/${businessId}/integrations/meta`, {
+      const res = await fetch(`/api/businesses/${businessId}/integrations/meta/request-setup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(metaForm),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(String(data.error ?? "Could not connect Facebook."));
+        setError(String(data.error ?? "Could not send setup request."));
         return;
       }
-      if (Array.isArray(data.nextSteps) && data.nextSteps.length) {
-        setMetaConnectResult({
-          webhookUrl: data.webhookUrl ? String(data.webhookUrl) : null,
-          subscribed: data.subscribed === true,
-          subscribeWarning: data.subscribeWarning ? String(data.subscribeWarning) : null,
-          nextSteps: data.nextSteps.map(String),
-        });
-        router.refresh();
-        return;
-      }
-      finishConnected();
+      setMetaRequestResult({
+        message: String(data.message ?? "VIBETech will connect your Facebook Page."),
+        emailed: data.emailed === true,
+        operatorEmail: data.operatorEmail ? String(data.operatorEmail) : "leopiandes@vtechdevelopment.com",
+      });
+      router.refresh();
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -291,7 +285,7 @@ export default function IntegrationSetupDialog({
   function primaryAction() {
     if (!canConnect) return onClose;
     if (setupMode === "oauth" && integration.id !== "meta_lead_ads") return startOAuth;
-    if (integration.id === "meta_lead_ads") return connectMeta;
+    if (integration.id === "meta_lead_ads") return requestMetaSetup;
     if (setupMode === "api_key") return connectApiKey;
     if (setupMode === "dev_connect") return connectDevEmail;
     return onClose;
@@ -301,12 +295,13 @@ export default function IntegrationSetupDialog({
     if (!canConnect) return "Got it";
     if (loading) {
       if (integration.id === "sms_channel" && !smsAdvanced) return "Setting up texting…";
+      if (integration.id === "meta_lead_ads") return "Sending request…";
       return "Connecting…";
     }
     if (setupMode === "oauth" && (integration.id === "business_email" || integration.id === "calendar" || integration.id === "google_search_console")) {
       return "Connect with Google";
     }
-    if (integration.id === "meta_lead_ads") return "Connect Facebook";
+    if (integration.id === "meta_lead_ads") return "Request VIBETech setup";
     if (setupMode === "dev_connect") return "Connect for development";
     if (integration.id === "sms_channel" && !smsAdvanced) return "Set up texting for my business";
     return "Connect";
@@ -319,12 +314,14 @@ export default function IntegrationSetupDialog({
           ? "Choose your customer email inbox"
           : integration.id === "sms_channel"
             ? "Set up text messaging"
-            : `Connect ${integration.title}`
+            : integration.id === "meta_lead_ads"
+              ? "Request Meta Lead Forms setup"
+              : `Connect ${integration.title}`
       }
       onClose={onClose}
       maxWidth={integration.id === "sms_channel" || integration.id === "meta_lead_ads" ? 560 : 440}
       footer={
-        canConnect && !(integration.id === "meta_lead_ads" && metaConnectResult) && !(integration.id === "sms_channel" && provisionResult) ? (
+        canConnect && !(integration.id === "meta_lead_ads" && metaRequestResult) && !(integration.id === "sms_channel" && provisionResult) ? (
           <>
             <SecondaryButton onClick={loading ? undefined : onClose}>Cancel</SecondaryButton>
             {allowLocalDesignPartnerConnect ? (
@@ -334,7 +331,7 @@ export default function IntegrationSetupDialog({
             ) : null}
             <PrimaryButton onClick={loading ? undefined : primaryAction()}>{primaryLabel()}</PrimaryButton>
           </>
-        ) : canConnect && ((integration.id === "meta_lead_ads" && metaConnectResult) || (integration.id === "sms_channel" && provisionResult)) ? (
+        ) : canConnect && ((integration.id === "meta_lead_ads" && metaRequestResult) || (integration.id === "sms_channel" && provisionResult)) ? (
           <SecondaryButton onClick={onClose}>Close</SecondaryButton>
         ) : (
           <PrimaryButton onClick={onClose}>Got it</PrimaryButton>
@@ -867,7 +864,7 @@ export default function IntegrationSetupDialog({
             </div>
           ) : canConnect && integration.id === "meta_lead_ads" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
-              {metaConnectResult ? (
+              {metaRequestResult ? (
                 <div style={{
                   display: "grid",
                   gap: 10,
@@ -877,35 +874,23 @@ export default function IntegrationSetupDialog({
                   background: "#ecfdf5",
                 }}>
                   <div style={{ fontWeight: 800, color: "#047857" }}>
-                    Facebook Page connected
-                    {metaConnectResult.subscribed ? " · leadgen subscribed" : ""}
+                    Setup requested
                   </div>
-                  {metaConnectResult.subscribeWarning ? (
-                    <p style={{ margin: 0, fontSize: 12, color: "#b45309", fontWeight: 650 }}>
-                      Page subscribe warning: {metaConnectResult.subscribeWarning}. You can still finish webhook setup below.
-                    </p>
-                  ) : null}
-                  {metaConnectResult.webhookUrl ? (
-                    <p style={{ margin: 0, fontSize: 12, color: "#065f46", fontWeight: 650, wordBreak: "break-all" }}>
-                      Webhook URL: {metaConnectResult.webhookUrl}
-                    </p>
-                  ) : null}
-                  <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "#065f46", lineHeight: 1.5, fontWeight: 600 }}>
-                    {(metaConnectResult.nextSteps ?? []).map((step) => (
-                      <li key={step}>{step}</li>
-                    ))}
-                  </ol>
-                  <PrimaryButton onClick={() => finishConnected()}>
-                    Done — send a test lead next
-                  </PrimaryButton>
+                  <p style={{ margin: 0, fontSize: 13, color: "#065f46", lineHeight: 1.5, fontWeight: 600 }}>
+                    {metaRequestResult.message}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#047857", lineHeight: 1.45 }}>
+                    We’ll email {metaRequestResult.operatorEmail ?? "leopiandes@vtechdevelopment.com"} with the exact Graph API / webhook steps and connect the Page for you. You don’t paste tokens.
+                  </p>
+                  <PrimaryButton onClick={onClose}>Done</PrimaryButton>
                 </div>
               ) : (
                 <>
                   <div style={{ fontWeight: 700, fontSize: 14, color: cockpitColors.textPrimary }}>
-                    Connect Facebook Lead Ads (step-by-step)
+                    VIBETech connects this for you
                   </div>
                   <div style={{
-                    fontSize: 12,
+                    fontSize: 13,
                     color: cockpitColors.textSecondary,
                     lineHeight: 1.5,
                     padding: 10,
@@ -913,49 +898,41 @@ export default function IntegrationSetupDialog({
                     border: `1px solid ${cockpitColors.panelBorder}`,
                     background: "#fafaf9",
                   }}>
-                    <div style={{ fontWeight: 800, marginBottom: 6, color: cockpitColors.textPrimary }}>
-                      If you’ve never run a Facebook Lead Ad
-                    </div>
-                    <ol style={{ margin: 0, paddingLeft: 18 }}>
-                      <li>Go to <strong>facebook.com/adsmanager</strong> (same Facebook login that manages your business Page).</li>
-                      <li>Click <strong>+ Create</strong> → objective <strong>Leads</strong> (not Traffic/Engagement).</li>
-                      <li>Choose your <strong>Facebook Page</strong> → Instant Form / Lead form → collect <strong>name, email, phone</strong>.</li>
-                      <li>Add privacy policy URL (required by Meta) → Publish the form.</li>
-                      <li>Set a small daily budget (e.g. $5–$20) → place the ad. Even one test lead is enough to prove the pipeline.</li>
-                    </ol>
-                    <div style={{ fontWeight: 800, margin: "10px 0 6px", color: cockpitColors.textPrimary }}>
-                      Then connect that Page here
-                    </div>
-                    <ol style={{ margin: 0, paddingLeft: 18 }}>
-                      <li>Open <strong>developers.facebook.com</strong> → your app (or create one) → <strong>Tools → Graph API Explorer</strong>.</li>
-                      <li>Select your app → Get User Token → add permissions: <code>pages_show_list</code>, <code>pages_read_engagement</code>, <code>leads_retrieval</code>, <code>pages_manage_metadata</code>.</li>
-                      <li>Call <code>GET /me/accounts</code> → copy the Page <strong>id</strong> and that Page’s <strong>access_token</strong>.</li>
-                      <li>Paste both below → Connect. VIBETech will try to subscribe the Page to <code>leadgen</code> automatically.</li>
-                      <li>In the Meta app <strong>Webhooks</strong>, add the callback URL we show after connect (leadgen field).</li>
-                    </ol>
-                    <p style={{ margin: "10px 0 0", fontWeight: 650 }}>
-                      After that: every new Facebook lead lands in <strong>People</strong>, opens a pipeline card when available, and fires your <strong>META_LEAD</strong> automations (drafts for your approval — nothing texts/emails customers until you GRANT).
+                    <p style={{ margin: 0 }}>
+                      You should <strong>not</strong> use Meta Developers or Graph API. Tell us your Facebook Page below and we email ops with the exact connect steps. After we’re done, new Lead Ad submissions land in <strong>People</strong> and fire <strong>META_LEAD</strong> automations (drafts until you GRANT).
+                    </p>
+                    <p style={{ margin: "10px 0 0" }}>
+                      If you already run Lead Ads, great — just name the Page. If not, we can also help you set up a first Lead form once the Page is connected.
                     </p>
                   </div>
                   <label style={fieldLabelStyle}>
-                    Page ID
-                    <span style={fieldHintStyle}>From Graph API GET /me/accounts → id</span>
+                    Facebook Page name
+                    <span style={fieldHintStyle}>Optional but helpful — e.g. Mind and Mobility</span>
                     <input
-                      placeholder="Page ID"
-                      value={metaForm.pageId}
-                      onChange={(e) => setMetaForm((s) => ({ ...s, pageId: e.target.value }))}
+                      placeholder="Page name"
+                      value={metaForm.pageName}
+                      onChange={(e) => setMetaForm((s) => ({ ...s, pageName: e.target.value }))}
                       style={fieldInputStyle}
                     />
                   </label>
                   <label style={fieldLabelStyle}>
-                    Page access token
-                    <span style={fieldHintStyle}>Long-lived Page token with leads_retrieval</span>
+                    Facebook Page URL
+                    <span style={fieldHintStyle}>Optional — facebook.com/…</span>
                     <input
-                      placeholder="Page access token"
-                      type="password"
-                      value={metaForm.pageAccessToken}
-                      onChange={(e) => setMetaForm((s) => ({ ...s, pageAccessToken: e.target.value }))}
+                      placeholder="https://facebook.com/your-page"
+                      value={metaForm.pageUrl}
+                      onChange={(e) => setMetaForm((s) => ({ ...s, pageUrl: e.target.value }))}
                       style={fieldInputStyle}
+                    />
+                  </label>
+                  <label style={fieldLabelStyle}>
+                    Anything else we should know?
+                    <textarea
+                      placeholder="Who manages ads, privacy policy URL, etc."
+                      value={metaForm.notes}
+                      onChange={(e) => setMetaForm((s) => ({ ...s, notes: e.target.value }))}
+                      rows={3}
+                      style={{ ...fieldInputStyle, resize: "vertical" as const }}
                     />
                   </label>
                 </>

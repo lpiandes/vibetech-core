@@ -14,21 +14,35 @@ function safeString(v) {
 const recentlyNotified = new Map();
 const DEDUPE_MS = 15 * 60 * 1000;
 
+/** Default ops inbox when PLATFORM_OPERATOR_EMAIL is unset — white-glove setup requests. */
+export const DEFAULT_PLATFORM_OPERATOR_EMAIL = "leopiandes@vtechdevelopment.com";
+
 export async function notifyPlatformOperators({
   actions = [],
   fetchImpl = globalThis.fetch,
   force = false,
   deliveryProvider = null,
+  /** Optional override / merge recipients (e.g. always include Leo for client setup handoffs). */
+  toEmails = null,
+  /** When true and no PLATFORM_OPERATOR_EMAIL, fall back to DEFAULT_PLATFORM_OPERATOR_EMAIL. */
+  fallbackDefaultEmail = false,
 } = {}) {
   const list = Array.isArray(actions) ? actions : [];
   if (!list.length) {
     return { ok: true, skipped: true, reason: "no_actions" };
   }
 
-  const emails = safeString(process.env.PLATFORM_OPERATOR_EMAIL)
+  const fromEnv = safeString(process.env.PLATFORM_OPERATOR_EMAIL)
     .split(",")
     .map((e) => e.trim())
     .filter(Boolean);
+  const override = Array.isArray(toEmails)
+    ? toEmails.map((e) => safeString(e)).filter(Boolean)
+    : [];
+  let emails = [...new Set([...fromEnv, ...override])];
+  if (!emails.length && fallbackDefaultEmail) {
+    emails = [DEFAULT_PLATFORM_OPERATOR_EMAIL];
+  }
   const webhook = safeString(process.env.PLATFORM_OPERATOR_WEBHOOK_URL);
 
   if (!emails.length && !webhook) {

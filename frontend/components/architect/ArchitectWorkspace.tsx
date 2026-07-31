@@ -235,6 +235,15 @@ export default function ArchitectWorkspace({
         if (!answered.proposal) {
           setCenterMode("recommendation");
           setQuickReplies(answered.quickReplies ?? []);
+          try {
+            await refresh("propose");
+            setCenterMode("proposal");
+            setChangeImpact(null);
+          } catch (proposeErr) {
+            setError((proposeErr as any)?.productError ?? presentProductError(proposeErr));
+          }
+        } else {
+          setCenterMode("proposal");
         }
         return;
       }
@@ -264,6 +273,13 @@ export default function ArchitectWorkspace({
             return;
           }
           setCenterMode("recommendation");
+          try {
+            await refresh("propose");
+            setCenterMode("proposal");
+            setChangeImpact(null);
+          } catch (proposeErr) {
+            setError((proposeErr as any)?.productError ?? presentProductError(proposeErr));
+          }
         }
       } else {
         const data = await refresh("chat", { text });
@@ -700,10 +716,10 @@ export default function ArchitectWorkspace({
                 gap: 10,
               }}>
                 <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.5 }}>
-                  VIBETech has enough to recommend how your business should run.
+                  VIBETech has enough to show what will be built.
                 </p>
-                <ArchitectButton disabled={busy} onClick={() => setCenterMode("recommendation")}>
-                  Continue
+                <ArchitectButton disabled={busy} onClick={() => void propose()}>
+                  See what we’ll build
                 </ArchitectButton>
               </div>
             ) : null}
@@ -730,7 +746,10 @@ export default function ArchitectWorkspace({
             <ProposalStudio
               proposal={proposal}
               continuous={continuous}
-              onApprove={() => router.push(routes.dryRun)}
+              onApprove={() => {
+                // Skip dry-run maze — open install and go live, then hard-nav to Home.
+                router.push(`${routes.install}?launch=1`);
+              }}
               onRequestChanges={(input) => applyPlanChanges(input)}
               onBack={() => setCenterMode(continuous ? "conversation" : "recommendation")}
               busy={busy}
@@ -744,7 +763,7 @@ export default function ArchitectWorkspace({
               proposal={proposal}
               continuous={continuous}
               busy={busy}
-              onConfirm={() => router.push(routes.dryRun)}
+              onConfirm={() => router.push(`${routes.install}?launch=1`)}
               onBackToRecommendation={() => setCenterMode("proposal")}
               onKeepTalking={continuous ? () => setCenterMode("conversation") : undefined}
             />

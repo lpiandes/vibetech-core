@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { architect } from "./architectTheme";
@@ -24,6 +24,7 @@ import ExecutiveBriefing from "./ExecutiveBriefing";
 import { presentProductError, type ProductErrorView } from "@/lib/platform/productErrors";
 import ProductErrorBanner from "@/components/product/ProductErrorBanner";
 import { resolveBusinessDisplayName } from "@/lib/operating/businessLanguage";
+import { hardNavigateToBusinessHome } from "@/lib/builder/hardNavigateToBusinessHome";
 
 export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
@@ -54,11 +55,7 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
       }
       setResult(data);
       if (data.alreadyInstalled && data.openHref) {
-        // Session is already live — refresh layout so Home gets the nav chrome.
-        setTimeout(() => {
-          router.push(data.openHref);
-          router.refresh();
-        }, 50);
+        hardNavigateToBusinessHome(String(data.openHref));
       }
     } catch (err) {
       setError(presentProductError(err));
@@ -165,20 +162,15 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
             </p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {result?.alreadyInstalled && result?.openHref ? (
-                <ArchitectButton
-                  onClick={() => {
-                    router.push(String(result.openHref));
-                    router.refresh();
-                  }}
-                >
+                <ArchitectButton onClick={() => hardNavigateToBusinessHome(String(result.openHref))}>
                   Open Home
                 </ArchitectButton>
               ) : (
                 <ArchitectButton
                   disabled={(checklist.blocking ?? []).length > 0}
-                  onClick={() => router.push(routes.install)}
+                  onClick={() => router.push(`${routes.install}?launch=1`)}
                 >
-                  Continue to approval
+                  Open your business
                 </ArchitectButton>
               )}
               <ArchitectButton variant="secondary" onClick={() => router.push(routes.session)}>
@@ -192,7 +184,13 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
   );
 }
 
-export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
+export function ArchitectInstallClient({
+  sessionId,
+  autoLaunch = false,
+}: {
+  sessionId: string;
+  autoLaunch?: boolean;
+}) {
   const router = useRouter();
   const routes = architectRoutes(sessionId);
   const [workspace, setWorkspace] = useState<any>(null);
@@ -203,12 +201,26 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState<ProductErrorView | null>(null);
   const [openHref, setOpenHref] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bootReady, setBootReady] = useState(false);
+  const autoLaunchStarted = useRef(false);
+  const redirectedHome = useRef(false);
+
+  function goHome(href: string | null | undefined) {
+    if (redirectedHome.current) return;
+    const url = String(href ?? "").trim();
+    if (!url) return;
+    redirectedHome.current = true;
+    hardNavigateToBusinessHome(url);
+  }
 
   useEffect(() => {
     void (async () => {
       const response = await fetch(`/api/builder/sessions/${encodeURIComponent(sessionId)}`);
       const data = await response.json();
-      if (!data.ok) return;
+      if (!data.ok) {
+        setBootReady(true);
+        return;
+      }
       setWorkspace(data);
       const stage = String(data.session?.currentStage ?? "");
       const businessId = data.session?.businessId;
@@ -216,11 +228,12 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
         setStatus("installed");
         setActiveStep(ARCHITECT_INSTALL_STAGES.length - 1);
         setPercent(100);
-        setOpenHref(`/b/${businessId}/home`);
+        const href = `/b/${businessId}/home`;
+        setOpenHref(href);
+        setBootReady(true);
+        goHome(href);
         return;
       }
-      // Reloading mid-install or after a failed attempt must show recovery — never a blank
-      // "Approve" start screen that hides that work (and answers/plan/approval) already exists.
       if (stage === "failed" || stage === "installing") {
         setStatus("failed");
         try {
@@ -249,6 +262,7 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
           setError(presentProductError("install_failed"));
         }
       }
+      setBootReady(true);
     })();
   }, [sessionId]);
 
@@ -259,7 +273,6 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
     setActiveStep(0);
     setPercent(4);
     setStageOverride(null);
-    // Soft motion while the server runs real install ops — cap below 90 until results arrive.
     const timer = setInterval(() => {
       setActiveStep((current) => Math.min(current + 1, ARCHITECT_INSTALL_STAGES.length - 2));
       setPercent((current) => Math.min(88, current + 7));
@@ -301,7 +314,9 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
       setActiveStep(ARCHITECT_INSTALL_STAGES.length - 1);
       setPercent(data.installProgress?.percent ?? 100);
       setStatus("installed");
-      setOpenHref(data.openHref ?? (data.session?.businessId ? `/b/${data.session.businessId}/home` : null));
+      const href = data.openHref ?? (data.session?.businessId ? `/b/${data.session.businessId}/home` : null);
+      setOpenHref(href);
+      goHome(href);
     } catch (err) {
       setStatus("failed");
       setError(presentProductError(err));
@@ -310,6 +325,13 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!bootReady || !autoLaunch || autoLaunchStarted.current) return;
+    if (status !== "awaiting_approval") return;
+    autoLaunchStarted.current = true;
+    void install();
+  }, [bootReady, autoLaunch, status, sessionId]);
 
   const proposal = workspace?.proposal;
   const session = workspace?.session;
@@ -327,12 +349,11 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
           <ExecutiveBriefing
             proposal={proposal}
             openHref={openHref}
-            onOpenPortal={() => {
-              if (!openHref) return;
-              router.push(openHref);
-              router.refresh();
-            }}
+            onOpenPortal={() => goHome(openHref)}
           />
+          <p style={{ margin: "16px 0 0", color: architect.inkMuted, fontSize: 13 }}>
+            Opening your business Home…
+          </p>
         </ArchitectPanel>
       </ArchitectShell>
     );
@@ -343,10 +364,14 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
       <header style={{ display: "grid", gap: 10, marginBottom: 24 }}>
         <ArchitectBadge tone="accent">Go live</ArchitectBadge>
         <h1 style={{ margin: 0, fontFamily: architect.display, fontSize: "clamp(1.8rem, 3vw, 2.4rem)" }}>
-          Approve your operating system
+          {status === "installing" || autoLaunch
+            ? "Opening your business"
+            : "Ready to open your business?"}
         </h1>
         <p style={{ margin: 0, color: architect.inkMuted, maxWidth: 640 }}>
-          Approval is tied to this exact recommendation. If anything changes, VIBETech will ask you to review readiness again.
+          {status === "installing" || (autoLaunch && status === "awaiting_approval")
+            ? "VIBETech is creating your operating system. You’ll land on Home when it’s ready — this can take a minute."
+            : "One click installs your plan and takes you to Home. If anything fails, you can retry without starting over."}
         </p>
       </header>
 
@@ -428,18 +453,24 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
         ) : null}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <ArchitectButton
-            disabled={busy}
-            onClick={() => void install({ resume: status === "failed" })}
-          >
-            {busy
-              ? HUMAN_COPY.installing
-              : status === "failed"
-                ? "Retry go live"
-                : HUMAN_COPY.approveLaunch}
-          </ArchitectButton>
-          <ArchitectButton variant="ghost" onClick={() => router.push(routes.session)}>
-            Back to Ask VIBETech
+          {status !== "installing" ? (
+            <ArchitectButton
+              disabled={busy}
+              onClick={() => void install({ resume: status === "failed" })}
+            >
+              {busy
+                ? HUMAN_COPY.installing
+                : status === "failed"
+                  ? "Retry — open your business"
+                  : "Open your business"}
+            </ArchitectButton>
+          ) : (
+            <ArchitectButton disabled>
+              Opening your business…
+            </ArchitectButton>
+          )}
+          <ArchitectButton variant="ghost" disabled={busy || status === "installing"} onClick={() => router.push(routes.session)}>
+            Back
           </ArchitectButton>
         </div>
       </ArchitectPanel>
@@ -499,9 +530,9 @@ const readyComposition = {
 
 const readySection = {
   borderRadius: architect.radiusSm,
-  border: `1px solid rgba(148,163,184,.1)`,
-  background: "rgba(7,12,16,.45)",
-  padding: "14px 14px 12px",
+  border: `1px solid ${architect.border}`,
+  background: "rgba(15,23,42,.55)",
+  padding: 14,
   display: "grid" as const,
   gap: 10,
 };
@@ -513,13 +544,10 @@ const chipRow = {
 };
 
 const chip = {
-  display: "inline-flex" as const,
-  alignItems: "center" as const,
-  padding: "5px 10px",
-  borderRadius: 999,
   fontSize: 12,
-  fontWeight: 600,
-  color: architect.ink,
-  background: "rgba(20,184,166,.12)",
-  border: "1px solid rgba(20,184,166,.28)",
+  padding: "4px 8px",
+  borderRadius: 999,
+  border: `1px solid ${architect.border}`,
+  background: "rgba(2,6,23,.35)",
+  color: architect.inkMuted,
 };

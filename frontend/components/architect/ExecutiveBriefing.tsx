@@ -3,6 +3,7 @@
 import { architect } from "./architectTheme";
 import { ArchitectBadge, ArchitectButton } from "./ArchitectPrimitives";
 import { executiveBriefing } from "./architectSemantics";
+import { hardNavigateToBusinessHome } from "@/lib/builder/hardNavigateToBusinessHome";
 
 export default function ExecutiveBriefing({
   proposal,
@@ -14,6 +15,14 @@ export default function ExecutiveBriefing({
   onOpenPortal: () => void;
 }) {
   const briefing = executiveBriefing(proposal);
+
+  function open() {
+    if (openHref) {
+      hardNavigateToBusinessHome(openHref);
+      return;
+    }
+    onOpenPortal();
+  }
 
   return (
     <div style={{
@@ -47,7 +56,7 @@ export default function ExecutiveBriefing({
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <ArchitectButton onClick={onOpenPortal} disabled={!openHref}>
+        <ArchitectButton onClick={open} disabled={!openHref}>
           Open your business
         </ArchitectButton>
       </div>

@@ -189,7 +189,7 @@ export function primaryIntegrationAction(conn: ConnectionViewRow, display: Integ
         ? display.id === "business_email" || display.id === "calendar"
           ? "Connect with Google"
           : display.id === "meta_lead_ads"
-            ? "Connect Facebook"
+            ? "Request setup"
             : "Connect"
         : display.setupMode === "api_key"
           ? "Connect"
