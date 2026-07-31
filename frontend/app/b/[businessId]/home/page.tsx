@@ -11,6 +11,8 @@ import { reconcilePackWorkforce } from "@/lib/team/reconcilePackWorkforce.js";
 import { reconcileOperatingContracts } from "@/lib/team/reconcileOperatingContracts.js";
 import { redirect } from "next/navigation";
 import { readPendingPackageAsk } from "../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
+import { getAiBuilderService } from "@/lib/builder/getAiBuilderService";
+import { resolveOnboardingHomeHref } from "@/lib/builder/resolveOnboardingHomeHref";
 
 /**
  * Home is one experience with two moments:
@@ -123,10 +125,27 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
 
     // Pre-install: conversation with VIBETech only. No dashboard chrome.
     if (!hasInstalledOs) {
+      // Never link to a bare, sessionless /architect when a durable builder session already
+      // exists — that strands the owner's prior answers/plan/approval on refresh (e.g. after
+      // Approve/Open hit a server error before canonical persistence finished). Resume the
+      // most recently updated non-archived session instead of starting a new one.
+      let talkHref = `/b/${encodeURIComponent(businessId)}/architect`;
+      try {
+        const builder = getAiBuilderService() as any;
+        const existing = await builder.listSessions?.({ businessId });
+        const resolved = resolveOnboardingHomeHref({
+          businessId,
+          sessions: existing?.sessions ?? [],
+        });
+        talkHref = resolved.href;
+      } catch {
+        /* best effort — fall back to starting a fresh discovery conversation */
+      }
       return (
         <BusinessOnboardingHome
           businessId={businessId}
           businessName={home.businessName}
+          talkHref={talkHref}
         />
       );
     }

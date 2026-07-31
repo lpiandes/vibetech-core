@@ -179,6 +179,49 @@ test("TikTok Ads reads real campaign metrics once Marketing API env is configure
   });
 });
 
+test("TikTok Ads reads campaign metrics from a per-business connection even without platform env", async () => {
+  await withEnv({ TIKTOK_ACCESS_TOKEN: undefined, TIKTOK_ADVERTISER_ID: undefined }, async () => {
+    const fetchImpl = async (url, init) => {
+      assert.match(String(url), /business-api\.tiktok\.com/);
+      assert.equal(init.headers["Access-Token"], "biz_tok");
+      return {
+        ok: true,
+        json: async () => ({
+          code: 0,
+          data: { list: [{ dimensions: { campaign_id: "tt_biz_1" }, metrics: { campaign_name: "Business-owned TikTok leads", spend: "40", impressions: "1500", clicks: "30", ctr: "2.0" } }] },
+        }),
+      };
+    };
+    const result = await fetchAdsMetrics({
+      businessId: "biz_1",
+      platformStore: platformStoreWithRows([
+        { credentialId: "cred_tiktok", providerType: "tiktok_lead_ads", secrets: { accessToken: "biz_tok", advertiserId: "biz_adv_1" } },
+      ]),
+      nowISO: NOW,
+      fetchImpl,
+    });
+    const tiktok = result.providers.find((p) => p.id === "tiktok_ads");
+    assert.equal(tiktok.status, "connected");
+    assert.equal(tiktok.campaigns[0].name, "Business-owned TikTok leads");
+    assert.equal(tiktok.totals.spend, 40);
+  });
+});
+
+test("TikTok Ads stays not_configured with a clear message when there's no connection and no platform env", async () => {
+  await withEnv({ TIKTOK_ACCESS_TOKEN: undefined, TIKTOK_ADVERTISER_ID: undefined }, async () => {
+    const result = await fetchAdsMetrics({
+      businessId: "biz_1",
+      platformStore: platformStoreWithRows([]),
+      nowISO: NOW,
+      fetchImpl: async () => { throw new Error("should not call TikTok API"); },
+    });
+    const tiktok = result.providers.find((p) => p.id === "tiktok_ads");
+    assert.equal(tiktok.status, "not_configured");
+    assert.match(tiktok.message, /no per-business TikTok Ads connection/);
+    assert.match(tiktok.message, /TIKTOK_ACCESS_TOKEN/);
+  });
+});
+
 test("provider errors surface as status=error with a message instead of throwing", async () => {
   await withEnv({ META_GRAPH_API_VERSION: "v25.0" }, async () => {
     const fetchImpl = async () => ({ ok: false, status: 401, json: async () => ({ error: { message: "invalid token" } }) });

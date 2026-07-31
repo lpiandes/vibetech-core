@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 
 import { resolveNextSlots } from "./resolveAvailabilitySlots.js";
 
-function member(id, { weekly, bookable = true, overrides = [] } = {}) {
-  return { memberId: id, displayName: id, timezone: null, weekly, overrides, bookable, updatedAt: null };
+function member(id, { weekly, bookable = true, overrides = [], timezone = null } = {}) {
+  return { memberId: id, displayName: id, timezone, weekly, overrides, bookable, updatedAt: null };
 }
 
 function mondayNineAm() {
@@ -115,4 +115,47 @@ test("resolveNextSlots ignores non-bookable members", () => {
   };
   const slots = resolveNextSlots({ availability, count: 3, now });
   assert.equal(slots.length, 0);
+});
+
+test("member timezone (America/New_York) vs UTC server doesn't shift weekday windows incorrectly", () => {
+  // `now` is a real instant chosen to be Monday 13:00 UTC, which is Monday
+  // 09:00 in America/New_York (EDT, UTC-4) — well inside a 09:00-17:00 window
+  // in that timezone but potentially misread as a different weekday/hour if
+  // the resolver quietly used server-local time instead of the member's
+  // stored IANA timezone.
+  let now = new Date(Date.UTC(2026, 6, 27, 13, 0, 0)); // 2026-07-27 is a Monday
+  while (now.getUTCDay() !== 1) now = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  const availability = {
+    timezone: "UTC",
+    members: {
+      ny: member("ny", { weekly: [{ day: 1, start: "09:00", end: "17:00" }], timezone: "America/New_York" }),
+    },
+  };
+
+  const slots = resolveNextSlots({ availability, count: 1, now, durationMinutes: 30, daysAhead: 0 });
+  assert.equal(slots.length, 1, "09:00 America/New_York window should be open at 13:00 UTC");
+  const start = new Date(slots[0].startISO);
+  // 09:00 America/New_York (EDT, UTC-4) in late July == 13:00 UTC.
+  assert.equal(start.getUTCHours(), 13);
+  assert.equal(start.getUTCMinutes(), 0);
+  assert.equal(slots[0].timeZone, "America/New_York");
+});
+
+test("member timezone conversion is correct across a DST transition (fall back)", () => {
+  // 2026-11-01 is the Sunday America/New_York falls back from EDT (UTC-4) to
+  // EST (UTC-5). A 09:00 window on the *following* Monday (2026-11-02) should
+  // resolve using the post-transition EST offset (UTC-5), not the stale EDT
+  // offset — i.e. 09:00 America/New_York == 14:00 UTC that week, not 13:00.
+  const now = new Date(Date.UTC(2026, 10, 2, 0, 0, 0)); // 2026-11-02 00:00 UTC (still Sun 8pm EDT)
+  const availability = {
+    timezone: "America/New_York",
+    members: {
+      a: member("a", { weekly: [{ day: 1, start: "09:00", end: "10:00" }] }),
+    },
+  };
+  const slots = resolveNextSlots({ availability, count: 1, now, durationMinutes: 30, daysAhead: 1 });
+  assert.equal(slots.length, 1);
+  const start = new Date(slots[0].startISO);
+  assert.equal(start.getUTCHours(), 14, "post-fall-back EST offset (UTC-5) applies to the Monday window");
 });

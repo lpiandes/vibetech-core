@@ -100,3 +100,116 @@ test("Meta Ads scaffolds a paused campaign + ad set + creative for managed lead 
   assert.equal(adSetCall.body.status, "PAUSED");
   assert.equal(adSetCall.body.campaign_id, "meta_campaign_1");
 });
+
+test("Meta Ads reads richer campaign status via READ_EXTERNAL_RECORD", async () => {
+  const adapter = new MetaAdsIntegrationAdapter({
+    nowISO: NOW,
+    graphApiVersion: "v25.0",
+    fetchImpl: async (url) => {
+      assert.match(String(url), /meta_campaign_1/);
+      return { ok: true, json: async () => ({ id: "meta_campaign_1", name: "Spring promo", status: "PAUSED", effective_status: "PAUSED", objective: "OUTCOME_LEADS", daily_budget: "2000" }) };
+    },
+  });
+  const result = await adapter.executeAction({
+    actionRequest: { capability: INTEGRATION_CAPABILITIES.READ_EXTERNAL_RECORD, parameters: { recordType: "campaign_status", campaignId: "meta_campaign_1" } },
+    connection: connection(),
+    credentialResolver: resolver({ adAccountId: "123", accessToken: "meta_token" }),
+  });
+  assert.equal(result.status, "completed");
+  assert.equal(result.metadata.status, "PAUSED");
+  assert.equal(result.metadata.effectiveStatus, "PAUSED");
+  assert.equal(result.metadata.objective, "OUTCOME_LEADS");
+});
+
+test("Meta Ads duplicates a paused ad variant under an existing campaign", async () => {
+  const calls = [];
+  const adapter = new MetaAdsIntegrationAdapter({
+    nowISO: NOW,
+    graphApiVersion: "v25.0",
+    fetchImpl: async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push({ url: String(url), body });
+      if (String(url).includes("/adsets")) return { ok: true, json: async () => ({ id: "meta_adset_variant" }) };
+      if (String(url).includes("/adcreatives")) return { ok: true, json: async () => ({ id: "meta_creative_variant" }) };
+      return { ok: false, json: async () => ({ error: { message: "unexpected_call" } }) };
+    },
+  });
+  const result = await adapter.executeAction({
+    actionRequest: {
+      capability: INTEGRATION_CAPABILITIES.CREATE_EXTERNAL_RECORD,
+      requiresApproval: true,
+      outboundApproved: true,
+      parameters: {
+        recordType: "ad_variant",
+        campaignId: "meta_campaign_1",
+        adSet: { name: "Variant B ad set" },
+        creative: { name: "Variant B creative", pageId: "page_1" },
+      },
+    },
+    connection: connection(),
+    credentialResolver: resolver({ adAccountId: "123", accessToken: "meta_token" }),
+  });
+  assert.equal(result.status, "completed");
+  assert.equal(result.metadata.adSetId, "meta_adset_variant");
+  assert.equal(result.metadata.adSetStatus, "PAUSED");
+  assert.equal(result.metadata.creativeId, "meta_creative_variant");
+  assert.equal(result.metadata.variant, true);
+  const adSetCall = calls.find((c) => c.url.includes("/adsets"));
+  assert.equal(adSetCall.body.status, "PAUSED");
+  assert.equal(adSetCall.body.campaign_id, "meta_campaign_1");
+});
+
+test("Meta Ads ad variant creation still requires owner approval", async () => {
+  const adapter = new MetaAdsIntegrationAdapter({ nowISO: NOW, graphApiVersion: "v25.0", fetchImpl: async () => { throw new Error("should not call Graph API"); } });
+  const result = await adapter.executeAction({
+    actionRequest: { capability: INTEGRATION_CAPABILITIES.CREATE_EXTERNAL_RECORD, requiresApproval: false, outboundApproved: false, parameters: { recordType: "ad_variant", campaignId: "meta_campaign_1" } },
+    connection: connection(),
+    credentialResolver: resolver({ adAccountId: "123", accessToken: "meta_token" }),
+  });
+  assert.equal(result.error, "owner_approval_required");
+});
+
+test("Meta Ads refuses ACTIVATE_AD_CAMPAIGN without both ownerApproved and confirmActivate", async () => {
+  const adapter = new MetaAdsIntegrationAdapter({ nowISO: NOW, graphApiVersion: "v25.0", fetchImpl: async () => { throw new Error("should not call Graph API"); } });
+
+  const missingBoth = await adapter.executeAction({
+    actionRequest: { capability: INTEGRATION_CAPABILITIES.ACTIVATE_AD_CAMPAIGN, parameters: { campaignId: "meta_campaign_1" } },
+    connection: connection(),
+    credentialResolver: resolver({ adAccountId: "123", accessToken: "meta_token" }),
+  });
+  assert.equal(missingBoth.error, "explicit_owner_activation_required");
+
+  const missingConfirm = await adapter.executeAction({
+    actionRequest: { capability: INTEGRATION_CAPABILITIES.ACTIVATE_AD_CAMPAIGN, parameters: { campaignId: "meta_campaign_1", ownerApproved: true } },
+    connection: connection(),
+    credentialResolver: resolver({ adAccountId: "123", accessToken: "meta_token" }),
+  });
+  assert.equal(missingConfirm.error, "explicit_owner_activation_required");
+
+  const missingOwnerApproval = await adapter.executeAction({
+    actionRequest: { capability: INTEGRATION_CAPABILITIES.ACTIVATE_AD_CAMPAIGN, parameters: { campaignId: "meta_campaign_1", confirmActivate: true } },
+    connection: connection(),
+    credentialResolver: resolver({ adAccountId: "123", accessToken: "meta_token" }),
+  });
+  assert.equal(missingOwnerApproval.error, "explicit_owner_activation_required");
+});
+
+test("Meta Ads activates a campaign only with explicit ownerApproved + confirmActivate", async () => {
+  let payload = null;
+  const adapter = new MetaAdsIntegrationAdapter({
+    nowISO: NOW,
+    graphApiVersion: "v25.0",
+    fetchImpl: async (_url, init) => { payload = JSON.parse(init.body); return { ok: true, json: async () => ({ success: true }) }; },
+  });
+  const result = await adapter.executeAction({
+    actionRequest: {
+      capability: INTEGRATION_CAPABILITIES.ACTIVATE_AD_CAMPAIGN,
+      parameters: { campaignId: "meta_campaign_1", ownerApproved: true, confirmActivate: true },
+    },
+    connection: connection(),
+    credentialResolver: resolver({ adAccountId: "123", accessToken: "meta_token" }),
+  });
+  assert.equal(result.status, "completed");
+  assert.equal(payload.status, "ACTIVE");
+  assert.equal(result.metadata.campaignStatus, "ACTIVE");
+});

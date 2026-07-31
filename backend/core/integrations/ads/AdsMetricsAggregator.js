@@ -1,9 +1,6 @@
 import { MetaAdsIntegrationAdapter } from "../adapters/MetaAdsIntegrationAdapter.js";
 import { GoogleAdsIntegrationAdapter } from "../adapters/GoogleAdsIntegrationAdapter.js";
-import {
-  TikTokLeadAdsIntegrationAdapter,
-  isTikTokMarketingApiConfigured,
-} from "../adapters/TikTokLeadAdsIntegrationAdapter.js";
+import { TikTokLeadAdsIntegrationAdapter } from "../adapters/TikTokLeadAdsIntegrationAdapter.js";
 import { INTEGRATION_CAPABILITIES } from "../capabilities/IntegrationCapability.js";
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 
@@ -240,24 +237,34 @@ async function fetchGoogleProvider({ rows, since, until, fetchImpl, nowISO }) {
   }
 }
 
-async function fetchTikTokProvider({ since, until, fetchImpl, nowISO }) {
+async function fetchTikTokProvider({ rows, since, until, fetchImpl, nowISO }) {
   const id = "tiktok_ads";
   const label = "TikTok Ads";
-  if (!isTikTokMarketingApiConfigured()) {
+  // TikTok Ads shares its connection with the lead-ads adapter
+  // (supportedConnectionTypes: ["tiktok_lead_ads"]) — a business's own
+  // connected credential takes priority; the platform env credential
+  // (isTikTokMarketingApiConfigured) is the VIBETech-managed fallback.
+  const row = rows.find((r) => String(r.providerType) === "tiktok_lead_ads");
+  const connection = row ? { credentialReference: { credentialId: row.credentialId } } : null;
+  const credentialResolver = row ? credentialResolverFor(rows) : null;
+  const adapter = new TikTokLeadAdsIntegrationAdapter({ fetchImpl, nowISO });
+  const health = await adapter.healthCheck({ connection, credentialResolver });
+  if (health.status === "not_configured") {
     return providerResult({
       id,
       label,
       status: "not_configured",
-      message: "TikTok Marketing API isn't configured yet. Ad performance reporting isn't available until VIBETech ops sets up platform credentials.",
+      message: health.message || "TikTok Marketing API isn't configured yet. Ad performance reporting isn't available until a business credential or VIBETech ops platform credential is set up.",
     });
   }
-  const adapter = new TikTokLeadAdsIntegrationAdapter({ fetchImpl, nowISO });
   try {
     const result = await adapter.executeAction({
       actionRequest: {
         capability: INTEGRATION_CAPABILITIES.READ_AD_PERFORMANCE,
         parameters: { since, until },
       },
+      connection,
+      credentialResolver,
     });
     if (result.status !== "completed") {
       return providerResult({
@@ -308,7 +315,7 @@ export async function fetchAdsMetrics({
   const [meta, google, tiktok] = await Promise.all([
     fetchMetaProvider({ rows, since, until, fetchImpl, nowISO }),
     fetchGoogleProvider({ rows, since, until, fetchImpl, nowISO }),
-    fetchTikTokProvider({ since, until, fetchImpl, nowISO }),
+    fetchTikTokProvider({ rows, since, until, fetchImpl, nowISO }),
   ]);
 
   return deepFreeze({

@@ -17,22 +17,65 @@ import { selectDueGmailSyncBusinesses } from "../../../backend/core/integrations
 // pick a handful that are overdue for a sync (see selectDueGmailSyncBusinesses),
 // and run GmailInboundSyncService for just those. Failures here must never break
 // the primary platform_jobs drain.
-const GMAIL_SYNC_CANDIDATE_POOL = 20;
-const GMAIL_SYNC_MAX_PER_TICK = 3;
+//
+// The candidate pool (100) and offset rotation below exist so that once a
+// deployment has more Gmail-connected businesses than fit in one pool, every
+// business still eventually gets pulled into a tick instead of only ever the
+// first `GMAIL_SYNC_CANDIDATE_POOL` (ordered by workspace_id) ever syncing.
+const GMAIL_SYNC_CANDIDATE_POOL = 100;
+const GMAIL_SYNC_MAX_PER_TICK = 8;
 const GMAIL_SYNC_MIN_INTERVAL_MS = 10 * 60 * 1000;
 
+// Best-effort in-memory rotation cursor: advances by the pool size each tick
+// (within this process) so successive ticks sweep through different slices of
+// the ordered workspace_id list, then wraps back to 0 once a sweep returns
+// fewer candidates than requested (i.e. it reached the end of the list). This
+// is intentionally process-local — with multiple hosted instances each keeps
+// its own cursor, which just means the pools they sweep can overlap; it never
+// causes a business to be skipped forever, only (at worst) swept more than
+// once before every instance's cursor has wrapped.
+let gmailSyncPoolOffset = 0;
+
 async function runHostedGmailInboxSyncSweep() {
-  const outcome = { attempted: 0, synced: 0, errors: [] as Array<{ businessId: string; reason: string }> };
+  const outcome = {
+    attempted: 0,
+    synced: 0,
+    errors: [] as Array<{ businessId: string; reason: string }>,
+    poolOffset: 0,
+  };
   const listCandidates = (platformStore as any)?.listWorkspaceIdsWithIntegrationCredentialType;
   if (typeof listCandidates !== "function") return outcome;
 
+  const poolOffset = gmailSyncPoolOffset;
   let candidateBusinessIds: string[] = [];
   try {
-    candidateBusinessIds = await listCandidates.call(platformStore, "gmail", { limit: GMAIL_SYNC_CANDIDATE_POOL });
+    candidateBusinessIds = await listCandidates.call(platformStore, "gmail", {
+      limit: GMAIL_SYNC_CANDIDATE_POOL,
+      offset: poolOffset,
+    });
   } catch {
     return outcome;
   }
-  if (!candidateBusinessIds.length) return outcome;
+  // Advance (or wrap) the rotation cursor for the next tick regardless of
+  // whether any business in this pool turns out to be due for a sync.
+  gmailSyncPoolOffset = candidateBusinessIds.length < GMAIL_SYNC_CANDIDATE_POOL
+    ? 0
+    : poolOffset + candidateBusinessIds.length;
+  if (!candidateBusinessIds.length) {
+    // Pool came back empty at a non-zero offset (fewer total businesses than
+    // the offset implied, e.g. some were disconnected) — reset and retry once
+    // from the start so a tick right after a big drop in connections isn't wasted.
+    if (poolOffset > 0) {
+      gmailSyncPoolOffset = 0;
+      try {
+        candidateBusinessIds = await listCandidates.call(platformStore, "gmail", { limit: GMAIL_SYNC_CANDIDATE_POOL, offset: 0 });
+      } catch {
+        return outcome;
+      }
+      gmailSyncPoolOffset = candidateBusinessIds.length < GMAIL_SYNC_CANDIDATE_POOL ? 0 : candidateBusinessIds.length;
+    }
+    if (!candidateBusinessIds.length) return outcome;
+  }
 
   const candidates = await Promise.all(
     candidateBusinessIds.map(async (businessId) => ({
@@ -47,6 +90,7 @@ async function runHostedGmailInboxSyncSweep() {
     maxPerTick: GMAIL_SYNC_MAX_PER_TICK,
   });
   outcome.attempted = dueBusinessIds.length;
+  outcome.poolOffset = poolOffset;
 
   for (const businessId of dueBusinessIds) {
     try {

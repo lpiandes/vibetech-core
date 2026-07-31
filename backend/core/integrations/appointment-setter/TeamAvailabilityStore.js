@@ -18,9 +18,13 @@
  *   updatedAt,
  * }
  *
- * Note: slot resolution treats all weekly/override times as being in
- * `availability.timezone` — per-member timezone is stored for display but not
- * yet used to convert times during slot math.
+ * Timezones ARE used during slot resolution (see resolveAvailabilitySlots.js):
+ * each member's weekly/override windows are treated as civil (wall-clock)
+ * times in `member.timezone`, falling back to `availability.timezone`, then
+ * America/New_York, then UTC if neither is a valid IANA zone identifier.
+ * Conversion to UTC instants goes through the `zonedTimeToUtc` helper
+ * (backend/core/workspace/_utils/timezone.js), which is correct across DST
+ * transitions and never depends on the server process's local timezone.
  */
 export const DEFAULT_TIMEZONE = "America/New_York";
 

@@ -1664,6 +1664,12 @@ export class AiBuilderService {
     return deepFreeze({ ok: true, session: updated, approval });
   }
 
+  /**
+   * install() must be durable and resume-safe: a thrown error (network blip, DB hiccup,
+   * canonical-persist failure) must never leave the session claiming "installed" without
+   * the canonical Business OS actually persisted, and must never lose answers/plan/approval.
+   * The session is only advanced to "installed" after canonical persistence succeeds.
+   */
   async install({
     sessionId,
     approved = false,
@@ -1673,15 +1679,10 @@ export class AiBuilderService {
     const session = await this.requireSession(sessionId);
 
     // Already live — idempotent success (reloading /install must not re-enter installing).
+    // Self-heals the case where a session was marked installed but canonical persistence
+    // never completed (e.g. an older bug, or a crash between the two writes).
     if (String(session.currentStage) === "installed" && session.businessId) {
-      const storedInstalled = await this.loadProposalState(session);
-      return deepFreeze({
-        ok: true,
-        alreadyInstalled: true,
-        session,
-        installation: storedInstalled?.installation ?? { ok: true },
-        openHref: `/b/${session.businessId}/home`,
-      });
+      return this.#reconcileAlreadyInstalledSession({ session, actorId });
     }
 
     let stored = await this.loadProposalState(session);
@@ -1703,140 +1704,327 @@ export class AiBuilderService {
       stored = await this.loadProposalState(await this.requireSession(sessionId));
     }
 
-    const businessId = await this.ensurePlatformBusinessId(session, stored);
-    await this.syncPlatformBusinessName({ session, stored, businessId });
-    await this.syncPlatformIndustryPackage({ session, stored, businessId });
-    this.hydrateInstallationRepository(businessId, stored);
+    let businessId = null;
+    let specification = null;
+    let plan = null;
+    let dryRunResult = null;
+    let approval = null;
+    let installing = session;
+    let installed = null;
 
-    // Re-apply owner plan edits; if they changed the installable spec, re-dry-run + re-bind approval.
-    let specification = sanitizeSpecificationEmployeeArchetypes(
-      applyPlanAdditionsToSpecification(stored.specification, session),
-    );
-    let plan = stored.plan;
-    let dryRunResult = stored.dryRunResult;
-    let approval = stored.approval;
-    const specChanged = String(specification?.contentHash ?? "") !== String(stored.specification?.contentHash ?? "")
-      || (specification?.employeeDefinitions?.length ?? 0) !== (stored.specification?.employeeDefinitions?.length ?? 0);
+    try {
+      businessId = await this.ensurePlatformBusinessId(session, stored);
+      await this.syncPlatformBusinessName({ session, stored, businessId });
+      await this.syncPlatformIndustryPackage({ session, stored, businessId });
+      this.hydrateInstallationRepository(businessId, stored);
 
-    if (specChanged) {
-      const compiled = this.compiler.compile(specification, { nowISO: this.nowISO() });
-      if (!compiled.ok) return compiled;
-      plan = compiled.plan;
-      dryRunResult = this.installer.dryRun({
+      // Re-apply owner plan edits; if they changed the installable spec, re-dry-run + re-bind approval.
+      specification = sanitizeSpecificationEmployeeArchetypes(
+        applyPlanAdditionsToSpecification(stored.specification, session),
+      );
+      plan = stored.plan;
+      dryRunResult = stored.dryRunResult;
+      approval = stored.approval;
+      const specChanged = String(specification?.contentHash ?? "") !== String(stored.specification?.contentHash ?? "")
+        || (specification?.employeeDefinitions?.length ?? 0) !== (stored.specification?.employeeDefinitions?.length ?? 0);
+
+      if (specChanged) {
+        const compiled = this.compiler.compile(specification, { nowISO: this.nowISO() });
+        if (!compiled.ok) return compiled;
+        plan = compiled.plan;
+        dryRunResult = this.installer.dryRun({
+          specification: { ...specification, businessId },
+          plan,
+          businessId,
+          nowISO: this.nowISO(),
+        });
+        if (!dryRunResult?.ok) {
+          return deepFreeze({
+            ok: false,
+            reason: "dry_run_required",
+            dryRunResult,
+            checklist: buildDryRunChecklist({ plan, dryRunResult, specification }),
+          });
+        }
+        approval = createBusinessOSInstallationApproval({
+          approvalId: `appr_${session.sessionId}_${String(specification.contentHash ?? "plan").slice(0, 8)}`,
+          businessId,
+          specificationId: specification.specificationId,
+          specificationVersion: specification.version,
+          specificationContentHash: specification.contentHash,
+          planId: plan.planId,
+          planHash: plan.planHash,
+          approvedByUserId: actorId ?? session.actorId ?? "builder_actor",
+          approvedAt: this.nowISO(),
+        });
+        this.installationRepository.saveApproval(approval);
+      }
+
+      installing = withBuilderSessionPatch(session, { currentStage: "installing" });
+      await this.repository.save(installing);
+      await this.recordArchitectAudit(installing, "architect.change_execution_started", {
+        businessId,
+        planId: plan?.planId ?? null,
+      });
+
+      installed = this.installer.install({
         specification: { ...specification, businessId },
         plan,
         businessId,
+        dryRunResult,
+        approval,
+        actorUserId: actorId ?? session.actorId,
         nowISO: this.nowISO(),
+        failAtOperationId,
       });
-      if (!dryRunResult?.ok) {
-        return deepFreeze({
-          ok: false,
-          reason: "dry_run_required",
+
+      if (!installed.ok) {
+        return await this.#markInstallFailed({
+          base: installing,
+          stored,
+          specification,
+          plan,
           dryRunResult,
-          checklist: buildDryRunChecklist({ plan, dryRunResult, specification }),
+          approval,
+          installationRecord: installed.installation ?? stored.installation,
+          installerResult: installed,
+          businessId,
+          reason: installed.reason ?? "install_failed",
         });
       }
-      approval = createBusinessOSInstallationApproval({
-        approvalId: `appr_${session.sessionId}_${String(specification.contentHash ?? "plan").slice(0, 8)}`,
-        businessId,
-        specificationId: specification.specificationId,
-        specificationVersion: specification.version,
-        specificationContentHash: specification.contentHash,
-        planId: plan.planId,
-        planHash: plan.planHash,
-        approvedByUserId: actorId ?? session.actorId ?? "builder_actor",
-        approvedAt: this.nowISO(),
-      });
-      this.installationRepository.saveApproval(approval);
-    }
 
-    const installing = withBuilderSessionPatch(session, { currentStage: "installing" });
-    await this.repository.save(installing);
-    await this.recordArchitectAudit(installing, "architect.change_execution_started", {
-      businessId,
-      planId: plan?.planId ?? null,
-    });
+      // Operation-level install succeeded. Only declare victory once the canonical
+      // Business OS rows are durably persisted — Home reads truth from those tables.
+      try {
+        await this.persistCanonicalBusinessOS({
+          businessId,
+          specification: { ...specification, businessId },
+          plan,
+          installation: installed.installation,
+          actorUserId: actorId ?? session.actorId,
+        });
+      } catch (canonicalError) {
+        return await this.#markInstallFailed({
+          base: installing,
+          stored,
+          specification,
+          plan,
+          dryRunResult,
+          approval,
+          installationRecord: installed.installation,
+          businessId,
+          reason: "canonical_persist_failed",
+          errorMessage: canonicalError instanceof Error ? canonicalError.message : String(canonicalError),
+        });
+      }
 
-    const installed = this.installer.install({
-      specification: { ...specification, businessId },
-      plan,
-      businessId,
-      dryRunResult,
-      approval,
-      actorUserId: actorId ?? session.actorId,
-      nowISO: this.nowISO(),
-      failAtOperationId,
-    });
-
-    const proposalState = createBuilderProposalState({
-      ...stored,
-      specification,
-      plan,
-      dryRunResult,
-      approval,
-      installation: installed.installation ?? stored.installation,
-      updatedAt: this.nowISO(),
-    });
-
-    const updated = await this.persistProposalState(installing, proposalState, {
-      currentStage: installed.ok ? "installed" : "failed",
-      businessId,
-      installationPlanId: plan?.planId,
-      installationPlanHash: plan?.planHash,
-    });
-
-    if (installed.ok) {
-      await this.persistCanonicalBusinessOS({
-        businessId,
-        specification: { ...specification, businessId },
+      const proposalState = createBuilderProposalState({
+        ...stored,
+        specification,
         plan,
-        installation: installed.installation ?? proposalState.installation,
-        actorUserId: actorId ?? session.actorId,
+        dryRunResult,
+        approval,
+        installation: installed.installation,
+        updatedAt: this.nowISO(),
       });
-      await this.executeChangeSideEffects({
+
+      const updated = await this.persistProposalState(installing, proposalState, {
+        currentStage: "installed",
+        businessId,
+        installationPlanId: plan?.planId,
+        installationPlanHash: plan?.planHash,
+        metadata: { ...installing.metadata, installError: null },
+      });
+
+      // Best-effort tail — the install is already durably persisted; these must never
+      // undo a successful, persisted install if they fail.
+      try {
+        await this.executeChangeSideEffects({
+          session: updated,
+          sideEffects: session.metadata?.lastChangeSideEffects ?? [],
+          actorId: actorId ?? session.actorId,
+          businessId,
+        });
+        await this.recordArchitectAudit(updated, "architect.change_executed", {
+          businessId,
+          installationId: installed.installation?.installationId ?? null,
+        });
+      } catch {
+        /* non-fatal — install already succeeded and is durably persisted */
+      }
+
+      const actionResults = installed.actionResults ?? installed.installation?.actionCheckpoints ?? [];
+      return deepFreeze({
+        ok: true,
         session: updated,
-        sideEffects: session.metadata?.lastChangeSideEffects ?? [],
-        actorId: actorId ?? session.actorId,
-        businessId,
+        installation: installed,
+        actionResults,
+        installProgress: summarizeInstallActionProgress(actionResults, { ok: true }),
+        openHref: `/b/${businessId}/home`,
       });
-      await this.recordArchitectAudit(updated, "architect.change_executed", {
-        businessId,
-        installationId: installed.installation?.installationId ?? null,
-      });
-    } else {
-      await this.recordArchitectAudit(updated, "architect.change_failed", {
-        businessId,
-        reason: installed.reason ?? "install_failed",
+    } catch (error) {
+      return await this.#markInstallFailed({
+        base: installing,
+        stored,
+        specification,
+        plan,
+        dryRunResult,
+        approval,
+        installationRecord: installed?.installation ?? stored?.installation ?? null,
+        businessId: businessId ?? session.businessId ?? null,
+        reason: "install_threw",
+        errorMessage: error instanceof Error ? error.message : String(error),
       });
     }
-
-    const actionResults = installed.actionResults
-      ?? installed.installation?.actionCheckpoints
-      ?? [];
-    return deepFreeze({
-      ok: installed.ok,
-      session: updated,
-      installation: installed,
-      actionResults,
-      installProgress: summarizeInstallActionProgress(actionResults, { ok: installed.ok }),
-      openHref: installed.ok ? `/b/${businessId}/home` : null,
-    });
   }
 
-  async resumeInstall({ sessionId, actorId = null, failAtOperationId = null }) {
-    const session = await this.requireSession(sessionId);
-    if (String(session.currentStage) === "installed" && session.businessId) {
+  /**
+   * Session already claims "installed" — verify the canonical Business OS actually exists
+   * before trusting it. If it does not (crash between the two writes, or legacy data),
+   * reconcile from the durable proposal state instead of silently sending the owner back
+   * to onboarding.
+   */
+  async #reconcileAlreadyInstalledSession({ session, actorId = null }) {
+    const stored = await this.loadProposalState(session);
+    const canonicalExists = await this.canonicalBusinessOSExists(session.businessId);
+    if (canonicalExists) {
       return deepFreeze({
         ok: true,
         alreadyInstalled: true,
         session,
-        installation: { ok: true },
+        installation: stored?.installation ?? { ok: true },
         openHref: `/b/${session.businessId}/home`,
       });
     }
-    const stored = await this.loadProposalState(session);
-    if (!stored?.approval) {
-      return deepFreeze({ ok: false, reason: "approval_required" });
+
+    if (!stored?.specification || !stored?.plan || !stored?.installation) {
+      // Nothing durable to reconcile with — still honor the session's claim rather than
+      // trapping the owner, but callers can see canonicalReconciled: false.
+      return deepFreeze({
+        ok: true,
+        alreadyInstalled: true,
+        session,
+        installation: stored?.installation ?? { ok: true },
+        openHref: `/b/${session.businessId}/home`,
+        canonicalReconciled: false,
+      });
+    }
+
+    try {
+      await this.persistCanonicalBusinessOS({
+        businessId: session.businessId,
+        specification: stored.specification,
+        plan: stored.plan,
+        installation: stored.installation,
+        actorUserId: actorId ?? session.actorId,
+      });
+      return deepFreeze({
+        ok: true,
+        alreadyInstalled: true,
+        session,
+        installation: stored.installation,
+        openHref: `/b/${session.businessId}/home`,
+        canonicalReconciled: true,
+      });
+    } catch (error) {
+      return await this.#markInstallFailed({
+        base: session,
+        stored,
+        specification: stored.specification,
+        plan: stored.plan,
+        dryRunResult: stored.dryRunResult,
+        approval: stored.approval,
+        installationRecord: stored.installation,
+        businessId: session.businessId,
+        reason: "canonical_persist_failed",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * Durably persist a failed/interrupted install: session moves to "failed" (never lost —
+   * "failed" keeps all answers/plan/approval so retry is possible), with the error recorded
+   * in metadata for the UI to show recovery messaging instead of a blank restart.
+   */
+  async #markInstallFailed({
+    base,
+    stored,
+    specification = null,
+    plan = null,
+    dryRunResult = null,
+    approval = null,
+    installationRecord = null,
+    installerResult = null,
+    businessId = null,
+    reason = "install_failed",
+    errorMessage = null,
+  }) {
+    const now = this.nowISO();
+    const proposalState = createBuilderProposalState({
+      ...stored,
+      specification: specification ?? stored?.specification ?? null,
+      plan: plan ?? stored?.plan ?? null,
+      dryRunResult: dryRunResult ?? stored?.dryRunResult ?? null,
+      approval: approval ?? stored?.approval ?? null,
+      installation: installationRecord ?? stored?.installation ?? null,
+      updatedAt: now,
+    });
+    const updated = await this.persistProposalState(base, proposalState, {
+      currentStage: "failed",
+      ...(businessId ? { businessId } : {}),
+      metadata: {
+        ...base.metadata,
+        installError: { reason, message: errorMessage, at: now },
+      },
+    });
+    await this.recordArchitectAudit(updated, "architect.change_failed", {
+      businessId: businessId ?? base.businessId ?? null,
+      reason,
+    });
+    const installation = installerResult ?? {
+      ok: false,
+      reason,
+      message: errorMessage,
+      installation: installationRecord ?? null,
+    };
+    const actionResults = installation.actionResults ?? installationRecord?.actionCheckpoints ?? [];
+    return deepFreeze({
+      ok: false,
+      reason,
+      session: updated,
+      installation,
+      actionResults,
+      installProgress: summarizeInstallActionProgress(actionResults, { ok: false }),
+      openHref: null,
+      message: errorMessage ?? undefined,
+    });
+  }
+
+  /** Truth for "is this business actually live" lives in canonical Postgres, not session state. */
+  async canonicalBusinessOSExists(businessId) {
+    if (!businessId || String(businessId).startsWith("draft_")) return false;
+    if (typeof this.platformStore?.getBusinessOSInstallation !== "function") return true;
+    try {
+      const row = await this.platformStore.getBusinessOSInstallation(businessId);
+      return Boolean(row);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Resume-safe: retries install from durable session state. If the session already claims
+   * installed, delegate to install()'s own canonical-reconciliation check rather than trusting
+   * the flag blindly.
+   */
+  async resumeInstall({ sessionId, actorId = null, failAtOperationId = null }) {
+    const session = await this.requireSession(sessionId);
+    if (String(session.currentStage) !== "installed") {
+      const stored = await this.loadProposalState(session);
+      if (!stored?.approval) {
+        return deepFreeze({ ok: false, reason: "approval_required" });
+      }
     }
     return this.install({
       sessionId,

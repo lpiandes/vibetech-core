@@ -24,6 +24,10 @@ export const INTEGRATION_CAPABILITIES = {
   CREATE_AD_CAMPAIGN: "CREATE_AD_CAMPAIGN",
   READ_AD_PERFORMANCE: "READ_AD_PERFORMANCE",
   READ_SEARCH_PERFORMANCE: "READ_SEARCH_PERFORMANCE",
+  // Explicit, double-confirmed owner action that flips a paused campaign
+  // active. Never invoked automatically by any playbook/orchestration code —
+  // see MetaAdsIntegrationAdapter / TikTokLeadAdsIntegrationAdapter.
+  ACTIVATE_AD_CAMPAIGN: "ACTIVATE_AD_CAMPAIGN",
 };
 
 export const SUPPORTED_INTEGRATION_CAPABILITIES = Object.values(INTEGRATION_CAPABILITIES);

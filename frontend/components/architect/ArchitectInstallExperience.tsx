@@ -217,8 +217,37 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
         setActiveStep(ARCHITECT_INSTALL_STAGES.length - 1);
         setPercent(100);
         setOpenHref(`/b/${businessId}/home`);
-      } else if (stage === "failed") {
+        return;
+      }
+      // Reloading mid-install or after a failed attempt must show recovery — never a blank
+      // "Approve" start screen that hides that work (and answers/plan/approval) already exists.
+      if (stage === "failed" || stage === "installing") {
         setStatus("failed");
+        try {
+          const proposalResponse = await fetch(`/api/builder/sessions/${encodeURIComponent(sessionId)}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: "get_proposal" }),
+          });
+          const proposalData = await proposalResponse.json();
+          if (proposalData.ok) {
+            const actionResults = proposalData.installation?.actionResults
+              ?? proposalData.installation?.actionCheckpoints
+              ?? [];
+            const progress = summarizeInstallProgress(actionResults);
+            setStageOverride(progress.stages);
+            setActiveStep(progress.activeIndex);
+            setPercent(progress.percent);
+          }
+          const installErrorMeta = proposalData.session?.metadata?.installError ?? null;
+          setError(
+            installErrorMeta?.message
+              ? { ...presentProductError("install_failed"), whatHappened: String(installErrorMeta.message) }
+              : presentProductError("install_failed"),
+          );
+        } catch {
+          setError(presentProductError("install_failed"));
+        }
       }
     })();
   }, [sessionId]);
@@ -399,8 +428,15 @@ export function ArchitectInstallClient({ sessionId }: { sessionId: string }) {
         ) : null}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <ArchitectButton disabled={busy} onClick={() => void install()}>
-            {busy ? HUMAN_COPY.installing : HUMAN_COPY.approveLaunch}
+          <ArchitectButton
+            disabled={busy}
+            onClick={() => void install({ resume: status === "failed" })}
+          >
+            {busy
+              ? HUMAN_COPY.installing
+              : status === "failed"
+                ? "Retry go live"
+                : HUMAN_COPY.approveLaunch}
           </ArchitectButton>
           <ArchitectButton variant="ghost" onClick={() => router.push(routes.session)}>
             Back to Ask VIBETech

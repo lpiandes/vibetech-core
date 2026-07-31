@@ -8,6 +8,12 @@ import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
  * MetaAdsIntegrationAdapter#createLeadCampaignScaffold and
  * TikTokLeadAdsIntegrationAdapter for the adapter-level scaffolding this
  * playbook drives.
+ *
+ * Activation: once the owner has reviewed a paused campaign, activating it
+ * can go through either Ads Manager directly, or the adapters' explicit
+ * ACTIVATE_AD_CAMPAIGN action — which both adapters refuse unless the caller
+ * passes BOTH `ownerApproved: true` AND `confirmActivate: true`. Nothing in
+ * this playbook (or the adapters) ever sets those flags automatically.
  */
 
 export const MANAGED_LEAD_ADS_STEPS = deepFreeze([
@@ -60,7 +66,7 @@ export const MANAGED_LEAD_ADS_STEPS = deepFreeze([
   {
     id: "review_and_activate",
     title: "Owner reviews and activates",
-    description: "Owner (or VIBETech ops with owner sign-off) reviews the paused campaigns in Ads Manager / TikTok Ads Manager and activates. Nothing in this playbook flips a campaign to active automatically.",
+    description: "Owner (or VIBETech ops with owner sign-off) reviews the paused campaigns in Ads Manager / TikTok Ads Manager and activates — either directly in Ads Manager, or via each adapter's ACTIVATE_AD_CAMPAIGN action (capability shared by meta_ads and tiktok_lead_ads), which requires explicit ownerApproved: true AND confirmActivate: true and never flips a campaign to active automatically.",
     ownerInputRequired: true,
   },
 ]);

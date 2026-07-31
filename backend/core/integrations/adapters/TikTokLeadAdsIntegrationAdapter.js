@@ -19,20 +19,90 @@ export function isTikTokLeadAdsWebhookConfigured() {
 }
 
 /**
+ * Platform-level TikTok Marketing API access token / advertiser id — the
+ * VIBETech-ops-managed fallback used when a business hasn't connected its own
+ * TikTok Ads credential. `TIKTOK_ADS_ACCESS_TOKEN`/`TIKTOK_ADS_ADVERTISER_ID`
+ * are accepted as aliases of `TIKTOK_ACCESS_TOKEN`/`TIKTOK_ADVERTISER_ID` so
+ * ops can name the env vars either way.
+ */
+function platformAccessToken() {
+  return safeString(process.env.TIKTOK_ACCESS_TOKEN) || safeString(process.env.TIKTOK_ADS_ACCESS_TOKEN);
+}
+
+function platformAdvertiserId() {
+  return safeString(process.env.TIKTOK_ADVERTISER_ID) || safeString(process.env.TIKTOK_ADS_ADVERTISER_ID);
+}
+
+/**
  * TikTok Marketing API credentials for VIBETech-managed campaign creation.
- * This is a platform-level (not per-business) credential today — scaffold
- * stage only. Do not treat this as a per-workspace OAuth connection yet.
+ * This checks the platform-level (not per-business) env credential only —
+ * see `isTikTokMarketingApiUsable` for the combined per-business-or-platform
+ * check the adapter itself uses.
  */
 export function isTikTokMarketingApiConfigured() {
-  return Boolean(
-    safeString(process.env.TIKTOK_ACCESS_TOKEN)
-    && safeString(process.env.TIKTOK_ADVERTISER_ID),
-  );
+  return Boolean(platformAccessToken() && platformAdvertiserId());
 }
 
 /** Overall "is TikTok lead ads usable at all" gate for provider registration. */
 export function isTikTokLeadAdsConfigured() {
   return isTikTokLeadAdsWebhookConfigured() || isTikTokMarketingApiConfigured();
+}
+
+/** Resolve a per-business TikTok Ads credential via the connection's credentialResolver, if any. */
+function resolveConnectionCreds({ connection, credentialResolver }) {
+  if (!connection?.credentialReference || !credentialResolver) return null;
+  let value;
+  try {
+    value = credentialResolver.resolve(connection.credentialReference);
+  } catch {
+    return null;
+  }
+  const accessToken = safeString(value?.accessToken || value?.access_token);
+  const advertiserId = safeString(value?.advertiserId || value?.advertiser_id);
+  if (!accessToken || !advertiserId) return null;
+  return { accessToken, advertiserId, source: "connection" };
+}
+
+function resolvePlatformCreds() {
+  const accessToken = platformAccessToken();
+  const advertiserId = platformAdvertiserId();
+  if (!accessToken || !advertiserId) return null;
+  return { accessToken, advertiserId, source: "platform_env" };
+}
+
+/**
+ * Prefer a business's own connected TikTok Ads credential; fall back to the
+ * VIBETech-managed platform credential (env vars) when the business hasn't
+ * connected one yet. Either path is enough to consider TikTok Ads "usable".
+ */
+function resolveCreds({ connection, credentialResolver }) {
+  return resolveConnectionCreds({ connection, credentialResolver }) || resolvePlatformCreds();
+}
+
+/** Human-readable list of exactly what's missing, for clear not_configured errors. */
+function describeMissingCreds({ connection, credentialResolver }) {
+  const missing = [];
+  if (connection?.credentialReference && credentialResolver) {
+    let value = null;
+    try {
+      value = credentialResolver.resolve(connection.credentialReference);
+    } catch (err) {
+      missing.push(`connected TikTok Ads credential could not be resolved (${String(err?.message ?? err)})`);
+    }
+    if (value) {
+      const fields = [];
+      if (!safeString(value?.accessToken || value?.access_token)) fields.push("access token");
+      if (!safeString(value?.advertiserId || value?.advertiser_id)) fields.push("advertiser id");
+      if (fields.length) missing.push(`connected TikTok Ads credential is missing ${fields.join(" and ")}`);
+    }
+  } else {
+    missing.push("no per-business TikTok Ads connection");
+  }
+  const envMissing = [];
+  if (!platformAccessToken()) envMissing.push("TIKTOK_ACCESS_TOKEN (or TIKTOK_ADS_ACCESS_TOKEN)");
+  if (!platformAdvertiserId()) envMissing.push("TIKTOK_ADVERTISER_ID (or TIKTOK_ADS_ADVERTISER_ID)");
+  if (envMissing.length) missing.push(`platform fallback env not set: ${envMissing.join(", ")}`);
+  return missing;
 }
 
 /**
@@ -69,52 +139,65 @@ export class TikTokLeadAdsIntegrationAdapter extends IntegrationProvider {
       INTEGRATION_CAPABILITIES.INGEST_FORM_SUBMISSION,
       INTEGRATION_CAPABILITIES.CREATE_AD_CAMPAIGN,
       INTEGRATION_CAPABILITIES.READ_AD_PERFORMANCE,
+      // Owner-gated activation — see #activateCampaign. Refuses unless both
+      // ownerApproved and confirmActivate are explicit; never automatic.
+      INTEGRATION_CAPABILITIES.ACTIVATE_AD_CAMPAIGN,
     ];
   }
 
   getSetupGuidance() {
     return createProviderSetupGuidance({
       title: "VIBETech-managed TikTok lead ads",
-      summary: "VIBETech ops runs TikTok lead-form ads on your behalf as part of the managed lead ads playbook. This is rolling out — campaign scaffolding requires platform-level TikTok Business Center credentials; there is no self-serve connect yet.",
+      summary: "VIBETech ops runs TikTok lead-form ads on your behalf as part of the managed lead ads playbook. Connect your own TikTok Ads access token + advertiser ID below, or VIBETech ops can run campaigns on the platform-managed credential (env: TIKTOK_ACCESS_TOKEN / TIKTOK_ADVERTISER_ID, aka TIKTOK_ADS_ACCESS_TOKEN / TIKTOK_ADS_ADVERTISER_ID) until you connect your own.",
       estimatedTime: "Managed by VIBETech ops",
       prerequisites: ["TikTok Business Center account", "TikTok Ads Manager advertiser ID", "Lead Generation objective enabled on the advertiser account"],
       steps: [
-        "VIBETech ops configures a TikTok Business Center app + advertiser access",
+        "Connect your own TikTok Ads access token + advertiser ID (preferred), or ask VIBETech ops to configure the platform-managed credential",
         "VIBETech ops scaffolds a paused campaign for your offer/creative brief",
         "Owner reviews the paused campaign and approves the budget",
-        "VIBETech ops (or the owner) activates the campaign in TikTok Ads Manager",
+        "VIBETech ops (or the owner) activates the campaign in TikTok Ads Manager, or via the ACTIVATE_AD_CAMPAIGN action (requires ownerApproved + confirmActivate)",
         "New lead-form submissions webhook into the same appointment-setter pipeline as Meta leads",
       ],
       permissionsRequested: ["ads_management", "leads_retrieval"],
-      verificationMethod: "TikTok Marketing API advertiser probe (platform credentials).",
-      commonProblems: ["Platform TikTok credentials not configured yet — managed ops required", "Advertiser account missing Lead Generation objective"],
-      reconnectInstructions: "Contact VIBETech ops to refresh TikTok Business Center credentials.",
+      verificationMethod: "TikTok Marketing API advertiser probe (per-business credential, or platform credential if not connected).",
+      commonProblems: [
+        "Neither a per-business connection nor platform TIKTOK_ACCESS_TOKEN/TIKTOK_ADVERTISER_ID env is configured",
+        "Advertiser account missing Lead Generation objective",
+        "ACTIVATE_AD_CAMPAIGN refuses without both ownerApproved and confirmActivate set explicitly",
+      ],
+      reconnectInstructions: "Reconnect with a fresh TikTok Ads access token, or contact VIBETech ops to refresh the platform Business Center credential.",
       documentationReference: "https://business-api.tiktok.com/portal/docs",
     });
   }
 
-  async healthCheck() {
-    if (!isTikTokMarketingApiConfigured()) {
-      return { status: "not_configured", providerId: this.id, message: "TikTok Marketing API credentials are not set. VIBETech-managed TikTok lead ads is not available yet." };
+  async healthCheck({ connection, credentialResolver } = {}) {
+    const creds = resolveCreds({ connection, credentialResolver });
+    if (!creds) {
+      return {
+        status: "not_configured",
+        providerId: this.id,
+        message: `TikTok Marketing API credentials aren't available yet (${describeMissingCreds({ connection, credentialResolver }).join("; ")}).`,
+        missing: describeMissingCreds({ connection, credentialResolver }),
+      };
     }
-    return { status: "requires_connection", providerId: this.id };
+    return { status: "requires_connection", providerId: this.id, credentialSource: creds.source };
   }
 
-  async verifyConnection() {
-    if (!isTikTokMarketingApiConfigured()) {
+  async verifyConnection({ connection, credentialResolver } = {}) {
+    const creds = resolveCreds({ connection, credentialResolver });
+    if (!creds) {
       return deepFreeze({
         status: "failed",
         verifiedAt: this._nowISO,
         capabilitiesVerified: [],
         code: "not_configured",
-        message: "TikTok Marketing API credentials (TIKTOK_ACCESS_TOKEN, TIKTOK_ADVERTISER_ID) are not configured.",
+        message: `TikTok Marketing API credentials are not configured (${describeMissingCreds({ connection, credentialResolver }).join("; ")}).`,
       });
     }
     try {
-      const advertiserId = safeString(process.env.TIKTOK_ADVERTISER_ID);
       const res = await this._fetch(
-        `${TIKTOK_API_BASE}/advertiser/info/?advertiser_ids=${encodeURIComponent(JSON.stringify([advertiserId]))}`,
-        { headers: { "Access-Token": safeString(process.env.TIKTOK_ACCESS_TOKEN) } },
+        `${TIKTOK_API_BASE}/advertiser/info/?advertiser_ids=${encodeURIComponent(JSON.stringify([creds.advertiserId]))}`,
+        { headers: { "Access-Token": creds.accessToken } },
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok || Number(data?.code) !== 0) {
@@ -160,13 +243,13 @@ export class TikTokLeadAdsIntegrationAdapter extends IntegrationProvider {
       kind: "tiktok_leadgen",
       leadId: safeString(lead.lead_id || lead.id),
       formId: safeString(lead.form_id || body?.form_id),
-      advertiserId: safeString(lead.advertiser_id || body?.advertiser_id || process.env.TIKTOK_ADVERTISER_ID),
+      advertiserId: safeString(lead.advertiser_id || body?.advertiser_id || platformAdvertiserId()),
       createdTime: safeString(lead.create_time || lead.created_time),
       raw: deepFreeze(lead),
     });
   }
 
-  async executeAction({ actionRequest } = {}) {
+  async executeAction({ actionRequest, connection, credentialResolver } = {}) {
     const capability = safeString(actionRequest?.capability);
     const params = actionRequest?.parameters ?? {};
 
@@ -181,20 +264,20 @@ export class TikTokLeadAdsIntegrationAdapter extends IntegrationProvider {
     }
 
     if (capability === INTEGRATION_CAPABILITIES.READ_AD_PERFORMANCE) {
-      if (!isTikTokMarketingApiConfigured()) {
+      const creds = resolveCreds({ connection, credentialResolver });
+      if (!creds) {
         return deepFreeze({
           status: "failed",
           error: "not_configured",
-          message: "TikTok Marketing API credentials (TIKTOK_ACCESS_TOKEN, TIKTOK_ADVERTISER_ID) aren't set. TikTok ad performance reporting isn't available until VIBETech ops configures platform credentials.",
+          message: `TikTok ad performance reporting isn't available yet (${describeMissingCreds({ connection, credentialResolver }).join("; ")}).`,
           completedAt: this._nowISO,
         });
       }
       try {
-        const advertiserId = safeString(process.env.TIKTOK_ADVERTISER_ID);
         const startDate = safeString(params.since);
         const endDate = safeString(params.until);
         const query = new URLSearchParams({
-          advertiser_id: advertiserId,
+          advertiser_id: creds.advertiserId,
           report_type: "BASIC",
           data_level: "AUCTION_CAMPAIGN",
           dimensions: JSON.stringify(["campaign_id"]),
@@ -204,7 +287,7 @@ export class TikTokLeadAdsIntegrationAdapter extends IntegrationProvider {
           page_size: "100",
         });
         const res = await this._fetch(`${TIKTOK_API_BASE}/report/integrated/get/?${query.toString()}`, {
-          headers: { "Access-Token": safeString(process.env.TIKTOK_ACCESS_TOKEN) },
+          headers: { "Access-Token": creds.accessToken },
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || Number(data?.code) !== 0) {
@@ -219,7 +302,7 @@ export class TikTokLeadAdsIntegrationAdapter extends IntegrationProvider {
           externalReference: `tiktok_ads_report_${this._nowISO}`,
           status: "completed",
           completedAt: this._nowISO,
-          metadata: deepFreeze({ list: Array.isArray(data?.data?.list) ? data.data.list : [] }),
+          metadata: deepFreeze({ list: Array.isArray(data?.data?.list) ? data.data.list : [], credentialSource: creds.source }),
         });
       } catch (err) {
         return deepFreeze({ status: "failed", error: String(err?.message ?? err), retryable: true, completedAt: this._nowISO });
@@ -230,11 +313,12 @@ export class TikTokLeadAdsIntegrationAdapter extends IntegrationProvider {
       if (!actionRequest?.requiresApproval || !actionRequest?.outboundApproved) {
         return deepFreeze({ status: "failed", error: "owner_approval_required", completedAt: this._nowISO });
       }
-      if (!isTikTokMarketingApiConfigured()) {
+      const creds = resolveCreds({ connection, credentialResolver });
+      if (!creds) {
         return deepFreeze({
           status: "failed",
           error: "managed_ops_required",
-          message: "TikTok Marketing API isn't configured yet. VIBETech ops will launch this campaign manually as part of the managed lead ads playbook.",
+          message: `TikTok Marketing API isn't configured yet (${describeMissingCreds({ connection, credentialResolver }).join("; ")}). VIBETech ops will launch this campaign manually as part of the managed lead ads playbook.`,
           completedAt: this._nowISO,
         });
       }
@@ -243,15 +327,14 @@ export class TikTokLeadAdsIntegrationAdapter extends IntegrationProvider {
         return deepFreeze({ status: "failed", error: "approved_campaign_name_required", completedAt: this._nowISO });
       }
       try {
-        const advertiserId = safeString(process.env.TIKTOK_ADVERTISER_ID);
         const res = await this._fetch(`${TIKTOK_API_BASE}/campaign/create/`, {
           method: "POST",
           headers: {
-            "Access-Token": safeString(process.env.TIKTOK_ACCESS_TOKEN),
+            "Access-Token": creds.accessToken,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            advertiser_id: advertiserId,
+            advertiser_id: creds.advertiserId,
             campaign_name: safeString(campaign.name),
             objective_type: safeString(campaign.objective || "LEAD_GENERATION"),
             budget_mode: safeString(campaign.budgetMode || "BUDGET_MODE_DAY"),
@@ -274,7 +357,62 @@ export class TikTokLeadAdsIntegrationAdapter extends IntegrationProvider {
           externalReference: campaignId,
           status: "completed",
           completedAt: this._nowISO,
-          metadata: deepFreeze({ campaignId, campaignStatus: "DISABLE", managedOps: true }),
+          metadata: deepFreeze({ campaignId, campaignStatus: "DISABLE", managedOps: creds.source === "platform_env" }),
+        });
+      } catch (err) {
+        return deepFreeze({ status: "failed", error: String(err?.message ?? err), retryable: true, completedAt: this._nowISO });
+      }
+    }
+
+    if (capability === INTEGRATION_CAPABILITIES.ACTIVATE_AD_CAMPAIGN) {
+      // The only place spend can actually start — requires BOTH flags
+      // explicitly, never inferred from requiresApproval/outboundApproved,
+      // and never called by any automated playbook step.
+      if (params?.ownerApproved !== true || params?.confirmActivate !== true) {
+        return deepFreeze({
+          status: "failed",
+          error: "explicit_owner_activation_required",
+          message: "Activating a TikTok campaign requires both ownerApproved: true and confirmActivate: true — this is never automatic.",
+          completedAt: this._nowISO,
+        });
+      }
+      const creds = resolveCreds({ connection, credentialResolver });
+      if (!creds) {
+        return deepFreeze({
+          status: "failed",
+          error: "not_configured",
+          message: `Cannot activate — TikTok Marketing API credentials aren't available (${describeMissingCreds({ connection, credentialResolver }).join("; ")}).`,
+          completedAt: this._nowISO,
+        });
+      }
+      const campaignId = safeString(params.campaignId);
+      if (!campaignId) {
+        return deepFreeze({ status: "failed", error: "campaignId_required", completedAt: this._nowISO });
+      }
+      try {
+        const res = await this._fetch(`${TIKTOK_API_BASE}/campaign/status/update/`, {
+          method: "POST",
+          headers: { "Access-Token": creds.accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            advertiser_id: creds.advertiserId,
+            campaign_ids: [campaignId],
+            operation_status: "ENABLE",
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || Number(data?.code) !== 0) {
+          return deepFreeze({
+            status: "failed",
+            error: safeString(data?.message) || `tiktok_http_${res.status}`,
+            retryable: res.status >= 500,
+            completedAt: this._nowISO,
+          });
+        }
+        return deepFreeze({
+          externalReference: campaignId,
+          status: "completed",
+          completedAt: this._nowISO,
+          metadata: deepFreeze({ campaignId, campaignStatus: "ENABLE", activatedBy: "owner_approved_explicit_confirmation" }),
         });
       } catch (err) {
         return deepFreeze({ status: "failed", error: String(err?.message ?? err), retryable: true, completedAt: this._nowISO });

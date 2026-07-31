@@ -473,16 +473,21 @@ export class PostgresPlatformStore {
    * Distinct workspace ids with a live credential for `providerType` (e.g. "gmail").
    * Used by lightweight recurring jobs (Gmail inbox sync tick) that need to fan out
    * across businesses without a full per-workspace job registry entry.
+   *
+   * `offset` supports cursor-style rotation across ticks (see
+   * runHostedPlatformJobTick.ts) so that with more connected businesses than
+   * fit in one pool, every business eventually rotates into view instead of
+   * only ever the first `limit` (by workspace_id) ever syncing.
    */
-  async listWorkspaceIdsWithIntegrationCredentialType(providerType, { limit = 25 } = {}) {
+  async listWorkspaceIdsWithIntegrationCredentialType(providerType, { limit = 25, offset = 0 } = {}) {
     const { rows } = await this.withClient((client) =>
       client.query(
         `SELECT DISTINCT ON (workspace_id) workspace_id, updated_at
          FROM integration_credentials
          WHERE provider_type = $1
          ORDER BY workspace_id ASC, updated_at DESC
-         LIMIT $2`,
-        [String(providerType), Number(limit) || 25],
+         LIMIT $2 OFFSET $3`,
+        [String(providerType), Number(limit) || 25, Math.max(0, Number(offset) || 0)],
       ),
     );
     return rows.map((row) => String(row.workspace_id));

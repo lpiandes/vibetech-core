@@ -10,11 +10,18 @@ import { cockpitColors, spacing, radius } from "@/design/tokens";
 export default function BusinessOnboardingHome({
   businessId,
   businessName,
+  talkHref,
 }: {
   businessId: string;
   businessName: string;
+  /**
+   * Resolved server-side by Home: resumes the owner's durable builder session (discovery,
+   * dry-run/approval, or install recovery) when one exists, instead of always starting a new
+   * sessionless conversation. Falls back to a fresh conversation only when no session exists.
+   */
+  talkHref?: string;
 }) {
-  const talkHref = `/b/${encodeURIComponent(businessId)}/architect`;
+  const resolvedTalkHref = talkHref ?? `/b/${encodeURIComponent(businessId)}/architect`;
 
   return (
     <div
@@ -113,7 +120,7 @@ export default function BusinessOnboardingHome({
 
         <div style={{ marginTop: spacing["2xl"] ?? 40 }}>
           <Link
-            href={talkHref}
+            href={resolvedTalkHref}
             style={{
               display: "inline-flex",
               alignItems: "center",

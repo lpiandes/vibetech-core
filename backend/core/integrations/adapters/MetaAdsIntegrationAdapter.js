@@ -28,13 +28,17 @@ export class MetaAdsIntegrationAdapter extends IntegrationProvider {
     return [
       INTEGRATION_CAPABILITIES.CREATE_AD_CAMPAIGN,
       INTEGRATION_CAPABILITIES.READ_AD_PERFORMANCE,
+      INTEGRATION_CAPABILITIES.READ_EXTERNAL_RECORD,
       INTEGRATION_CAPABILITIES.CREATE_EXTERNAL_RECORD,
+      // Owner-gated activation — see #activateCampaign. Still defaults to
+      // refusing unless both ownerApproved and confirmActivate are explicit.
+      INTEGRATION_CAPABILITIES.ACTIVATE_AD_CAMPAIGN,
     ];
   }
   getSetupGuidance() {
     return createProviderSetupGuidance({
       title: "Connect Meta Ads",
-      summary: "Read ad performance and create owner-approved campaigns as paused drafts. VIBETech-managed lead ads can also scaffold a paused campaign + ad set + lead-form creative for review before you activate spend.",
+      summary: "Read ad performance and create owner-approved campaigns as paused drafts. VIBETech-managed lead ads can also scaffold a paused campaign + ad set + lead-form creative, duplicate paused ad variants for testing, and read richer campaign status — all for review before you activate spend.",
       estimatedTime: "20 minutes",
       prerequisites: ["Meta Business Portfolio", "Ad account", "System user or user access token with ads permissions", "Facebook Page + lead form (for managed lead-ads scaffolding)"],
       steps: [
@@ -43,9 +47,11 @@ export class MetaAdsIntegrationAdapter extends IntegrationProvider {
         "Run a read-only account test",
         "Create a paused test campaign and review it in Ads Manager",
         "Optional: scaffold a paused lead-ads campaign (ad set + creative) for VIBETech-managed ops",
+        "Optional: duplicate a paused ad variant (new ad set + creative) under an existing campaign for testing",
+        "Activate a paused campaign only via the explicit ACTIVATE_AD_CAMPAIGN action (requires ownerApproved + confirmActivate) — never automatic",
       ],
       permissionsRequested: ["ads_read", "ads_management"], verificationMethod: "Meta ad-account account-status probe.",
-      commonProblems: ["Token is expired", "System user lacks ad-account access", "Graph API version has expired", "Lead form ID does not belong to the connected Page"],
+      commonProblems: ["Token is expired", "System user lacks ad-account access", "Graph API version has expired", "Lead form ID does not belong to the connected Page", "ACTIVATE_AD_CAMPAIGN refuses without both ownerApproved and confirmActivate set explicitly"],
       reconnectInstructions: "Replace the access token, confirm account permissions, and rerun the test.", documentationReference: "https://developers.facebook.com/docs/marketing-apis/",
     });
   }
@@ -173,6 +179,105 @@ export class MetaAdsIntegrationAdapter extends IntegrationProvider {
     });
   }
 
+  /** Richer read of a single campaign's status than the insights report gives — id/name/status/effective_status/objective/budget. */
+  async #readCampaignStatus({ accessToken, campaignId }) {
+    const { res, data } = await this.#request({
+      path: campaignId,
+      accessToken,
+      parameters: { fields: "id,name,status,effective_status,objective,daily_budget,lifetime_budget" },
+    });
+    if (!res.ok) {
+      return deepFreeze({ status: "failed", error: text(data?.error?.message || `meta_http_${res.status}`), retryable: res.status >= 500, completedAt: this._nowISO });
+    }
+    return deepFreeze({
+      externalReference: campaignId,
+      status: "completed",
+      completedAt: this._nowISO,
+      metadata: deepFreeze({
+        campaignId: text(data?.id) || campaignId,
+        name: text(data?.name),
+        status: text(data?.status) || null,
+        effectiveStatus: text(data?.effective_status) || null,
+        objective: text(data?.objective) || null,
+        dailyBudget: data?.daily_budget ?? null,
+        lifetimeBudget: data?.lifetime_budget ?? null,
+      }),
+    });
+  }
+
+  /**
+   * Create an additional PAUSED ad set + creative under an existing
+   * campaign — a "variant" for A/B testing copy/targeting without touching
+   * the original ad set. Same money-safety posture as the initial scaffold:
+   * always PAUSED, still gated on requiresApproval/outboundApproved by the
+   * caller in executeAction.
+   */
+  async #createAdVariant({ accessToken, adAccountId, params }) {
+    const campaignId = text(params.campaignId);
+    if (!campaignId) {
+      return deepFreeze({ status: "failed", error: "campaignId_required", completedAt: this._nowISO });
+    }
+    const { res: adSetRes, data: adSetData } = await this.#createAdSet({ accessToken, adAccountId, campaignId, adSet: params?.adSet });
+    if (!adSetRes.ok) {
+      return deepFreeze({ status: "failed", error: text(adSetData?.error?.message || `meta_http_${adSetRes.status}`), retryable: adSetRes.status >= 500, completedAt: this._nowISO });
+    }
+    const adSetId = text(adSetData?.id);
+    const creativeInput = params?.creative && typeof params.creative === "object" ? params.creative : null;
+    let creativeId = null;
+    let creativeError = null;
+    if (creativeInput?.pageId) {
+      const { res: creativeRes, data: creativeData } = await this.#createCreative({ accessToken, adAccountId, creative: creativeInput });
+      if (creativeRes.ok) creativeId = text(creativeData?.id);
+      else creativeError = text(creativeData?.error?.message || `meta_http_${creativeRes.status}`);
+    }
+    return deepFreeze({
+      externalReference: adSetId,
+      status: "completed",
+      completedAt: this._nowISO,
+      metadata: deepFreeze({
+        campaignId,
+        adSetId: adSetId || null,
+        adSetStatus: adSetId ? "PAUSED" : null,
+        creativeId,
+        creativeError,
+        variant: true,
+        activationRequired: "Owner (or VIBETech ops) must review and activate in Meta Ads Manager — nothing here spends money.",
+      }),
+    });
+  }
+
+  /**
+   * Flip a paused campaign to ACTIVE. This is the only place spend can
+   * actually start, so it requires BOTH `ownerApproved: true` AND
+   * `confirmActivate: true` in the action parameters — never inferred from
+   * `requiresApproval`/`outboundApproved` alone, and never called by any
+   * automated playbook step.
+   */
+  async #activateCampaign({ accessToken, params }) {
+    if (params?.ownerApproved !== true || params?.confirmActivate !== true) {
+      return deepFreeze({
+        status: "failed",
+        error: "explicit_owner_activation_required",
+        message: "Activating a Meta campaign requires both ownerApproved: true and confirmActivate: true — this is never automatic.",
+        completedAt: this._nowISO,
+      });
+    }
+    const campaignId = text(params.campaignId);
+    if (!campaignId) {
+      return deepFreeze({ status: "failed", error: "campaignId_required", completedAt: this._nowISO });
+    }
+    const { res, data } = await this.#request({ path: campaignId, method: "POST", accessToken, parameters: { status: "ACTIVE" } });
+    if (!res.ok) {
+      return deepFreeze({ status: "failed", error: text(data?.error?.message || `meta_http_${res.status}`), retryable: res.status >= 500, completedAt: this._nowISO });
+    }
+    return deepFreeze({
+      externalReference: campaignId,
+      status: "completed",
+      completedAt: this._nowISO,
+      metadata: deepFreeze({ campaignId, campaignStatus: "ACTIVE", activatedBy: "owner_approved_explicit_confirmation" }),
+    });
+  }
+
   async executeAction({ actionRequest, connection, credentialResolver } = {}) {
     try {
       const creds = this.#creds({ connection, credentialResolver }); const capability = text(actionRequest?.capability); const params = actionRequest?.parameters ?? {};
@@ -180,6 +285,14 @@ export class MetaAdsIntegrationAdapter extends IntegrationProvider {
         const { res, data } = await this.#request({ path: `${creds.adAccountId}/insights`, accessToken: creds.accessToken, parameters: { fields: text(params.fields || "campaign_id,campaign_name,impressions,clicks,spend"), time_range: params.timeRange ?? { since: params.since, until: params.until }, level: text(params.level || "campaign") } });
         if (!res.ok) return deepFreeze({ status: "failed", error: text(data?.error?.message || `meta_http_${res.status}`), retryable: res.status >= 500, completedAt: this._nowISO });
         return deepFreeze({ externalReference: `meta_ads_report_${this._nowISO}`, status: "completed", completedAt: this._nowISO, metadata: deepFreeze({ data: data?.data ?? [] }) });
+      }
+      if (capability === INTEGRATION_CAPABILITIES.READ_EXTERNAL_RECORD) {
+        if (text(params.recordType) !== "campaign_status") {
+          return deepFreeze({ status: "failed", error: "unsupported_record_type", completedAt: this._nowISO });
+        }
+        const campaignId = text(params.campaignId);
+        if (!campaignId) return deepFreeze({ status: "failed", error: "campaignId_required", completedAt: this._nowISO });
+        return this.#readCampaignStatus({ accessToken: creds.accessToken, campaignId });
       }
       if (capability === INTEGRATION_CAPABILITIES.CREATE_AD_CAMPAIGN) {
         if (!actionRequest?.requiresApproval || !actionRequest?.outboundApproved) return deepFreeze({ status: "failed", error: "owner_approval_required", completedAt: this._nowISO });
@@ -191,12 +304,19 @@ export class MetaAdsIntegrationAdapter extends IntegrationProvider {
         return deepFreeze({ externalReference: text(data?.id), status: "completed", completedAt: this._nowISO, metadata: deepFreeze({ campaignStatus: "PAUSED", id: data?.id ?? null }) });
       }
       if (capability === INTEGRATION_CAPABILITIES.CREATE_EXTERNAL_RECORD) {
-        if (text(params.recordType) !== "lead_campaign_scaffold") {
+        const recordType = text(params.recordType);
+        if (recordType !== "lead_campaign_scaffold" && recordType !== "ad_variant") {
           return deepFreeze({ status: "failed", error: "unsupported_record_type", completedAt: this._nowISO });
         }
         // Same money-safety gate as CREATE_AD_CAMPAIGN — scaffolding still creates real (paused) Meta objects.
         if (!actionRequest?.requiresApproval || !actionRequest?.outboundApproved) return deepFreeze({ status: "failed", error: "owner_approval_required", completedAt: this._nowISO });
+        if (recordType === "ad_variant") {
+          return this.#createAdVariant({ accessToken: creds.accessToken, adAccountId: creds.adAccountId, params });
+        }
         return this.#createLeadCampaignScaffold({ accessToken: creds.accessToken, adAccountId: creds.adAccountId, params });
+      }
+      if (capability === INTEGRATION_CAPABILITIES.ACTIVATE_AD_CAMPAIGN) {
+        return this.#activateCampaign({ accessToken: creds.accessToken, params });
       }
       return deepFreeze({ status: "failed", error: "unsupported_capability", completedAt: this._nowISO });
     } catch (error) { return deepFreeze({ status: "failed", error: String(error?.message ?? error), retryable: true, completedAt: this._nowISO }); }

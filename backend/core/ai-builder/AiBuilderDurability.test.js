@@ -42,13 +42,67 @@ async function prepareReadySession(repository, installationRepository) {
   return { service, sessionId: started.session.sessionId };
 }
 
-function restartService(repository, installationRepository = new BusinessOSInstallationRepository()) {
+function restartService(repository, installationRepository = new BusinessOSInstallationRepository(), platformStore = null) {
   return new AiBuilderService({
     repository,
     installationRepository,
     installer: new BusinessOSInstaller({ repository: installationRepository }),
+    platformStore,
     nowISO: NOW,
   });
+}
+
+/**
+ * Builds a fully installable session (specification + plan + dry-run + approval) without
+ * going through the discovery-completeness gate — these install()-recovery tests only care
+ * about what happens after approval, not discovery readiness rules.
+ */
+async function prepareInstallableSession({
+  repository,
+  installationRepository,
+  platformStore = null,
+  businessId,
+  businessName,
+  description,
+}) {
+  const service = new AiBuilderService({
+    repository,
+    installationRepository,
+    installer: new BusinessOSInstaller({ repository: installationRepository }),
+    platformStore,
+    nowISO: NOW,
+  });
+
+  const started = await service.startSession({
+    mode: "new_business",
+    businessId,
+    businessName,
+    description,
+  });
+  const sessionId = started.session.sessionId;
+  for (const [questionId, answer] of [
+    ["q_company_name", businessName],
+    ["q_industry", "general services"],
+    ["q_services", "consulting"],
+    ["q_customers", "clients"],
+    ["q_roles", "owner"],
+  ]) {
+    await service.answer({ sessionId, questionId, answer });
+  }
+
+  const session = await service.requireSession(sessionId);
+  const assemblyPlan = service.assemblyPlanner.plan({ session });
+  const assembled = service.assembler.assemble({ session, assemblyPlan, nowISO: service.nowISO() });
+  assert.equal(assembled.ok, true, "test fixture: assembler must produce a specification");
+  await service.seedProposalState({ sessionId, specification: assembled.specification, assemblyPlan });
+
+  const dry = await service.dryRun({ sessionId });
+  assert.equal(dry.ok, true, "test fixture: dry run must succeed");
+
+  const approved = await service.approve({ sessionId, actorId: "owner_test" });
+  assert.equal(approved.ok, true, "test fixture: approval must succeed");
+
+  return { service, sessionId };
 }
 
 test("Builder proposal survives process restart", async () => {
@@ -291,4 +345,239 @@ test("successful install upserts canonical Business OS rows when platformStore i
   assert.equal(installs[0].status, "installed");
   assert.equal(installs[0].businessId, "biz_canonical_os");
   assert.ok(audits.some((entry) => entry.action === "architect.installed"));
+});
+
+// --- Approve/Open regression coverage -------------------------------------------------
+// Root cause: install() used to mark the session "installed" before canonical Business OS
+// persistence succeeded. If that persist step failed (or threw), the session was already
+// durably "installed" with no canonical row — Home then found nothing in
+// business_os_installations, fell back to onboarding, and linked to a sessionless
+// /architect (losing the owner's answers/plan/approval on refresh). These tests lock in the
+// fix: the session is never advanced to "installed" until canonical persistence succeeds,
+// answers/plan/approval always survive a failed install, and a retry succeeds without
+// re-asking discovery.
+
+test("install failure during canonical persistence keeps session recoverable and retry succeeds", async () => {
+  const repository = new BuilderSessionRepository();
+  const installationRepository = new BusinessOSInstallationRepository();
+  let failCanonicalPersist = true;
+  const specs = [];
+  const installs = [];
+  const platformStore = {
+    async createBusiness({ id, name }) {
+      return { id: id ?? "biz_canonical_recovery", name };
+    },
+    async getBusinessById(id) {
+      return id ? { id, name: "Recovery Co" } : null;
+    },
+    async getBusinessOSInstallation() {
+      return installs.length ? installs[installs.length - 1] : null;
+    },
+    async upsertBusinessOSSpecification(row) {
+      if (failCanonicalPersist) throw new Error("simulated canonical specification write failure");
+      specs.push(row);
+      return { ...row, id: row.id };
+    },
+    async upsertBusinessOSInstallation(row) {
+      if (failCanonicalPersist) throw new Error("simulated canonical installation write failure");
+      installs.push(row);
+      return { ...row, id: row.id };
+    },
+    async recordAuditEvent() {
+      return null;
+    },
+  };
+
+  const { service, sessionId } = await prepareInstallableSession({
+    repository,
+    installationRepository,
+    platformStore,
+    businessId: "biz_canonical_recovery",
+    businessName: "Recovery Co",
+    description: "A services business that needs recovery testing.",
+  });
+
+  const beforeFailure = await service.requireSession(sessionId);
+  const answersBefore = beforeFailure.answers;
+
+  const failedInstall = await service.install({
+    sessionId,
+    approved: true,
+    actorId: "owner_recovery",
+  });
+
+  assert.equal(failedInstall.ok, false);
+  assert.equal(failedInstall.reason, "canonical_persist_failed");
+  assert.equal(failedInstall.openHref, null);
+
+  // Session must remain durable and recoverable — never silently lost back to step 1.
+  const failedSession = failedInstall.session;
+  assert.equal(failedSession.currentStage, "failed");
+  assert.deepEqual(failedSession.answers, answersBefore);
+  assert.ok(failedSession.metadata.installError);
+  assert.equal(failedSession.metadata.installError.reason, "canonical_persist_failed");
+
+  const storedAfterFailure = await service.loadProposalState(failedSession);
+  assert.ok(storedAfterFailure.specification, "specification must survive a failed install");
+  assert.ok(storedAfterFailure.plan, "plan must survive a failed install");
+  assert.ok(storedAfterFailure.approval, "approval must survive a failed install");
+
+  // Retry after the transient failure clears — must succeed without re-running discovery.
+  failCanonicalPersist = false;
+  const retried = await service.install({
+    sessionId,
+    approved: true,
+    actorId: "owner_recovery",
+  });
+
+  assert.equal(retried.ok, true);
+  assert.equal(retried.session.currentStage, "installed");
+  assert.equal(retried.openHref, "/b/biz_canonical_recovery/home");
+  assert.equal(specs.length, 1);
+  assert.equal(installs.length, 1);
+  assert.equal(retried.session.metadata.installError, null);
+});
+
+test("resumeInstall retries a failed install using the durable approval — never requires re-approval", async () => {
+  const repository = new BuilderSessionRepository();
+  const installationRepository = new BusinessOSInstallationRepository();
+  let failCanonicalPersist = true;
+  const platformStore = {
+    async createBusiness({ id, name }) {
+      return { id: id ?? "biz_resume_recovery", name };
+    },
+    async getBusinessById(id) {
+      return id ? { id, name: "Resume Co" } : null;
+    },
+    async getBusinessOSInstallation() {
+      return null;
+    },
+    async upsertBusinessOSSpecification(row) {
+      if (failCanonicalPersist) throw new Error("simulated failure");
+      return { ...row, id: row.id };
+    },
+    async upsertBusinessOSInstallation(row) {
+      if (failCanonicalPersist) throw new Error("simulated failure");
+      return { ...row, id: row.id };
+    },
+    async recordAuditEvent() {
+      return null;
+    },
+  };
+
+  const { service, sessionId } = await prepareInstallableSession({
+    repository,
+    installationRepository,
+    platformStore,
+    businessId: "biz_resume_recovery",
+    businessName: "Resume Co",
+    description: "A services business testing resume-safe installs.",
+  });
+
+  const failed = await service.install({ sessionId, approved: true, actorId: "owner_resume" });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.session.currentStage, "failed");
+
+  failCanonicalPersist = false;
+  const resumed = await service.resumeInstall({ sessionId, actorId: "owner_resume" });
+  assert.equal(resumed.ok, true);
+  assert.equal(resumed.session.currentStage, "installed");
+  assert.equal(resumed.openHref, "/b/biz_resume_recovery/home");
+});
+
+test("install is idempotent once live: reloading /install does not re-run install or lose data", async () => {
+  const repository = new BuilderSessionRepository();
+  const installationRepository = new BusinessOSInstallationRepository();
+  const installs = [];
+  const platformStore = {
+    async createBusiness({ id, name }) {
+      return { id: id ?? "biz_idempotent", name };
+    },
+    async getBusinessById(id) {
+      return id ? { id, name: "Idempotent Co" } : null;
+    },
+    async getBusinessOSInstallation(businessId) {
+      return installs.find((row) => row.businessId === businessId) ?? null;
+    },
+    async upsertBusinessOSSpecification() {
+      return { id: "spec_row" };
+    },
+    async upsertBusinessOSInstallation(row) {
+      installs.push(row);
+      return { ...row, id: row.id };
+    },
+    async recordAuditEvent() {
+      return null;
+    },
+  };
+
+  const { service, sessionId } = await prepareInstallableSession({
+    repository,
+    installationRepository,
+    platformStore,
+    businessId: "biz_idempotent",
+    businessName: "Idempotent Co",
+    description: "A services business testing idempotent installs.",
+  });
+
+  const first = await service.install({ sessionId, approved: true, actorId: "owner_idempotent" });
+  assert.equal(first.ok, true);
+
+  // Reloading /install (e.g. after refresh) must short-circuit as already-installed —
+  // never re-enter "installing" or throw.
+  const second = await service.install({ sessionId, approved: true, actorId: "owner_idempotent" });
+  assert.equal(second.ok, true);
+  assert.equal(second.alreadyInstalled, true);
+  assert.equal(second.openHref, "/b/biz_idempotent/home");
+  assert.equal(installs.length, 1, "canonical installation must not be duplicated on reload");
+});
+
+test("install self-heals when session claims installed but canonical Business OS row is missing", async () => {
+  const repository = new BuilderSessionRepository();
+  const installationRepository = new BusinessOSInstallationRepository();
+  let canonicalRow = null;
+  const platformStore = {
+    async createBusiness({ id, name }) {
+      return { id: id ?? "biz_self_heal", name };
+    },
+    async getBusinessById(id) {
+      return id ? { id, name: "Self Heal Co" } : null;
+    },
+    async getBusinessOSInstallation() {
+      return canonicalRow;
+    },
+    async upsertBusinessOSSpecification() {
+      return { id: "spec_row" };
+    },
+    async upsertBusinessOSInstallation(row) {
+      canonicalRow = row;
+      return { ...row, id: row.id };
+    },
+    async recordAuditEvent() {
+      return null;
+    },
+  };
+
+  const { service, sessionId } = await prepareInstallableSession({
+    repository,
+    installationRepository,
+    platformStore,
+    businessId: "biz_self_heal",
+    businessName: "Self Heal Co",
+    description: "A services business testing self-healing installs.",
+  });
+
+  const installedFirst = await service.install({ sessionId, approved: true, actorId: "owner_self_heal" });
+  assert.equal(installedFirst.ok, true);
+
+  // Simulate legacy corrupted state: session claims installed, but the canonical row is gone
+  // (e.g. an older bug, or the row failed to persist on a prior process before this fix).
+  canonicalRow = null;
+
+  const reloaded = await service.install({ sessionId, approved: true, actorId: "owner_self_heal" });
+  assert.equal(reloaded.ok, true);
+  assert.equal(reloaded.alreadyInstalled, true);
+  assert.equal(reloaded.canonicalReconciled, true);
+  assert.equal(reloaded.openHref, "/b/biz_self_heal/home");
+  assert.ok(canonicalRow, "canonical row must be written by the self-heal path");
 });
