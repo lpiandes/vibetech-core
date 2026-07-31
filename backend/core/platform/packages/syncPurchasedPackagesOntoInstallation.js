@@ -192,13 +192,16 @@ export async function syncPurchasedPackagesOntoInstallation({
 }
 
 /**
- * Home/layout heal: inject missing thin-SKU employees and restore pending Ask on the business row.
+ * Home/layout heal: inject missing thin-SKU employees.
+ * By default does NOT create/restore pendingPackageAsk — only admin package saves should.
+ * Layout used to resurrect Ask every request and bounce Home ↔ Architect forever.
  */
 export async function healPurchasedPackagesForBusiness({
   platformStore,
   businessId,
   packageConfiguration = null,
   actorId = "home_heal",
+  ensurePendingAsk = false,
 } = {}) {
   if (!platformStore || !businessId) {
     return deepFreeze({ ok: false, added: 0, pendingRestored: false });
@@ -219,16 +222,15 @@ export async function healPurchasedPackagesForBusiness({
     purchasedPackages: packages,
     packageConfiguration: config,
     actorId,
-    ensurePendingAsk: true,
+    ensurePendingAsk: Boolean(ensurePendingAsk),
   });
 
   let pendingRestored = false;
   const businessPending = readPendingPackageAsk(config);
-  // Only resurrect pending Ask onto the business row when we just injected missing
-  // thin-SKU workers. Never copy installation pending back after the owner cleared Ask
-  // (that caused Home ↔ Architect bounce loops).
+  // Only write pending onto the business row when explicitly allowed AND we just injected workers.
   if (
-    sync.pendingPackageAsk
+    ensurePendingAsk
+    && sync.pendingPackageAsk
     && !businessPending
     && Array.isArray(sync.packagesInjected)
     && sync.packagesInjected.length > 0
@@ -244,25 +246,17 @@ export async function healPurchasedPackagesForBusiness({
       packageConfiguration: nextConfig,
     });
     pendingRestored = true;
-  } else if (
-    sync.pendingPackageAsk
-    && businessPending
-    && platformStore.updateBusinessPackageConfiguration
-    && JSON.stringify(businessPending) !== JSON.stringify(sync.pendingPackageAsk)
-  ) {
-    // Keep business row aligned with installation pending (e.g. sessionId).
-    // Only write when we restored missing pending above; otherwise leave business as source of truth.
   }
-
-  // If business had pending but installation sync recovered a fresher one after inject — already handled.
-  // If sync restored pending and business lacked it — written above.
-  // Also: business may already have purchased packages + pending; sync only updates installation.
 
   return deepFreeze({
     ok: Boolean(sync.ok),
     added: Number(sync.added ?? 0),
     packagesInjected: sync.packagesInjected ?? [],
-    pendingPackageAsk: sync.pendingPackageAsk,
+    pendingPackageAsk: readPendingPackageAsk(
+      pendingRestored
+        ? { ...config, pendingPackageAsk: sync.pendingPackageAsk }
+        : config,
+    ),
     pendingRestored,
   });
 }

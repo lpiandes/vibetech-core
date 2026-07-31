@@ -77,7 +77,7 @@ test("syncPurchasedPackagesOntoInstallation injects social screener and restores
   );
 });
 
-test("healPurchasedPackagesForBusiness writes pending onto business row", async () => {
+test("healPurchasedPackagesForBusiness does not resurrect Ask by default (layout-safe)", async () => {
   const receptionist = filterEmployeesForPurchasedPackages([], ["ai_receptionist"]);
   let businessConfig = {
     purchasedPackages: ["ai_receptionist", "social_background_screening"],
@@ -110,6 +110,47 @@ test("healPurchasedPackagesForBusiness writes pending onto business row", async 
   const heal = await healPurchasedPackagesForBusiness({
     platformStore,
     businessId: "biz_1",
+  });
+  assert.equal(heal.ok, true);
+  assert.equal(heal.added, 1);
+  assert.equal(heal.pendingRestored, false);
+  assert.equal(businessConfig.pendingPackageAsk, undefined);
+});
+
+test("healPurchasedPackagesForBusiness writes pending when ensurePendingAsk is true", async () => {
+  const receptionist = filterEmployeesForPurchasedPackages([], ["ai_receptionist"]);
+  let businessConfig = {
+    purchasedPackages: ["ai_receptionist", "social_background_screening"],
+  };
+  const platformStore = {
+    async getBusinessById() {
+      return { id: "biz_1", packageConfiguration: businessConfig };
+    },
+    async updateBusinessPackageConfiguration({ packageConfiguration }) {
+      businessConfig = packageConfiguration;
+      return { id: "biz_1", packageConfiguration };
+    },
+    async getBusinessOSInstallation() {
+      return {
+        id: "install_1",
+        businessId: "biz_1",
+        specificationId: "spec_1",
+        configuration: {
+          purchasedPackages: ["ai_receptionist"],
+          employees: receptionist,
+        },
+        history: [],
+      };
+    },
+    async upsertBusinessOSInstallation(row) {
+      return row;
+    },
+  };
+
+  const heal = await healPurchasedPackagesForBusiness({
+    platformStore,
+    businessId: "biz_1",
+    ensurePendingAsk: true,
   });
   assert.equal(heal.ok, true);
   assert.equal(heal.added, 1);

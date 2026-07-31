@@ -50,44 +50,28 @@ export default async function BusinessScopedLayout({
   const purchasedPackages = readPurchasedPackagesFromConfig(packageConfiguration);
   let pendingPackageAsk = readPendingPackageAsk(packageConfiguration);
 
-  // Heal missing thin-SKU employees / wiped pending Ask from prior package-save bugs.
+  // Heal missing thin-SKU employees only — never resurrect pendingPackageAsk here.
+  // Forced Ask redirects + layout heal re-creating pending caused Home↔Architect loops.
   if (purchasedPackages.length) {
     try {
       const { healPurchasedPackagesForBusiness } = await import(
         "../../../../backend/core/platform/packages/syncPurchasedPackagesOntoInstallation.js"
       );
-      const heal = await healPurchasedPackagesForBusiness({
+      await healPurchasedPackagesForBusiness({
         platformStore,
         businessId,
         packageConfiguration,
         actorId: "layout_heal",
+        ensurePendingAsk: false,
       });
-      // Only treat pending Ask as real when it was written back onto the business row.
-      // Never redirect from installation-only / heal-local pending (refresh loop).
-      if (heal?.pendingRestored && heal.pendingPackageAsk) {
-        packageConfiguration = {
-          ...packageConfiguration,
-          pendingPackageAsk: heal.pendingPackageAsk,
-        };
-        pendingPackageAsk = heal.pendingPackageAsk as typeof pendingPackageAsk;
-      }
-      // Re-read after heal — business row is source of truth.
       pendingPackageAsk = readPendingPackageAsk(packageConfiguration);
     } catch {
       // Non-fatal — page still renders.
     }
   }
 
-  const headerStore = await headers();
-  const pathname = headerStore.get("x-pathname") ?? "";
-  const onArchitect = /\/b\/[^/]+\/architect/.test(pathname);
-  // Force package Ask only from Home (or bare /b/{id}) — never yank the owner off
-  // Integrations / Settings mid-connect (that produced white-screen soft navs).
-  const onHomeSurface = /\/b\/[^/]+\/?(?:home)?\/?$/.test(pathname)
-    || /\/b\/[^/]+\/home(?:\/|$|\?)/.test(pathname);
-  if (pendingPackageAsk && !onArchitect && onHomeSurface) {
-    redirect(`/b/${encodeURIComponent(businessId)}/architect?packageAsk=1`);
-  }
+  // No server redirect to /architect?packageAsk=1 — that raced with clear/heal and looped.
+  // Home shows PackageAskHomeBanner; owner opens Ask when ready.
 
   let installedNavigation = null as any;
   let installedBusinessOS = null as any;

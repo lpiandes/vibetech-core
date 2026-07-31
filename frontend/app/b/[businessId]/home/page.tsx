@@ -13,6 +13,7 @@ import { redirect } from "next/navigation";
 import { readPendingPackageAsk } from "../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 import { getAiBuilderService } from "@/lib/builder/getAiBuilderService";
 import { resolveOnboardingHomeHref } from "@/lib/builder/resolveOnboardingHomeHref";
+import PackageAskHomeBanner from "@/components/home/PackageAskHomeBanner";
 
 /**
  * Home is one experience with two moments:
@@ -150,13 +151,10 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       );
     }
 
-    // Layout already heals + redirects pending Ask; keep a safety redirect here.
+    // Soft prompt only — never server-redirect to package Ask (that caused refresh loops).
     const pendingPackageAsk = readPendingPackageAsk(
       (ctx as any).authz?.business?.packageConfiguration ?? {},
     );
-    if (pendingPackageAsk) {
-      redirect(`/b/${encodeURIComponent(businessId)}/architect?packageAsk=1`);
-    }
 
     // Product 2 — installed: editorial operating Home.
     const ownerFirstName = String((ctx.user as { name?: string | null } | undefined)?.name ?? "")
@@ -250,10 +248,18 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
     });
 
     return (
-      <MissionControlRenderer
-        viewModel={enrichedViewModel as never}
-        variant="mission_control"
-      />
+      <>
+        {pendingPackageAsk ? (
+          <PackageAskHomeBanner
+            businessId={businessId}
+            packageIds={pendingPackageAsk.packages ?? []}
+          />
+        ) : null}
+        <MissionControlRenderer
+          viewModel={enrichedViewModel as never}
+          variant="mission_control"
+        />
+      </>
     );
   });
 }

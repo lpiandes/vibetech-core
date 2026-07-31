@@ -23,7 +23,17 @@ import {
   type AskHistoryItem,
 } from "./askSessionResume";
 import { ASK_NEW_CHAT_EVENT } from "./askOpenChat";
-import { hardNavigateToBusinessHome } from "@/lib/builder/hardNavigateToBusinessHome";
+
+function exitPackageAskToHome(businessId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(`vt_pkg_ask_exit:${businessId}`, String(Date.now()));
+  } catch {
+    /* ignore */
+  }
+  // replace (not assign) so Back doesn't re-enter the Ask URL and loop.
+  window.location.replace(`/b/${encodeURIComponent(businessId)}/home`);
+}
 
 const CONTEXT_KEYS = [
   "intelligenceCandidateId",
@@ -91,21 +101,32 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
       try {
         // Admin added packages → blocking discovery Ask (not continuous chat).
         if (packageAsk) {
+          // If we just exited Ask to Home, never re-enter from a stale tab / soft nav.
+          try {
+            const exitAt = Number(sessionStorage.getItem(`vt_pkg_ask_exit:${businessId}`) ?? "0");
+            if (exitAt && Date.now() - exitAt < 60_000) {
+              exitPackageAskToHome(businessId);
+              return;
+            }
+          } catch {
+            /* ignore */
+          }
+
           if (!hasInstalledOs) {
-            // Stale ?packageAsk=1 on a pre-install business — never show empty prompt loop.
             await fetch(`/api/businesses/${encodeURIComponent(businessId)}/builder/package-ask`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ action: "clear" }),
             }).catch(() => null);
-            if (!cancelled) {
-              hardNavigateToBusinessHome(`/b/${encodeURIComponent(businessId)}/home`);
-            }
+            if (!cancelled) exitPackageAskToHome(businessId);
             return;
           }
-          // URL already has a session from the previous mint — open it.
-          // Never call startPackageAsk again here or we loop: create → replace → boot → create…
           if (sessionFromQuery) {
+            try {
+              sessionStorage.removeItem(`vt_pkg_ask_exit:${businessId}`);
+            } catch {
+              /* ignore */
+            }
             setSessionId(sessionFromQuery);
             setSessionContinuous(false);
             await refreshHistory(sessionFromQuery);
@@ -113,15 +134,12 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
           }
           const data = await startPackageAskSession(businessId);
           if (!data.ok) {
-            // Nothing pending (or failed) — clear any stale flags then return home.
             await fetch(`/api/businesses/${encodeURIComponent(businessId)}/builder/package-ask`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ action: "clear" }),
             }).catch(() => null);
-            if (!cancelled) {
-              hardNavigateToBusinessHome(`/b/${encodeURIComponent(businessId)}/home`);
-            }
+            if (!cancelled) exitPackageAskToHome(businessId);
             return;
           }
           const nextId = data.session?.sessionId as string | undefined;
@@ -133,8 +151,13 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ action: "clear" }),
             }).catch(() => null);
-            hardNavigateToBusinessHome(`/b/${encodeURIComponent(businessId)}/home`);
+            exitPackageAskToHome(businessId);
             return;
+          }
+          try {
+            sessionStorage.removeItem(`vt_pkg_ask_exit:${businessId}`);
+          } catch {
+            /* ignore */
           }
           setSessionId(nextId);
           setSessionContinuous(false);
@@ -338,7 +361,7 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
   }, [businessId, hasInstalledOs, refreshHistory, router, scope.businessName]);
 
   const onPackageAskComplete = useCallback(() => {
-    hardNavigateToBusinessHome(`/b/${encodeURIComponent(businessId)}/home`);
+    exitPackageAskToHome(businessId);
   }, [businessId]);
 
   useEffect(() => {
