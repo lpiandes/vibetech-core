@@ -208,6 +208,7 @@ test("meta setup pending flips Mission to Pending", () => {
   const launch = buildCuratedLaunchMissions({
     vertical: "sports",
     businessId: "biz_1",
+    purchasedPackages: ["lead_follow_up"],
     metaSetupPending: true,
   });
   const meta = launch.missions.find((m) => m.id === "meta_lead_intake");
