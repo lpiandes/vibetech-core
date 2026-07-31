@@ -441,7 +441,7 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
               packageAskQuery === "1"
                 ? "Opening package setup"
                 : hasInstalledOs ? "Opening Ask VIBETech" : "Opening business setup"
-            }} />
+            } />
           </div>
           <ArchitectSkeleton height={28} width="40%" />
           <ArchitectSkeleton height={160} />
