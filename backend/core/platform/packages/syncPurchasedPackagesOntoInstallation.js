@@ -223,7 +223,16 @@ export async function healPurchasedPackagesForBusiness({
 
   let pendingRestored = false;
   const businessPending = readPendingPackageAsk(config);
-  if (sync.pendingPackageAsk && !businessPending && platformStore.updateBusinessPackageConfiguration) {
+  // Only resurrect pending Ask onto the business row when we just injected missing
+  // thin-SKU workers. Never copy installation pending back after the owner cleared Ask
+  // (that caused Home ↔ Architect bounce loops).
+  if (
+    sync.pendingPackageAsk
+    && !businessPending
+    && Array.isArray(sync.packagesInjected)
+    && sync.packagesInjected.length > 0
+    && platformStore.updateBusinessPackageConfiguration
+  ) {
     const nextConfig = JSON.parse(JSON.stringify({
       ...config,
       purchasedPackages: packages,

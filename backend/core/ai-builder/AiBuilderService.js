@@ -436,6 +436,44 @@ export class AiBuilderService {
       businessId,
       packageConfiguration,
     });
+
+    // Also clear installation.configuration.pendingPackageAsk — layout heal used to
+    // restore business pending from installation and bounce Home ↔ Architect forever.
+    try {
+      const installation = await this.platformStore?.getBusinessOSInstallation?.(businessId);
+      if (installation?.configuration?.pendingPackageAsk) {
+        const nextConfiguration = { ...(installation.configuration ?? {}) };
+        delete nextConfiguration.pendingPackageAsk;
+        await this.platformStore.upsertBusinessOSInstallation({
+          id: installation.id ?? installation.installationId ?? `install_${businessId}`,
+          businessId,
+          specificationRowId: installation.specificationRowId ?? null,
+          specificationId: installation.specificationId,
+          specificationVersion: installation.specificationVersion ?? 1,
+          specificationContentHash: installation.specificationContentHash
+            ?? installation.contentHash
+            ?? "clear_package_ask",
+          planId: installation.planId ?? `plan_${businessId}`,
+          status: installation.status ?? "installed",
+          plan: installation.plan ?? {},
+          actionCheckpoints: installation.actionCheckpoints ?? [],
+          configuration: nextConfiguration,
+          history: [
+            ...(Array.isArray(installation.history) ? installation.history : []),
+            {
+              at: this.nowISO?.() ?? new Date().toISOString(),
+              action: "clear_package_ask",
+              actorId: "clear_package_ask",
+            },
+          ],
+          actorUserId: installation.actorUserId ?? null,
+          installedAt: installation.installedAt ?? null,
+        });
+      }
+    } catch {
+      /* business clear already succeeded — installation wipe is best-effort */
+    }
+
     return deepFreeze({ ok: true, packageConfiguration });
   }
 

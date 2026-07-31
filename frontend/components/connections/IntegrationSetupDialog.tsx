@@ -286,7 +286,8 @@ export default function IntegrationSetupDialog({
         emailed: data.emailed === true,
         operatorEmail: data.operatorEmail ? String(data.operatorEmail) : "leopiandes@vtechdevelopment.com",
       });
-      router.refresh();
+      // Do NOT router.refresh() here — a pending package-Ask heal used to soft-nav
+      // this refresh into /architect?packageAsk=1 (white screen + Home bounce).
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -892,7 +893,9 @@ export default function IntegrationSetupDialog({
                     {metaRequestResult.message}
                   </p>
                   <p style={{ margin: 0, fontSize: 12, color: "#047857", lineHeight: 1.45 }}>
-                    We’ll email {metaRequestResult.operatorEmail ?? "leopiandes@vtechdevelopment.com"} with the exact Graph API / webhook steps and connect the Page for you. You don’t paste tokens.
+                    {metaRequestResult.emailed
+                      ? `Email sent to ${metaRequestResult.operatorEmail ?? "leopiandes@vtechdevelopment.com"} from support@vtechdevelopment.com with the exact connect steps.`
+                      : `We’ll reach ${metaRequestResult.operatorEmail ?? "leopiandes@vtechdevelopment.com"} with the exact steps. If email isn’t configured on the server yet, message that inbox directly.`}
                   </p>
                   <PrimaryButton onClick={onClose}>Done</PrimaryButton>
                 </div>

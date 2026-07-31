@@ -23,6 +23,15 @@ function resolveFromAddress() {
   );
 }
 
+/** Ops / white-glove handoffs — prefer support@ so clients see a real ops mailbox. */
+export function resolveOpsFromAddress() {
+  return (
+    process.env.OPS_EMAIL_FROM ??
+    process.env.SUPPORT_EMAIL_FROM ??
+    "VIBETech Support <support@vtechdevelopment.com>"
+  );
+}
+
 class UnconfiguredProductionDeliveryProvider extends InvitationDeliveryProvider {
   async send() {
     return {
@@ -33,8 +42,10 @@ class UnconfiguredProductionDeliveryProvider extends InvitationDeliveryProvider 
   }
 }
 
-export function createInvitationDeliveryProvider() {
+export function createInvitationDeliveryProvider(options = {}) {
   if (testProviderOverride) return testProviderOverride;
+
+  const from = String(options.from ?? "").trim() || resolveFromAddress();
 
   const explicit = String(process.env.INVITATION_DELIVERY_PROVIDER ?? "").trim().toLowerCase();
   if (explicit === "noop") return new NoopInvitationDeliveryProvider();
@@ -43,7 +54,7 @@ export function createInvitationDeliveryProvider() {
   if (resendApiKey) {
     return new ResendInvitationDeliveryProvider({
       apiKey: resendApiKey,
-      from: resolveFromAddress(),
+      from,
     });
   }
 
@@ -55,7 +66,7 @@ export function createInvitationDeliveryProvider() {
       secure: String(process.env.SMTP_SECURE ?? "").toLowerCase() === "true",
       user: String(process.env.SMTP_USER ?? "").trim() || undefined,
       pass: String(process.env.SMTP_PASS ?? "").trim() || undefined,
-      from: resolveFromAddress(),
+      from,
     });
   }
 

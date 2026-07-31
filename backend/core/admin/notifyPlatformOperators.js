@@ -4,7 +4,10 @@
  * Optional: PLATFORM_OPERATOR_WEBHOOK_URL for Slack/etc.
  * Email uses the same Resend/SMTP provider as invitations (RESEND_API_KEY or SMTP_*).
  */
-import { createInvitationDeliveryProvider } from "../platform/delivery/createInvitationDeliveryProvider.js";
+import {
+  createInvitationDeliveryProvider,
+  resolveOpsFromAddress,
+} from "../platform/delivery/createInvitationDeliveryProvider.js";
 
 function safeString(v) {
   return v == null ? "" : String(v).trim();
@@ -26,6 +29,8 @@ export async function notifyPlatformOperators({
   toEmails = null,
   /** When true and no PLATFORM_OPERATOR_EMAIL, fall back to DEFAULT_PLATFORM_OPERATOR_EMAIL. */
   fallbackDefaultEmail = false,
+  /** Override From: (defaults to support@vtechdevelopment.com for ops). */
+  from = null,
 } = {}) {
   const list = Array.isArray(actions) ? actions : [];
   if (!list.length) {
@@ -42,6 +47,10 @@ export async function notifyPlatformOperators({
   let emails = [...new Set([...fromEnv, ...override])];
   if (!emails.length && fallbackDefaultEmail) {
     emails = [DEFAULT_PLATFORM_OPERATOR_EMAIL];
+  }
+  // Always include Leo for white-glove handoffs when fallback is requested.
+  if (fallbackDefaultEmail && !emails.includes(DEFAULT_PLATFORM_OPERATOR_EMAIL)) {
+    emails = [...emails, DEFAULT_PLATFORM_OPERATOR_EMAIL];
   }
   const webhook = safeString(process.env.PLATFORM_OPERATOR_WEBHOOK_URL);
 
@@ -63,7 +72,7 @@ export async function notifyPlatformOperators({
       action.summary,
       "",
       "Steps:",
-      steps,
+      steps || "  (no steps listed)",
       "",
       "Payload:",
       payload,
@@ -72,7 +81,7 @@ export async function notifyPlatformOperators({
   }).join("\n\n---\n\n");
 
   const subject = `[VIBETech] ${list.length} operator action(s) need you`;
-  const results = { email: null, webhook: null };
+  const results = { email: null, webhook: null, from: null };
 
   if (webhook) {
     try {
@@ -92,7 +101,9 @@ export async function notifyPlatformOperators({
   }
 
   if (emails.length) {
-    const provider = deliveryProvider ?? createInvitationDeliveryProvider();
+    const fromAddress = safeString(from) || resolveOpsFromAddress();
+    results.from = fromAddress;
+    const provider = deliveryProvider ?? createInvitationDeliveryProvider({ from: fromAddress });
     const emailResults = [];
     for (const to of emails) {
       try {

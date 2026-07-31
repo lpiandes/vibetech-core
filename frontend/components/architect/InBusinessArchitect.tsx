@@ -23,6 +23,7 @@ import {
   type AskHistoryItem,
 } from "./askSessionResume";
 import { ASK_NEW_CHAT_EVENT } from "./askOpenChat";
+import { hardNavigateToBusinessHome } from "@/lib/builder/hardNavigateToBusinessHome";
 
 const CONTEXT_KEYS = [
   "intelligenceCandidateId",
@@ -100,8 +101,15 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
           }
           const data = await startPackageAskSession(businessId);
           if (!data.ok) {
-            // Nothing pending — return home.
-            router.replace(`/b/${encodeURIComponent(businessId)}/home`);
+            // Nothing pending (or failed) — clear any stale flags then return home.
+            await fetch(`/api/businesses/${encodeURIComponent(businessId)}/builder/package-ask`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ action: "clear" }),
+            }).catch(() => null);
+            if (!cancelled) {
+              hardNavigateToBusinessHome(`/b/${encodeURIComponent(businessId)}/home`);
+            }
             return;
           }
           const nextId = data.session?.sessionId as string | undefined;
@@ -113,7 +121,7 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ action: "clear" }),
             }).catch(() => null);
-            router.replace(`/b/${encodeURIComponent(businessId)}/home`);
+            hardNavigateToBusinessHome(`/b/${encodeURIComponent(businessId)}/home`);
             return;
           }
           setSessionId(nextId);
@@ -318,8 +326,8 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
   }, [businessId, hasInstalledOs, refreshHistory, router, scope.businessName]);
 
   const onPackageAskComplete = useCallback(() => {
-    router.replace(`/b/${encodeURIComponent(businessId)}/home`);
-  }, [businessId, router]);
+    hardNavigateToBusinessHome(`/b/${encodeURIComponent(businessId)}/home`);
+  }, [businessId]);
 
   useEffect(() => {
     function onAskNewChat() {

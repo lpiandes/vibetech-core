@@ -79,7 +79,11 @@ export default async function BusinessScopedLayout({
   const headerStore = await headers();
   const pathname = headerStore.get("x-pathname") ?? "";
   const onArchitect = /\/b\/[^/]+\/architect/.test(pathname);
-  if (pendingPackageAsk && !onArchitect) {
+  // Force package Ask only from Home (or bare /b/{id}) — never yank the owner off
+  // Integrations / Settings mid-connect (that produced white-screen soft navs).
+  const onHomeSurface = /\/b\/[^/]+\/?(?:home)?\/?$/.test(pathname)
+    || /\/b\/[^/]+\/home(?:\/|$|\?)/.test(pathname);
+  if (pendingPackageAsk && !onArchitect && onHomeSurface) {
     redirect(`/b/${encodeURIComponent(businessId)}/architect?packageAsk=1`);
   }
 
