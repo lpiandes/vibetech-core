@@ -113,7 +113,7 @@ function titleFor(mission: LaunchMission) {
 function detailFor(mission: LaunchMission) {
   if (isPendingOpsMission(mission)) {
     return mission.detail
-      || "Setup requested — VIBETech is connecting your Facebook Lead Ads (usually less than 24 hours). We’ll email you when it’s ready.";
+      || "Setup requested — VIBETech is connecting your Facebook Lead Ads. Use Request again if you need to ping us.";
   }
   if (isDeferredMission(mission)) {
     if (mission.id === "knowledge_consult") {
@@ -158,7 +158,7 @@ function phaseLabel(mission: LaunchMission) {
 
 function actionLabel(mission: LaunchMission, proveReady: boolean) {
   if (mission.complete) return "Done";
-  if (isPendingOpsMission(mission)) return "Pending";
+  if (isPendingOpsMission(mission)) return "Request again";
   if (isDeferredMission(mission)) {
     if (mission.id === "knowledge_consult") return "Add knowledge";
     return "Resume";
@@ -218,7 +218,6 @@ export default function LaunchCenter({
   const homeReturnTo = businessId ? `/b/${businessId}/home` : "/";
 
   function resolveInlineSetup(mission: LaunchMission): IntegrationDisplay | null {
-    if (isPendingOpsMission(mission)) return null;
     const integrationId = String(mission.requiredIntegrations?.[0] ?? "");
     if (!integrationId || !INLINE_SETUP_IDS.has(integrationId)) return null;
     const display = getIntegrationDisplay(integrationId, undefined, liveFlags as any);
@@ -227,7 +226,6 @@ export default function LaunchCenter({
   }
 
   function openInlineSetup(mission: LaunchMission): boolean {
-    if (isPendingOpsMission(mission)) return false;
     const display = resolveInlineSetup(mission);
     if (!display) return false;
     cancelNavigation();
@@ -885,15 +883,35 @@ export default function LaunchCenter({
                 ) : null}
               </div>
 
-              {done || locked || pendingOps ? (
+              {done || locked ? (
                 <span style={{
                   flexShrink: 0,
                   fontSize: 13,
                   fontWeight: 750,
-                  color: done ? "#047857" : pendingOps ? "#1d4ed8" : cockpitColors.textMuted,
+                  color: done ? "#047857" : cockpitColors.textMuted,
                   padding: "8px 10px",
                 }}>
                   {btn}
+                </span>
+              ) : pendingOps && resolveInlineSetup(mission) ? (
+                <button
+                  type="button"
+                  onClick={() => openInlineSetup(mission)}
+                  style={rowActionButtonStyle}
+                  title="Still pending — tap to send another setup request to VIBETech"
+                >
+                  {btn}
+                  <ArrowRight size={14} />
+                </button>
+              ) : pendingOps ? (
+                <span style={{
+                  flexShrink: 0,
+                  fontSize: 13,
+                  fontWeight: 750,
+                  color: "#1d4ed8",
+                  padding: "8px 10px",
+                }}>
+                  Pending
                 </span>
               ) : needsEmailReconnect(mission) ? (
                 <button
