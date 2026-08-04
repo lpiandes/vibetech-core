@@ -112,8 +112,43 @@ test("authorized role can upload supported document", async () => {
     mimeType: "text/markdown",
   });
   assert.equal(doc.sourceType, "MARKDOWN");
-  assert.equal(doc.textExtractionStatus, "skipped");
+  assert.equal(doc.textExtractionStatus, "succeeded");
   assert.equal(doc.status, "ready");
+});
+
+test("document content is durable in database for View even without blob storage", async () => {
+  const business = await createTestBusiness();
+  const owner = await createTestUser({ email: `view-knowledge-${uid()}@test.vibetech.local`, name: "Viewer" });
+  await platformStore.createMembership({ userId: owner.id, businessId: business.id, role: "OWNER" });
+  const service = makeService();
+  const doc = await service.uploadDocument({
+    businessId: business.id,
+    userId: owner.id,
+    buffer: Buffer.from("Client follow-up SOP: call within 15 minutes."),
+    filename: "Client-follow-up-SOP.txt",
+    mimeType: "text/plain",
+  });
+  const withStorage = await service.getDocumentContent(business.id, doc.id);
+  assert.equal(withStorage.available, true);
+  assert.match(withStorage.contentText, /Client follow-up SOP/);
+
+  const memoryOnly = new BusinessKnowledgeService({
+    storage: {
+      async putObject() {},
+      async getObject() {
+        throw new Error("gone");
+      },
+      async deleteObject() {},
+      async objectExists() {
+        return false;
+      },
+    },
+    store: platformStore,
+  });
+  const fromDb = await memoryOnly.getDocumentContent(business.id, doc.id);
+  assert.equal(fromDb.available, true);
+  assert.equal(fromDb.source, "database");
+  assert.match(fromDb.contentText, /call within 15 minutes/);
 });
 
 test("operational knowledge retrieval returns bounded ready document content without broadening public list shape", async () => {

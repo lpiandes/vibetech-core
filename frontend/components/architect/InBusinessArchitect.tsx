@@ -171,6 +171,12 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
         if (sessionFromQuery && !forceNewSetup && !packageAsk) {
           // Always allow reopening a past thread (setup plan or continuous chat).
           setSessionId(sessionFromQuery);
+          const continuous = hasInstalledOs
+            ? await sessionIsContinuous(sessionFromQuery)
+            : false;
+          if (!cancelled) {
+            setSessionContinuous(continuous === true || (continuous === "unknown" && hasInstalledOs));
+          }
           await refreshHistory(sessionFromQuery);
           return;
         }
@@ -431,7 +437,13 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
 
   function openPastChat(nextId: string) {
     const kind = history.find((item) => item.sessionId === nextId)?.kind;
-    setSessionContinuous(kind === "setup" ? false : hasInstalledOs);
+    if (kind === "setup") {
+      setSessionContinuous(false);
+    } else if (kind === "chat") {
+      setSessionContinuous(true);
+    } else {
+      setSessionContinuous(hasInstalledOs);
+    }
     setSessionId(nextId);
     void refreshHistory(nextId);
     router.replace(`/b/${encodeURIComponent(businessId)}/architect?sessionId=${encodeURIComponent(nextId)}`);

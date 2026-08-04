@@ -32,13 +32,17 @@ function DocumentRow({
   presentation,
   canManage,
   deleting,
+  viewing,
   onDelete,
+  onView,
 }: {
   doc: PlatformKnowledgeDocument;
   presentation: KnowledgePresentation;
   canManage: boolean;
   deleting: boolean;
+  viewing: boolean;
   onDelete: () => void;
+  onView: () => void;
 }) {
   const status = documentStatusPresentation(doc, presentation);
   const source = sourceTypePresentation(doc, presentation);
@@ -83,11 +87,11 @@ function DocumentRow({
             : <StatusBadge label="Untagged" tone="warning" />}
         </div>
       </div>
-      {canManage ? (
+      <div style={{ display: "flex", gap: spacing.xs, flexShrink: 0 }}>
         <button
           type="button"
-          onClick={onDelete}
-          disabled={deleting}
+          onClick={onView}
+          disabled={viewing}
           style={{
             border: `1px solid ${cockpitColors.panelBorder}`,
             borderRadius: 8,
@@ -95,14 +99,34 @@ function DocumentRow({
             padding: "8px 14px",
             fontSize: typography.caption.fontSize,
             fontWeight: 600,
-            cursor: deleting ? "wait" : "pointer",
-            opacity: deleting ? 0.6 : 1,
+            cursor: viewing ? "wait" : "pointer",
+            opacity: viewing ? 0.6 : 1,
             color: cockpitColors.textPrimary,
           }}
         >
-          {deleting ? "Deleting…" : "Delete"}
+          {viewing ? "Opening…" : "View"}
         </button>
-      ) : null}
+        {canManage ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={deleting}
+            style={{
+              border: `1px solid ${cockpitColors.panelBorder}`,
+              borderRadius: 8,
+              background: cockpitColors.panel,
+              padding: "8px 14px",
+              fontSize: typography.caption.fontSize,
+              fontWeight: 600,
+              cursor: deleting ? "wait" : "pointer",
+              opacity: deleting ? 0.6 : 1,
+              color: cockpitColors.textPrimary,
+            }}
+          >
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -132,6 +156,8 @@ export default function KnowledgeExecutiveLayout({
   const searchParams = useSearchParams();
   const [showAdd, setShowAdd] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<{ title: string; body: string; unavailable?: boolean } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [powersAi, setPowersAi] = useState<PowersAiPanel | null>(null);
@@ -208,6 +234,28 @@ export default function KnowledgeExecutiveLayout({
     } finally {
       deletingRef.current = false;
       setDeletingId(null);
+    }
+  }
+
+  async function viewDocument(documentId: string, title: string) {
+    setViewingId(documentId);
+    try {
+      const res = await fetch(
+        `/api/businesses/${businessId}/knowledge/${encodeURIComponent(documentId)}?content=1`,
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        window.alert(String(data.error ?? "Could not open document."));
+        return;
+      }
+      const body = String(data.contentText ?? "").trim();
+      setViewer({
+        title: String(data.document?.title ?? title),
+        body: body || "No readable text is stored for this file yet. Re-upload a TXT or MD copy to view it here.",
+        unavailable: !data.available,
+      });
+    } finally {
+      setViewingId(null);
     }
   }
 
@@ -308,7 +356,9 @@ export default function KnowledgeExecutiveLayout({
                 presentation={presentation}
                 canManage={canManage}
                 deleting={deletingId === doc.id}
+                viewing={viewingId === doc.id}
                 onDelete={() => void deleteDocument(doc.id, doc.title)}
+                onView={() => void viewDocument(doc.id, doc.title)}
               />
             ))}
           </div>
@@ -379,6 +429,78 @@ export default function KnowledgeExecutiveLayout({
             router.refresh();
           }}
         />
+      ) : null}
+
+      {viewer ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={viewer.title}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 80,
+            background: "rgba(15, 23, 42, 0.45)",
+            display: "grid",
+            placeItems: "center",
+            padding: spacing.lg,
+          }}
+          onClick={() => setViewer(null)}
+        >
+          <div
+            style={{
+              width: "min(720px, 100%)",
+              maxHeight: "min(80vh, 900px)",
+              overflow: "auto",
+              background: cockpitColors.panel,
+              border: `1px solid ${cockpitColors.panelBorder}`,
+              borderRadius: radius.medium,
+              padding: spacing.lg,
+              boxShadow: "0 18px 48px rgba(15, 23, 42, 0.18)",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: spacing.md, alignItems: "start" }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18, color: cockpitColors.textPrimary }}>
+                  {viewer.title}
+                </h2>
+                {viewer.unavailable ? (
+                  <p style={{ margin: "6px 0 0", fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>
+                    Re-upload this file so View stays available after deploy.
+                  </p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewer(null)}
+                style={{
+                  border: `1px solid ${cockpitColors.panelBorder}`,
+                  borderRadius: 8,
+                  background: cockpitColors.panelElevated,
+                  padding: "8px 12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </div>
+            <pre
+              style={{
+                marginTop: spacing.md,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                fontFamily: "inherit",
+                fontSize: 14,
+                lineHeight: 1.55,
+                color: cockpitColors.textPrimary,
+              }}
+            >
+              {viewer.body}
+            </pre>
+          </div>
+        </div>
       ) : null}
     </div>
   );

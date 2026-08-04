@@ -24,6 +24,7 @@ import ProductErrorBanner from "@/components/product/ProductErrorBanner";
 import { parseOwnerPlanAdditions } from "./parseOwnerPlanAdditions";
 import { composePurchasedPackagesPanel } from "@/components/operating/purchasedPackagesSemantics";
 import { useOptionalBusinessScope } from "@/lib/platform/BusinessScopeContext";
+import { isContinuousImproveSession } from "./askSessionResume";
 
 /** Shared mode model for initial + continuous — maps to constitution progress. */
 type CenterMode = "conversation" | "recommendation" | "proposal" | "preview";
@@ -113,8 +114,9 @@ export default function ArchitectWorkspace({
         setBootLoading(true);
         const data = await refresh();
         if (cancelled) return;
+        const treatAsContinuous = continuous || isContinuousImproveSession(data.session);
         // Ask is a chatbot first. Continuous improve never dumps into the plan studio.
-        if (continuous) {
+        if (treatAsContinuous) {
           setCenterMode("conversation");
         } else if (packageAsk && data.journey?.readyForProposal) {
           // Everything for the new packages is already known / connected — go Home.
@@ -263,6 +265,14 @@ export default function ArchitectWorkspace({
     setThinking(true);
     setError(null);
     try {
+      const treatAsContinuous = continuous || isContinuousImproveSession(session);
+      if (treatAsContinuous) {
+        await refresh("chat", { text: text || "I don't know" });
+        setQuickReplies([]);
+        setCenterMode("conversation");
+        setMessage("");
+        return;
+      }
       if (!proposal) {
         await refresh("chat", { text: text || "I don't know" });
         setQuickReplies([]);

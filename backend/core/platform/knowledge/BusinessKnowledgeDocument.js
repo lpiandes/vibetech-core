@@ -26,6 +26,7 @@ export function mapKnowledgeDocumentRow(row) {
     sourceType: String(row.source_type),
     status: String(row.status),
     textExtractionStatus: String(row.text_extraction_status ?? "skipped"),
+    contentText: row.content_text != null ? String(row.content_text) : null,
     categoryIds: Array.isArray(row.category_ids)
       ? row.category_ids.map(String)
       : [],

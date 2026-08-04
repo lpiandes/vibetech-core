@@ -640,15 +640,18 @@ export class PostgresPlatformStore {
     sourceType,
     uploadedByUserId,
     categoryIds = [],
+    contentText = null,
+    textExtractionStatus = "skipped",
   }) {
     const cats = Array.isArray(categoryIds) ? categoryIds.map(String) : [];
     const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO business_knowledge_documents (
            business_id, title, original_filename, storage_key, mime_type, size_bytes,
-           source_type, status, text_extraction_status, uploaded_by_user_id, category_ids
+           source_type, status, text_extraction_status, uploaded_by_user_id, category_ids,
+           content_text
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'ready', 'skipped', $8, $9::text[])
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'ready', $8, $9, $10::text[], $11)
          RETURNING *`,
         [
           String(businessId),
@@ -658,12 +661,34 @@ export class PostgresPlatformStore {
           String(mimeType),
           Number(sizeBytes),
           String(sourceType),
+          String(textExtractionStatus || "skipped"),
           uploadedByUserId ? String(uploadedByUserId) : null,
           cats,
+          contentText != null ? String(contentText) : null,
         ],
       ),
     );
     return mapKnowledgeDocumentRow(rows[0]);
+  }
+
+  async updateKnowledgeDocumentContentText({ documentId, businessId, contentText, textExtractionStatus = null }) {
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `UPDATE business_knowledge_documents
+         SET content_text = $3,
+             text_extraction_status = COALESCE($4, text_extraction_status),
+             updated_at = NOW()
+         WHERE id = $1 AND business_id = $2 AND deleted_at IS NULL
+         RETURNING *`,
+        [
+          String(documentId),
+          String(businessId),
+          contentText != null ? String(contentText) : null,
+          textExtractionStatus != null ? String(textExtractionStatus) : null,
+        ],
+      ),
+    );
+    return mapKnowledgeDocumentRow(rows[0] ?? null);
   }
 
   async updateKnowledgeDocumentCategories({ documentId, businessId, categoryIds = [] }) {

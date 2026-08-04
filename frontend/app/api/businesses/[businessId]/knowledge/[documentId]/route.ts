@@ -4,16 +4,24 @@ import { businessKnowledgeService } from "@/lib/server/compose";
 import { PERMISSIONS } from "../../../../../../../backend/core/platform/permissions/rolePermissions.js";
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ businessId: string; documentId: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ businessId: string; documentId: string }> }) {
   try {
     const { businessId, documentId } = await params;
     await getAuthorizedWorkspace(businessId);
+    const wantContent = new URL(req.url).searchParams.get("content") === "1";
+    if (wantContent) {
+      const payload = await businessKnowledgeService.getDocumentContent(businessId, documentId);
+      return NextResponse.json(payload);
+    }
     const document = await businessKnowledgeService.getDocument(businessId, documentId);
     if (!document) {
       return NextResponse.json({ error: "Knowledge document not found." }, { status: 404 });
     }
     return NextResponse.json({ document });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "NOT_FOUND") {
+      return NextResponse.json({ error: "Knowledge document not found." }, { status: 404 });
+    }
     return authorizationErrorResponse(err);
   }
 }

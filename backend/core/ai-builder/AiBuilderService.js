@@ -617,6 +617,7 @@ export class AiBuilderService {
 
   async getWorkspace(sessionId, { connectedConnectionIds = null } = {}) {
     let session = await this.requireSession(sessionId);
+    const continuousAsk = isContinuousAskSession(session);
     if (session.metadata?.packageAsk || session.businessSummary?.packageAsk) {
       const fromWorkspace = Array.isArray(connectedConnectionIds)
         ? connectedConnectionIds.map(String).filter(Boolean)
@@ -642,40 +643,46 @@ export class AiBuilderService {
     } else {
       session = this.#withPackageAskFlags(session);
     }
-    const progress = this.sessionService.discoveryEngine.completeness.evaluate({
-      answers: session.answers,
-      businessSummary: session.businessSummary,
-    });
-    // Never re-plan questions after ready — that flashes SOP/docs behind the recommendation.
-    // Package-Ask uses the sync planner only (no LLM on every GET — that looped the UI).
-    let questions = progress?.readyForProposal
-      ? []
-      : this.sessionService.discoveryEngine.nextQuestions(session, { limit: 4 });
-    // Hard gate: package-Ask never surfaces identity / unrelated bank questions.
-    if (session.businessSummary?.packageAsk) {
-      const focus = resolvePackageAskQuestionIds(
-        session.businessSummary?.packageAskPackages ?? session.businessSummary?.purchasedPackages ?? [],
-      );
-      if (focus) {
-        questions = questions.filter((q) => focus.has(String(q.questionId)));
-      }
-    }
-    if (JSON.stringify(session.questions ?? []) !== JSON.stringify(questions)
-      || JSON.stringify(session.progress ?? {}) !== JSON.stringify(progress)
-      || Boolean(session.businessSummary?.packageAsk) !== Boolean(session.metadata?.packageAsk)) {
-      session = withBuilderSessionPatch(session, {
-        questions,
-        progress,
+    // Continuous Ask seeds the installed OS as proposal state. Never replan discovery
+    // questions or wipe that proposal on GET — that erases chats when switching history.
+    if (!continuousAsk) {
+      const progress = this.sessionService.discoveryEngine.completeness.evaluate({
+        answers: session.answers,
         businessSummary: session.businessSummary,
-        metadata: session.metadata,
-      }, { updatedAt: this.nowISO() });
-      await this.repository.save(session);
+      });
+      // Never re-plan questions after ready — that flashes SOP/docs behind the recommendation.
+      // Package-Ask uses the sync planner only (no LLM on every GET — that looped the UI).
+      let questions = progress?.readyForProposal
+        ? []
+        : this.sessionService.discoveryEngine.nextQuestions(session, { limit: 4 });
+      // Hard gate: package-Ask never surfaces identity / unrelated bank questions.
+      if (session.businessSummary?.packageAsk) {
+        const focus = resolvePackageAskQuestionIds(
+          session.businessSummary?.packageAskPackages ?? session.businessSummary?.purchasedPackages ?? [],
+        );
+        if (focus) {
+          questions = questions.filter((q) => focus.has(String(q.questionId)));
+        }
+      }
+      if (JSON.stringify(session.questions ?? []) !== JSON.stringify(questions)
+        || JSON.stringify(session.progress ?? {}) !== JSON.stringify(progress)
+        || Boolean(session.businessSummary?.packageAsk) !== Boolean(session.metadata?.packageAsk)) {
+        session = withBuilderSessionPatch(session, {
+          questions,
+          progress,
+          businessSummary: session.businessSummary,
+          metadata: session.metadata,
+        }, { updatedAt: this.nowISO() });
+        await this.repository.save(session);
+      }
     }
     let stored = await this.loadProposalState(session);
     // A recommendation assembled before the answers-only policy may contain
     // default workspaces or AI teammates. Never let an unapproved legacy
     // proposal reach installation; send it back through a fresh proposal.
-    if (stored?.specification
+    // Continuous Ask intentionally seeds the live installed OS (not answers_only_v1).
+    if (!continuousAsk
+      && stored?.specification
       && stored.specification?.metadata?.builderPolicyVersion !== "answers_only_v1"
       && !stored.approval
       && !stored.installation) {
@@ -2426,6 +2433,15 @@ export class AiBuilderService {
 function isAnswersOnlyBuilderProposal(proposalState) {
   return proposalState?.specification?.metadata?.builderPolicyVersion
     === ANSWERS_ONLY_BUILDER_POLICY_VERSION;
+}
+
+function isContinuousAskSession(session) {
+  if (!session || typeof session !== "object") return false;
+  if (session.metadata?.packageAsk === true || session.businessSummary?.packageAsk === true) {
+    return false;
+  }
+  if (session.metadata?.continuousImprovement) return true;
+  return /improve|continuous|expand_existing/i.test(String(session.mode ?? ""));
 }
 
 function unique(items) {

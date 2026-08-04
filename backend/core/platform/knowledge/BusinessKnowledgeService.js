@@ -10,6 +10,9 @@ import {
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_OPERATIONAL_CONTENT_BYTES = 32 * 1024;
 const DEFAULT_OPERATIONAL_CONTENT_CHARS = 4000;
+/** Cap stored/viewable text so Postgres stays lean while SOPs remain readable. */
+const DEFAULT_VIEW_CONTENT_CHARS = 120_000;
+const DEFAULT_VIEW_CONTENT_BYTES = 256 * 1024;
 
 const EXTENSION_SOURCE_TYPE = {
   ".pdf": KNOWLEDGE_SOURCE_TYPES.PDF,
@@ -176,7 +179,9 @@ export class BusinessKnowledgeService {
     const documents = [];
     for (const doc of rows) {
       let contentText = "";
-      if (supportsOperationalTextExtraction(doc.sourceType) && storage?.getObject) {
+      if (doc.contentText) {
+        contentText = String(doc.contentText).slice(0, Number(maxContentChars));
+      } else if (supportsOperationalTextExtraction(doc.sourceType) && storage?.getObject) {
         try {
           const buffer = await storage.getObject({ businessId, storageKey: doc.storageKey });
           contentText = await extractOperationalKnowledgeText({
@@ -212,6 +217,64 @@ export class BusinessKnowledgeService {
     return toPublicKnowledgeDocument(doc);
   }
 
+  /**
+   * Owner View: durable content_text first, then blob storage (may be gone on Vercel /tmp).
+   */
+  async getDocumentContent(
+    businessId,
+    documentId,
+    {
+      maxBytes = DEFAULT_VIEW_CONTENT_BYTES,
+      maxContentChars = DEFAULT_VIEW_CONTENT_CHARS,
+      storage = this.storage,
+    } = {},
+  ) {
+    const doc = await this.store.getKnowledgeDocumentById(documentId, businessId);
+    if (!doc || doc.status === "deleted") {
+      const err = new Error("Knowledge document not found.");
+      err.code = "NOT_FOUND";
+      throw err;
+    }
+
+    let contentText = doc.contentText ? String(doc.contentText) : "";
+    let source = contentText ? "database" : null;
+
+    if (!contentText && supportsOperationalTextExtraction(doc.sourceType) && storage?.getObject) {
+      try {
+        const buffer = await storage.getObject({ businessId, storageKey: doc.storageKey });
+        contentText = await extractOperationalKnowledgeText({
+          buffer,
+          sourceType: doc.sourceType,
+          filename: doc.originalFilename,
+          maxBytes,
+          maxContentChars,
+        });
+        if (contentText) {
+          source = "storage";
+          if (typeof this.store.updateKnowledgeDocumentContentText === "function") {
+            void this.store
+              .updateKnowledgeDocumentContentText({
+                documentId: doc.id,
+                businessId,
+                contentText,
+                textExtractionStatus: "succeeded",
+              })
+              .catch((err) => console.error("[knowledge-content] backfill failed", err));
+          }
+        }
+      } catch {
+        contentText = "";
+      }
+    }
+
+    return {
+      document: toPublicKnowledgeDocument(doc),
+      contentText: contentText.slice(0, Number(maxContentChars)),
+      available: Boolean(contentText.trim()),
+      source,
+    };
+  }
+
   async uploadDocument({
     businessId,
     userId,
@@ -240,6 +303,24 @@ export class BusinessKnowledgeService {
       mimeType: validation.mimeType,
     });
 
+    let contentText = "";
+    let textExtractionStatus = "skipped";
+    if (supportsOperationalTextExtraction(validation.sourceType)) {
+      try {
+        contentText = await extractOperationalKnowledgeText({
+          buffer,
+          sourceType: validation.sourceType,
+          filename: validation.safeFilename,
+          maxBytes: DEFAULT_VIEW_CONTENT_BYTES,
+          maxContentChars: DEFAULT_VIEW_CONTENT_CHARS,
+        });
+        textExtractionStatus = contentText ? "succeeded" : "failed";
+      } catch {
+        contentText = "";
+        textExtractionStatus = "failed";
+      }
+    }
+
     try {
       const doc = await this.store.createKnowledgeDocument({
         businessId,
@@ -251,6 +332,8 @@ export class BusinessKnowledgeService {
         sourceType: validation.sourceType,
         uploadedByUserId: userId,
         categoryIds: cats,
+        contentText: contentText || null,
+        textExtractionStatus,
       });
 
       void this.store
