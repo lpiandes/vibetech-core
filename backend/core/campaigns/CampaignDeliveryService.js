@@ -254,12 +254,14 @@ export class CampaignDeliveryService {
               }],
               subject: String(recipient.subject ?? document.subjectLine),
               body: String(recipient.body ?? ""),
+              htmlBody: recipient.htmlBody ? String(recipient.htmlBody) : null,
               createdAt: String(nowISO),
               sentAt: null,
               deliveredAt: null,
               failedAt: null,
               relatedObjects,
               metadata: {
+                htmlBody: recipient.htmlBody ? String(recipient.htmlBody) : null,
                 campaignDelivery: {
                   workId: String(workId),
                   partyId,

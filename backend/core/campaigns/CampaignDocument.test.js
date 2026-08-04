@@ -264,7 +264,7 @@ test("message version ids are deterministic and package compose has no provider 
   });
   assert.equal(draft.communicationStatus, "draft");
   assert.ok(draft.document.sections.length > 0);
-  assert.ok(draft.knowledgeSummary.includes("No approved knowledge"));
+  assert.ok(draft.knowledgeSummary.includes("No Knowledge docs"));
 });
 
 test("restart preserves studio document through work and communication snapshots", () => {

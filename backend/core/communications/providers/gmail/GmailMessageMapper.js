@@ -52,19 +52,42 @@ export function mapCommunicationMessageToGmailPayload(message) {
   const subject = safeString(message.subject);
   if (!subject) fail("message.subject required.");
 
-  // CommunicationMessage stores the outbound content in `body`.
+  // CommunicationMessage stores plain text in `body`; optional HTML in metadata.htmlBody.
   const body = safeString(message.body);
   if (!body) fail("message.body required.");
+  const htmlBody = safeString(message.htmlBody ?? message.metadata?.htmlBody);
 
-  const messageLines = [
-    `From: ${fromEmail}`,
-    `To: ${toEmails.join(", ")}`,
-    `Subject: ${subject}`,
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: 7bit",
-    "",
-    body,
-  ];
+  const messageLines = htmlBody
+    ? [
+      `From: ${fromEmail}`,
+      `To: ${toEmails.join(", ")}`,
+      `Subject: ${subject}`,
+      "MIME-Version: 1.0",
+      'Content-Type: multipart/alternative; boundary="vt_campaign_boundary"',
+      "",
+      "--vt_campaign_boundary",
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: 7bit",
+      "",
+      body,
+      "",
+      "--vt_campaign_boundary",
+      "Content-Type: text/html; charset=UTF-8",
+      "Content-Transfer-Encoding: 7bit",
+      "",
+      htmlBody,
+      "",
+      "--vt_campaign_boundary--",
+    ]
+    : [
+      `From: ${fromEmail}`,
+      `To: ${toEmails.join(", ")}`,
+      `Subject: ${subject}`,
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: 7bit",
+      "",
+      body,
+    ];
 
   const raw = toBase64Url(messageLines.join("\n"));
 

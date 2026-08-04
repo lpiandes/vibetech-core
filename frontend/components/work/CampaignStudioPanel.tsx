@@ -4,49 +4,99 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
+import { buildNewsletterPreviewHtml, type PreviewBrand } from "@/lib/campaigns/newsletterPreviewHtml";
 import {
   resolveCampaignApprovalPresentation,
   resolveCampaignReview,
   type WorkQueueItem,
 } from "./workQueueSemantics";
 
-type SectionFields = {
-  heading?: string | null;
-  body?: string | null;
-  ctaText?: string | null;
-  ctaUrl?: string | null;
-  subjectId?: string | null;
-};
-
 type StudioSection = {
   id: string;
   type: string;
   order: number;
-  fields: SectionFields;
-};
-
-type SectionType = {
-  id: string;
-  label: string;
-  fields: string[];
-  description?: string;
-};
-
-const FIELD_LABELS: Record<string, string> = {
-  heading: "Heading",
-  body: "Paragraph",
-  ctaText: "CTA text",
-  ctaUrl: "CTA destination",
-  subjectId: "Property id",
-};
-
-function emptySection(type: string, order: number): StudioSection {
-  return {
-    id: `sec_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    type,
-    order,
-    fields: { heading: "", body: "", ctaText: "", ctaUrl: "", subjectId: "" },
+  fields: {
+    heading?: string | null;
+    body?: string | null;
+    ctaText?: string | null;
+    ctaUrl?: string | null;
+    subjectId?: string | null;
   };
+};
+
+type ListingOption = { id: string; displayName: string };
+
+function findSection(sections: StudioSection[], type: string) {
+  return sections.find((section) => section.type === type) ?? null;
+}
+
+function fieldOf(sections: StudioSection[], type: string, key: "heading" | "body" | "ctaText") {
+  return String(findSection(sections, type)?.fields?.[key] ?? "");
+}
+
+function buildSectionsFromEditor({
+  intro,
+  highlights,
+  listingName,
+  listingBody,
+  listingId,
+  ctaText,
+  signature,
+  previous,
+}: {
+  intro: string;
+  highlights: string;
+  listingName: string;
+  listingBody: string;
+  listingId: string;
+  ctaText: string;
+  signature: string;
+  previous: StudioSection[];
+}): StudioSection[] {
+  const keepId = (type: string, fallback: string) => previous.find((s) => s.type === type)?.id ?? fallback;
+  const hasListing = Boolean(listingName.trim() || listingId || listingBody.trim());
+  const sections: StudioSection[] = [
+    {
+      id: keepId("intro", "sec_intro"),
+      type: "intro",
+      order: 0,
+      fields: { heading: "This week", body: intro },
+    },
+    {
+      id: keepId("custom_text", "sec_highlights"),
+      type: "custom_text",
+      order: 1,
+      fields: { heading: "Highlights", body: highlights },
+    },
+  ];
+  if (hasListing) {
+    sections.push({
+      id: keepId("property_feature", "sec_listing"),
+      type: "property_feature",
+      order: 2,
+      fields: {
+        heading: listingName.trim() || "Featured listing",
+        body: listingBody.trim()
+          || (listingName.trim() ? `Featured: ${listingName.trim()}.` : "Featured listing details."),
+        subjectId: listingId || null,
+      },
+    });
+  }
+  sections.push(
+    {
+      id: keepId("call_to_action", "sec_cta"),
+      type: "call_to_action",
+      order: hasListing ? 3 : 2,
+      fields: { ctaText: ctaText || "Reply if you want to talk", ctaUrl: "", body: "" },
+    },
+    {
+      id: keepId("contact_signature", "sec_signature"),
+      type: "contact_signature",
+      order: hasListing ? 4 : 3,
+      fields: { heading: "", body: signature || "— The team" },
+    },
+  );
+  return sections;
 }
 
 export default function CampaignStudioPanel({
@@ -60,20 +110,22 @@ export default function CampaignStudioPanel({
   const review = resolveCampaignReview(item);
   const [subjectLine, setSubjectLine] = useState("");
   const [previewText, setPreviewText] = useState("");
-  const [sections, setSections] = useState<StudioSection[]>([]);
-  const [sectionTypes, setSectionTypes] = useState<SectionType[]>([]);
+  const [intro, setIntro] = useState("");
+  const [highlights, setHighlights] = useState("");
+  const [ctaText, setCtaText] = useState("Reply if you want to talk");
+  const [signature, setSignature] = useState("— The team");
+  const [listingId, setListingId] = useState("");
+  const [listingName, setListingName] = useState("");
+  const [listingBody, setListingBody] = useState("");
+  const [listings, setListings] = useState<ListingOption[]>([]);
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [brand, setBrand] = useState<PreviewBrand | null>(null);
   const [binding, setBinding] = useState<Record<string, unknown> | null>(null);
-  const [knowledgeSources, setKnowledgeSources] = useState<Array<Record<string, unknown>>>([]);
-  const [knowledgeSummary, setKnowledgeSummary] = useState("");
-  const [sendPreview, setSendPreview] = useState<Record<string, unknown> | null>(null);
-  const [previewPartyId, setPreviewPartyId] = useState("");
-  const [previewBody, setPreviewBody] = useState<string | null>(null);
-  const [templateName, setTemplateName] = useState("");
+  const [previousSections, setPreviousSections] = useState<StudioSection[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [optimisticQueued, setOptimisticQueued] = useState(false);
-  const [addType, setAddType] = useState("custom_text");
 
   const base = `/api/businesses/${encodeURIComponent(businessId)}/campaigns/work/${encodeURIComponent(String(item.id))}`;
 
@@ -81,76 +133,87 @@ export default function CampaignStudioPanel({
     setOptimisticQueued(false);
     setError(null);
     setNotice(null);
-    setPreviewBody(null);
     let cancelled = false;
     async function load() {
       try {
-        const response = await fetch(base);
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(String(data?.error ?? "Could not load campaign studio."));
+        const [campaignRes, subjectsRes] = await Promise.all([
+          fetch(base),
+          fetch(`/api/businesses/${encodeURIComponent(businessId)}/subjects`),
+        ]);
+        const data = await campaignRes.json().catch(() => ({}));
+        const subjectsData = await subjectsRes.json().catch(() => ({}));
+        if (!campaignRes.ok) throw new Error(String(data?.error ?? "Could not load newsletter."));
         if (cancelled) return;
+
         const document = data.document ?? {};
+        const sections = (Array.isArray(document.sections) ? document.sections : []) as StudioSection[];
+        setPreviousSections(sections);
         setSubjectLine(String(document.subjectLine ?? review?.draftSubject ?? ""));
         setPreviewText(String(document.previewText ?? ""));
-        setSections(Array.isArray(document.sections) ? document.sections : []);
-        setSectionTypes(Array.isArray(data.sectionTypes) ? data.sectionTypes : []);
+        setIntro(fieldOf(sections, "intro", "body") || "Here is this week’s update.");
+        setHighlights(fieldOf(sections, "custom_text", "body") || "Add what you want people to know.");
+        setCtaText(fieldOf(sections, "call_to_action", "ctaText") || "Reply if you want to talk");
+        setSignature(fieldOf(sections, "contact_signature", "body") || "— The team");
+        const property = findSection(sections, "property_feature");
+        setListingId(String(property?.fields?.subjectId ?? ""));
+        setListingName(String(property?.fields?.heading ?? ""));
+        setListingBody(String(property?.fields?.body ?? ""));
         setBinding(data.expectedApprovalBinding ?? null);
-        setKnowledgeSources(Array.isArray(data.campaign?.knowledgeSources) ? data.campaign.knowledgeSources : []);
-        setKnowledgeSummary(String(data.campaign?.knowledgeSummary ?? review?.knowledgeSummary ?? ""));
-        setTemplateName(String(data.campaign?.campaignName ?? review?.campaignName ?? "Saved campaign"));
-        const firstParty = data.campaign?.recipientPreparations?.[0]?.partyId;
-        if (firstParty) setPreviewPartyId(String(firstParty));
+        setBrand(data.brand ?? null);
+
+        const rows = Array.isArray(subjectsData?.subjects)
+          ? subjectsData.subjects
+          : Array.isArray(subjectsData?.items)
+            ? subjectsData.items
+            : [];
+        setListings(
+          rows
+            .map((row: any) => ({
+              id: String(row.id ?? row.subjectId ?? ""),
+              displayName: String(row.displayName ?? row.name ?? row.id ?? ""),
+            }))
+            .filter((row: ListingOption) => row.id && row.displayName),
+        );
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load campaign studio.");
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load newsletter.");
       }
     }
     void load();
     return () => {
       cancelled = true;
     };
-  }, [base, item.id, review?.campaignName, review?.draftSubject]);
+  }, [base, businessId, item.id, review?.draftSubject]);
+
+  const sections = useMemo(
+    () => buildSectionsFromEditor({
+      intro,
+      highlights,
+      listingName,
+      listingBody,
+      listingId,
+      ctaText,
+      signature,
+      previous: previousSections,
+    }),
+    [intro, highlights, listingName, listingBody, listingId, ctaText, signature, previousSections],
+  );
+
+  const livePreview = useMemo(
+    () => buildNewsletterPreviewHtml({
+      subjectLine,
+      previewText,
+      sections,
+      brand,
+      recipientName: review?.recipients?.[0]?.displayName ?? "Alex",
+    }),
+    [subjectLine, previewText, sections, brand, review?.recipients],
+  );
 
   const approval = resolveCampaignApprovalPresentation(item, { requestPending: busy, optimisticQueued });
   const recipients = review?.recipients ?? [];
-
-  const typeOptions = useMemo(() => {
-    if (sectionTypes.length) return sectionTypes;
-    return [
-      { id: "intro", label: "Introduction", fields: ["heading", "body"] },
-      { id: "custom_text", label: "Custom text", fields: ["heading", "body"] },
-      { id: "property_feature", label: "Property feature", fields: ["heading", "body", "subjectId"] },
-      { id: "market_update", label: "Market update", fields: ["heading", "body"] },
-      { id: "educational_content", label: "Educational content", fields: ["heading", "body"] },
-      { id: "home_value_cma", label: "Home value / CMA", fields: ["heading", "body", "ctaText"] },
-      { id: "referral_request", label: "Referral request", fields: ["heading", "body", "ctaText"] },
-      { id: "call_to_action", label: "Call to action", fields: ["ctaText", "ctaUrl", "body"] },
-      { id: "contact_signature", label: "Contact signature", fields: ["heading", "body"] },
-    ];
-  }, [sectionTypes]);
-
-  function fieldsForType(type: string) {
-    return typeOptions.find((entry) => entry.id === type)?.fields ?? ["heading", "body"];
-  }
-
-  function moveSection(index: number, direction: -1 | 1) {
-    setSections((current) => {
-      const next = [...current].sort((a, b) => a.order - b.order);
-      const target = index + direction;
-      if (target < 0 || target >= next.length) return current;
-      const swap = next[index];
-      next[index] = next[target];
-      next[target] = swap;
-      return next.map((section, order) => ({ ...section, order }));
-    });
-  }
-
-  function updateSectionField(index: number, field: keyof SectionFields, value: string) {
-    setSections((current) => current.map((section, i) => (
-      i === index
-        ? { ...section, fields: { ...section.fields, [field]: value } }
-        : section
-    )));
-  }
+  const recipientLabel = review?.recipientCount
+    ? `${review.recipientCount} people`
+    : "No one yet";
 
   async function saveDraft() {
     if (busy) return;
@@ -161,37 +224,15 @@ export default function CampaignStudioPanel({
       const response = await fetch(`${base}/document`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subjectLine,
-          previewText: previewText || null,
-          sections: sections.map((section, order) => ({
-            ...section,
-            order,
-            fields: {
-              heading: section.fields.heading || null,
-              body: section.fields.body || null,
-              ctaText: section.fields.ctaText || null,
-              ctaUrl: section.fields.ctaUrl || null,
-              subjectId: section.fields.subjectId || null,
-            },
-          })),
-        }),
+        body: JSON.stringify({ subjectLine, previewText, sections }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(String(data?.error ?? "Could not save draft."));
-      setNotice(data.idempotent ? "Draft unchanged." : data.forkedFromApproved
-        ? `Saved as new draft version ${data.contentVersion}. Prior approved version retained.`
-        : `Saved draft version ${data.contentVersion}.`);
-      const refreshed = await fetch(base);
-      const refreshedData = await refreshed.json().catch(() => ({}));
-      if (refreshed.ok) {
-        setBinding(refreshedData.expectedApprovalBinding ?? null);
-        setSections(Array.isArray(refreshedData.document?.sections) ? refreshedData.document.sections : sections);
-        setSubjectLine(String(refreshedData.document?.subjectLine ?? subjectLine));
-      }
+      if (!response.ok) throw new Error(String(data?.error ?? "Could not save."));
+      setPreviousSections(sections);
+      setNotice("Saved.");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save draft.");
+      setError(err instanceof Error ? err.message : "Could not save.");
     } finally {
       setBusy(false);
     }
@@ -201,59 +242,51 @@ export default function CampaignStudioPanel({
     if (busy) return;
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
       const response = await fetch(`${base}/audience/refresh`, { method: "POST" });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(String(data?.error ?? "Could not refresh audience."));
-      setNotice(data.fingerprintChanged
-        ? "Audience refreshed. Prior approval no longer authorizes this version."
-        : "Audience unchanged.");
+      if (!response.ok) throw new Error(String(data?.error ?? "Could not refresh."));
+      setNotice(data.fingerprintChanged ? "Updated who gets it." : "Same people.");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not refresh audience.");
+      setError(err instanceof Error ? err.message : "Could not refresh.");
     } finally {
       setBusy(false);
     }
   }
 
-  async function runPreview() {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await fetch(`${base}/preview`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ partyId: previewPartyId || null }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(String(data?.error ?? "Could not preview."));
-      setPreviewBody(String(data.preview?.body ?? ""));
-      if (data.preview?.subjectLine) setNotice(`Preview subject: ${data.preview.subjectLine}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not preview.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveAsTemplate() {
+  async function generateFromWebsite() {
     if (busy) return;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const response = await fetch(`${base}/save-template`, {
+      const response = await fetch(`${base}/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: templateName || review?.campaignName || "Saved campaign" }),
+        body: JSON.stringify({
+          websiteUrl: websiteUrl || null,
+          listingName: listingName || null,
+          businessName: brand?.businessName ?? null,
+        }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(String(data?.error ?? "Could not save template."));
-      setNotice(`Saved reusable template: ${data.template?.name ?? templateName}`);
+      if (!response.ok || !data.ok) throw new Error(String(data?.error ?? "Could not generate."));
+      const draft = data.draft ?? {};
+      if (draft.subjectLine) setSubjectLine(String(draft.subjectLine));
+      if (draft.previewText != null) setPreviewText(String(draft.previewText));
+      if (draft.intro) setIntro(String(draft.intro));
+      if (draft.highlights) setHighlights(String(draft.highlights));
+      if (draft.listingBody) setListingBody(String(draft.listingBody));
+      if (draft.ctaText) setCtaText(String(draft.ctaText));
+      if (draft.signature) setSignature(String(draft.signature));
+      setNotice(
+        data.websiteFetched
+          ? "Draft filled from website — preview updated on the right."
+          : "Draft filled — add a website URL for richer copy. Preview updated on the right.",
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save template.");
+      setError(err instanceof Error ? err.message : "Could not generate.");
     } finally {
       setBusy(false);
     }
@@ -264,31 +297,39 @@ export default function CampaignStudioPanel({
     setBusy(true);
     setError(null);
     try {
+      await saveDraftSilent();
       const response = await fetch(`${base}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ binding }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(String(data?.error ?? "Could not approve campaign."));
+      if (!response.ok) throw new Error(String(data?.error ?? "Could not approve."));
       setOptimisticQueued(true);
-      setNotice("Approved and queued, not sent. Use Send approved campaign for delivery.");
-      const previewResponse = await fetch(`${base}/send`);
-      const previewData = await previewResponse.json().catch(() => ({}));
-      if (previewResponse.ok) setSendPreview(previewData);
+      setNotice("Approved — ready to send.");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not approve campaign.");
+      setError(err instanceof Error ? err.message : "Could not approve.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function saveDraftSilent() {
+    const response = await fetch(`${base}/document`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subjectLine, previewText, sections }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(String(data?.error ?? "Could not save."));
+    setPreviousSections(sections);
   }
 
   async function sendApprovedCampaign() {
     if (busy) return;
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
       const response = await fetch(`${base}/send`, {
         method: "POST",
@@ -296,15 +337,11 @@ export default function CampaignStudioPanel({
         body: JSON.stringify({ binding }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(String(data?.error ?? "Could not send campaign."));
-      setNotice(
-        data.deliverySummary?.campaignDeliveryStatus
-          ? `Delivery status: ${data.deliverySummary.campaignDeliveryStatus}`
-          : "Send completed.",
-      );
+      if (!response.ok) throw new Error(String(data?.error ?? "Could not send."));
+      setNotice("Sent.");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not send campaign.");
+      setError(err instanceof Error ? err.message : "Could not send.");
     } finally {
       setBusy(false);
     }
@@ -312,247 +349,200 @@ export default function CampaignStudioPanel({
 
   if (!review) return null;
 
-  const orderedSections = [...sections].sort((a, b) => a.order - b.order);
-
   return (
     <div style={{ display: "grid", gap: spacing.md, padding: spacing.md, borderTop: `1px solid ${cockpitColors.panelBorder}` }}>
-      <div style={{ display: "grid", gap: 4 }}>
-        <div style={{ ...typography.cardTitle, color: cockpitColors.textPrimary }}>Campaign studio</div>
-        <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
-          {review.purpose}
-          {review.operationName ? ` · ${review.operationName}` : ""}
-          {review.occurrenceKey ? ` · ${review.occurrenceKey}` : ""}
-          {review.subjectName ? ` · ${review.subjectName}` : ""}
-          {review.contentVersion ? ` · v${review.contentVersion}` : ""}
-        </div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
+        <div style={{ ...typography.cardTitle, color: cockpitColors.textPrimary }}>Newsletter</div>
+        <div style={{ color: cockpitColors.textMuted, fontSize: 12 }}>{recipientLabel} · {approval.statusLabel}</div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: spacing.sm }}>
-        <div>
-          <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>Recipients</div>
-          <strong>{review.recipientCount}</strong>
-        </div>
-        <div>
-          <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>Excluded</div>
-          <strong>{review.excludedCount}</strong>
-        </div>
-        <div>
-          <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>Delivery truth</div>
-          <strong>{approval.statusLabel}</strong>
-        </div>
-      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(280px, 1fr) minmax(300px, 1.1fr)",
+          gap: 16,
+          alignItems: "start",
+        }}
+        className="vt-newsletter-studio"
+      >
+        <div style={{ display: "grid", gap: 12 }}>
+          <label style={labelStyle}>
+            Subject
+            <input value={subjectLine} onChange={(e) => setSubjectLine(e.target.value)} style={inputStyle} placeholder="What people see in their inbox" />
+          </label>
 
-      <label style={{ display: "grid", gap: 4 }}>
-        <span style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>Subject line</span>
-        <input
-          value={subjectLine}
-          onChange={(event) => setSubjectLine(event.target.value)}
-          style={inputStyle}
-        />
-      </label>
+          <label style={labelStyle}>
+            Inbox preview line
+            <input value={previewText} onChange={(e) => setPreviewText(e.target.value)} style={inputStyle} placeholder="Short snippet under the subject" />
+          </label>
 
-      <label style={{ display: "grid", gap: 4 }}>
-        <span style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>Preview text</span>
-        <input
-          value={previewText}
-          onChange={(event) => setPreviewText(event.target.value)}
-          style={inputStyle}
-        />
-      </label>
+          <label style={labelStyle}>
+            Intro
+            <textarea value={intro} onChange={(e) => setIntro(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+          </label>
 
-      <div style={{ display: "grid", gap: spacing.sm }}>
-        <div style={{ fontWeight: 700, color: cockpitColors.textPrimary }}>Sections</div>
-        {orderedSections.map((section, index) => {
-          const allowedFields = fieldsForType(section.type);
-          return (
-            <div key={section.id} style={{ border: `1px solid ${cockpitColors.panelBorder}`, borderRadius: radius.medium, padding: spacing.sm, display: "grid", gap: spacing.xs }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: spacing.sm, flexWrap: "wrap" }}>
-                <strong style={{ color: cockpitColors.textPrimary }}>
-                  {typeOptions.find((entry) => entry.id === section.type)?.label ?? section.type}
-                </strong>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button type="button" style={smallButtonStyle} onClick={() => moveSection(index, -1)} disabled={index === 0}>Up</button>
-                  <button type="button" style={smallButtonStyle} onClick={() => moveSection(index, 1)} disabled={index === orderedSections.length - 1}>Down</button>
-                  <button
-                    type="button"
-                    style={smallButtonStyle}
-                    onClick={() => setSections((current) => current.filter((entry) => entry.id !== section.id).map((entry, order) => ({ ...entry, order })))}
-                  >
-                    Remove
-                  </button>
+          <label style={labelStyle}>
+            Highlights
+            <textarea value={highlights} onChange={(e) => setHighlights(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+          </label>
+
+          <div style={{ display: "grid", gap: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: cockpitColors.textMuted }}>Listing (optional)</div>
+            {listings.length > 0 ? (
+              <select
+                value={listingId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setListingId(id);
+                  const hit = listings.find((row) => row.id === id);
+                  if (hit) {
+                    setListingName(hit.displayName);
+                    if (!listingBody.trim()) setListingBody(`Featured: ${hit.displayName}.`);
+                  } else {
+                    setListingName("");
+                    setListingBody("");
+                  }
+                }}
+                style={inputStyle}
+              >
+                <option value="">No listing</option>
+                {listings.map((row) => (
+                  <option key={row.id} value={row.id}>{row.displayName}</option>
+                ))}
+              </select>
+            ) : null}
+            <input
+              value={listingName}
+              onChange={(e) => setListingName(e.target.value)}
+              placeholder="House / listing name"
+              style={inputStyle}
+            />
+            <textarea
+              value={listingBody}
+              onChange={(e) => setListingBody(e.target.value)}
+              rows={3}
+              placeholder="What to say about this listing"
+              style={{ ...inputStyle, resize: "vertical" }}
+            />
+          </div>
+
+          <label style={labelStyle}>
+            Call to action
+            <input value={ctaText} onChange={(e) => setCtaText(e.target.value)} style={inputStyle} />
+          </label>
+
+          <label style={labelStyle}>
+            Signature
+            <input value={signature} onChange={(e) => setSignature(e.target.value)} style={inputStyle} />
+          </label>
+
+          <div style={{ display: "grid", gap: 8, padding: 12, borderRadius: radius.medium, border: `1px solid ${cockpitColors.panelBorder}`, background: "#fafaf9" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: cockpitColors.textPrimary }}>Generate from website</div>
+            <div style={{ fontSize: 12, color: cockpitColors.textMuted }}>
+              Fills the fields on the left. The preview on the right updates immediately.
+            </div>
+            <input
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+              placeholder="annmcbride.com"
+              style={inputStyle}
+            />
+            <button type="button" style={primaryButtonStyle(true)} onClick={() => void generateFromWebsite()} disabled={busy}>
+              {busy ? "Working…" : "Generate draft"}
+            </button>
+          </div>
+
+          {recipients.length > 0 ? (
+            <div style={{ display: "grid", gap: 4 }}>
+              <div style={{ fontSize: 12, fontWeight: 800 }}>Sending to</div>
+              {recipients.slice(0, 6).map((recipient) => (
+                <div key={String(recipient.partyId)} style={{ fontSize: 12, color: cockpitColors.textSecondary }}>
+                  {String(recipient.displayName ?? recipient.partyId)}
+                  {recipient.email ? ` · ${String(recipient.email)}` : ""}
                 </div>
-              </div>
-              {allowedFields.map((field) => (
-                <label key={field} style={{ display: "grid", gap: 4 }}>
-                  <span style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted }}>{FIELD_LABELS[field] ?? field}</span>
-                  {field === "body" ? (
-                    <textarea
-                      value={String(section.fields[field as keyof SectionFields] ?? "")}
-                      onChange={(event) => updateSectionField(index, field as keyof SectionFields, event.target.value)}
-                      rows={3}
-                      style={{ ...inputStyle, resize: "vertical" }}
-                    />
-                  ) : (
-                    <input
-                      value={String(section.fields[field as keyof SectionFields] ?? "")}
-                      onChange={(event) => updateSectionField(index, field as keyof SectionFields, event.target.value)}
-                      style={inputStyle}
-                    />
-                  )}
-                </label>
               ))}
             </div>
-          );
-        })}
-        <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap", alignItems: "center" }}>
-          <select value={addType} onChange={(event) => setAddType(event.target.value)} style={inputStyle}>
-            {typeOptions.map((entry) => (
-              <option key={entry.id} value={entry.id}>{entry.label}</option>
-            ))}
-          </select>
-          <button
-            type="button"
-            style={smallButtonStyle}
-            onClick={() => setSections((current) => [...current, emptySection(addType, current.length)])}
-          >
-            Add section
-          </button>
-        </div>
-      </div>
+          ) : null}
 
-      <div style={{ display: "grid", gap: spacing.xs }}>
-        <div style={{ fontWeight: 700, color: cockpitColors.textPrimary }}>Recipient preview</div>
-        <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
-          <select value={previewPartyId} onChange={(event) => setPreviewPartyId(event.target.value)} style={inputStyle}>
-            <option value="">Shared draft</option>
-            {recipients.map((recipient) => (
-              <option key={String(recipient.partyId)} value={String(recipient.partyId)}>
-                {String(recipient.displayName ?? recipient.partyId)}
-              </option>
-            ))}
-          </select>
-          <button type="button" style={smallButtonStyle} onClick={runPreview} disabled={busy}>Preview</button>
-        </div>
-        {previewBody != null ? (
-          <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontFamily: "inherit", color: cockpitColors.textPrimary, lineHeight: 1.5, border: `1px solid ${cockpitColors.panelBorder}`, borderRadius: radius.medium, padding: spacing.sm }}>
-            {previewBody || "Empty preview."}
-          </pre>
-        ) : null}
-      </div>
-
-      <div style={{ display: "grid", gap: spacing.xs }}>
-        <div style={{ fontWeight: 700, color: cockpitColors.textPrimary }}>Knowledge sources</div>
-        <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
-          {knowledgeSummary || review.knowledgeSummary || "No approved knowledge retrieved."}
-        </div>
-        {knowledgeSources.length ? knowledgeSources.map((source) => (
-          <div key={String(source.id)} style={{ border: `1px solid ${cockpitColors.panelBorder}`, borderRadius: radius.medium, padding: spacing.sm }}>
-            <div style={{ fontWeight: 650 }}>{String(source.title ?? source.id)}</div>
-            <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
-              {String(source.reasonSelected ?? "Selected for campaign content")}
-            </div>
-            <div style={{ marginTop: 4, color: cockpitColors.textSecondary, fontSize: typography.caption.fontSize }}>
-              {String(source.excerpt ?? "")}
-            </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" style={primaryButtonStyle(true)} onClick={() => void saveDraft()} disabled={busy}>Save</button>
+            <button type="button" style={smallButtonStyle} onClick={() => void refreshAudience()} disabled={busy}>Refresh who gets it</button>
+            <button type="button" style={primaryButtonStyle(approval.canApprove)} onClick={() => void approveCampaign()} disabled={!approval.canApprove || busy}>Approve</button>
+            <button type="button" style={primaryButtonStyle(Boolean(approval.isQueued || optimisticQueued))} onClick={() => void sendApprovedCampaign()} disabled={busy || !(approval.isQueued || optimisticQueued)}>Send</button>
           </div>
-        )) : null}
-      </div>
-
-      <div style={{ display: "grid", gap: spacing.xs }}>
-        <div style={{ fontWeight: 700, color: cockpitColors.textPrimary }}>Audience</div>
-        {review.evidenceSummary ? <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>{review.evidenceSummary}</div> : null}
-        {review.knowledgeSummary ? <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>{review.knowledgeSummary}</div> : null}
-        {recipients.slice(0, 6).map((recipient) => (
-          <div key={String(recipient.partyId)} style={{ color: cockpitColors.textSecondary, fontSize: typography.caption.fontSize }}>
-            {String(recipient.displayName ?? recipient.partyId)} — {(recipient.personalizationSummary ?? []).join("; ") || "Evidence-backed recipient"}
-          </div>
-        ))}
-        {review.exclusions.slice(0, 4).map((exclusion) => (
-          <div key={String(exclusion.partyId)} style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
-            Excluded: {String(exclusion.displayName ?? exclusion.partyId)} — {String(exclusion.reason ?? "Not eligible")}
-          </div>
-        ))}
-      </div>
-
-      {review.guardrails.length ? (
-        <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
-          {review.guardrails.join(" ")}
+          {approval.showApprovalHelper && !review.recipientCount ? (
+            <div style={{ fontSize: 12, color: cockpitColors.textMuted }}>Add people with email, then Refresh who gets it.</div>
+          ) : null}
+          {notice ? <div style={{ fontSize: 12, color: cockpitColors.textSecondary }}>{notice}</div> : null}
+          {error ? <div style={{ fontSize: 12, color: cockpitColors.warning }}>{error}</div> : null}
         </div>
-      ) : null}
 
-      <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap", alignItems: "center" }}>
-        <button type="button" style={primaryButtonStyle(true)} onClick={saveDraft} disabled={busy}>Save draft</button>
-        <button type="button" style={smallButtonStyle} onClick={refreshAudience} disabled={busy}>Refresh audience</button>
-        <input
-          value={templateName}
-          onChange={(event) => setTemplateName(event.target.value)}
-          placeholder="Template name"
-          style={{ ...inputStyle, minWidth: 180 }}
-        />
-        <button type="button" style={smallButtonStyle} onClick={saveAsTemplate} disabled={busy}>Save as template</button>
-        <button
-          type="button"
-          disabled={!approval.canApprove}
-          onClick={approveCampaign}
-          style={primaryButtonStyle(approval.canApprove)}
-        >
-          {approval.buttonLabel}
-        </button>
-        <button
-          type="button"
-          disabled={busy || !(approval.isQueued || optimisticQueued)}
-          onClick={sendApprovedCampaign}
-          style={primaryButtonStyle(Boolean(approval.isQueued || optimisticQueued))}
-        >
-          Send approved campaign
-        </button>
-      </div>
-      {sendPreview ? (
-        <div style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
-          Send preview: {String(sendPreview.recipientCount ?? 0)} eligible, {String(sendPreview.excludedCount ?? 0)} excluded,
-          provider {String(sendPreview.providerStatus ?? "unknown")}.
+        <div style={{ display: "grid", gap: 8, position: "sticky", top: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: cockpitColors.textMuted }}>Exact email preview</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: cockpitColors.textPrimary }}>
+            Subject: {livePreview.subject}
+          </div>
+          <iframe
+            title="Newsletter preview"
+            sandbox=""
+            srcDoc={livePreview.html}
+            style={{
+              width: "100%",
+              minHeight: 520,
+              border: `1px solid ${cockpitColors.panelBorder}`,
+              borderRadius: 16,
+              background: "#f1f5f9",
+            }}
+          />
         </div>
-      ) : null}
-      {approval.showApprovalHelper ? (
-        <span style={{ color: cockpitColors.textMuted, fontSize: typography.caption.fontSize }}>
-          Review requires prepared content and at least one eligible recipient.
-        </span>
-      ) : null}
-      {notice ? <span style={{ color: cockpitColors.textSecondary, fontSize: typography.caption.fontSize }}>{notice}</span> : null}
-      {error ? <span style={{ color: cockpitColors.warning, fontSize: typography.caption.fontSize }}>{error}</span> : null}
+      </div>
+
+      <style>{`
+        @media (max-width: 960px) {
+          .vt-newsletter-studio { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }
 
+const labelStyle: CSSProperties = {
+  display: "grid",
+  gap: 4,
+  fontSize: 12,
+  fontWeight: 700,
+  color: cockpitColors.textMuted,
+};
+
 const inputStyle: CSSProperties = {
   border: `1px solid ${cockpitColors.panelBorder}`,
   borderRadius: radius.medium,
-  padding: "8px 10px",
-  background: cockpitColors.panel,
+  padding: "10px 12px",
+  font: "inherit",
+  fontWeight: 600,
   color: cockpitColors.textPrimary,
-  fontSize: typography.caption.fontSize,
+  background: "#fff",
 };
 
 const smallButtonStyle: CSSProperties = {
-  borderRadius: radius.medium,
   border: `1px solid ${cockpitColors.panelBorder}`,
-  backgroundColor: cockpitColors.panel,
-  color: cockpitColors.textSecondary,
+  borderRadius: 10,
   padding: "8px 12px",
-  fontSize: typography.caption.fontSize,
-  fontWeight: 650,
+  background: "#fff",
+  fontWeight: 700,
+  fontSize: 12,
   cursor: "pointer",
 };
 
 function primaryButtonStyle(enabled: boolean): CSSProperties {
   return {
-    borderRadius: radius.medium,
-    border: `1px solid ${enabled ? cockpitColors.accent : cockpitColors.panelBorder}`,
-    backgroundColor: enabled ? cockpitColors.accent : cockpitColors.panel,
-    color: enabled ? "#fff" : cockpitColors.textMuted,
-    padding: "8px 12px",
-    fontSize: typography.caption.fontSize,
-    fontWeight: 700,
-    cursor: enabled ? "pointer" : "default",
+    border: "none",
+    borderRadius: 10,
+    padding: "8px 14px",
+    background: enabled ? cockpitColors.accent : "rgba(15,118,110,0.35)",
+    color: "#fff",
+    fontWeight: 800,
+    fontSize: 12,
+    cursor: enabled ? "pointer" : "not-allowed",
   };
 }

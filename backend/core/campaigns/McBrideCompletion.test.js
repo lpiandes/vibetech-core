@@ -184,7 +184,7 @@ test("S2 knowledge: compose attaches sources and no-doc truth remains honest", (
     knowledgeDocuments: [],
   });
   assert.equal(noDocs.knowledgeSources.length, 0);
-  assert.ok(noDocs.knowledgeSummary.includes("No approved knowledge"));
+  assert.ok(noDocs.knowledgeSummary.includes("No Knowledge docs"));
 });
 
 test("S3 delivery: explicit send required, consent re-check, idempotent retry, missing provider truth", async () => {

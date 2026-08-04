@@ -59,6 +59,7 @@ import { buildCampaignOperationsView } from "../../../backend/core/campaigns/Cam
 import { CampaignPreparationService } from "../../../backend/core/campaigns/CampaignPreparationService.js";
 import { CampaignDocumentService, buildExpectedApprovalBinding } from "../../../backend/core/campaigns/CampaignDocumentService.js";
 import { CampaignDeliveryService } from "../../../backend/core/campaigns/CampaignDeliveryService.js";
+import { readCrmState } from "../../../backend/core/crm/CrmStore.js";
 import { businessCampaignTemplateService } from "@/lib/server/compose";
 import { businessKnowledgeService } from "@/lib/server/compose";
 import { buildMcBrideReadinessProjection } from "../../../backend/core/campaigns/McBrideReadinessProjection.js";
@@ -365,6 +366,31 @@ export class WorkspaceService {
       connectedSystemsSnapshot: this.connected.connectedSystemsSnapshot,
       connectionDependencyProjection: this.connected.connectionDependencyProjection,
       installationResult: this.connected.installationResult,
+    };
+  }
+
+  /** People roster for campaign audiences — universal, not industry-specific. */
+  #crmContactsForCampaigns() {
+    try {
+      const crm = readCrmState(this.connected.installationResult);
+      return Array.isArray(crm?.contacts) ? crm.contacts : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Appearance for branded campaign emails (any business). */
+  #campaignBrand() {
+    const identity = this.connected.identityViewModel as Record<string, unknown> | null | undefined;
+    const appearance = (identity?.appearance ?? identity ?? {}) as Record<string, unknown>;
+    return {
+      businessName: String(
+        appearance.businessName
+          ?? identity?.businessName
+          ?? "Your team",
+      ),
+      logoUrl: String(appearance.logoUrl ?? identity?.logoUrl ?? ""),
+      accentColor: String(appearance.accentColor ?? appearance.accent ?? "#0f766e"),
     };
   }
 
@@ -1689,6 +1715,7 @@ export class WorkspaceService {
       stack,
       operationDefinitions: installation?.recurringOperationDefinitions ?? [],
       campaignTemplates: installation?.campaignTemplates ?? [],
+      crmContacts: this.#crmContactsForCampaigns(),
       nowISO: currentCampaignNowISO(),
     });
     const referralOperations = buildReferralOperationsSummary({ stack });
@@ -1759,7 +1786,8 @@ export class WorkspaceService {
       subjectId,
       nowISO: effectiveNowISO,
       knowledgeDocuments,
-      knowledgeExpectations: (MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE as any).knowledgeExpectations ?? null,
+      knowledgeExpectations: null,
+      crmContacts: this.#crmContactsForCampaigns(),
     });
     if (result.snapshotKinds?.length) {
       await persistAffectedRuntimes({
@@ -1781,6 +1809,7 @@ export class WorkspaceService {
       ...result,
       sectionTypes: PM_CAMPAIGN_SECTION_TYPES,
       expectedApprovalBinding: buildExpectedApprovalBinding(result.campaign, workId),
+      brand: this.#campaignBrand(),
     };
   }
 
@@ -1797,6 +1826,7 @@ export class WorkspaceService {
       subjectLine: input.subjectLine,
       previewText: input.previewText,
       sections: input.sections,
+      brand: this.#campaignBrand(),
       nowISO: nowISO ?? NOW_ISO,
     });
     if (result.ok && result.snapshotKinds?.length) {
@@ -1832,6 +1862,8 @@ export class WorkspaceService {
       stack,
       workId,
       campaignTemplate: template,
+      crmContacts: this.#crmContactsForCampaigns(),
+      brand: this.#campaignBrand(),
       nowISO: nowISO ?? NOW_ISO,
     });
     if (result.ok && result.snapshotKinds?.length) {

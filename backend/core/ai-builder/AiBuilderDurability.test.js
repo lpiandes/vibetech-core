@@ -581,3 +581,59 @@ test("install self-heals when session claims installed but canonical Business OS
   assert.equal(reloaded.openHref, "/b/biz_self_heal/home");
   assert.ok(canonicalRow, "canonical row must be written by the self-heal path");
 });
+
+test("install auto-runs dry-run when UI skipped readiness page", async () => {
+  const repository = new BuilderSessionRepository();
+  const installationRepository = new BusinessOSInstallationRepository();
+  const service = new AiBuilderService({
+    repository,
+    installationRepository,
+    installer: new BusinessOSInstaller({ repository: installationRepository }),
+    nowISO: NOW,
+  });
+
+  const started = await service.startSession({
+    mode: "new_business",
+    businessId: "biz_skip_dry_run",
+    businessName: "Skip Dry Run Co",
+    description: "A services business testing install without a readiness page visit.",
+  });
+  const sessionId = started.session.sessionId;
+  for (const [questionId, answer] of [
+    ["q_company_name", "Skip Dry Run Co"],
+    ["q_industry", "general services"],
+    ["q_services", "consulting"],
+    ["q_customers", "clients"],
+    ["q_roles", "owner"],
+  ]) {
+    await service.answer({ sessionId, questionId, answer });
+  }
+
+  const session = await service.requireSession(sessionId);
+  const assemblyPlan = service.assemblyPlanner.plan({ session });
+  const assembled = service.assembler.assemble({ session, assemblyPlan, nowISO: service.nowISO() });
+  assert.equal(assembled.ok, true);
+  // Proposal only — no dryRun / approve (mirrors Approve → /install?launch=1).
+  await service.seedProposalState({ sessionId, specification: assembled.specification, assemblyPlan });
+
+  const before = await service.getProposal(sessionId);
+  assert.ok(before.specification);
+  assert.equal(before.plan ?? null, null);
+  assert.equal(before.dryRunResult ?? null, null);
+  assert.equal(before.approval ?? null, null);
+
+  const installed = await service.install({
+    sessionId,
+    approved: true,
+    actorId: "owner_skip_dry_run",
+  });
+  assert.equal(installed.ok, true, installed.reason ?? installed.message ?? "install should succeed");
+  assert.equal(installed.session.currentStage, "installed");
+  assert.ok(installed.openHref?.includes("/home"));
+
+  const after = await service.getProposal(sessionId);
+  assert.equal(after.dryRunResult?.ok, true);
+  assert.ok(after.plan?.planHash);
+  assert.ok(after.approval?.planHash);
+  assert.equal(after.approval.planHash, after.plan.planHash);
+});

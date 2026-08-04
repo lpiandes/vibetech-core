@@ -44,6 +44,7 @@ export class CampaignPreparationService {
     businessTemplate = null,
     knowledgeDocuments = [],
     knowledgeExpectations = null,
+    crmContacts = [],
     nowISO = new Date().toISOString(),
   } = {}) {
     if (!stack?.workRuntime || !stack?.communicationRuntime || !stack?.businessGraphRuntime) {
@@ -94,6 +95,7 @@ export class CampaignPreparationService {
       audience: template.audience,
       subjectId,
       channel: template.channel ?? "email",
+      crmContacts,
     });
     const draft = composeCampaignDraft({
       template: campaignTemplate || template,

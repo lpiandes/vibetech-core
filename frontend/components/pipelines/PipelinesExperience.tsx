@@ -240,12 +240,14 @@ export default function PipelinesExperience({ businessId }: { businessId: string
       setError("Add a stage first.");
       return;
     }
+    const linkedContact = contacts.find((c) => c.id === cardContactId);
+    const titleFromContact = String(linkedContact?.name ?? "").trim();
     await run(async () => {
       const data = await post({
         action: "add_card",
         pipelineId: pipeline.id,
         card: {
-          title: "",
+          title: titleFromContact,
           stageId: targetStageId,
           contactId: cardContactId || undefined,
           ownerUserId: cardOwnerUserId || null,
@@ -257,7 +259,12 @@ export default function PipelinesExperience({ businessId }: { businessId: string
         block: "nearest",
       });
       if (data.createdCardId) {
-        focusCardForEdit(data.createdCardId, "", cardContactId, cardOwnerUserId);
+        focusCardForEdit(
+          data.createdCardId,
+          titleFromContact,
+          cardContactId,
+          cardOwnerUserId,
+        );
       }
     });
   }
@@ -266,8 +273,14 @@ export default function PipelinesExperience({ businessId }: { businessId: string
     if (!pipeline || !editingCardId) return;
     const cardId = editingCardId;
     const card = (pipeline.cards ?? []).find((c) => c.id === cardId);
-    const next = cardDraft.trim() || "Untitled";
     const nextContactId = cardContactId;
+    const linkedContact = contacts.find((c) => c.id === nextContactId);
+    const contactName = String(linkedContact?.name ?? "").trim();
+    const typed = cardDraft.trim();
+    const next = typed
+      || contactName
+      || (card?.title?.trim() && card.title.trim() !== "Untitled" ? card.title.trim() : "")
+      || "New opportunity";
     const nextOwnerId = cardOwnerUserId;
     setEditingCardId(null);
     if (!card) return;
@@ -416,7 +429,8 @@ export default function PipelinesExperience({ businessId }: { businessId: string
 
   async function removeOpportunity(card: Card) {
     if (!pipeline) return;
-    const label = card.title.trim() || "Untitled";
+    const contactName = contacts.find((c) => c.id === card.contactId)?.name?.trim();
+    const label = card.title.trim() || contactName || "Opportunity";
     if (!window.confirm(`Delete opportunity “${label}”?`)) return;
     await run(async () => {
       if (editingCardId === card.id) setEditingCardId(null);
@@ -494,8 +508,8 @@ export default function PipelinesExperience({ businessId }: { businessId: string
           </button>
         </VtDock>
         <p style={{ margin: "10px 0 0", fontSize: 13, color: "rgba(255,255,255,0.72)", fontWeight: 650, maxWidth: 720 }}>
-          + Stage and + Opportunity drop straight onto the board — type the name in place.
-          Assign a sales rep on each card; their color highlights the opportunity on every stage.
+          Prefer People → + Contact (lead) to pick pipeline and stage — the card is named after the person.
+          Or add here and link a contact; the name follows the person.
         </p>
       </VtHero>
 
@@ -782,7 +796,16 @@ export default function PipelinesExperience({ businessId }: { businessId: string
                                   />
                                   <select
                                     value={cardContactId}
-                                    onChange={(e) => setCardContactId(e.target.value)}
+                                    onChange={(e) => {
+                                      const nextId = e.target.value;
+                                      setCardContactId(nextId);
+                                      const picked = contacts.find((c) => c.id === nextId);
+                                      const pickedName = String(picked?.name ?? "").trim();
+                                      const current = cardDraft.trim();
+                                      if (pickedName && (!current || current === "Untitled" || current === "New opportunity")) {
+                                        setCardDraft(pickedName);
+                                      }
+                                    }}
                                     onBlur={() => void commitRenameCard()}
                                     style={{
                                       width: "100%",
@@ -849,7 +872,7 @@ export default function PipelinesExperience({ businessId }: { businessId: string
                                     width: "100%",
                                   }}
                                 >
-                                  {card.title.trim() || "Untitled"}
+                                  {card.title.trim() || contact?.name || "Opportunity"}
                                 </button>
                               )}
                               {!isEditing && contact ? (

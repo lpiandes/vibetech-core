@@ -518,7 +518,23 @@ test("CMA and referral templates include guardrails and require actual relations
   const cmaResult = service.execute({ stack: s, businessId: BUSINESS_ID, campaignTemplate: cma, occurrenceKey: "cma", nowISO: NOW });
   const referralAudience = buildCampaignAudiencePreview({ stack: s, audience: referral.audience, channel: "email" });
 
-  assert.ok(s.communicationRuntime.getMessage(cmaResult.messageId).body.includes("not a guaranteed appraisal"));
+  assert.ok(s.communicationRuntime.getMessage(cmaResult.messageId).body.includes("not a formal appraisal"));
   assert.equal(referralAudience.includedCount, 1);
   assert.equal(referralAudience.included[0].partyId, "party_past");
+});
+
+test("newsletter audience includes People CRM leads with email without graph marketing relationship", () => {
+  const s = stack();
+  const audience = buildCampaignAudiencePreview({
+    stack: s,
+    audience: { type: "all_marketable_contacts" },
+    channel: "email",
+    crmContacts: [
+      { id: "contact_tim", name: "Tim", email: "tim@example.com", kind: "lead" },
+      { id: "contact_emp", name: "Staff", email: "staff@example.com", kind: "employee" },
+    ],
+  });
+  assert.equal(audience.included.some((entry) => entry.partyId === "contact_tim"), true);
+  assert.equal(audience.included.some((entry) => entry.partyId === "contact_emp"), false);
+  assert.equal(audience.included.find((entry) => entry.partyId === "contact_tim")?.email, "tim@example.com");
 });

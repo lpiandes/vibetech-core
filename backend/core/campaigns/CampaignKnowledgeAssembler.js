@@ -121,7 +121,7 @@ export function attachKnowledgeToCampaignDocument({
   const usedSources = sources.filter((source) => usedIds.has(String(source.id)));
   const knowledgeSummary = usedSources.length
     ? `Using ${usedSources.length} approved knowledge source(s): ${usedSources.map((s) => s.title).join("; ")}.`
-    : "No approved knowledge documents were retrieved for this campaign. Draft content uses canonical relationship, property, consent, and audience evidence only.";
+    : "No Knowledge docs attached yet — write the message below.";
 
   return deepFreeze({
     sections: nextSections,

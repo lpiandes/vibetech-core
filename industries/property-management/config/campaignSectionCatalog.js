@@ -18,19 +18,19 @@ export const PM_CAMPAIGN_SECTION_TYPES = deepFreeze([
     id: "property_feature",
     label: "Property feature",
     fields: ["heading", "body", "subjectId"],
-    description: "Highlight a canonical property or listing.",
+    description: "Highlight a listing.",
   },
   {
     id: "market_update",
     label: "Market update",
     fields: ["heading", "body"],
-    description: "Informational market commentary.",
+    description: "Market commentary.",
   },
   {
     id: "educational_content",
-    label: "Educational content",
+    label: "Extra note",
     fields: ["heading", "body"],
-    description: "Helpful guidance for clients.",
+    description: "Optional tip or note.",
   },
   {
     id: "home_value_cma",
@@ -79,26 +79,27 @@ export function buildPackageCampaignSectionRecipe(template, { subject = null } =
   const templateId = String(template?.id ?? "");
   const cta = String(template?.cta ?? "Reply if you would like to talk through next steps.");
   const propertyName = subject?.displayName ? String(subject.displayName) : null;
+  const signature = "— The team";
 
   if (templateId === "property_announcement") {
     return deepFreeze([
       section("sec_intro", "intro", 0, {
         heading: "Property update",
         body: propertyName
-          ? `You are receiving this draft because there is canonical interest linked to ${propertyName}.`
-          : "You are receiving this draft because there is canonical property interest on record.",
+          ? `Quick update on ${propertyName}.`
+          : "Quick update on a property you asked about.",
       }),
       section("sec_property", "property_feature", 1, {
         heading: propertyName || "Featured property",
         body: propertyName
-          ? `Details for ${propertyName} are based on the canonical BusinessSubject record.`
-          : "Select a property to feature evidence-backed listing details.",
+          ? `Here is what we can share about ${propertyName}.`
+          : "Add the listing details you want to share.",
         subjectId: subject?.id ? String(subject.id) : null,
       }),
       section("sec_cta", "call_to_action", 2, { ctaText: cta, body: null, ctaUrl: null }),
       section("sec_signature", "contact_signature", 3, {
         heading: null,
-        body: "— The McBride team",
+        body: signature,
       }),
     ]);
   }
@@ -106,17 +107,17 @@ export function buildPackageCampaignSectionRecipe(template, { subject = null } =
   if (templateId === "cma_home_value") {
     return deepFreeze([
       section("sec_intro", "intro", 0, {
-        heading: "Home value conversation",
-        body: "The McBride team can prepare an informational CMA conversation if that would be useful.",
+        heading: "Home value",
+        body: "Happy to walk through an informational home-value conversation if that would help.",
       }),
       section("sec_cma", "home_value_cma", 1, {
         heading: "Informational only",
-        body: "This is not a guaranteed appraisal or valuation; it is a starting point for a real conversation using approved context.",
+        body: "This is not a formal appraisal — just a starting point for a conversation.",
         ctaText: cta,
       }),
       section("sec_signature", "contact_signature", 2, {
         heading: null,
-        body: "— The McBride team",
+        body: signature,
       }),
     ]);
   }
@@ -125,16 +126,16 @@ export function buildPackageCampaignSectionRecipe(template, { subject = null } =
     return deepFreeze([
       section("sec_intro", "intro", 0, {
         heading: "Checking in",
-        body: "We are checking in with past clients and referral relationships where there is real relationship history in the business record.",
+        body: "Hope you are doing well — we wanted to stay in touch.",
       }),
       section("sec_referral", "referral_request", 1, {
-        heading: "Referral question",
-        body: "If someone you know could use a conversation with the team, we would welcome an introduction.",
+        heading: "Quick ask",
+        body: "If someone you know could use a conversation with our team, we would welcome an introduction.",
         ctaText: cta,
       }),
       section("sec_signature", "contact_signature", 2, {
         heading: null,
-        body: "— The McBride team",
+        body: signature,
       }),
     ]);
   }
@@ -142,17 +143,17 @@ export function buildPackageCampaignSectionRecipe(template, { subject = null } =
   if (templateId === "monthly_market_update") {
     return deepFreeze([
       section("sec_intro", "intro", 0, {
-        heading: "Monthly market update",
-        body: "Here is a draft informational update prepared from canonical relationship and business evidence.",
+        heading: "Monthly update",
+        body: "A short market note for you this month.",
       }),
       section("sec_market", "market_update", 1, {
         heading: "Market notes",
-        body: "Add approved market commentary before sending. Do not present unsupported market statistics.",
+        body: "Add the market notes you want to share.",
       }),
       section("sec_cta", "call_to_action", 2, { ctaText: cta }),
       section("sec_signature", "contact_signature", 3, {
         heading: null,
-        body: "— The McBride team",
+        body: signature,
       }),
     ]);
   }
@@ -160,38 +161,36 @@ export function buildPackageCampaignSectionRecipe(template, { subject = null } =
   if (templateId === "weekly_newsletter" || templateId === "past_client_reactivation") {
     return deepFreeze([
       section("sec_intro", "intro", 0, {
-        heading: templateId === "past_client_reactivation" ? "Checking in" : "This week's update",
-        body: "Here is a draft update prepared from canonical relationship and business evidence.",
+        heading: templateId === "past_client_reactivation" ? "Checking in" : "This week",
+        body: templateId === "past_client_reactivation"
+          ? "Hope you are doing well — a quick note from our team."
+          : "Here is this week’s update.",
       }),
       section("sec_custom", "custom_text", 1, {
         heading: "Highlights",
-        body: "Add the relationship update you want recipients to review.",
+        body: "Add what you want people to know.",
       }),
-      section("sec_edu", "educational_content", 2, {
-        heading: "Helpful context",
-        body: "Optional educational notes can be added here.",
-      }),
-      section("sec_cta", "call_to_action", 3, { ctaText: cta }),
-      section("sec_signature", "contact_signature", 4, {
+      section("sec_cta", "call_to_action", 2, { ctaText: cta }),
+      section("sec_signature", "contact_signature", 3, {
         heading: null,
-        body: "— The McBride team",
+        body: signature,
       }),
     ]);
   }
 
   return deepFreeze([
     section("sec_intro", "intro", 0, {
-      heading: String(template?.name ?? "Campaign"),
-      body: "Here is a draft update prepared from canonical relationship and business evidence.",
+      heading: String(template?.name ?? "Update"),
+      body: "Here is a short update.",
     }),
     section("sec_custom", "custom_text", 1, {
       heading: null,
-      body: "Add campaign content here.",
+      body: "Add your message here.",
     }),
     section("sec_cta", "call_to_action", 2, { ctaText: cta }),
     section("sec_signature", "contact_signature", 3, {
       heading: null,
-      body: "— The McBride team",
+      body: signature,
     }),
   ]);
 }

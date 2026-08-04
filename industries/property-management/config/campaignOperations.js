@@ -9,8 +9,8 @@ export const PM_CAMPAIGN_TEMPLATES = deepFreeze([
     audience: { type: "all_marketable_contacts" },
     approvalRequired: true,
     defaultSubject: "This week's real estate and property update",
-    cta: "Reply if you want to talk through next steps with the McBride team.",
-    guardrails: ["Use canonical relationship context and approved source material when available.", "Do not claim market facts without approved source material."],
+    cta: "Reply if you want to talk through next steps with our team.",
+    guardrails: [],
   },
   {
     id: "monthly_market_update",
@@ -19,9 +19,9 @@ export const PM_CAMPAIGN_TEMPLATES = deepFreeze([
     channel: "email",
     audience: { type: "all_marketable_contacts" },
     approvalRequired: true,
-    defaultSubject: "Monthly real estate market update",
+    defaultSubject: "Monthly market update",
     cta: "Reply if you want a focused conversation about your plans.",
-    guardrails: ["Use approved source material when available.", "Do not present unsupported market statistics."],
+    guardrails: [],
   },
   {
     id: "property_announcement",
@@ -32,7 +32,7 @@ export const PM_CAMPAIGN_TEMPLATES = deepFreeze([
     approvalRequired: true,
     defaultSubject: "A property update you may want to review",
     cta: "Reply if you would like details or a showing conversation.",
-    guardrails: ["Use BusinessSubject as property truth.", "Include only evidence-backed property interest."],
+    guardrails: [],
   },
   {
     id: "cma_home_value",
@@ -43,7 +43,7 @@ export const PM_CAMPAIGN_TEMPLATES = deepFreeze([
     approvalRequired: true,
     defaultSubject: "Would a home value conversation be useful?",
     cta: "Reply if you would like to request a CMA or speak with the team.",
-    guardrails: ["Say this is informational, not a guaranteed appraisal.", "Do not infer equity, household facts, or private life events."],
+    guardrails: ["Informational only — not a formal appraisal."],
   },
   {
     id: "past_client_reactivation",
@@ -52,9 +52,9 @@ export const PM_CAMPAIGN_TEMPLATES = deepFreeze([
     channel: "email",
     audience: { type: "relationship_types", relationshipTypes: ["PAST_BUYER", "PAST_SELLER"] },
     approvalRequired: true,
-    defaultSubject: "Checking in from the McBride team",
-    cta: "Reply if there is anything real estate related we can help with.",
-    guardrails: ["Use only recorded relationship classifications.", "Do not infer life events."],
+    defaultSubject: "Checking in from our team",
+    cta: "Reply if there is anything we can help with.",
+    guardrails: [],
   },
   {
     id: "referral_outreach",
@@ -64,8 +64,8 @@ export const PM_CAMPAIGN_TEMPLATES = deepFreeze([
     audience: { type: "relationship_types", relationshipTypes: ["PAST_BUYER", "PAST_SELLER", "REFERRAL_SOURCE"] },
     approvalRequired: true,
     defaultSubject: "A quick referral question",
-    cta: "Reply if someone you know could use a conversation with the team.",
-    guardrails: ["Do not fabricate positive engagement.", "Referral responses become normal Requests or Interactions."],
+    cta: "Reply if someone you know could use a conversation with our team.",
+    guardrails: [],
   },
 ]);
 

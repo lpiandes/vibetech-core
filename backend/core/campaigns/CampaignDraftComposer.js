@@ -114,7 +114,7 @@ export function composeCampaignDraft({
     knowledgeSources: deepFreeze(attached.knowledgeSources),
     evidenceSummary: subject
       ? `Audience is based on canonical interest in ${String(subject.displayName)}.`
-      : "Audience is based on canonical relationship, property interest, and communication preference evidence.",
+      : "People with email in your contacts.",
     recipientPreparations: recipients,
     recipientCount: recipients.length,
     excludedCount: Number(audiencePreview?.excludedCount ?? 0),

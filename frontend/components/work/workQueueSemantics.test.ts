@@ -163,14 +163,14 @@ test("campaign review semantics expose draft content only from selected Work con
         recipientCount: 1,
         excludedCount: 0,
         cta: "Reply if you want to talk.",
-        knowledgeSummary: "No approved knowledge documents were retrieved by this campaign draft composer.",
-        evidenceSummary: "Audience is based on canonical relationship evidence.",
+        knowledgeSummary: "No Knowledge docs attached yet — write the message below.",
+        evidenceSummary: "People with email in your contacts.",
         recipientPreparations: [
           {
             partyId: "party_alex",
             displayName: "Alex Morgan",
             subject: "This week's real estate and property update",
-            body: "Hi Alex,\n\nHere is a draft update prepared from canonical relationship and business evidence.",
+            body: "Hi Alex,\n\nHere is this week's update.",
             personalizationSummary: ["prospect relationship"],
           },
         ],
@@ -180,7 +180,7 @@ test("campaign review semantics expose draft content only from selected Work con
   const review = resolveCampaignReview(campaignWork);
 
   assert.equal(review?.draftSubject, "This week's real estate and property update");
-  assert.match(String(review?.draftBody), /canonical relationship/);
+  assert.match(String(review?.draftBody), /this week's update/i);
   assert.equal(review?.recipients[0].displayName, "Alex Morgan");
   assert.equal(canApproveCampaignFromWorkDetail(campaignWork), true);
   assert.equal(shouldShowCampaignApprovalHelper(campaignWork), false);

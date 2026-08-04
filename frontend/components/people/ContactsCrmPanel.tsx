@@ -69,6 +69,9 @@ export default function ContactsCrmPanel({
   const [pipelines, setPipelines] = useState<Array<{ id: string; name: string; stages: Array<{ id: string; label: string }> }>>([]);
   const [importPipelineId, setImportPipelineId] = useState("");
   const [importStageId, setImportStageId] = useState("");
+  const [composePipelineId, setComposePipelineId] = useState("");
+  const [composeStageId, setComposeStageId] = useState("");
+  const [composeAddToPipeline, setComposeAddToPipeline] = useState(true);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importReport, setImportReport] = useState<string | null>(null);
   const [addToPipeline, setAddToPipeline] = useState(true);
@@ -84,8 +87,10 @@ export default function ContactsCrmPanel({
     void load().catch((err) => setError(err instanceof Error ? err.message : "Load failed"));
   }, [load]);
 
+  const needsPipelinePicker = importOpen || composerOpen;
+
   useEffect(() => {
-    if (!importOpen) return;
+    if (!needsPipelinePicker) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -98,9 +103,15 @@ export default function ContactsCrmPanel({
           stages: (p.stages ?? []).map((s: any) => ({ id: s.id, label: s.label })),
         }));
         setPipelines(list);
-        if (!importPipelineId && list[0]) {
-          setImportPipelineId(list[0].id);
-          setImportStageId(list[0].stages?.[0]?.id ?? "");
+        if (list[0]) {
+          if (!importPipelineId) {
+            setImportPipelineId(list[0].id);
+            setImportStageId(list[0].stages?.[0]?.id ?? "");
+          }
+          if (!composePipelineId) {
+            setComposePipelineId(list[0].id);
+            setComposeStageId(list[0].stages?.[0]?.id ?? "");
+          }
         }
       } catch {
         /* optional */
@@ -109,11 +120,17 @@ export default function ContactsCrmPanel({
     return () => {
       cancelled = true;
     };
-  }, [importOpen, businessId, importPipelineId]);
+  }, [needsPipelinePicker, businessId, importPipelineId, composePipelineId]);
 
   const importStages = useMemo(() => {
     return pipelines.find((p) => p.id === importPipelineId)?.stages ?? [];
   }, [pipelines, importPipelineId]);
+
+  const composeStages = useMemo(() => {
+    return pipelines.find((p) => p.id === composePipelineId)?.stages ?? [];
+  }, [pipelines, composePipelineId]);
+
+  const leadNeedsPipeline = kind === "lead" && composeAddToPipeline;
 
   const selected = useMemo(
     () => contacts.find((c) => c.id === selectedId) ?? null,
@@ -166,24 +183,41 @@ export default function ContactsCrmPanel({
 
   async function addContact() {
     if (!name.trim()) return;
+    const putOnBoard = kind === "lead" ? composeAddToPipeline : false;
+    if (putOnBoard && (!composePipelineId || !composeStageId)) {
+      setError("Choose a pipeline and stage for this lead.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/contacts`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, email, phone, kind, notes }),
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          kind,
+          notes,
+          addToPipeline: putOnBoard,
+          pipelineId: putOnBoard ? composePipelineId : null,
+          stageId: putOnBoard ? composeStageId : null,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Could not save");
       setContacts(data.contacts ?? []);
-      const created = (data.contacts ?? []).find((c: Contact) => c.name === name.trim())
+      const created = data.contact
+        ?? (data.contacts ?? []).find((c: Contact) => c.name === name.trim())
         ?? data.contacts?.[data.contacts.length - 1];
       if (created?.id) setSelectedId(created.id);
       setName("");
       setEmail("");
       setPhone("");
       setNotes("");
+      setKind("lead");
+      setComposeAddToPipeline(true);
       setComposerOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -405,7 +439,7 @@ export default function ContactsCrmPanel({
       ) : null}
 
       {composerOpen ? (
-        <VtPanel title="Recruit contact">
+        <VtPanel title="Add contact">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }} className="vt-people-compose">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" style={vtInputStyle} />
             <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" style={vtInputStyle} />
@@ -417,8 +451,62 @@ export default function ContactsCrmPanel({
             </select>
           </div>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes" rows={2} style={vtInputStyle} />
-          <PrimaryButton onClick={() => void addContact()} disabled={busy || !name.trim()}>
-            {busy ? "…" : "Add"}
+          {kind === "lead" ? (
+            <div style={{ display: "grid", gap: 8, marginTop: 4 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={composeAddToPipeline}
+                  onChange={(e) => setComposeAddToPipeline(e.target.checked)}
+                />
+                Add to pipeline
+              </label>
+              {composeAddToPipeline ? (
+                <>
+                  <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: 13, fontWeight: 600 }}>
+                    Card on the board will be named <strong>{name.trim() || "this lead"}</strong>.
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }} className="vt-people-compose">
+                    <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 800 }}>
+                      Pipeline
+                      <select
+                        value={composePipelineId}
+                        onChange={(e) => {
+                          setComposePipelineId(e.target.value);
+                          const stages = pipelines.find((p) => p.id === e.target.value)?.stages ?? [];
+                          setComposeStageId(stages[0]?.id ?? "");
+                        }}
+                        style={vtInputStyle}
+                      >
+                        {pipelines.length === 0 ? <option value="">No pipelines yet</option> : null}
+                        {pipelines.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 800 }}>
+                      Stage
+                      <select
+                        value={composeStageId}
+                        onChange={(e) => setComposeStageId(e.target.value)}
+                        style={vtInputStyle}
+                      >
+                        {composeStages.length === 0 ? <option value="">No stages</option> : null}
+                        {composeStages.map((s) => (
+                          <option key={s.id} value={s.id}>{s.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+          <PrimaryButton
+            onClick={() => void addContact()}
+            disabled={busy || !name.trim() || (leadNeedsPipeline && (!composePipelineId || !composeStageId))}
+          >
+            {busy ? "…" : kind === "lead" && composeAddToPipeline ? "Add lead to pipeline" : "Add"}
           </PrimaryButton>
         </VtPanel>
       ) : null}

@@ -91,6 +91,7 @@ export function buildCampaignOperationsView({
   stack,
   operationDefinitions,
   campaignTemplates,
+  crmContacts = [],
   nowISO,
 } = {}) {
   const operations = recurringOperationStatus({
@@ -112,6 +113,7 @@ export function buildCampaignOperationsView({
           stack,
           audience: template.audience,
           channel: template.channel ?? "email",
+          crmContacts,
         });
     const subjectAudiencePreviews = requiresSubject
       ? subjects.map((subject) => {
@@ -120,6 +122,7 @@ export function buildCampaignOperationsView({
             audience: template.audience,
             subjectId: subject.id,
             channel: template.channel ?? "email",
+            crmContacts,
           });
           return {
             subject,

@@ -180,6 +180,7 @@ export class CampaignDocumentService {
     subjectLine = undefined,
     previewText = undefined,
     sections = undefined,
+    brand = null,
     nowISO = new Date().toISOString(),
   } = {}) {
     const loaded = this.getCampaignWork(stack, workId);
@@ -240,6 +241,7 @@ export class CampaignDocumentService {
     const recipients = buildRecipientPreparations({
       document: nextDocument,
       audiencePreview: audiencePreviewFromCampaign(campaign),
+      brand: brand ?? null,
     });
     const sharedSubject = renderCampaignSubjectLine(nextDocument, { subject: campaign.subject });
     const sharedBody = renderCampaignDocumentBody(nextDocument, {
@@ -317,6 +319,8 @@ export class CampaignDocumentService {
     stack,
     workId,
     campaignTemplate = null,
+    crmContacts = [],
+    brand = null,
     nowISO = new Date().toISOString(),
   } = {}) {
     const loaded = this.getCampaignWork(stack, workId);
@@ -331,6 +335,7 @@ export class CampaignDocumentService {
       audience: resolvedAudience,
       subjectId: campaign.subject?.id ?? null,
       channel: document.channel ?? "email",
+      crmContacts,
     });
     const fingerprint = computeAudienceFingerprint({
       includedPartyIds: (audiencePreview.included ?? []).map((entry) => entry.partyId),
@@ -339,7 +344,7 @@ export class CampaignDocumentService {
       audienceType: resolvedAudience?.type ?? null,
     });
     const fingerprintChanged = fingerprint !== String(campaign.audienceFingerprint ?? document.audienceFingerprint ?? "");
-    const recipients = buildRecipientPreparations({ document, audiencePreview });
+    const recipients = buildRecipientPreparations({ document, audiencePreview, brand });
 
     if (!fingerprintChanged) {
       const nextCampaign = {

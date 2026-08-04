@@ -1731,11 +1731,40 @@ export class AiBuilderService {
         message: "This recommendation was created before your answers-only configuration. Refresh Architect and create a new recommendation before going live.",
       });
     }
-    if (!stored?.specification || !stored?.plan || !stored?.dryRunResult) {
-      return deepFreeze({ ok: false, reason: "dry_run_required" });
+    if (!stored?.specification) {
+      return deepFreeze({ ok: false, reason: "proposal_required" });
     }
 
-    if (!stored.approval) {
+    // Architect UI may skip the readiness page (install?launch=1). Still compile + dry-run
+    // here so go-live never fails solely because the checklist screen was bypassed.
+    if (!stored?.plan || !stored?.dryRunResult?.ok) {
+      if (!approved && !stored.approval) {
+        return deepFreeze({ ok: false, reason: "dry_run_required" });
+      }
+      const dry = await this.dryRun({ sessionId });
+      if (!dry.ok) {
+        return deepFreeze({
+          ok: false,
+          reason: dry.reason ?? "dry_run_required",
+          dryRunResult: dry.dryRunResult ?? null,
+          checklist: dry.checklist ?? null,
+          message: dry.message,
+        });
+      }
+      stored = await this.loadProposalState(await this.requireSession(sessionId));
+      if (!stored?.plan || !stored?.dryRunResult?.ok) {
+        return deepFreeze({ ok: false, reason: "dry_run_required" });
+      }
+    }
+
+    const approvalPlanMismatch = stored.approval
+      && stored.plan
+      && (
+        String(stored.approval.planId ?? "") !== String(stored.plan.planId ?? "")
+        || String(stored.approval.planHash ?? "") !== String(stored.plan.planHash ?? "")
+      );
+
+    if (!stored.approval || approvalPlanMismatch) {
       if (!approved) return deepFreeze({ ok: false, reason: "approval_required" });
       const approvedResult = await this.approve({ sessionId, actorId });
       if (!approvedResult.ok) return approvedResult;
