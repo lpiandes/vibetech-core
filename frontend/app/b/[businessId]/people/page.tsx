@@ -8,6 +8,7 @@ import {
   businessHasAiProspecting,
   readPurchasedPackagesFromConfig,
 } from "../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
+import { businessGrantsSocialCheckerAccess } from "../../../../../backend/core/platform/packages/socialCheckerEntitlement.js";
 
 /**
  * One People surface: CRM roster + relationship follow-ups when available.
@@ -26,9 +27,9 @@ export default async function PeoplePage({ params }: { params: Promise<{ busines
   }
 
   const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
-  const aiProspectingEnabled = businessHasAiProspecting(
-    readPurchasedPackagesFromConfig(installation?.configuration ?? {}),
-  );
+  const purchasedPackages = readPurchasedPackagesFromConfig(installation?.configuration ?? {});
+  const aiProspectingEnabled = businessHasAiProspecting(purchasedPackages);
+  const socialCheckerEnabled = businessGrantsSocialCheckerAccess(purchasedPackages);
 
   return (
     <ModuleRenderer moduleId="people">
@@ -36,7 +37,11 @@ export default async function PeoplePage({ params }: { params: Promise<{ busines
         {followUpCandidates.length > 0 ? (
           <RelationshipFollowUpQueue businessId={businessId} candidates={followUpCandidates} />
         ) : null}
-        <ContactsCrmPanel businessId={businessId} aiProspectingEnabled={aiProspectingEnabled} />
+        <ContactsCrmPanel
+          businessId={businessId}
+          aiProspectingEnabled={aiProspectingEnabled}
+          socialCheckerEnabled={socialCheckerEnabled}
+        />
       </div>
     </ModuleRenderer>
   );

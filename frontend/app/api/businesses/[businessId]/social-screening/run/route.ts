@@ -7,9 +7,12 @@ import { JOB_TYPES } from "../../../../../../../backend/core/platform/jobs/Platf
 import { processSocialBackgroundScreenJob } from "../../../../../../../backend/core/platform/jobs/processSocialBackgroundScreenJob.js";
 import { loadSpecialtyWorkerWorkspace } from "../../../../../../../backend/core/platform/jobs/loadSpecialtyWorkerWorkspace.js";
 import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
+import { readPurchasedPackagesFromConfig } from "../../../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
+import { businessGrantsSocialCheckerAccess } from "../../../../../../../backend/core/platform/packages/socialCheckerEntitlement.js";
 
 /**
  * Enqueue (or run) a social background screen for a contact / subject.
+ * Paid Social Checker SKU only.
  */
 export async function POST(
   request: Request,
@@ -18,6 +21,16 @@ export async function POST(
   try {
     const { businessId } = await params;
     await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
+
+    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    const purchasedPackages = readPurchasedPackagesFromConfig(installation?.configuration ?? {});
+    if (!businessGrantsSocialCheckerAccess(purchasedPackages)) {
+      return NextResponse.json(
+        { error: "Social Checker is not included in this business package.", code: "SOCIAL_NOT_ENTITLED" },
+        { status: 403 },
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const subjectName = String(body.subjectName ?? body.name ?? "").trim();
     if (!subjectName) {

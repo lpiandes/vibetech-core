@@ -44,9 +44,12 @@ type PipelineCard = {
 export default function ContactsCrmPanel({
   businessId,
   aiProspectingEnabled = false,
+  socialCheckerEnabled = false,
 }: {
   businessId: string;
   aiProspectingEnabled?: boolean;
+  /** Paid Social Checker SKU only — otherwise hide entirely. */
+  socialCheckerEnabled?: boolean;
 }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [kindFilter, setKindFilter] = useState<string>("all");
@@ -306,33 +309,6 @@ export default function ContactsCrmPanel({
     }
   }
 
-  async function runSocialScreen() {
-    if (!selected && !editName.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/social-screening/run`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          contactId: selected?.id ?? null,
-          subjectName: editName.trim() || selected?.name,
-          name: editName.trim() || selected?.name,
-          email: editEmail.trim() || selected?.email,
-          phone: editPhone.trim() || selected?.phone,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) throw new Error(data.error ?? "Screen failed");
-      setError(null);
-      window.alert(data.message ?? "Social background screen started.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Screen failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <VtPage>
       <VtHero
@@ -557,12 +533,29 @@ export default function ContactsCrmPanel({
               </select>
               <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={3} style={vtInputStyle} />
               <PrimaryButton onClick={() => void saveSelected()} disabled={busy}>Save</PrimaryButton>
-              <PrimaryButton
-                onClick={() => void runSocialScreen()}
-                disabled={busy || !editName.trim()}
-              >
-                {busy ? "…" : "Run social background screen"}
-              </PrimaryButton>
+              {socialCheckerEnabled ? (
+                <a
+                  href="https://social.vtechdevelopment.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 12,
+                    border: "2px solid rgba(28,25,23,0.22)",
+                    backgroundColor: "#fff",
+                    color: cockpitColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: 800,
+                    padding: "10px 16px",
+                    textDecoration: "none",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  Open Social Checker
+                </a>
+              ) : null}
               <SecondaryButton href={`/b/${encodeURIComponent(businessId)}/people/${encodeURIComponent(selected.partyId ?? selected.id)}`}>
                 Open person
               </SecondaryButton>

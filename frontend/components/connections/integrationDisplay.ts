@@ -81,7 +81,7 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
     icon: Search,
     setupMode: "api_key",
     listed: false,
-    unlocks: "People → Run social background screen → Needs Attention report",
+    unlocks: "Settings → Open Social Checker (social.vtechdevelopment.com)",
   },
   prospecting_enrichment: {
     title: "Prospecting enrichment",
