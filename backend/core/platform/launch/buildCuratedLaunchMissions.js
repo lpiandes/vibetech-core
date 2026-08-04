@@ -48,9 +48,9 @@ const LAUNCH_PRIORITY = Object.freeze({
     "knowledge_consult",
     "outbound_approvals",
     "sms_send",
+    "voice_calls",
     "meta_lead_intake",
     "website_forms",
-    "voice_calls",
   ],
 });
 

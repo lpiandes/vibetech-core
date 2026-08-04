@@ -2906,10 +2906,39 @@ export class WorkspaceService {
       kinds: [RUNTIME_SNAPSHOT_KINDS.BUSINESS_GRAPH],
     });
 
+    // Fire specialty / workflow automations when a person is linked to a property.
+    // Skip quiet duplicates so re-saving an existing link does not re-trigger.
+    if (!result.duplicate) {
+      const subject = stack.businessSubjectRuntime.getSubject?.(sid) ?? null;
+      const party = stack.businessGraphRuntime.getParty?.(pid) ?? null;
+      const subjectName =
+        String(subject?.displayName ?? subject?.name ?? subject?.title ?? sid).trim() || sid;
+      const partyName =
+        String(party?.displayName ?? party?.name ?? party?.fullName ?? pid).trim() || pid;
+      try {
+        await this.emitSpecialtyBusinessEvent({
+          eventType: "PARTY_SUBJECT_LINKED",
+          forceManual: false,
+          actorId: "system",
+          brief: `${partyName} linked to property "${subjectName}"`,
+          eventPayload: {
+            partyId: pid,
+            subjectId: sid,
+            relationshipId: result.relationshipId ?? null,
+            relationshipType: "INTERESTED_IN",
+            "contact.name": partyName,
+            "subject.id": sid,
+            "subject.name": subjectName,
+            source: "party_subject_link",
+          },
+        });
+      } catch {
+        // Non-fatal — link succeeded even if automations cannot fire.
+      }
+    }
+
     return result;
   }
-
-  async unlinkPartyFromSubject(partyId: string, subjectId: string, nowISO?: string) {
     const stack = this.connected.operatingStack;
     if (!stack?.businessGraphRuntime) {
       throw new Error("Person–property linking is not available for this workspace.");

@@ -144,6 +144,21 @@ test("full OS does not surface Meta unless lead_follow_up was purchased", () => 
   assert.ok(withLeads.some((m) => m.id === "meta_lead_intake"));
 });
 
+test("SMS-entitled packages also surface missed-call voice mission", () => {
+  const pool = [
+    { id: "sms_send" },
+    { id: "voice_calls" },
+    { id: "customer_email_send" },
+    { id: "meta_lead_intake" },
+    { id: "website_forms" },
+    { id: "outbound_approvals" },
+    { id: "knowledge_consult" },
+  ];
+  const missions = filterLaunchMissionsForPurchasedPackages(pool, ["lead_follow_up"]);
+  assert.ok(missions.some((m) => m.id === "sms_send"));
+  assert.ok(missions.some((m) => m.id === "voice_calls"));
+});
+
 test("launch path label comes from packages or industry — never a hardcoded Sports-only map", () => {
   assert.equal(
     presentLaunchPathLabel({ purchasedPackages: ["ai_receptionist", "crm_automation"] }),

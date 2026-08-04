@@ -17,6 +17,7 @@ export const SPECIALTY_EVENT_CATALOG = Object.freeze([
   { id: "META_LEAD", label: "Meta / Facebook lead" },
   { id: "CONTACT_CREATED", label: "New contact created" },
   { id: "CONTACT_IMPORTED", label: "Lead list imported" },
+  { id: "PARTY_SUBJECT_LINKED", label: "Person linked to a property / listing" },
   { id: "INTERACTION_OUTCOME_RECORDED", label: "Interaction recorded" },
 ]);
 

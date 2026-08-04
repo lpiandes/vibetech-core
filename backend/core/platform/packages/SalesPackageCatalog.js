@@ -192,13 +192,14 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     launchMissionIds: [
       "customer_email_send",
       "sms_send",
+      "voice_calls",
       "meta_lead_intake",
       "website_forms",
       "outbound_approvals",
       "knowledge_consult",
     ],
     packageAskQuestionIds: ["q_customers", "q_lead_sources", "q_communications", "q_integrations"],
-    packageAskConnectionOptions: ["meta_platform", "gmail", "twilio_sms"],
+    packageAskConnectionOptions: ["meta_platform", "gmail", "twilio_sms", "twilio_voice"],
     honestyNote: "Intake + approved drafts — not a scored lead engine.",
     commercialStatus: "product",
     sellable: true,
@@ -211,8 +212,8 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "needs_attention", "people", "pipelines", "work", "inbox", "knowledge", "calendar", "team", "automations", "ads", "integrations", "settings"],
     discoveryTopics: ["identity", "industry", "customers", "communications", "operations", "integrations", "outcomes"],
     packageAskQuestionIds: ["q_customers", "q_lead_sources", "q_communications", "q_integrations", "q_scheduling"],
-    packageAskConnectionOptions: ["meta_platform", "twilio_sms", "google_calendar"],
-    launchMissionIds: ["meta_lead_intake", "website_forms", "sms_send", "calendar_scheduling", "outbound_approvals", "knowledge_consult"],
+    packageAskConnectionOptions: ["meta_platform", "twilio_sms", "twilio_voice", "google_calendar"],
+    launchMissionIds: ["meta_lead_intake", "website_forms", "sms_send", "voice_calls", "calendar_scheduling", "outbound_approvals", "knowledge_consult"],
     honestyNote: "Live today: first-touch SMS sends automatically when Twilio SMS is connected (TCPA: include opt-out), durable across restarts; confirmed appointments auto-book onto teammate availability (real Google Calendar event when connected) with no manual HOLD step; Twilio white-glove provisioning (VIBETech buys the number + auto-configures the inbound webhook); Meta lead-form ingest. Rolling out: VIBETech-managed Meta paused-campaign scaffolding (ad set + creative) and TikTok lead ads (platform credentials required, honest not_configured until then). Meta Lead Ads + Calendar are required for the full loop. Not a self-serve ad creative builder.",
     commercialStatus: "product",
     sellable: true,
@@ -1248,7 +1249,10 @@ export function filterLaunchMissionsForPurchasedPackages(missions = [], purchase
   let rows = Array.isArray(missions) ? missions : [];
 
   if (!scope.fullOs && scope.launchMissionIds) {
-    rows = rows.filter((mission) => scope.launchMissionIds.has(String(mission?.id ?? "")));
+    // Missed-call SMS needs Voice + SMS. If SMS is entitled, always surface voice setup too.
+    const allowed = new Set(scope.launchMissionIds);
+    if (allowed.has("sms_send")) allowed.add("voice_calls");
+    rows = rows.filter((mission) => allowed.has(String(mission?.id ?? "")));
   }
 
   // Meta Lead Ads is a purchasable lead product — never dump it on Full OS by accident.

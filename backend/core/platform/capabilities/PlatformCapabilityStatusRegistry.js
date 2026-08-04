@@ -61,8 +61,8 @@ export const PLATFORM_CAPABILITIES = deepFreeze([
   },
   {
     id: "voice_calls",
-    label: "Approved voice calls",
-    description: "AI phone receptionist (Knowledge-backed). Prove places a live call. Customer outbound stays approval-gated.",
+    label: "Missed-call texts",
+    description: "Business Twilio number rings your cell first. If you miss it, the caller gets an SMS automatically. Also connect Text messaging.",
     verticals: ["*"],
     requiredIntegrations: ["voice_channel"],
     requiredPermissions: ["integrations.manage"],

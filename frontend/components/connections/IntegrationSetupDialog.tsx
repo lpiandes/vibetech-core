@@ -81,8 +81,8 @@ export default function IntegrationSetupDialog({
     messageSample1: "",
     messageSample2: "",
     messageFlow: "",
-    privacyPolicyUrl: "https://vtechdevelopment.com/privacy.html",
-    termsUrl: "https://vtechdevelopment.com/terms.html",
+    privacyPolicyUrl: "",
+    termsUrl: "",
   });
   const [provisionResult, setProvisionResult] = useState<{
     fromNumber?: string;
@@ -632,18 +632,20 @@ export default function IntegrationSetupDialog({
                     />
                   </label>
                   <label style={fieldLabelStyle}>
-                    Privacy policy URL (optional but recommended)
+                    Your business privacy policy URL
+                    <span style={fieldHintStyle}>Required for carrier A2P — use this business&apos;s policy, not VIBETech&apos;s</span>
                     <input
-                      placeholder="https://…/privacy"
+                      placeholder="https://yourbusiness.com/privacy"
                       value={smsBrand.privacyPolicyUrl}
                       onChange={(e) => setSmsBrand((s) => ({ ...s, privacyPolicyUrl: e.target.value }))}
                       style={fieldInputStyle}
                     />
                   </label>
                   <label style={fieldLabelStyle}>
-                    Terms URL (optional but recommended)
+                    Your business terms URL
+                    <span style={fieldHintStyle}>This business&apos;s terms of service / messaging terms</span>
                     <input
-                      placeholder="https://…/terms"
+                      placeholder="https://yourbusiness.com/terms"
                       value={smsBrand.termsUrl}
                       onChange={(e) => setSmsBrand((s) => ({ ...s, termsUrl: e.target.value }))}
                       style={fieldInputStyle}

@@ -13,6 +13,7 @@ export const TRIGGER_TYPES = Object.freeze([
   { id: "contact_imported", label: "Lead list imported", eventType: "CONTACT_IMPORTED" },
   { id: "pipeline_stage", label: "Pipeline stage changed", eventType: "PIPELINE_STAGE_ENTERED" },
   { id: "pipeline_card_created", label: "Card added to pipeline", eventType: "PIPELINE_CARD_CREATED" },
+  { id: "party_subject_linked", label: "Person linked to a property", eventType: "PARTY_SUBJECT_LINKED" },
   { id: "manual", label: "Run manually / test", eventType: "MANUAL_RUN" },
 ]);
 
@@ -35,6 +36,8 @@ export const CONDITION_FIELDS = Object.freeze([
   { id: "pipeline.stageId", label: "Pipeline stage id" },
   { id: "pipeline.stageLabel", label: "Pipeline stage name" },
   { id: "pipeline.name", label: "Pipeline name" },
+  { id: "subject.id", label: "Property / listing id" },
+  { id: "subject.name", label: "Property / listing name" },
   { id: "source", label: "Source" },
 ]);
 

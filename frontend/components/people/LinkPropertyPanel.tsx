@@ -187,7 +187,7 @@ export default function LinkPropertyPanel({
         </div>
       ) : (
         <div style={{ fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
-          Link a property so campaigns and follow-up know what they asked about.
+          Link a property so campaigns, follow-up, and automations know what they asked about.
         </div>
       )}
 
