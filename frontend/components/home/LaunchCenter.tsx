@@ -64,7 +64,7 @@ const SIMPLE_TITLE: Record<string, string> = {
   customer_email_send: "Connect business email",
   calendar_scheduling: "Connect calendar",
   sms_send: "Set up text messaging",
-  voice_calls: "Connect phone calling",
+  voice_calls: "Set up missed-call texts",
   social_screen_prove: "Prove social background screening",
   meta_lead_intake: "Request Facebook lead setup",
   website_forms: "Website form intake",
@@ -78,7 +78,7 @@ const SIMPLE_DETAIL: Record<string, string> = {
   customer_email_send: "Sign in with Google so VIBETech can send approved customer emails.",
   calendar_scheduling: "Connect Google Calendar so scheduling can book real appointments.",
   sms_send: "Enter your legal business name and address once — VIBETech buys a texting number and handles carrier registration. No Twilio Console required.",
-  voice_calls: "Connect Twilio Voice for the Knowledge-backed AI receptionist. Prove places a test call. Customer outbound calls stay approval-gated.",
+  voice_calls: "Connect your Twilio business number and your cell. Callers ring you first; if you miss them, we text automatically. Publish that Twilio number (or forward your existing line to it).",
   social_screen_prove: "Connect Serper + ScrapingBee, then run a sample public-web screen. Filtered report lands in Needs Attention.",
   meta_lead_intake: "Tell us your Facebook Page — VIBETech connects Lead Ads for you. New leads land in People and fire intake automations (sends still need your approval).",
   website_forms: "Open your hosted intake form, share the link, and prove with a test submission. Leads land in People.",
@@ -90,6 +90,7 @@ const SIMPLE_DETAIL: Record<string, string> = {
 
 const CONNECTED_DETAIL: Record<string, string> = {
   sms_send: "Number is set up. Send a test text, then confirm you got it. US delivery may wait until carrier approval finishes.",
+  voice_calls: "Phone is connected. Call the business Twilio number from another phone, do not answer, and confirm the missed-call SMS arrives.",
   customer_email_send: "Email is connected. Send a test email, then confirm you got it.",
   calendar_scheduling: "Calendar is connected. Create a test event, then confirm you see it in Google Calendar.",
 };

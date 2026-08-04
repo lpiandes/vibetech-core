@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import StatusBadge from "@/components/product/StatusBadge";
 import EntityAvatar from "@/components/shell/EntityAvatar";
 import ShellPanel from "@/components/shell/ShellPanel";
+import LinkPropertyPanel from "@/components/people/LinkPropertyPanel";
 import type { EngagementViewModel } from "@/lib/workspace/EngagementTypes";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 import { resolvePeopleDetailNextActionHref, workQueueHrefForPeopleDetail } from "./peopleSemantics";
@@ -252,27 +253,15 @@ export default function PeopleDetailLayout({
             </ShellPanel>
           ) : null}
 
-          {viewModel.subjects.length > 0 ? (
-            <ShellPanel title="Linked records">
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                {viewModel.subjects.map((subject) => (
-                  <Link
-                    key={String(subject.id)}
-                    href={`/b/${businessId}/properties/${String(subject.id)}`}
-                    style={{
-                      padding: spacing.md,
-                      borderBottom: `1px solid ${cockpitColors.panelBorder}`,
-                      textDecoration: "none",
-                      color: cockpitColors.textPrimary,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {String(subject.displayName)}
-                  </Link>
-                ))}
-              </div>
-            </ShellPanel>
-          ) : null}
+          <ShellPanel title="Linked records">
+            <div style={{ padding: spacing.md }}>
+              <LinkPropertyPanel
+                businessId={businessId}
+                partyId={String(viewModel.partyId)}
+                linkedSubjects={viewModel.subjects as Array<{ id?: string; displayName?: string }>}
+              />
+            </div>
+          </ShellPanel>
 
           <ShellPanel title="Open requests and work">
             {viewModel.openRequests.length === 0 && viewModel.openWork.length === 0 ? (

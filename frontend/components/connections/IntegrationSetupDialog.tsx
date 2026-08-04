@@ -38,6 +38,9 @@ export default function IntegrationSetupDialog({
     authToken: "",
     fromNumber: "",
     twimlUrl: "",
+    forwardNumber: "",
+    missedCallFollowUpEnabled: true,
+    ringTimeoutSeconds: "20",
     serperApiKey: "",
     scrapingBeeApiKey: "",
     apolloApiKey: "",
@@ -78,8 +81,8 @@ export default function IntegrationSetupDialog({
     messageSample1: "",
     messageSample2: "",
     messageFlow: "",
-    privacyPolicyUrl: "https://vtechdevelopment.com/privacy",
-    termsUrl: "https://vtechdevelopment.com/terms",
+    privacyPolicyUrl: "https://vtechdevelopment.com/privacy.html",
+    termsUrl: "https://vtechdevelopment.com/terms.html",
   });
   const [provisionResult, setProvisionResult] = useState<{
     fromNumber?: string;
@@ -87,6 +90,13 @@ export default function IntegrationSetupDialog({
     simulated?: boolean;
     a2pRegistrationStatus?: string | null;
     inboundWebhookConfigured?: boolean | null;
+  } | null>(null);
+  const [voiceConnectResult, setVoiceConnectResult] = useState<{
+    fromNumber?: string;
+    inboundUrl?: string;
+    nextSteps?: string[];
+    voiceWebhookConfigured?: boolean;
+    missedCallFollowUp?: { active?: boolean; forwardNumber?: string | null };
   } | null>(null);
 
   const setupMode = integration.setupMode ?? "manual";
@@ -255,6 +265,16 @@ export default function IntegrationSetupDialog({
         setError(String(data.error ?? "Could not connect."));
         return;
       }
+      if (integration.id === "voice_channel") {
+        setVoiceConnectResult({
+          fromNumber: data.fromNumber,
+          inboundUrl: data.inboundUrl,
+          nextSteps: Array.isArray(data.nextSteps) ? data.nextSteps : [],
+          voiceWebhookConfigured: Boolean(data.voiceWebhookConfigured),
+          missedCallFollowUp: data.missedCallFollowUp ?? null,
+        });
+        return;
+      }
       finishConnected();
     } catch {
       setError("Network error. Please try again.");
@@ -333,12 +353,14 @@ export default function IntegrationSetupDialog({
             ? "Set up text messaging"
             : integration.id === "meta_lead_ads"
               ? "Request Meta Lead Forms setup"
+              : integration.id === "voice_channel"
+                ? "Set up missed-call texts"
               : `Connect ${integration.title}`
       }
       onClose={onClose}
-      maxWidth={integration.id === "sms_channel" || integration.id === "meta_lead_ads" ? 560 : 440}
+      maxWidth={integration.id === "sms_channel" || integration.id === "meta_lead_ads" || integration.id === "voice_channel" ? 560 : 440}
       footer={
-        canConnect && !(integration.id === "meta_lead_ads" && metaRequestResult) && !(integration.id === "sms_channel" && provisionResult) ? (
+        canConnect && !(integration.id === "meta_lead_ads" && metaRequestResult) && !(integration.id === "sms_channel" && provisionResult) && !(integration.id === "voice_channel" && voiceConnectResult) ? (
           <>
             <SecondaryButton onClick={loading ? undefined : onClose}>Cancel</SecondaryButton>
             {allowLocalDesignPartnerConnect ? (
@@ -348,8 +370,8 @@ export default function IntegrationSetupDialog({
             ) : null}
             <PrimaryButton onClick={loading ? undefined : primaryAction()}>{primaryLabel()}</PrimaryButton>
           </>
-        ) : canConnect && ((integration.id === "meta_lead_ads" && metaRequestResult) || (integration.id === "sms_channel" && provisionResult)) ? (
-          <SecondaryButton onClick={onClose}>Close</SecondaryButton>
+        ) : canConnect && ((integration.id === "meta_lead_ads" && metaRequestResult) || (integration.id === "sms_channel" && provisionResult) || (integration.id === "voice_channel" && voiceConnectResult)) ? (
+          <SecondaryButton onClick={integration.id === "voice_channel" ? finishConnected : onClose}>Close</SecondaryButton>
         ) : (
           <PrimaryButton onClick={onClose}>Got it</PrimaryButton>
         )
@@ -748,53 +770,108 @@ export default function IntegrationSetupDialog({
             </div>
           ) : canConnect && setupMode === "api_key" && integration.id === "voice_channel" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
-              <div style={{ fontWeight: 600, fontSize: typography.caption.fontSize, color: cockpitColors.textPrimary }}>
-                Twilio credentials
-              </div>
-              <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
-                In Twilio Console, open the account menu (top-left) → <strong>API keys & tokens</strong> (or Account → Account info).
-              </p>
-              <label style={fieldLabelStyle}>
-                Account SID
-                <span style={fieldHintStyle}>Starts with AC… — copy from Account info</span>
-                <input
-                  placeholder="ACxxxxxxxx"
-                  value={apiKeyForm.accountSid}
-                  onChange={(e) => setApiKeyForm((s) => ({ ...s, accountSid: e.target.value }))}
-                  style={fieldInputStyle}
-                />
-              </label>
-              <label style={fieldLabelStyle}>
-                Auth Token
-                <span style={fieldHintStyle}>Click Show next to Auth Token, then copy</span>
-                <input
-                  placeholder="Auth Token"
-                  type="password"
-                  value={apiKeyForm.authToken}
-                  onChange={(e) => setApiKeyForm((s) => ({ ...s, authToken: e.target.value }))}
-                  style={fieldInputStyle}
-                />
-              </label>
-              <label style={fieldLabelStyle}>
-                From number
-                <span style={fieldHintStyle}>Phone Numbers → Manage → Active numbers → copy your +1 number</span>
-                <input
-                  placeholder="+1…"
-                  value={apiKeyForm.fromNumber}
-                  onChange={(e) => setApiKeyForm((s) => ({ ...s, fromNumber: e.target.value }))}
-                  style={fieldInputStyle}
-                />
-              </label>
-              <label style={fieldLabelStyle}>
-                TwiML webhook URL
-                <span style={fieldHintStyle}>Optional for now — leave blank unless you have a voice webhook</span>
-                <input
-                  placeholder="https://…"
-                  value={apiKeyForm.twimlUrl}
-                  onChange={(e) => setApiKeyForm((s) => ({ ...s, twimlUrl: e.target.value }))}
-                  style={fieldInputStyle}
-                />
-              </label>
+              {voiceConnectResult ? (
+                <>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: cockpitColors.textPrimary }}>
+                    Phone connected
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
+                    Business number: <strong>{voiceConnectResult.fromNumber || "saved"}</strong>
+                    {voiceConnectResult.missedCallFollowUp?.active
+                      ? ` · Missed calls ring ${voiceConnectResult.missedCallFollowUp.forwardNumber}, then text automatically.`
+                      : " · Add a forward number anytime to enable missed-call texts."}
+                  </p>
+                  <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.55 }}>
+                    {(voiceConnectResult.nextSteps ?? []).map((step) => (
+                      <li key={step} style={{ marginBottom: 6 }}>{step}</li>
+                    ))}
+                  </ol>
+                  <PrimaryButton onClick={finishConnected}>Done</PrimaryButton>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: cockpitColors.textPrimary }}>
+                    Missed-call texts (4 steps)
+                  </div>
+                  <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.55 }}>
+                    <li>Have a Twilio number (buy one, or reuse your SMS number if it supports Voice).</li>
+                    <li>Paste Account SID, Auth Token, and that Twilio number below.</li>
+                    <li>Enter your cell as “Forward to” so we ring you first.</li>
+                    <li>After connect: publish the Twilio number as your business line, or forward unanswered calls from your existing business number to it.</li>
+                  </ol>
+                  <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
+                    Twilio Console → account menu (top-left) → <strong>Account info</strong> for SID + Auth Token.
+                    Phone Numbers → Active numbers for the +1 From number.
+                  </p>
+                  <label style={fieldLabelStyle}>
+                    Account SID
+                    <span style={fieldHintStyle}>Starts with AC…</span>
+                    <input
+                      placeholder="ACxxxxxxxx"
+                      value={apiKeyForm.accountSid}
+                      onChange={(e) => setApiKeyForm((s) => ({ ...s, accountSid: e.target.value }))}
+                      style={fieldInputStyle}
+                    />
+                  </label>
+                  <label style={fieldLabelStyle}>
+                    Auth Token
+                    <span style={fieldHintStyle}>Click Show, then copy</span>
+                    <input
+                      placeholder="Auth Token"
+                      type="password"
+                      value={apiKeyForm.authToken}
+                      onChange={(e) => setApiKeyForm((s) => ({ ...s, authToken: e.target.value }))}
+                      style={fieldInputStyle}
+                    />
+                  </label>
+                  <label style={fieldLabelStyle}>
+                    Twilio business number
+                    <span style={fieldHintStyle}>The number callers dial (or get forwarded to)</span>
+                    <input
+                      placeholder="+1…"
+                      value={apiKeyForm.fromNumber}
+                      onChange={(e) => setApiKeyForm((s) => ({ ...s, fromNumber: e.target.value }))}
+                      style={fieldInputStyle}
+                    />
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 650 }}>
+                    <input
+                      type="checkbox"
+                      checked={apiKeyForm.missedCallFollowUpEnabled}
+                      onChange={(e) => setApiKeyForm((s) => ({ ...s, missedCallFollowUpEnabled: e.target.checked }))}
+                    />
+                    Ring my phone first, then text if I miss it (recommended)
+                  </label>
+                  {apiKeyForm.missedCallFollowUpEnabled ? (
+                    <>
+                      <label style={fieldLabelStyle}>
+                        Your cell (forward / ring)
+                        <span style={fieldHintStyle}>Required for missed-call texts</span>
+                        <input
+                          placeholder="+1…"
+                          value={apiKeyForm.forwardNumber}
+                          onChange={(e) => setApiKeyForm((s) => ({ ...s, forwardNumber: e.target.value }))}
+                          style={fieldInputStyle}
+                        />
+                      </label>
+                      <label style={fieldLabelStyle}>
+                        Ring timeout (seconds)
+                        <span style={fieldHintStyle}>How long we ring you before texting the caller</span>
+                        <input
+                          placeholder="20"
+                          value={apiKeyForm.ringTimeoutSeconds}
+                          onChange={(e) => setApiKeyForm((s) => ({ ...s, ringTimeoutSeconds: e.target.value }))}
+                          style={fieldInputStyle}
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted }}>
+                      With this off, inbound calls use the AI receptionist instead of ringing your cell.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           ) : canConnect && setupMode === "api_key" && integration.id === "social_screening" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>

@@ -5,6 +5,7 @@ import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
 import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
 import { putDurableCredential } from "../../../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
+import { configureInboundVoiceWebhook } from "../../../../../../../backend/core/integrations/twilio/TwilioProvisioningService.js";
 import {
   notifyPlatformOperators,
 } from "../../../../../../../backend/core/admin/notifyPlatformOperators.js";
@@ -27,6 +28,15 @@ export async function POST(
     const origin = new URL(request.url).origin;
     const defaultTwiml = `${origin}/api/businesses/${encodeURIComponent(businessId)}/integrations/voice/inbound`;
     const twimlUrl = String(body.twimlUrl ?? process.env.TWILIO_VOICE_TWIML_URL ?? defaultTwiml).trim() || defaultTwiml;
+    const forwardNumber = String(body.forwardNumber ?? "").trim();
+    const missedCallFollowUpEnabled = body.missedCallFollowUpEnabled === true
+      || body.missedCallFollowUpEnabled === "true"
+      || Boolean(forwardNumber);
+    const ringTimeoutSeconds = Math.min(
+      60,
+      Math.max(5, Number(body.ringTimeoutSeconds ?? 20) || 20),
+    );
+    const smsBodyTemplate = String(body.smsBodyTemplate ?? "").trim();
 
     if (!accountSid || !authToken || !fromNumber) {
       return NextResponse.json(
@@ -45,12 +55,26 @@ export async function POST(
       workspaceId: businessId,
       credentialId,
       providerType: "twilio_voice",
-      secrets: { accountSid, authToken, fromNumber, twimlUrl },
+      secrets: {
+        accountSid,
+        authToken,
+        fromNumber,
+        twimlUrl,
+        forwardNumber,
+        missedCallFollowUpEnabled,
+        ringTimeoutSeconds,
+        smsBodyTemplate,
+      },
       metadata: {
         fromNumber,
         twimlUrl,
-        receptionist: true,
+        receptionist: !missedCallFollowUpEnabled || !forwardNumber,
         inboundUrl: defaultTwiml,
+        dialResultUrl: `${origin}/api/businesses/${encodeURIComponent(businessId)}/integrations/voice/dial-result`,
+        missedCallFollowUpEnabled,
+        forwardNumber,
+        ringTimeoutSeconds,
+        smsBodyTemplate: smsBodyTemplate || null,
       },
     });
 
@@ -60,6 +84,27 @@ export async function POST(
       fromNumber,
       platformActiveKnowledgeCount: knowledgeCount,
     });
+
+    let voiceWebhook = { ok: false as boolean, configured: false as boolean, message: null as string | null };
+    try {
+      const configured = await configureInboundVoiceWebhook({
+        businessId,
+        accountSid,
+        authToken,
+        fromNumber,
+      });
+      voiceWebhook = {
+        ok: Boolean(configured?.ok),
+        configured: Boolean(configured?.configured || configured?.ok),
+        message: configured?.ok ? null : String(configured?.message ?? configured?.reason ?? "webhook_not_set"),
+      };
+    } catch (err) {
+      voiceWebhook = {
+        ok: false,
+        configured: false,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
 
     try {
       const business = await platformStore.getBusinessById(businessId).catch(() => null);
@@ -82,16 +127,33 @@ export async function POST(
       /* non-blocking */
     }
 
+    const missedOn = Boolean(missedCallFollowUpEnabled && forwardNumber);
+    const nextSteps = [
+      voiceWebhook.configured
+        ? "Voice webhook set on your Twilio number automatically."
+        : `In Twilio → Phone Numbers → your number → Voice webhook (POST): ${defaultTwiml}`,
+      "Publish this Twilio number as your business line (website/Google), or forward unanswered calls from your existing business number to it.",
+      missedOn
+        ? `Missed calls ring ${forwardNumber}, then text the caller automatically. Also connect Text messaging if you have not.`
+        : "Add your cell as the forward number to turn on missed-call texts (or leave off for AI receptionist only).",
+      "Prove with a real call from another phone — do not answer — confirm you get the SMS.",
+    ];
+
     return NextResponse.json({
       ok: true,
       connection: { id: connection?.id, connectionType: connection?.connectionType, status: connection?.status },
       twimlUrl,
       inboundUrl: defaultTwiml,
-      nextSteps: [
-        `Point this Twilio number’s Voice webhook to: ${defaultTwiml}`,
-        "Inbound calls use the Knowledge-backed AI receptionist.",
-        "Outbound customer calls still require owner GRANT.",
-      ],
+      fromNumber,
+      voiceWebhookConfigured: voiceWebhook.configured,
+      voiceWebhookMessage: voiceWebhook.message,
+      missedCallFollowUp: {
+        enabled: missedCallFollowUpEnabled,
+        forwardNumber: forwardNumber || null,
+        ringTimeoutSeconds,
+        active: missedOn,
+      },
+      nextSteps,
     });
   } catch (err) {
     return authorizationErrorResponse(err);

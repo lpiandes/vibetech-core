@@ -85,6 +85,11 @@ import {
 import { runShowingCoordinationOperatingLoop } from "../../../backend/core/integration/ShowingCoordinationOperatingLoopService.js";
 import { buildCommunicationThreadDetail } from "../../../backend/core/communications/views/buildCommunicationThreadDetail.js";
 import { RecordBusinessSubjectService } from "../../../backend/core/business-subject/RecordBusinessSubjectService.js";
+import {
+  ensurePartySubjectRelationship,
+  endPartySubjectRelationship,
+} from "../../../backend/core/business-graph/partySubjectRelationship.js";
+import { tryDualWriteParty, findContact } from "../../../backend/core/crm/ensureCrmContactAndOptionalCard.js";
 import { reconcileHistoricalSubjectInterests } from "../../../backend/core/business-subject/SubjectInterestReconciliationService.js";
 import { buildBusinessSubjectIndex } from "../../../backend/core/business-subject/views/buildBusinessSubjectIndex.js";
 import { buildSubjectAudiencePreview } from "../../../backend/core/segments/views/buildSubjectAudiencePreview.js";
@@ -2850,6 +2855,84 @@ export class WorkspaceService {
     });
 
     return subject;
+  }
+
+  /**
+   * Ensure a graph party exists for CRM or graph ids, then link INTERESTED_IN to a subject.
+   */
+  async linkPartyToSubject(partyId: string, subjectId: string, nowISO?: string) {
+    const stack = this.connected.operatingStack;
+    if (!stack?.businessGraphRuntime || !stack?.businessSubjectRuntime) {
+      throw new Error("Person–property linking is not available for this workspace.");
+    }
+    const pid = String(partyId ?? "").trim();
+    const sid = String(subjectId ?? "").trim();
+    if (!pid || !sid) throw new Error("partyId and subjectId are required.");
+
+    const timestamp = nowISO ?? new Date().toISOString();
+    if (!stack.businessGraphRuntime.getParty?.(pid)) {
+      const installation = this.connected.installationResult as Record<string, unknown> | null | undefined;
+      const crm = readCrmState(installation);
+      const contact = findContact(crm, { id: pid, partyId: pid });
+      if (contact) {
+        tryDualWriteParty({
+          businessGraphRuntime: stack.businessGraphRuntime,
+          contact,
+          source: "party_subject_link",
+          nowISO: timestamp,
+        });
+      }
+    }
+    if (!stack.businessGraphRuntime.getParty?.(pid)) {
+      throw new Error("Person not found. Open People and save the contact first.");
+    }
+
+    const result = ensurePartySubjectRelationship({
+      stack,
+      partyId: pid,
+      subjectId: sid,
+      nowISO: timestamp,
+      source: "workspace_service",
+      metadata: { linkedVia: "people_ui" },
+    });
+    if (!result.ok) {
+      throw new Error(String(result.message ?? result.reason ?? "Could not link property."));
+    }
+
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.BUSINESS_GRAPH],
+    });
+
+    return result;
+  }
+
+  async unlinkPartyFromSubject(partyId: string, subjectId: string, nowISO?: string) {
+    const stack = this.connected.operatingStack;
+    if (!stack?.businessGraphRuntime) {
+      throw new Error("Person–property linking is not available for this workspace.");
+    }
+    const result = endPartySubjectRelationship({
+      stack,
+      partyId: String(partyId ?? "").trim(),
+      subjectId: String(subjectId ?? "").trim(),
+      nowISO: nowISO ?? new Date().toISOString(),
+      source: "workspace_service",
+    });
+    if (!result.ok) {
+      throw new Error(String(result.message ?? result.reason ?? "Could not unlink property."));
+    }
+
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.BUSINESS_GRAPH],
+    });
+
+    return result;
   }
 
   hasProspectInquiry() {

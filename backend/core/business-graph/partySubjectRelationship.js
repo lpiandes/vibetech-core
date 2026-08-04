@@ -84,3 +84,43 @@ export function ensurePartySubjectRelationship({
     relationship: stack.businessGraphRuntime.getRelationship(relationshipId),
   };
 }
+
+export function endPartySubjectRelationship({
+  stack,
+  partyId,
+  subjectId,
+  relationshipType = "INTERESTED_IN",
+  nowISO = new Date().toISOString(),
+  source = "party_subject_relationship",
+} = {}) {
+  if (!stack?.businessGraphRuntime) {
+    throw new Error("partySubjectRelationship: businessGraphRuntime required.");
+  }
+
+  const pid = requireString(partyId, "partyId");
+  const sid = requireString(subjectId, "subjectId");
+  const type = requireString(relationshipType, "relationshipType");
+  const relationshipId = partySubjectRelationshipId({ partyId: pid, subjectId: sid, relationshipType: type });
+  const existing = stack.businessGraphRuntime.getRelationship(relationshipId);
+  if (!existing) {
+    return { ok: false, reason: "relationship_not_found", message: `Relationship not found: ${relationshipId}` };
+  }
+  if (String(existing.status) !== "active") {
+    return { ok: true, duplicate: true, relationshipId, relationship: existing };
+  }
+
+  stack.businessGraphRuntime.applyEvent({
+    id: `evt_party_subject_relationship_ended_${sanitizeId(relationshipId)}`,
+    timestampISO: nowISO,
+    type: BUSINESS_GRAPH_EVENT_TYPES.RELATIONSHIP_ENDED,
+    source,
+    payload: { relationshipId },
+  });
+
+  return {
+    ok: true,
+    duplicate: false,
+    relationshipId,
+    relationship: stack.businessGraphRuntime.getRelationship(relationshipId),
+  };
+}

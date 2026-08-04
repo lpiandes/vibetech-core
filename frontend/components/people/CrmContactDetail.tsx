@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 
 import PrimaryButton from "@/components/product/PrimaryButton";
 import SecondaryButton from "@/components/product/SecondaryButton";
+import LinkPropertyPanel from "@/components/people/LinkPropertyPanel";
 import {
   VtHero,
   VtPage,
@@ -39,6 +40,7 @@ export type CrmContactDetailModel = {
     pipelineName?: string;
     value?: number;
   }>;
+  linkedSubjects?: Array<{ id?: string; displayName?: string }>;
 };
 
 const KINDS = ["lead", "client", "family", "contractor", "vendor", "other"];
@@ -51,9 +53,10 @@ export default function CrmContactDetail({
   model: CrmContactDetailModel;
 }) {
   const router = useRouter();
-  const { contact, cards } = model;
+  const { contact, cards, linkedSubjects = [] } = model;
   const peopleHref = `/b/${encodeURIComponent(businessId)}/people`;
   const pipelinesHref = `/b/${encodeURIComponent(businessId)}/pipelines`;
+  const partyId = String(contact.partyId || contact.id);
 
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -248,16 +251,25 @@ export default function CrmContactDetail({
                     border: `1px solid ${cockpitColors.panelBorder}`,
                     textDecoration: "none",
                     color: cockpitColors.textPrimary,
-                    background: "#fff",
                   }}
                 >
                   <div style={{ fontWeight: 800 }}>{card.title}</div>
-                  <div style={{ fontSize: 12, color: cockpitColors.textSecondary, marginTop: 4, fontWeight: 650 }}>
-                    {card.pipelineName || "Pipeline"} · {card.stageLabel || card.stageId}
+                  <div style={{ fontSize: 12, color: cockpitColors.textMuted, marginTop: 4 }}>
+                    {card.pipelineName ?? "Pipeline"} · {card.stageLabel ?? card.stageId}
                   </div>
                 </Link>
               ))
             )}
+          </div>
+        </VtPanel>
+
+        <VtPanel title="Linked records">
+          <div style={{ padding: spacing.md }}>
+            <LinkPropertyPanel
+              businessId={businessId}
+              partyId={partyId}
+              linkedSubjects={linkedSubjects}
+            />
           </div>
         </VtPanel>
       </div>

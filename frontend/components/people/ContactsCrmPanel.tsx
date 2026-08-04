@@ -17,6 +17,7 @@ import {
 } from "@/components/product/VtChrome";
 import { cockpitColors } from "@/design/tokens";
 import ProspectingFindLeadsPanel from "@/components/people/ProspectingFindLeadsPanel";
+import LinkPropertyPanel from "@/components/people/LinkPropertyPanel";
 
 const KINDS = ["lead", "client", "family", "contractor", "vendor", "employee", "other"] as const;
 
@@ -565,6 +566,16 @@ export default function ContactsCrmPanel({
               <SecondaryButton href={`/b/${encodeURIComponent(businessId)}/people/${encodeURIComponent(selected.partyId ?? selected.id)}`}>
                 Open person
               </SecondaryButton>
+              <div style={{ marginTop: 4 }}>
+                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: cockpitColors.textMuted, marginBottom: 8 }}>
+                  Linked property
+                </div>
+                <LinkPropertyPanel
+                  businessId={businessId}
+                  partyId={String(selected.partyId ?? selected.id)}
+                  linkedSubjects={[]}
+                />
+              </div>
               <SecondaryButton onClick={() => void deleteSelected()} disabled={busy}>Remove</SecondaryButton>
               <SecondaryButton href={`/b/${encodeURIComponent(businessId)}/pipelines`}>Pipelines</SecondaryButton>
               <div>

@@ -42,11 +42,21 @@ export default async function PeopleDetailPage({
           }
         }
       }
+
+      let linkedSubjects: Array<{ id?: string; displayName?: string }> = [];
+      try {
+        const { service } = await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
+        const viewModel = service.loadEngagementViewModel(String(contact.partyId || contact.id));
+        linkedSubjects = Array.isArray(viewModel?.subjects) ? viewModel.subjects : [];
+      } catch {
+        linkedSubjects = [];
+      }
+
       markRequestTiming("VIEW_MODEL", { bytes: JSON.stringify(contact).length, source: "crm" });
       return (
         <CrmContactDetail
           businessId={businessId}
-          model={{ contact, cards }}
+          model={{ contact, cards, linkedSubjects }}
         />
       );
     }

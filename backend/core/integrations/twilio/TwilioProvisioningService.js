@@ -28,6 +28,14 @@ export function resolveInboundSmsWebhookUrl(businessId) {
   return `${origin}/api/businesses/${encodeURIComponent(id)}/integrations/sms/inbound`;
 }
 
+/** Hosted inbound voice webhook — missed-call Dial + receptionist share this route. */
+export function resolveInboundVoiceWebhookUrl(businessId) {
+  const origin = safeString(process.env.NEXTAUTH_URL || process.env.APP_ORIGIN || "").replace(/\/$/, "");
+  const id = safeString(businessId);
+  if (!origin || !id) return "";
+  return `${origin}/api/businesses/${encodeURIComponent(id)}/integrations/voice/inbound`;
+}
+
 export function normalizeBrandInput(input = {}) {
   const legalBusinessName = safeString(input.legalBusinessName || input.businessName);
   const dba = safeString(input.dba || input.displayName);
@@ -445,6 +453,78 @@ export async function configureInboundSmsWebhook({
       webhookUrl,
       phoneSid: resolvedPhoneSid,
       configured: safeString(updated?.sms_url) === webhookUrl,
+    };
+  } catch (err) {
+    return { ok: false, reason: "webhook_update_error", message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Point a Twilio number's VoiceUrl at the platform inbound voice webhook.
+ * @param {{
+ *   businessId: string,
+ *   accountSid: string,
+ *   authToken: string,
+ *   phoneSid?: string | null,
+ *   fromNumber?: string | null,
+ *   fetchImpl?: typeof fetch,
+ * }} input
+ */
+export async function configureInboundVoiceWebhook({
+  businessId,
+  accountSid,
+  authToken,
+  phoneSid = null,
+  fromNumber = null,
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  const webhookUrl = resolveInboundVoiceWebhookUrl(businessId);
+  if (!webhookUrl) {
+    return { ok: false, reason: "webhook_url_unresolved", message: "Set NEXTAUTH_URL or APP_ORIGIN to auto-configure the inbound voice webhook." };
+  }
+  const sid = safeString(accountSid);
+  const token = safeString(authToken);
+  if (!sid || !token) {
+    return { ok: false, reason: "credentials_required", message: "Twilio Account SID and Auth Token are required." };
+  }
+  try {
+    let resolvedPhoneSid = safeString(phoneSid);
+    if (!resolvedPhoneSid && fromNumber) {
+      const lookupRes = await fetchImpl(
+        `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(fromNumber)}`,
+        { headers: { Authorization: basicAuth(sid, token) } },
+      );
+      const lookup = await lookupRes.json().catch(() => ({}));
+      const row = Array.isArray(lookup?.incoming_phone_numbers) ? lookup.incoming_phone_numbers[0] : null;
+      resolvedPhoneSid = safeString(row?.sid);
+    }
+    if (!resolvedPhoneSid) {
+      return { ok: false, reason: "phone_sid_unresolved", message: "Could not find the Twilio phone number to configure." };
+    }
+    const updateRes = await fetchImpl(
+      `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/IncomingPhoneNumbers/${encodeURIComponent(resolvedPhoneSid)}.json`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: basicAuth(sid, token),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ VoiceUrl: webhookUrl, VoiceMethod: "POST" }).toString(),
+      },
+    );
+    const updated = await updateRes.json().catch(() => ({}));
+    if (!updateRes.ok) {
+      return {
+        ok: false,
+        reason: "webhook_update_failed",
+        message: safeString(updated?.message) || `Could not set the inbound voice webhook (HTTP ${updateRes.status}).`,
+      };
+    }
+    return {
+      ok: true,
+      webhookUrl,
+      phoneSid: resolvedPhoneSid,
+      configured: safeString(updated?.voice_url) === webhookUrl,
     };
   } catch (err) {
     return { ok: false, reason: "webhook_update_error", message: err instanceof Error ? err.message : String(err) };

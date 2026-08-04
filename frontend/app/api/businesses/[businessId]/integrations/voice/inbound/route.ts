@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { platformStore } from "@/lib/server/compose";
+import { getSystemWorkspaceForBusiness } from "@/lib/platform/getSystemWorkspaceForBusiness";
 import {
   buildReceptionistGatherTwiml,
   buildReceptionistHangupTwiml,
@@ -9,12 +10,15 @@ import {
 import { enqueueVoiceAppointmentWork } from "../../../../../../../../backend/core/integrations/voice/enqueueVoiceAppointmentWork.js";
 import { enqueueVoiceCalendarHold } from "../../../../../../../../backend/core/integrations/voice/enqueueVoiceCalendarHold.js";
 import {
+  buildMissedCallDialTwiml,
+  resolveMissedCallFollowUpConfig,
+} from "../../../../../../../../backend/core/integrations/voice/missedCallSmsFollowUp.js";
+import {
   readCrmState,
   writeCrmState,
   upsertContact,
 } from "../../../../../../../../backend/core/crm/CrmStore.js";
 import { businessKnowledgeService } from "@/lib/server/compose";
-import { getSystemWorkspaceForBusiness } from "@/lib/platform/getSystemWorkspaceForBusiness";
 import { emitSpecialtyBusinessEvent } from "../../../../../../../../backend/core/ai-builder/specialty/emitSpecialtyBusinessEvent.js";
 
 async function loadWorkspaceService(businessId: string) {
@@ -34,8 +38,15 @@ function actionUrl(request: Request, businessId: string) {
   return `${origin}/api/businesses/${encodeURIComponent(businessId)}/integrations/voice/inbound`;
 }
 
+function dialResultUrl(request: Request, businessId: string) {
+  const origin = new URL(request.url).origin;
+  return `${origin}/api/businesses/${encodeURIComponent(businessId)}/integrations/voice/dial-result`;
+}
+
 /**
- * Twilio inbound voice webhook — AI receptionist Gather loop.
+ * Twilio inbound voice webhook.
+ * When missed-call follow-up is configured: Dial owner phone, then dial-result handles SMS.
+ * Otherwise: AI receptionist Gather loop.
  */
 export async function POST(
   request: Request,
@@ -54,7 +65,22 @@ export async function POST(
     ?? "our business",
   );
 
+  // First webhook hit (no speech): maybe Dial owner instead of receptionist.
   if (!speech) {
+    try {
+      const { service } = await getSystemWorkspaceForBusiness(businessId);
+      const config = resolveMissedCallFollowUpConfig({ businessId, workspace: service });
+      if (config.active) {
+        return twimlResponse(buildMissedCallDialTwiml({
+          forwardNumber: config.forwardNumber,
+          timeoutSeconds: config.ringTimeoutSeconds,
+          actionUrl: dialResultUrl(request, businessId),
+        }));
+      }
+    } catch {
+      /* fall through to receptionist */
+    }
+
     return twimlResponse(buildReceptionistGatherTwiml({
       sayText: `Thanks for calling ${businessName}. How can I help you today?`,
       actionUrl: actionUrl(request, businessId),
@@ -132,12 +158,12 @@ export async function POST(
           reply: `${String(turn.reply ?? "").trim()} I also placed a calendar hold for the team to confirm with you.`,
         };
       }
+      void workResult;
     } catch {
       /* best effort */
     }
   }
 
-  // Fan-out to LIVE specialty automations listening for inbound voice (not Meta/form).
   try {
     const { service } = await getSystemWorkspaceForBusiness(businessId);
     const freshInstallation = await platformStore.getBusinessOSInstallation(businessId).catch(() => installation);
@@ -161,7 +187,7 @@ export async function POST(
       platformStore,
     });
   } catch {
-    /* best effort — call answer must not fail if specialty fan-out errors */
+    /* best effort */
   }
 
   if (turn.intent === "goodbye") {

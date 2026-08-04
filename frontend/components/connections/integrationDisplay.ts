@@ -66,13 +66,13 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
     unlocks: "Approved SMS after carrier registration",
   },
   voice_channel: {
-    title: "Phone",
-    description: "Inbound AI receptionist via Twilio. Prove with a live test call from Launch.",
+    title: "Business phone",
+    description: "Missed calls ring your cell, then text the caller from your Twilio number. One-time connect — after that it runs automatically.",
     tier: "live",
     icon: Phone,
     setupMode: "api_key",
     listed: false,
-    unlocks: "Answered calls → Knowledge + People notes",
+    unlocks: "Missed call → People + SMS · optional AI receptionist if forward is off",
   },
   social_screening: {
     title: "Social screening",
