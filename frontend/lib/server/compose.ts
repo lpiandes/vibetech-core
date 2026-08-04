@@ -14,7 +14,7 @@ import { AuthorizationError } from "../../../backend/core/platform/Authorization
 import { createDurableSupportAccessService } from "../../../backend/core/platform/support/SupportAccessService.js";
 import { createDurableAccessRequestService } from "../../../backend/core/access-requests/AccessRequestService.js";
 import { createBusinessKnowledgeService } from "../../../backend/core/platform/knowledge/BusinessKnowledgeService.js";
-import { LocalFilesystemKnowledgeStorage } from "../../../backend/core/platform/knowledge/LocalFilesystemKnowledgeStorage.js";
+import { createKnowledgeStorageProvider } from "../../../backend/core/platform/knowledge/createKnowledgeStorageProvider.js";
 import { createBusinessCampaignTemplateService } from "../../../backend/core/platform/campaigns/BusinessCampaignTemplateService.js";
 import { createPlatformBusinessService } from "../../../backend/core/platform/services/PlatformBusinessService.js";
 import { createDemoWorkspaceProvisioner } from "../../../backend/core/platform/DemoWorkspaceProvisioner.js";
@@ -65,7 +65,7 @@ function composeServer() {
   const accessRequestService = createDurableAccessRequestService(platformStore);
   const businessKnowledgeService = createBusinessKnowledgeService({
     store: platformStore,
-    storage: new LocalFilesystemKnowledgeStorage(),
+    storage: createKnowledgeStorageProvider(),
   });
   const businessCampaignTemplateService = createBusinessCampaignTemplateService({
     store: platformStore,

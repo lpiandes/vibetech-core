@@ -5,9 +5,15 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 
 function storageRoot() {
-  return process.env.KNOWLEDGE_STORAGE_ROOT
-    ? path.resolve(process.env.KNOWLEDGE_STORAGE_ROOT)
-    : path.join(repoRoot, ".dev", "knowledge-storage");
+  // Vercel/serverless filesystems are read-only except /tmp. Without S3, use /tmp
+  // so Knowledge uploads work in production (content is instance-local; metadata is in DB).
+  if (process.env.KNOWLEDGE_STORAGE_ROOT) {
+    return path.resolve(process.env.KNOWLEDGE_STORAGE_ROOT);
+  }
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return path.join("/tmp", "vibetech-knowledge-storage");
+  }
+  return path.join(repoRoot, ".dev", "knowledge-storage");
 }
 
 function businessDir(businessId) {

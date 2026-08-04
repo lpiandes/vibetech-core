@@ -77,9 +77,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ bus
 
     return NextResponse.json({ document }, { status: 201 });
   } catch (err) {
-    if (err instanceof Error && "code" in err && err.code === "VALIDATION_ERROR") {
+    if (err instanceof Error && "code" in err && (err as { code?: string }).code === "VALIDATION_ERROR") {
       return NextResponse.json({ error: err.message }, { status: 400 });
     }
-    return authorizationErrorResponse(err);
+    try {
+      return authorizationErrorResponse(err);
+    } catch (unexpected) {
+      console.error("[knowledge-upload]", unexpected);
+      const message =
+        unexpected instanceof Error && unexpected.message
+          ? unexpected.message
+          : "Could not upload document.";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
   }
 }
