@@ -2939,6 +2939,8 @@ export class WorkspaceService {
 
     return result;
   }
+
+  async unlinkPartyFromSubject(partyId: string, subjectId: string, nowISO?: string) {
     const stack = this.connected.operatingStack;
     if (!stack?.businessGraphRuntime) {
       throw new Error("Person–property linking is not available for this workspace.");
