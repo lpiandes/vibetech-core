@@ -630,6 +630,15 @@ export class PostgresPlatformStore {
     return "No owner";
   }
 
+  async ensureKnowledgeContentTextColumn() {
+    await this.withClient((client) =>
+      client.query(`
+        ALTER TABLE business_knowledge_documents
+        ADD COLUMN IF NOT EXISTS content_text TEXT
+      `),
+    );
+  }
+
   async createKnowledgeDocument({
     businessId,
     title,
@@ -644,6 +653,8 @@ export class PostgresPlatformStore {
     textExtractionStatus = "skipped",
   }) {
     const cats = Array.isArray(categoryIds) ? categoryIds.map(String) : [];
+    // Self-heal: code shipped before prod migration ran (local migrate only).
+    await this.ensureKnowledgeContentTextColumn();
     const { rows } = await this.withClient((client) =>
       client.query(
         `INSERT INTO business_knowledge_documents (
@@ -672,6 +683,7 @@ export class PostgresPlatformStore {
   }
 
   async updateKnowledgeDocumentContentText({ documentId, businessId, contentText, textExtractionStatus = null }) {
+    await this.ensureKnowledgeContentTextColumn();
     const { rows } = await this.withClient((client) =>
       client.query(
         `UPDATE business_knowledge_documents
