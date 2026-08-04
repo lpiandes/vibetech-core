@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import PrimaryButton from "@/components/product/PrimaryButton";
 import { cockpitColors } from "@/design/tokens";
 import { formatProductErrorMessage } from "@/lib/platform/productErrors";
+import { hardNavigateToBusinessHome } from "@/lib/builder/hardNavigateToBusinessHome";
 
 /**
- * One-click: elevated support enter → client's real Home.
- * Admin identity stays; no permanent membership.
+ * One-click: elevated support enter → client's real Home (hard navigation).
+ * Soft client navigations can flash forbidden/home when support session
+ * isn't ready in the layout request — always re-enter, then full page load.
  */
 export default function OpenBusinessAsAdminButton({
   businessId,
@@ -19,19 +20,15 @@ export default function OpenBusinessAsAdminButton({
   businessName: string;
   alreadyActive?: boolean;
 }) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const homeHref = `/b/${encodeURIComponent(businessId)}/home`;
 
   async function openWorkspace() {
-    if (alreadyActive) {
-      router.push(homeHref);
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
+      // Always refresh support access — don't trust a stale "already active" banner.
       const res = await fetch("/api/admin/support/enter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -41,13 +38,16 @@ export default function OpenBusinessAsAdminButton({
           mode: "elevated",
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
-        setError(formatProductErrorMessage(data.productError ?? data.reason ?? data.error ?? "Could not open business"));
+        setError(
+          formatProductErrorMessage(
+            data.productError ?? data.reason ?? data.error ?? "Could not open business",
+          ),
+        );
         return;
       }
-      router.push(homeHref);
-      router.refresh();
+      hardNavigateToBusinessHome(homeHref);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open business");
     } finally {

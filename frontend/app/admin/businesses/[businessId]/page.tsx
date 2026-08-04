@@ -2,6 +2,7 @@ import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
 import { getAdminPlatformService } from "@/lib/admin/getAdminServices";
 import AdminVtPage from "@/components/admin/AdminVtPage";
 import OpenBusinessAsAdminButton from "@/components/admin/OpenBusinessAsAdminButton";
+import AdminOwnerInviteActions from "@/components/admin/AdminOwnerInviteActions";
 import SupportEnterForm from "@/components/admin/SupportEnterForm";
 import AdminBusinessManagePanel from "@/components/admin/AdminBusinessManagePanel";
 import { VtCard, VtDockLink, VtPanel } from "@/components/product/VtChrome";
@@ -12,10 +13,13 @@ import { cockpitColors } from "@/design/tokens";
  */
 export default async function AdminBusinessDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ businessId: string }>;
+  searchParams?: Promise<{ needSupport?: string }>;
 }) {
   const { businessId } = await params;
+  const query = searchParams ? await searchParams : {};
   const user = await requirePlatformAdmin();
   const result = await getAdminPlatformService().getBusinessSummary({
     adminUserId: user.id,
@@ -29,6 +33,7 @@ export default async function AdminBusinessDetailPage({
 
   const business = result.business;
   const supportActive = Boolean(business.supportSession?.active ?? business.supportSession);
+  const needSupport = String(query.needSupport ?? "") === "1";
 
   return (
     <AdminVtPage
@@ -43,6 +48,23 @@ export default async function AdminBusinessDetailPage({
         </>
       )}
     >
+      {needSupport ? (
+        <div
+          style={{
+            padding: "12px 14px",
+            borderRadius: 12,
+            border: "1px solid #fcd34d",
+            background: "#fffbeb",
+            color: "#92400e",
+            fontWeight: 700,
+            fontSize: 14,
+            marginBottom: 8,
+          }}
+        >
+          Support access is required before opening this workspace. Click Continue to business below.
+        </div>
+      ) : null}
+
       <VtPanel title="Open their workspace">
         <OpenBusinessAsAdminButton
           businessId={business.id}
@@ -53,6 +75,10 @@ export default async function AdminBusinessDetailPage({
           Owner: {business.ownerStatus ?? "—"} · Install: {business.installation?.status ?? "not installed"}
           {business.members?.length ? ` · ${business.members.length} member${business.members.length === 1 ? "" : "s"}` : ""}
         </div>
+        <AdminOwnerInviteActions
+          businessId={business.id}
+          ownerStatus={business.ownerStatus ?? null}
+        />
       </VtPanel>
 
       <AdminBusinessManagePanel

@@ -36,8 +36,10 @@ export default async function BusinessScopedLayout({
       if (err.code === "NOT_FOUND" || err.code === "FORBIDDEN") {
         notFound();
       }
+      // Platform admins must enter support from Admin — send them back there
+      // instead of Access denied → Go home (that looked like a broken twitch).
       if (err.code === "SUPPORT_ACCESS_REQUIRED") {
-        forbidden();
+        redirect(`/admin/businesses/${encodeURIComponent(businessId)}?needSupport=1`);
       }
       forbidden();
     }
