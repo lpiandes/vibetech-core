@@ -8,11 +8,6 @@ import { getSharedCredentialVault } from "../../integrations/credentials/Credent
 import { hydrateWorkspaceCredentials } from "../../integrations/credentials/durableCredentialVault.js";
 import { fireSpecialtyTrigger } from "../../ai-builder/specialty/fireSpecialtyTrigger.js";
 import { ensureEmployeeOperatingAutomationRegistered } from "../../ai-builder/specialty/registerEmployeeOperatingAutomation.js";
-import {
-  readCrmState,
-  writeCrmState,
-  upsertContact,
-} from "../../crm/CrmStore.js";
 
 export async function processSocialBackgroundScreenJob({
   job,
@@ -118,34 +113,8 @@ export async function processSocialBackgroundScreenJob({
     nowISO: () => at,
   });
 
-  if (subject.contactId && loaded.installation && platformStore) {
-    try {
-      let crm = readCrmState(loaded.installation);
-      const existing = (crm.contacts ?? []).find((c) => String(c.id) === subject.contactId);
-      const noteBlock = [
-        `Social background screen ${at}`,
-        screen.report?.summary ?? "",
-        draft?.workItemId ? `Work: ${draft.workItemId}` : "",
-      ].filter(Boolean).join("\n");
-      crm = upsertContact(crm, {
-        ...(existing ?? { id: subject.contactId, name: subject.name }),
-        id: subject.contactId,
-        name: subject.name || existing?.name,
-        email: subject.email || existing?.email,
-        phone: subject.phone || existing?.phone,
-        notes: [existing?.notes, noteBlock].filter(Boolean).join("\n\n"),
-        tags: Array.from(new Set([...(existing?.tags ?? []), "social_screened"])),
-      });
-      await writeCrmState({
-        platformStore,
-        installation: loaded.installation,
-        crm,
-        actorId: "social_background_screen",
-      });
-    } catch {
-      /* best effort */
-    }
-  }
+  // Report opens as Work for review — do not dump into CRM contact notes
+  // (that looked like Social Checker still lived on People for non-buyers).
 
   if (typeof loaded.persistWork === "function") {
     await loaded.persistWork().catch(() => null);
