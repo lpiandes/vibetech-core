@@ -70,10 +70,14 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
         /* non-blocking */
       }
     }
-    void load();
-    const id = window.setInterval(load, 60_000);
+    // Defer badge fetch so first paint / navigation is not competing with it.
+    const start = window.setTimeout(() => {
+      void load();
+    }, 1200);
+    const id = window.setInterval(load, 120_000);
     return () => {
       cancelled = true;
+      window.clearTimeout(start);
       window.clearInterval(id);
     };
   }, [scope.businessId]);

@@ -5,20 +5,15 @@ export const semanticColors = {
   surface: "var(--card)",
   surfaceSecondary: "var(--popover)",
   surfaceElevated: "var(--card)",
-
   border: "var(--border)",
-
   textPrimary: "var(--foreground)",
   textSecondary: "var(--secondary-foreground)",
   textMuted: "var(--muted-foreground)",
-
   accent: "var(--accent)",
-
   success: "oklch(0.77 0.18 155)",
   warning: "oklch(0.87 0.16 80)",
   danger: "oklch(0.65 0.21 25)",
   info: "oklch(0.72 0.18 205)",
-
   healthExcellent: "oklch(0.77 0.18 155)",
   healthGood: "oklch(0.86 0.13 170)",
   healthWarning: "oklch(0.87 0.16 80)",
@@ -27,10 +22,7 @@ export const semanticColors = {
 
 export type SemanticColorKey = keyof typeof semanticColors;
 
-/**
- * App chrome = marketing site (vtechdevelopment.com):
- * deep navy canvas, cyan accent, purple CTA gradient.
- */
+/** App chrome — same hex values as vtechdevelopment.com */
 export const cockpitColors = {
   background: brand.bgDeep,
   panel: brand.bg,
@@ -42,7 +34,7 @@ export const cockpitColors = {
   sidebarBorder: brand.border,
   sidebarText: brand.text,
   sidebarTextMuted: brand.textMuted,
-  sidebarActive: "rgba(34, 211, 238, 0.14)",
+  sidebarActive: "rgba(34, 211, 238, 0.10)",
   textPrimary: brand.text,
   textSecondary: brand.textMuted,
   textMuted: "#64748b",
@@ -54,7 +46,6 @@ export const cockpitColors = {
   waiting: "#fbbf24",
 } as const;
 
-/** Semantic operational status — always pair with text/icon, not color alone. */
 export const statusSemantics = {
   critical: { label: "Critical", color: cockpitColors.critical, bg: "rgba(248,113,113,0.12)", icon: "!" },
   high: { label: "High", color: "#fb923c", bg: "rgba(251,146,60,0.12)", icon: "▲" },

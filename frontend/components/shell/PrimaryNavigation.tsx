@@ -26,7 +26,7 @@ import {
   type CanonicalNavItem,
 } from "@/components/workspace/canonicalBusinessNavigation";
 import { findActiveNavHref } from "@/components/shell/navActivePath";
-import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
+import { brand, cockpitColors, spacing, typography, radius } from "@/design/tokens";
 
 function iconForName(iconName: string): ReactNode {
   switch (iconName) {
@@ -125,9 +125,8 @@ function NavSection({
                   padding: `${spacing.sm} ${spacing.md}`,
                   borderRadius: radius.medium,
                   textDecoration: "none",
-                  color: active ? "#fff" : cockpitColors.sidebarTextMuted,
-                  backgroundColor: active ? "rgba(34,211,238,0.12)" : "transparent",
-                  boxShadow: active ? "inset 3px 0 0 #22d3ee" : "none",
+                  color: active ? brand.text : cockpitColors.sidebarTextMuted,
+                  backgroundColor: active ? cockpitColors.sidebarActive : "transparent",
                   fontSize: typography.body.fontSize,
                   fontWeight: active ? 650 : 500,
                 }}
@@ -136,7 +135,7 @@ function NavSection({
                   style={{
                     flexShrink: 0,
                     display: "flex",
-                    color: active ? "#22d3ee" : "inherit",
+                    color: active ? brand.cyan : "inherit",
                     opacity: active ? 1 : 0.75,
                   }}
                 >

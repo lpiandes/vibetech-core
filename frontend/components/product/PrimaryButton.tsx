@@ -9,8 +9,9 @@ const baseStyle = {
   justifyContent: "center",
   gap: 6,
   borderRadius: radius.medium,
-  border: "1px solid rgba(255,255,255,0.12)",
+  border: "none",
   background: brand.primaryGradient,
+  backgroundSize: "160% 100%",
   color: brand.primaryOnGradient,
   fontSize: 14,
   fontWeight: 800,
@@ -18,7 +19,7 @@ const baseStyle = {
   cursor: "pointer",
   textDecoration: "none",
   lineHeight: 1.2,
-  boxShadow: "0 8px 24px rgba(34, 211, 238, 0.28)",
+  boxShadow: brand.primaryShadow,
 } as const;
 
 export default function PrimaryButton({

@@ -52,9 +52,8 @@ export default async function BusinessScopedLayout({
   const purchasedPackages = readPurchasedPackagesFromConfig(packageConfiguration);
   let pendingPackageAsk = readPendingPackageAsk(packageConfiguration);
 
-  // Heal missing thin-SKU employees only — never resurrect pendingPackageAsk here.
-  // Forced Ask redirects + layout heal re-creating pending caused Home↔Architect loops.
-  if (purchasedPackages.length) {
+  // Heal only when a package Ask is pending — avoid DB work on every soft navigation.
+  if (purchasedPackages.length && pendingPackageAsk) {
     try {
       const { healPurchasedPackagesForBusiness } = await import(
         "../../../../backend/core/platform/packages/syncPurchasedPackagesOntoInstallation.js"
