@@ -385,7 +385,7 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
 }
 
 function StatusSummaryCard({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: "good" | "warning" | "info" }) {
-  const colors = tone === "warning" ? { fg: "#c2410c", bg: "#fff7ed" } : tone === "good" ? { fg: "#047857", bg: "#ecfdf5" } : { fg: "#2563eb", bg: "#eff6ff" };
+  const colors = tone === "warning" ? { fg: "#fbbf24", bg: "rgba(251,191,36,0.14)" } : tone === "good" ? { fg: "#6ee7b7", bg: "rgba(52,211,153,0.12)" } : { fg: "#67e8f9", bg: "rgba(34,211,238,0.14)" };
   return <div style={{ padding: 14, borderRadius: 14, border: "1px solid #e8edf2", background: colors.bg, minWidth: 180, flex: "1 1 180px" }}>
     <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".07em", textTransform: "uppercase", color: colors.fg }}>{label}</div>
     <div style={{ marginTop: 6, fontSize: "1.15rem", fontWeight: 780, letterSpacing: "-.03em", color: cockpitColors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>

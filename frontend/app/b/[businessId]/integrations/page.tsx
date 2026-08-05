@@ -7,6 +7,7 @@ import { liveIntegrationAvailability } from "@/lib/server/liveIntegrations";
 import ConnectionsRenderer from "@/components/connections/ConnectionsRenderer";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
+import { brand, cockpitColors } from "@/design/tokens";
 import {
   PACKAGE_ASK_OPTION_TO_CONNECTION,
   resolvePackageAskConnectionOptions,
@@ -71,49 +72,36 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ b
     });
     markRequestTiming("VIEW_MODEL", { bytes: JSON.stringify(viewModel).length });
 
+    const tipBanner = {
+      borderRadius: 12,
+      border: `1px solid ${cockpitColors.panelBorder}`,
+      background: cockpitColors.panelElevated,
+      color: cockpitColors.textPrimary,
+      padding: "10px 14px",
+      fontSize: 13,
+      display: "flex",
+      flexWrap: "wrap" as const,
+      gap: 8,
+      alignItems: "center",
+      justifyContent: "space-between",
+    };
+    const tipLink = { fontWeight: 800, color: brand.cyan, textDecoration: "none" as const };
+
     return (
       <div style={{ display: "grid", gap: 12 }}>
-        <div
-          style={{
-            borderRadius: 12,
-            border: "1px solid rgba(15,118,110,0.25)",
-            background: "linear-gradient(90deg, #ecfdf5, #fff)",
-            padding: "10px 14px",
-            fontSize: 13,
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <span>Reconnected Gmail? Sync recent inbox messages (read-only, manual sync).</span>
-          <Link
-            href={`/b/${encodeURIComponent(businessId)}/integrations/gmail/inbox`}
-            style={{ fontWeight: 800, color: "#0f766e", textDecoration: "none" }}
-          >
+        <div style={tipBanner}>
+          <span style={{ color: cockpitColors.textSecondary }}>
+            Reconnected Gmail? Sync recent inbox messages (read-only, manual sync).
+          </span>
+          <Link href={`/b/${encodeURIComponent(businessId)}/integrations/gmail/inbox`} style={tipLink}>
             Open Gmail inbox →
           </Link>
         </div>
-        <div
-          style={{
-            borderRadius: 12,
-            border: "1px solid rgba(15,118,110,0.25)",
-            background: "linear-gradient(90deg, #ecfdf5, #fff)",
-            padding: "10px 14px",
-            fontSize: 13,
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <span>Running Meta, Google, or TikTok ads? See spend, clicks, and campaigns in-platform.</span>
-          <Link
-            href={`/b/${encodeURIComponent(businessId)}/ads`}
-            style={{ fontWeight: 800, color: "#0f766e", textDecoration: "none" }}
-          >
+        <div style={tipBanner}>
+          <span style={{ color: cockpitColors.textSecondary }}>
+            Running Meta, Google, or TikTok ads? See spend, clicks, and campaigns in-platform.
+          </span>
+          <Link href={`/b/${encodeURIComponent(businessId)}/ads`} style={tipLink}>
             Open Ad performance →
           </Link>
         </div>

@@ -13,7 +13,7 @@ import {
   VtPanel,
   vtInputStyle,
 } from "@/components/product/VtChrome";
-import { cockpitColors } from "@/design/tokens";
+import { cockpitColors, brand } from "@/design/tokens";
 
 import type { SpecialtyArtifactPreview } from "@/components/specialty/SpecialtyDeliverableView";
 import { describeHowAutomationStarts } from "../../../backend/core/ai-builder/specialty/triggerHowItStarts.js";
@@ -502,7 +502,7 @@ export default function SpecialtySurfaceExperience({ model }: { model: Specialty
                     padding: "12px 14px",
                     borderRadius: 12,
                     border: `1px solid ${cockpitColors.panelBorder}`,
-                    background: "#fff",
+                    background: cockpitColors.panel,
                   }}
                 >
                   <div style={{ fontWeight: 800 }}>{entry.title}</div>
@@ -551,7 +551,7 @@ export default function SpecialtySurfaceExperience({ model }: { model: Specialty
                     padding: "12px 14px",
                     borderRadius: 12,
                     border: `1px solid ${cockpitColors.panelBorder}`,
-                    background: "#fff",
+                    background: cockpitColors.panel,
                   }}
                 >
                   <div style={{ minWidth: 0 }}>
@@ -726,7 +726,7 @@ const topBar: CSSProperties = {
   padding: "16px 18px",
   borderRadius: 16,
   border: `1px solid ${cockpitColors.panelBorder}`,
-  background: "#fff",
+  background: cockpitColors.panel,
   boxShadow: "0 4px 16px rgba(28,25,23,0.05)",
 };
 
@@ -759,7 +759,7 @@ const chatPane: CSSProperties = {
   padding: 14,
   borderRadius: 16,
   border: `1px solid ${cockpitColors.panelBorder}`,
-  background: "linear-gradient(180deg, #f8faf9 0%, #fff 40%)",
+  background: cockpitColors.panel,
   minHeight: 520,
   position: "sticky",
   top: 12,
@@ -778,19 +778,20 @@ const chatScroll: CSSProperties = {
 const pathPane: CSSProperties = {
   borderRadius: 16,
   border: `1px solid ${cockpitColors.panelBorder}`,
-  background: "#f4f4f5",
-  backgroundImage: "radial-gradient(rgba(28,25,23,0.08) 1px, transparent 1px)",
+  background: cockpitColors.inset,
+  backgroundImage: "radial-gradient(rgba(148,163,184,0.12) 1px, transparent 1px)",
   backgroundSize: "16px 16px",
   padding: "28px 18px 40px",
   minHeight: 520,
+  color: cockpitColors.textPrimary,
 };
 
 function tabChip(active: boolean): CSSProperties {
   return {
     borderRadius: 999,
     border: active ? `2px solid ${cockpitColors.accent}` : `1px solid ${cockpitColors.panelBorder}`,
-    background: active ? "linear-gradient(180deg, #0f766e, #115e59)" : "#fff",
-    color: active ? "#fff" : cockpitColors.textPrimary,
+    background: active ? brand.primaryGradient : cockpitColors.panel,
+    color: active ? brand.primaryOnGradient : cockpitColors.textPrimary,
     fontWeight: 900,
     fontSize: 12,
     letterSpacing: "0.06em",

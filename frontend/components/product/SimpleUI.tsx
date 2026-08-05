@@ -67,7 +67,7 @@ export function NextBanner({
 
 export function SimpleEmpty({ children = "Nothing here yet." }: { children?: ReactNode }) {
   return (
-    <div style={{ padding: "28px 20px", color: cockpitColors.textMuted, fontSize: 15, fontWeight: 600 }}>
+    <div style={{ padding: "28px 20px", color: cockpitColors.textSecondary, fontSize: 15, fontWeight: 600 }}>
       {children}
     </div>
   );
@@ -76,7 +76,7 @@ export function SimpleEmpty({ children = "Nothing here yet." }: { children?: Rea
 /** Compact empty copy for dense dashboard panels — not a tall placeholder block. */
 export function SimpleEmptyLine({ children }: { children: ReactNode }) {
   return (
-    <div style={{ padding: "14px 18px", color: cockpitColors.textMuted, fontSize: 14, fontWeight: 600, lineHeight: 1.45 }}>
+    <div style={{ padding: "14px 18px", color: cockpitColors.textSecondary, fontSize: 14, fontWeight: 600, lineHeight: 1.45 }}>
       {children}
     </div>
   );

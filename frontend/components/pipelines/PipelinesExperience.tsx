@@ -531,7 +531,7 @@ export default function PipelinesExperience({ businessId }: { businessId: string
                 fontSize: 12,
                 fontWeight: 750,
                 color: cockpitColors.textPrimary,
-                background: "#fff",
+                background: cockpitColors.panel,
               }}
             >
               <span
@@ -765,8 +765,8 @@ export default function PipelinesExperience({ businessId }: { businessId: string
                             borderRadius: 12,
                             border: `1px solid ${isEditing ? accent : "rgba(28,25,23,0.1)"}`,
                             background: card.ownerUserId
-                              ? `linear-gradient(165deg, #fff, ${accent}14)`
-                              : "linear-gradient(165deg, #fff, #f0fdfa)",
+                              ? `linear-gradient(165deg, ${cockpitColors.panel}, ${accent}22)`
+                              : cockpitColors.panel,
                             padding: "11px 12px",
                             cursor: isEditing ? "text" : "grab",
                             boxShadow: "0 6px 16px rgba(28,25,23,0.06)",
@@ -814,7 +814,7 @@ export default function PipelinesExperience({ businessId }: { businessId: string
                                       padding: "6px 8px",
                                       fontSize: 12,
                                       fontWeight: 650,
-                                      background: "#fff",
+                                      background: cockpitColors.panel,
                                     }}
                                     aria-label="Linked contact"
                                   >
@@ -834,7 +834,7 @@ export default function PipelinesExperience({ businessId }: { businessId: string
                                       padding: "6px 8px",
                                       fontSize: 12,
                                       fontWeight: 650,
-                                      background: "#fff",
+                                      background: cockpitColors.panel,
                                     }}
                                     aria-label="Sales owner"
                                   >
@@ -1100,7 +1100,7 @@ const stageRemoveBtn: CSSProperties = {
   height: 24,
   borderRadius: 8,
   border: `1px solid ${cockpitColors.panelBorder}`,
-  background: "#fff",
+  background: cockpitColors.panel,
   color: cockpitColors.textMuted,
   fontWeight: 900,
   fontSize: 16,

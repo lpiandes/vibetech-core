@@ -62,8 +62,9 @@ export default function InboxCrmContactLink({
         padding: "10px 12px",
         borderRadius: 10,
         border: `1px solid ${cockpitColors.panelBorder}`,
-        background: "linear-gradient(90deg, #ecfdf5, #fff)",
+        background: cockpitColors.panelElevated,
         fontSize: 13,
+        color: cockpitColors.textPrimary,
       }}
     >
       {match ? (

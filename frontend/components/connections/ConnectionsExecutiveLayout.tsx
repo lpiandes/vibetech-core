@@ -82,7 +82,7 @@ function IntegrationRow({
           <StatusBadge label={status.label} tone={status.tone} />
         </div>
         {blocker ? (
-          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 4 }}>
+          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, marginTop: 4 }}>
             {blocker}
           </div>
         ) : null}
@@ -264,9 +264,9 @@ export default function ConnectionsExecutiveLayout() {
           style={{
             padding: spacing.md,
             borderRadius: radius.medium,
-            border: "1px solid #fcd34d",
-            backgroundColor: "#fffbeb",
-            color: "#92400e",
+            border: "1px solid rgba(251,191,36,0.35)",
+            backgroundColor: "rgba(251,191,36,0.12)",
+            color: "#fbbf24",
             fontSize: typography.caption.fontSize,
             lineHeight: 1.55,
             display: "grid",
@@ -274,7 +274,7 @@ export default function ConnectionsExecutiveLayout() {
           }}
         >
           <div style={{ fontWeight: 750, fontSize: 15 }}>Google access denied</div>
-          <div>Add a test user in Google Cloud, or connect locally.</div>
+          <div style={{ color: cockpitColors.textSecondary }}>Add a test user in Google Cloud, or connect locally.</div>
           <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap", alignItems: "center" }}>
             <PrimaryButton onClick={() => void connectEmailLocally()} disabled={localConnecting}>
               {localConnecting ? "…" : "Connect email here"}
@@ -287,9 +287,9 @@ export default function ConnectionsExecutiveLayout() {
           style={{
             padding: spacing.md,
             borderRadius: radius.medium,
-            border: `1px solid #fecaca`,
-            backgroundColor: "#fef2f2",
-            color: "#991b1b",
+            border: `1px solid rgba(248,113,113,0.35)`,
+            backgroundColor: "rgba(248,113,113,0.12)",
+            color: cockpitColors.critical,
             fontSize: typography.caption.fontSize,
             lineHeight: 1.5,
           }}
@@ -302,9 +302,9 @@ export default function ConnectionsExecutiveLayout() {
           style={{
             padding: spacing.md,
             borderRadius: radius.medium,
-            border: `1px solid #bbf7d0`,
-            backgroundColor: "#f0fdf4",
-            color: "#166534",
+            border: `1px solid rgba(52,211,153,0.35)`,
+            backgroundColor: "rgba(52,211,153,0.12)",
+            color: cockpitColors.handled,
             fontSize: typography.caption.fontSize,
             lineHeight: 1.5,
           }}
@@ -317,9 +317,9 @@ export default function ConnectionsExecutiveLayout() {
           style={{
             padding: spacing.md,
             borderRadius: radius.medium,
-            border: `1px solid rgba(15,118,110,.25)`,
-            backgroundColor: "#f0fdfa",
-            color: "#0f766e",
+            border: `1px solid ${cockpitColors.panelBorder}`,
+            backgroundColor: cockpitColors.panelElevated,
+            color: cockpitColors.textPrimary,
             fontSize: typography.caption.fontSize,
             lineHeight: 1.5,
           }}

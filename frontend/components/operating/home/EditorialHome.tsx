@@ -278,7 +278,7 @@ export function MetricStrip({
 
 function metricVisual(label: string, tone?: "default" | "attention" | "good") {
   const normalized = String(label).toLowerCase();
-  if (tone === "attention" || /need|attention|waiting|approval/.test(normalized)) return { icon: CircleAlert, color: "#b45309", background: "#fff3dd" };
+  if (tone === "attention" || /need|attention|waiting|approval/.test(normalized)) return { icon: CircleAlert, color: "#fbbf24", background: "rgba(251,191,36,0.14)" };
   if (/team|teammate|employee/.test(normalized)) return { icon: UsersRound, color: "#7c3aed", background: "#f1eaff" };
   if (/work|motion|active|deal|showing/.test(normalized)) return { icon: BriefcaseBusiness, color: "#047857", background: "#e5f7ef" };
   if (/inquir|lead|people|conversation|message/.test(normalized)) return { icon: Mail, color: "#2563eb", background: "#e8f1ff" };
@@ -483,7 +483,7 @@ export function ActivityItem({
 }) {
   const visuals = [
     { icon: Activity, color: "#2563eb", background: "#e8f1ff" },
-    { icon: ClipboardCheck, color: "#d97706", background: "#fff3dd" },
+    { icon: ClipboardCheck, color: "#fbbf24", background: "rgba(251,191,36,0.14)" },
     { icon: CheckCircle2, color: "#059669", background: "#e5f7ef" },
     { icon: UsersRound, color: "#7c3aed", background: "#f1eaff" },
     { icon: Mail, color: "#dc2626", background: "#ffe9e8" },

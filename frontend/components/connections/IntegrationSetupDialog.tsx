@@ -401,9 +401,9 @@ export default function IntegrationSetupDialog({
             style={{
               padding: spacing.md,
               borderRadius: 8,
-              backgroundColor: "#fffbeb",
-              border: "1px solid #fcd34d",
-              color: "#92400e",
+              backgroundColor: "rgba(251,191,36,0.12)",
+              border: "1px solid rgba(251,191,36,0.35)",
+              color: "#fbbf24",
               fontSize: typography.caption.fontSize,
               lineHeight: 1.45,
             }}
@@ -995,11 +995,12 @@ export default function IntegrationSetupDialog({
                     borderRadius: 10,
                     border: `1px solid ${cockpitColors.panelBorder}`,
                     background: "#fafaf9",
+                    color: cockpitColors.inkOnLight,
                   }}>
-                    <p style={{ margin: 0 }}>
+                    <p style={{ margin: 0, color: cockpitColors.inkOnLight }}>
                       You should <strong>not</strong> use Meta Developers or Graph API. Most businesses already have a Facebook Page — just put the name below. If you have no Facebook Page or Lead Ads yet, say so and we’ll set that up with you.
                     </p>
-                    <p style={{ margin: "10px 0 0" }}>
+                    <p style={{ margin: "10px 0 0", color: cockpitColors.inkMutedOnLight }}>
                       After we’re done, new Lead Ad submissions land in <strong>People</strong> and fire <strong>META_LEAD</strong> automations (drafts until you GRANT).
                     </p>
                   </div>
@@ -1013,8 +1014,9 @@ export default function IntegrationSetupDialog({
                       padding: 10,
                       borderRadius: 10,
                       border: `1px solid ${metaForm.startingPoint === "have_page" ? cockpitColors.accent : cockpitColors.panelBorder}`,
-                      background: metaForm.startingPoint === "have_page" ? "#f0fdfa" : "#fff",
+                      background: metaForm.startingPoint === "have_page" ? cockpitColors.accentMuted : cockpitColors.panel,
                       cursor: "pointer",
+                      color: cockpitColors.textPrimary,
                     }}>
                       <input
                         type="radio"
@@ -1039,8 +1041,9 @@ export default function IntegrationSetupDialog({
                       padding: 10,
                       borderRadius: 10,
                       border: `1px solid ${metaForm.startingPoint === "need_everything" ? cockpitColors.accent : cockpitColors.panelBorder}`,
-                      background: metaForm.startingPoint === "need_everything" ? "#f0fdfa" : "#fff",
+                      background: metaForm.startingPoint === "need_everything" ? cockpitColors.accentMuted : cockpitColors.panel,
                       cursor: "pointer",
+                      color: cockpitColors.textPrimary,
                     }}>
                       <input
                         type="radio"

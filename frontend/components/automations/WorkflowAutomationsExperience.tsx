@@ -411,7 +411,8 @@ export default function WorkflowAutomationsExperience({
                 padding={12}
                 style={{
                   border: `1px solid ${selectedId === wf.id ? cockpitColors.accent : cockpitColors.panelBorder}`,
-                  background: selectedId === wf.id ? "linear-gradient(165deg, #ecfdf5, #fff)" : "#fff",
+                  background: selectedId === wf.id ? cockpitColors.accentMuted : cockpitColors.panel,
+                  color: cockpitColors.textPrimary,
                 }}
               >
                 <button
@@ -598,7 +599,8 @@ export default function WorkflowAutomationsExperience({
                     maxWidth: "95%",
                     padding: "10px 12px",
                     borderRadius: 12,
-                    background: msg.role === "user" ? "linear-gradient(165deg, #ecfdf5, #d1fae5)" : "#f8fafc",
+                    background: msg.role === "user" ? cockpitColors.accentMuted : cockpitColors.panelElevated,
+                    color: cockpitColors.textPrimary,
                     border: `1px solid ${cockpitColors.panelBorder}`,
                     fontSize: 13,
                     fontWeight: 650,

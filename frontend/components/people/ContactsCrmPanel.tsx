@@ -502,15 +502,15 @@ export default function ContactsCrmPanel({
                   borderRadius: 12,
                   border: `1px solid ${selectedId === c.id ? cockpitColors.accent : cockpitColors.panelBorder}`,
                   background: selectedId === c.id
-                    ? "linear-gradient(165deg, #ecfdf5, #fff)"
-                    : "linear-gradient(180deg, #fff, #fafaf9)",
+                    ? cockpitColors.accentMuted
+                    : cockpitColors.panel,
+                  color: cockpitColors.textPrimary,
                   padding: 12,
                   cursor: "pointer",
-                  borderLeft: `3px solid ${cockpitColors.accent}`,
                   font: "inherit",
                 }}
               >
-                <div style={{ fontWeight: 800 }}>{c.name}</div>
+                <div style={{ fontWeight: 800, color: cockpitColors.textPrimary }}>{c.name}</div>
                 <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: cockpitColors.accent, marginTop: 4 }}>
                   {c.kind || "lead"}
                 </div>
@@ -544,7 +544,7 @@ export default function ContactsCrmPanel({
                     justifyContent: "center",
                     borderRadius: 12,
                     border: "2px solid rgba(28,25,23,0.22)",
-                    backgroundColor: "#fff",
+                    backgroundColor: cockpitColors.panel,
                     color: cockpitColors.textPrimary,
                     fontSize: 14,
                     fontWeight: 800,
@@ -579,7 +579,7 @@ export default function ContactsCrmPanel({
                   <div style={{ marginTop: 6, fontSize: 13, color: cockpitColors.textMuted, fontWeight: 700 }}>Not on a board</div>
                 ) : (
                   relatedCards.map((c) => (
-                    <div key={c.id} style={{ marginTop: 6, padding: 10, borderRadius: 10, border: `1px solid ${cockpitColors.panelBorder}`, background: "#fff" }}>
+                    <div key={c.id} style={{ marginTop: 6, padding: 10, borderRadius: 10, border: `1px solid ${cockpitColors.panelBorder}`, background: cockpitColors.panel }}>
                       <div style={{ fontWeight: 800 }}>{c.title}</div>
                       <div style={{ fontSize: 12, color: cockpitColors.textSecondary }}>{c.pipelineName} · {c.stageLabel}</div>
                     </div>

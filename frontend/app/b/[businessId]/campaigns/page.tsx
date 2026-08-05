@@ -116,7 +116,7 @@ export default function CampaignLitePage() {
         padding: 16,
         display: "grid",
         gap: 10,
-        background: "#fff",
+        background: cockpitColors.panel,
       }}
       >
         <input
@@ -178,7 +178,7 @@ export default function CampaignLitePage() {
                     border: `1px solid ${cockpitColors.panelBorder}`,
                     borderRadius: 12,
                     padding: 14,
-                    background: "#fff",
+                    background: cockpitColors.panel,
                     display: "grid",
                     gap: 8,
                   }}

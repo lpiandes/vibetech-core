@@ -3,9 +3,9 @@ import { cockpitColors, typography, radius } from "@/design/tokens";
 export type StatusBadgeTone = "neutral" | "success" | "warning" | "info";
 
 const TONE_STYLES: Record<StatusBadgeTone, { bg: string; color: string }> = {
-  neutral: { bg: cockpitColors.panelElevated, color: cockpitColors.textMuted },
-  success: { bg: "rgba(34,197,94,0.12)", color: "#15803d" },
-  warning: { bg: "rgba(245,158,11,0.12)", color: "#b45309" },
+  neutral: { bg: cockpitColors.panelElevated, color: cockpitColors.textSecondary },
+  success: { bg: "rgba(52,211,153,0.14)", color: "#6ee7b7" },
+  warning: { bg: "rgba(251,191,36,0.14)", color: "#fbbf24" },
   info: { bg: cockpitColors.accentMuted, color: cockpitColors.accent },
 };
 

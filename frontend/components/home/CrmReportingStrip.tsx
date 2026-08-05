@@ -113,7 +113,7 @@ function QuickLink({ href, children }: { href: string; children: React.ReactNode
         padding: "8px 12px",
         borderRadius: 10,
         border: `1px solid ${cockpitColors.panelBorder}`,
-        background: "linear-gradient(180deg, #fff, #f5f5f4)",
+        background: cockpitColors.panel,
         color: cockpitColors.textPrimary,
         textDecoration: "none",
         fontSize: 11,

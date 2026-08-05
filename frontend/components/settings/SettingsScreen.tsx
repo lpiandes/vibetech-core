@@ -125,8 +125,8 @@ export default function SettingsScreen({
               justifyContent: "space-between",
               padding: "16px 18px",
               borderRadius: 16,
-              background: "#fff",
-              border: "1px solid rgba(15,23,42,.08)",
+              background: cockpitColors.panel,
+              border: `1px solid ${cockpitColors.panelBorder}`,
               textDecoration: "none",
               color: cockpitColors.textPrimary,
               fontWeight: 750,
@@ -151,8 +151,8 @@ export default function SettingsScreen({
                 justifyContent: "space-between",
                 padding: "16px 18px",
                 borderRadius: 16,
-                background: "#fff",
-                border: "1px solid rgba(15,23,42,.08)",
+                background: cockpitColors.panel,
+                border: `1px solid ${cockpitColors.panelBorder}`,
                 textDecoration: "none",
                 color: cockpitColors.textPrimary,
                 fontWeight: 750,
@@ -172,8 +172,8 @@ export default function SettingsScreen({
           style={{
             padding: 16,
             borderRadius: 16,
-            background: "#fff",
-            border: "1px solid rgba(15,23,42,.08)",
+            background: cockpitColors.panel,
+            border: `1px solid ${cockpitColors.panelBorder}`,
           }}
         >
           <AccessRequestsPanel />
@@ -184,8 +184,8 @@ export default function SettingsScreen({
         style={{
           padding: 16,
           borderRadius: 16,
-          background: "#fff",
-          border: "1px solid rgba(15,23,42,.08)",
+          background: cockpitColors.panel,
+          border: `1px solid ${cockpitColors.panelBorder}`,
         }}
       >
         <BillingUsagePanel businessId={businessId} purchasedPackages={purchasedPackages} />

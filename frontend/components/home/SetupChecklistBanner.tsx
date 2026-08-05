@@ -54,7 +54,7 @@ export default function SetupChecklistBanner({
           padding: "16px 18px",
           borderRadius: 16,
           border: "1px solid rgba(15,118,110,.18)",
-          background: "linear-gradient(110deg, #f0fdfa 0%, #ffffff 48%, #eff6ff 100%)",
+          background: cockpitColors.panelElevated,
           boxShadow: "0 8px 22px rgba(15,118,110,.07)",
         }}
       >
@@ -68,7 +68,7 @@ export default function SetupChecklistBanner({
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", color: cockpitColors.accent, textTransform: "uppercase" }}>Launch path</span>
-              <span style={{ padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, color: "#0f766e", background: "rgba(13,148,136,.10)" }}>{level}</span>
+              <span style={{ padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, color: cockpitColors.accent, background: cockpitColors.accentMuted }}>{level}</span>
             </div>
             <div style={{ marginTop: 4, fontWeight: 750, fontSize: "1rem", color: cockpitColors.textPrimary }}>
               Mission {nextStepNumber}: {nextItem?.title}
@@ -105,7 +105,7 @@ export default function SetupChecklistBanner({
         padding: spacing.lg,
         borderRadius: radius.large,
         border: `1px solid rgba(15, 118, 110, 0.18)`,
-        background: "linear-gradient(165deg, #ffffff 0%, #f3faf8 48%, #ffffff 100%)",
+        background: cockpitColors.panel,
         boxShadow: "0 1px 2px rgba(15,23,42,0.04), 0 12px 28px rgba(15,118,110,0.06)",
         display: "grid",
         gap: spacing.md,
@@ -277,7 +277,7 @@ const actionLinkStyle: CSSProperties = {
   fontSize: typography.caption.fontSize,
   fontWeight: 600,
   flexShrink: 0,
-  background: "#fff",
+  background: cockpitColors.panel,
 };
 
 const viewAllLinkStyle: CSSProperties = {

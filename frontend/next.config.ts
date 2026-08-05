@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
     // Next 15 defaults dynamic soft-nav cache to 0s — every tab click re-fetched.
     // Keep recently visited business pages warm so switching back is instant.
     staleTimes: {
-      dynamic: 30,
+      dynamic: 60,
       static: 180,
     },
   },

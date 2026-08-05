@@ -91,7 +91,7 @@ export default function CompanyRulesExperience({
                   padding: spacing.md,
                   borderRadius: radius.medium,
                   border: `1px solid ${cockpitColors.panelBorder}`,
-                  background: "#fff",
+                  background: cockpitColors.panel,
                   display: "grid",
                   gap: spacing.xs,
                 }}

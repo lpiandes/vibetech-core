@@ -377,7 +377,7 @@ function BriefingPanel({
   const top = briefing?.topRecommendation;
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ ...panel, background: "linear-gradient(180deg, #fff 0%, #F3F7F6 100%)" }}>
+      <div style={{ ...panel, background: cockpitColors.panel }}>
         <h2 style={serifTitle}>{briefing?.headline ?? "Executive Briefing"}</h2>
         <p style={{ margin: "8px 0 0", color: cockpitColors.textSecondary, lineHeight: 1.55, maxWidth: 720 }}>
           {briefing?.summary}

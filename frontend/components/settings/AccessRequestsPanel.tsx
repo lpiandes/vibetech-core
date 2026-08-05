@@ -87,11 +87,11 @@ export default function AccessRequestsPanel() {
   return (
     <div style={{ display: "grid", gap: spacing.md }}>
       <div>
-        <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Access requests</h2>
+        <h2 style={{ margin: 0, fontSize: "1.2rem", color: cockpitColors.textPrimary }}>Access requests</h2>
       </div>
       {error ? <ProductErrorBanner error={error} /> : null}
       {success ? (
-        <div role="status" style={{ ...card, borderColor: "rgba(15,118,110,.35)", color: "#0F766E", fontWeight: 650 }}>
+        <div role="status" style={{ ...card, borderColor: "rgba(34,211,238,.35)", color: cockpitColors.accent, fontWeight: 650 }}>
           {success}
         </div>
       ) : null}

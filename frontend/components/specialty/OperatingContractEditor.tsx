@@ -411,7 +411,7 @@ const sheetStyle = {
   padding: "12px 14px",
   borderRadius: 14,
   border: `1px solid ${cockpitColors.panelBorder}`,
-  background: "linear-gradient(180deg, #ffffff 0%, #f7f6f3 100%)",
+  background: cockpitColors.panel,
   display: "grid",
   gap: 8,
 } as const;
@@ -433,7 +433,7 @@ const statChip = {
   padding: "10px 12px",
   borderRadius: 12,
   border: `1px solid ${cockpitColors.panelBorder}`,
-  background: "#fff",
+  background: cockpitColors.panel,
   minHeight: 72,
 } as const;
 

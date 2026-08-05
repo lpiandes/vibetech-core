@@ -14,7 +14,7 @@ const fieldStyle = {
   fontSize: 15,
   fontFamily: "inherit" as const,
   color: cockpitColors.textPrimary,
-  background: "#fff",
+  background: cockpitColors.panel,
   width: "100%",
   boxSizing: "border-box" as const,
 };
@@ -176,7 +176,7 @@ export default function CreateBusinessModal({
               style={{
                 border: `1px solid ${cockpitColors.panelBorder}`,
                 borderRadius: 12,
-                background: "#fff",
+                background: cockpitColors.panel,
                 padding: "12px 14px",
                 display: "grid",
                 gap: 4,

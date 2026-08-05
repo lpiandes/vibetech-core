@@ -66,7 +66,7 @@ export default function GlobalAskVibeTechEntry({
         whiteSpace: "nowrap",
         border: "none",
         outline: "none",
-        boxShadow: brand.primaryShadow,
+        boxShadow: "0 8px 32px rgba(34, 211, 238, 0.25)",
         opacity: active ? 0.92 : 1,
       }}
     >

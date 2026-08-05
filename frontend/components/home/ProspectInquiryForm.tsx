@@ -80,8 +80,8 @@ export default function ProspectInquiryForm({
             padding: spacing.md,
             borderRadius: radius.large,
             border: `1px solid ${emailSent ? "#bbf7d0" : "#fde68a"}`,
-            backgroundColor: emailSent ? "#f0fdf4" : "#fffbeb",
-            color: emailSent ? "#166534" : "#92400e",
+            backgroundColor: emailSent ? "rgba(52,211,153,0.12)" : "rgba(251,191,36,0.12)",
+            color: emailSent ? cockpitColors.handled : cockpitColors.waiting,
             fontSize: typography.body.fontSize,
             lineHeight: 1.5,
           }}

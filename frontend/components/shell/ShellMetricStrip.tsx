@@ -56,7 +56,7 @@ export default function ShellMetricStrip({ metrics }: { metrics: ShellMetric[] }
 
 function metricVisual(label: string) {
   const value = label.toLowerCase();
-  if (/need|blocked|overdue|attention|setup/.test(value)) return { icon: CircleAlert, color: "#c2410c", background: "#fff0df" };
+  if (/need|blocked|overdue|attention|setup/.test(value)) return { icon: CircleAlert, color: "#fbbf24", background: "rgba(251,191,36,0.14)" };
   if (/ready|connected|complete|sent|working/.test(value)) return { icon: CheckCircle2, color: "#047857", background: "#e5f7ef" };
   if (/team|people|employee/.test(value)) return { icon: UsersRound, color: "#7c3aed", background: "#f1eaff" };
   if (/knowledge|document/.test(value)) return { icon: FileText, color: "#2563eb", background: "#e8f1ff" };

@@ -175,6 +175,20 @@
   opacity: 1;
 }
 
+/*
+ * Contrast lock — light surfaces must use dark ink.
+ * Catches leftover white / mint / cream panels that still inherit shell light text.
+ * Explicit per-element colors still win when set without !important.
+ */
+.vt-shell-main [data-surface="light"],
+.vt-shell-main .vt-light-surface {
+  color: #0f172a !important;
+}
+.vt-shell-main [data-surface="light"] a,
+.vt-shell-main .vt-light-surface a {
+  color: #0f766e !important;
+}
+
 /* Mobile FAB clearance — avoid covering primary actions */
 @media (max-width: 767px) {
   .vt-shell-main {

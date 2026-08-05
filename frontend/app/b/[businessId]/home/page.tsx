@@ -25,12 +25,12 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
   return runTimedPage("home", async () => {
     const ctx = await getAuthorizedWorkspace(businessId);
 
-    // Maintenance that used to block EVERY soft navigation — only on Home now.
-    await Promise.all([
+    // Maintenance must never block first paint / login. Fire-and-forget on Home only.
+    void Promise.all([
       ctx.service.reconcileHistoricalSubjectInterestsIfNeeded().catch(() => null),
       ctx.service.materializeDueRecurringCampaignOperationsIfNeeded().catch(() => null),
     ]);
-    markRequestTiming("HOME_MAINTENANCE");
+    markRequestTiming("HOME_MAINTENANCE_QUEUED");
 
     let hasInstalledOs = false;
     let installedSpecification: Record<string, unknown> | null = null;
@@ -62,7 +62,10 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       hasInstalledOs = false;
     }
 
-    const knowledgeDocumentCount = await platformStore.countActiveKnowledgeDocuments(businessId);
+    const [knowledgeDocumentCount, teamInviteChecklistComplete] = await Promise.all([
+      platformStore.countActiveKnowledgeDocuments(businessId),
+      platformStore.isTeamInviteChecklistComplete(businessId),
+    ]);
     markRequestTiming("KNOWLEDGE_DB");
 
     const businessName = String(
@@ -76,7 +79,12 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       ?? (installedSpecification as any)?.businessProfile?.industry
       ?? "",
     );
-    const reconciled = hasInstalledOs
+    const existingEmployees = Array.isArray(installation?.configuration?.employees)
+      ? installation.configuration.employees
+      : [];
+    // Cold-login speed: skip workforce/contract DB heal when employees already exist.
+    const needsWorkforceHeal = hasInstalledOs && existingEmployees.length === 0;
+    const reconciled = needsWorkforceHeal
       ? await reconcilePackWorkforce({
         platformStore,
         businessId,
@@ -90,9 +98,14 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
           ?? "",
         ),
       })
-      : { employees: [], healed: false, added: 0, industry: null };
+      : {
+        employees: existingEmployees,
+        healed: false,
+        added: 0,
+        industry: industry || null,
+      };
 
-    const contractReconcile = hasInstalledOs
+    const contractReconcile = needsWorkforceHeal
       ? await reconcileOperatingContracts({
         platformStore,
         businessId,
@@ -107,7 +120,12 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
         industry: reconciled.industry ?? industry,
         businessName,
       })
-      : { employees: [], healed: false, updated: 0, industry: null };
+      : {
+        employees: Array.isArray(reconciled.employees) ? reconciled.employees : existingEmployees,
+        healed: false,
+        updated: 0,
+        industry: (reconciled.industry ?? industry) || null,
+      };
 
     const bosEmployees = mergeBosEmployeesForTeam({
       configuration: {
@@ -126,7 +144,7 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
 
     const home = ctx.service.loadBusinessHomeViewModel({
       activeKnowledgeDocumentCount: knowledgeDocumentCount,
-      teamInviteChecklistComplete: await platformStore.isTeamInviteChecklistComplete(businessId),
+      teamInviteChecklistComplete,
       installedSpecification,
     });
     markRequestTiming("VIEW_MODEL", { bytes: JSON.stringify(home).length });

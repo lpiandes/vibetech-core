@@ -425,7 +425,7 @@ export default function ProspectingFindLeadsPanel({
                         padding: 12,
                         borderRadius: 12,
                         border: `1px solid ${cockpitColors.panelBorder}`,
-                        background: c.status === "accepted" ? "#ecfdf5" : c.status === "rejected" ? "#f8fafc" : "#fff",
+                        background: c.status === "accepted" ? "rgba(52,211,153,0.12)" : c.status === "rejected" ? cockpitColors.panelElevated : cockpitColors.panel,
                         opacity: c.status === "duplicate" ? 0.7 : 1,
                       }}
                     >

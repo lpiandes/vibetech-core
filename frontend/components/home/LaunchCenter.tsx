@@ -518,7 +518,7 @@ export default function LaunchCenter({
             borderRadius: 12,
             border: `1px solid ${flash.tone === "error" ? "#fecaca" : "#a7f3d0"}`,
             background: flash.tone === "error" ? "#fef2f2" : "#ecfdf5",
-            color: flash.tone === "error" ? "#991b1b" : "#065f46",
+            color: flash.tone === "error" ? cockpitColors.critical : cockpitColors.handled,
             padding: "14px 16px",
             fontSize: 14,
             fontWeight: 650,
@@ -762,11 +762,11 @@ export default function LaunchCenter({
                 padding: "16px 18px",
                 borderRadius: 18,
                 background: done
-                  ? "linear-gradient(135deg, rgba(16,185,129,.08), #fff 42%)"
+                  ? `linear-gradient(135deg, rgba(52,211,153,.14), ${cockpitColors.panel})`
                   : pendingOps
-                    ? "linear-gradient(135deg, rgba(59,130,246,.08), #fff 48%)"
+                    ? `linear-gradient(135deg, rgba(56,189,248,.14), ${cockpitColors.panel})`
                   : deferred
-                    ? "linear-gradient(135deg, rgba(245,158,11,.10), #fff 48%)"
+                    ? `linear-gradient(135deg, rgba(251,191,36,.14), ${cockpitColors.panel})`
                     : "#fff",
                 border: `1px solid ${done
                   ? "rgba(16,185,129,.28)"
@@ -1194,7 +1194,7 @@ const ctaButtonStyle: CSSProperties = {
   gap: 10,
   padding: "13px 18px",
   borderRadius: 14,
-  background: "#fff",
+  background: cockpitColors.panel,
   color: "#0f766e",
   fontWeight: 800,
   fontSize: 15,

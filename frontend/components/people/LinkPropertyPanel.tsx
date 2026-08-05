@@ -156,7 +156,7 @@ export default function LinkPropertyPanel({
                   padding: "8px 10px",
                   border: `1px solid ${cockpitColors.panelBorder}`,
                   borderRadius: radius.medium,
-                  background: "#fff",
+                  background: cockpitColors.panel,
                 }}
               >
                 <Link
@@ -173,7 +173,7 @@ export default function LinkPropertyPanel({
                     border: `1px solid ${cockpitColors.panelBorder}`,
                     borderRadius: 8,
                     padding: "4px 8px",
-                    background: "#fff",
+                    background: cockpitColors.panel,
                     fontSize: 12,
                     fontWeight: 700,
                     cursor: busy ? "not-allowed" : "pointer",
@@ -246,7 +246,7 @@ const inputStyle: CSSProperties = {
   font: "inherit",
   fontWeight: 600,
   color: cockpitColors.textPrimary,
-  background: "#fff",
+  background: cockpitColors.panel,
 };
 
 function buttonStyle(enabled: boolean): CSSProperties {

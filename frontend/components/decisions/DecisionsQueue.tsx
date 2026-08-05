@@ -113,7 +113,7 @@ export default function DecisionsQueue({
             padding: spacing.sm,
             borderRadius: radius.medium,
             border: `1px solid ${semanticColors.criticalBorder ?? "#fecaca"}`,
-            backgroundColor: "#fef2f2",
+            backgroundColor: "rgba(248,113,113,0.12)",
             color: cockpitColors.critical ?? "#b91c1c",
             fontSize: 13,
             fontWeight: 650,

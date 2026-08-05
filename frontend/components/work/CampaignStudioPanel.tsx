@@ -436,7 +436,7 @@ export default function CampaignStudioPanel({
             <input value={signature} onChange={(e) => setSignature(e.target.value)} style={inputStyle} />
           </label>
 
-          <div style={{ display: "grid", gap: 8, padding: 12, borderRadius: radius.medium, border: `1px solid ${cockpitColors.panelBorder}`, background: "#fafaf9" }}>
+          <div style={{ display: "grid", gap: 8, padding: 12, borderRadius: radius.medium, border: `1px solid ${cockpitColors.panelBorder}`, background: cockpitColors.panelElevated }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: cockpitColors.textPrimary }}>Generate from website</div>
             <div style={{ fontSize: 12, color: cockpitColors.textMuted }}>
               Fills the fields on the left. The preview on the right updates immediately.
@@ -521,14 +521,14 @@ const inputStyle: CSSProperties = {
   font: "inherit",
   fontWeight: 600,
   color: cockpitColors.textPrimary,
-  background: "#fff",
+  background: cockpitColors.panel,
 };
 
 const smallButtonStyle: CSSProperties = {
   border: `1px solid ${cockpitColors.panelBorder}`,
   borderRadius: 10,
   padding: "8px 12px",
-  background: "#fff",
+  background: cockpitColors.panel,
   fontWeight: 700,
   fontSize: 12,
   cursor: "pointer",

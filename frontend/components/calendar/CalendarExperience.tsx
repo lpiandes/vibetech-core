@@ -604,16 +604,16 @@ export default function CalendarExperience({
               minHeight: "min(72vh, 820px)",
               height: "72vh",
               borderRadius: 14,
-              border: `2px solid ${sameDay(anchor, new Date()) ? cockpitColors.accent : "rgba(28,25,23,0.16)"}`,
+              border: `2px solid ${sameDay(anchor, new Date()) ? cockpitColors.accent : cockpitColors.panelBorder}`,
               background: sameDay(anchor, new Date())
-                ? "linear-gradient(180deg, rgba(15,118,110,0.1), #fff 120px)"
-                : "#fff",
+                ? `linear-gradient(180deg, rgba(34,211,238,0.12), ${cockpitColors.panel} 120px)`
+                : cockpitColors.panel,
               padding: 16,
               overflowY: "auto",
               display: "grid",
               gap: 12,
               alignContent: "start",
-              boxShadow: "0 8px 24px rgba(28,25,23,0.08)",
+              boxShadow: "0 8px 24px rgba(7,11,20,0.35)",
             }}
           >
             {dayEvents.length === 0 ? <VtEmpty label="No events this day — create one with + New event" /> : null}
@@ -652,19 +652,20 @@ export default function CalendarExperience({
                     minHeight: "min(58vh, 640px)",
                     height: "58vh",
                     borderRadius: 14,
-                    border: `2px solid ${isToday || isSelected ? cockpitColors.accent : "rgba(28,25,23,0.16)"}`,
+                    border: `2px solid ${isToday || isSelected ? cockpitColors.accent : cockpitColors.panelBorder}`,
                     background: isToday
-                      ? "linear-gradient(180deg, rgba(15,118,110,0.14), #fff)"
-                      : "#fff",
+                      ? `linear-gradient(180deg, rgba(34,211,238,0.14), ${cockpitColors.panel})`
+                      : cockpitColors.panel,
                     padding: 10,
                     display: "grid",
                     gap: 8,
                     alignContent: "start",
                     overflowY: "auto",
-                    boxShadow: isToday ? "0 0 0 1px rgba(15,118,110,0.25), 0 8px 20px rgba(15,118,110,0.12)" : "0 4px 14px rgba(28,25,23,0.06)",
+                    boxShadow: isToday ? "0 0 0 1px rgba(34,211,238,0.25), 0 8px 20px rgba(7,11,20,0.35)" : "0 4px 14px rgba(7,11,20,0.25)",
                     cursor: "pointer",
                     textAlign: "left",
                     font: "inherit",
+                    color: cockpitColors.textPrimary,
                   }}
                 >
                   <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.04em", textTransform: "uppercase", color: cockpitColors.textPrimary }}>
@@ -712,8 +713,9 @@ export default function CalendarExperience({
                   style={{
                     minHeight: 110,
                     borderRadius: 12,
-                    border: `2px solid ${isToday ? cockpitColors.accent : "rgba(28,25,23,0.14)"}`,
-                    background: inMonth ? "#fff" : cockpitColors.inset,
+                    border: `2px solid ${isToday ? cockpitColors.accent : cockpitColors.panelBorder}`,
+                    background: inMonth ? cockpitColors.panel : cockpitColors.inset,
+                    color: cockpitColors.textPrimary,
                     padding: 8,
                     display: "grid",
                     gap: 4,
@@ -788,16 +790,17 @@ function EventCard({
     <div
       style={{
         borderRadius: large ? 14 : 10,
-        background: "linear-gradient(135deg, #ecfdf5, #fff)",
-        border: `2px solid rgba(15,118,110,0.28)`,
+        background: cockpitColors.panelElevated,
+        border: `1px solid ${cockpitColors.panelBorder}`,
+        color: cockpitColors.textPrimary,
         padding: large ? "14px 16px" : "8px 10px",
         fontSize: large ? 16 : 14,
         fontWeight: 750,
-        boxShadow: large ? "0 6px 18px rgba(15,118,110,0.1)" : undefined,
+        boxShadow: large ? "0 6px 18px rgba(7,11,20,0.35)" : undefined,
       }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ fontWeight: 900 }}>{event.title}</div>
+        <div style={{ fontWeight: 900, color: cockpitColors.textPrimary }}>{event.title}</div>
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
           {onEdit ? (
             <button

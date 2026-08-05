@@ -37,7 +37,11 @@ export const cockpitColors = {
   sidebarActive: "rgba(34, 211, 238, 0.10)",
   textPrimary: brand.text,
   textSecondary: brand.textMuted,
-  textMuted: "#64748b",
+  /** Secondary copy on dark panels — keep ≥ #94a3b8 so it never blends into navy. */
+  textMuted: brand.textMuted,
+  /** Use only on intentional light surfaces (alerts, marketing chips). */
+  inkOnLight: brand.navy,
+  inkMutedOnLight: "#475569",
   accent: brand.cyan,
   accentMuted: "rgba(34, 211, 238, 0.14)",
   warning: "#f59e0b",

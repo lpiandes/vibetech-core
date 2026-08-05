@@ -83,6 +83,46 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
     };
   }, [scope.businessId]);
 
+  // Prefetch primary destinations so first clicks after login stay warm.
+  useEffect(() => {
+    if (isSetupBuilder) return;
+    const base = `/b/${encodeURIComponent(scope.businessId)}`;
+    const hrefs = [
+      `${base}/home`,
+      `${base}/decisions`,
+      `${base}/outcomes`,
+      `${base}/calendar`,
+      `${base}/work`,
+      `${base}/integrations`,
+      `${base}/settings`,
+    ];
+    const run = () => {
+      for (const href of hrefs) {
+        try {
+          router.prefetch(href);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+    run();
+    const idle =
+      typeof window !== "undefined" && "requestIdleCallback" in window
+        ? window.requestIdleCallback(run, { timeout: 2500 })
+        : window.setTimeout(run, 400);
+    return () => {
+      if (typeof window !== "undefined" && "cancelIdleCallback" in window && typeof idle === "number") {
+        try {
+          window.cancelIdleCallback(idle);
+        } catch {
+          window.clearTimeout(idle);
+        }
+      } else {
+        window.clearTimeout(idle as number);
+      }
+    };
+  }, [isSetupBuilder, router, scope.businessId]);
+
   return (
     <WorkspaceNavigationProvider>
       <div

@@ -295,7 +295,7 @@ export default function AutomationPathEditor({
             padding: 12,
             borderRadius: 12,
             border: `1px solid ${cockpitColors.panelBorder}`,
-            background: "linear-gradient(180deg, #ecfdf5 0%, #f7f6f3 100%)",
+            background: cockpitColors.panelElevated,
             display: "grid",
             gap: 8,
           }}
@@ -622,7 +622,7 @@ function AddConnector({
             height: 28,
             borderRadius: 999,
             border: `2px solid ${cockpitColors.accent}`,
-            background: "#fff",
+            background: cockpitColors.panel,
             color: cockpitColors.accent,
             fontWeight: 900,
             fontSize: 18,
@@ -647,7 +647,7 @@ function AddConnector({
               padding: 8,
               borderRadius: 12,
               border: `1px solid ${cockpitColors.panelBorder}`,
-              background: "#fff",
+              background: cockpitColors.panel,
               boxShadow: "0 10px 28px rgba(28,25,23,0.12)",
             }}
           >
@@ -1189,7 +1189,7 @@ function SpecificPeopleEditor({
           gap: 6,
           borderRadius: 999,
           border: `1px solid ${cockpitColors.panelBorder}`,
-          background: "#fff",
+          background: cockpitColors.panel,
           color: cockpitColors.textPrimary,
           padding: "6px 12px",
           fontSize: 13,
@@ -1214,7 +1214,7 @@ const nodeCard = {
   borderRadius: 12,
   border: "1px solid",
   padding: "14px 16px",
-  background: "#fff",
+  background: cockpitColors.panel,
   width: "100%",
 } as const;
 
