@@ -8,6 +8,7 @@ import PageContainer from "@/components/layout/PageContainer";
 import WorkspaceMainArea from "@/components/workspace/WorkspaceMainArea";
 import { WorkspaceNavigationProvider } from "@/components/workspace/WorkspaceNavigationContext";
 import NavPerfDebug from "@/components/workspace/NavPerfDebug";
+import NavProgressBar from "@/components/workspace/NavProgressBar";
 import PrimaryNavigation from "@/components/shell/PrimaryNavigation";
 import ShellTopBar from "@/components/shell/ShellTopBar";
 import MobileNavigationDrawer from "@/components/shell/MobileNavigationDrawer";
@@ -165,6 +166,7 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </div>
+      <NavProgressBar />
       <NavPerfDebug />
       {hasInstalledOs && !isSetupBuilder ? (
         <ProductTour

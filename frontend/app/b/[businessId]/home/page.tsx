@@ -25,6 +25,13 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
   return runTimedPage("home", async () => {
     const ctx = await getAuthorizedWorkspace(businessId);
 
+    // Maintenance that used to block EVERY soft navigation — only on Home now.
+    await Promise.all([
+      ctx.service.reconcileHistoricalSubjectInterestsIfNeeded().catch(() => null),
+      ctx.service.materializeDueRecurringCampaignOperationsIfNeeded().catch(() => null),
+    ]);
+    markRequestTiming("HOME_MAINTENANCE");
+
     let hasInstalledOs = false;
     let installedSpecification: Record<string, unknown> | null = null;
     let installation: any = null;

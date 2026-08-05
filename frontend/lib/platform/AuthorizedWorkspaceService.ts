@@ -110,14 +110,13 @@ export const getAuthorizedWorkspace = cache(async (businessId: string, requiredP
       }),
     );
     connected.credentialsHydrated = true;
+  } else {
+    timer.mark("CREDENTIAL_HYDRATE_SKIPPED");
   }
 
-  await timer.time("SUBJECT_INTEREST_RECONCILIATION", () =>
-    service.reconcileHistoricalSubjectInterestsIfNeeded(),
-  );
-  await timer.time("RECURRING_CAMPAIGN_MATERIALIZATION", () =>
-    service.materializeDueRecurringCampaignOperationsIfNeeded(),
-  );
+  // Do NOT reconcile subject interests or materialize campaigns here.
+  // Those are write-side maintenance and used to run on every soft navigation,
+  // making tab switches multi-second. Home / job tick own that work.
 
   timer.finish("TOTAL");
 

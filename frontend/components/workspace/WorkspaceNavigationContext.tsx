@@ -105,9 +105,9 @@ export function WorkspaceNavigationProvider({ children }: { children: ReactNode 
   }, []);
 
   const isNavigating = pendingHref !== null;
-  // Never highlight a different tab than the content on screen — pendingHref caused
-  // "Today" selected while Decisions still showed (felt broken / glitchy).
-  const displayPath = normalizedPathname;
+  // Optimistic highlight: tab switches the instant you click. Content follows
+  // as soon as the RSC payload lands (kept fast by skipping nav-path side effects).
+  const displayPath = pendingHref ?? normalizedPathname;
 
   const value = useMemo(
     () => ({

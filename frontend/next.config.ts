@@ -16,6 +16,12 @@ const nextConfig: NextConfig = {
   experimental: {
     // Enables next/navigation forbidden() + unauthorized() for clean 403/401 UX.
     authInterrupts: true,
+    // Next 15 defaults dynamic soft-nav cache to 0s — every tab click re-fetched.
+    // Keep recently visited business pages warm so switching back is instant.
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
   },
   webpack: (config) => {
     // Backend files live outside frontend/; resolve their deps from both install roots.
