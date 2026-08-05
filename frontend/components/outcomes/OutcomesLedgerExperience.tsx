@@ -59,8 +59,29 @@ export default function OutcomesLedgerExperience({ view }: { view: OutcomesLedge
     <div style={{ display: "grid", gap: spacing.xl, padding: `${spacing.lg} ${spacing.md}`, maxWidth: 960, margin: "0 auto" }}>
       <PageHeader
         title="Outcomes"
-        description="Proof ledger — completed work, exceptions, and evidence. Nothing here is fabricated."
+        description="This is the scoreboard for Revenue Follow-Through: what we detected, what finished with real proof, and what still needs a human. Empty is normal until you run observe → prove on real work."
       />
+
+      {(!items.length && !(summary.total > 0)) ? (
+        <div
+          style={{
+            padding: spacing.lg,
+            borderRadius: radius.large,
+            border: `1px solid ${cockpitColors.panelBorder}`,
+            background: cockpitColors.panel,
+            display: "grid",
+            gap: spacing.sm,
+          }}
+        >
+          <strong style={{ fontSize: typography.body.fontSize, color: cockpitColors.textPrimary }}>
+            Nothing to score yet
+          </strong>
+          <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize, lineHeight: 1.5 }}>
+            After you confirm how you operate, replay history, and prove one real opportunity, finished work with evidence shows up here.
+            “Not observable” means we don’t have enough source history to measure that number honestly — we won’t invent it.
+          </p>
+        </div>
+      ) : null}
 
       {view.honesty?.message ? (
         <p style={{ margin: 0, color: cockpitColors.textMuted, fontSize: typography.meta.fontSize }}>

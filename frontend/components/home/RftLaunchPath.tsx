@@ -380,7 +380,11 @@ function BaselineStrip({ baseline, outcomesHref }: { baseline: any; outcomesHref
     <div style={{ display: "grid", gap: spacing.sm }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: spacing.sm, flexWrap: "wrap" }}>
         <strong style={{ fontSize: typography.meta.fontSize }}>Baseline ({baseline.windowDays}d)</strong>
-        <Link href={outcomesHref} style={{ fontSize: 12, fontWeight: 650, color: cockpitColors.accent, textDecoration: "none" }}>
+        <Link
+          href={outcomesHref}
+          prefetch
+          style={{ fontSize: 12, fontWeight: 650, color: cockpitColors.accent, textDecoration: "none" }}
+        >
           Full report →
         </Link>
       </div>
