@@ -1,6 +1,8 @@
-import { createHash } from "node:crypto";
+/**
+ * Versioned RFT service-standard document + content hash.
+ * Must stay free of top-level node:crypto — SalesPackageCatalog is imported by client UI.
+ */
 import { deepFreeze } from "../../../workspace/_utils/deepFreeze.js";
-import { canonicalizeForHash } from "../../../business-os/BusinessOSSpecificationHasher.js";
 import {
   RFT_CONTRACT_KIND,
   RFT_CONTRACT_VERSION,
@@ -8,9 +10,51 @@ import {
   defaultRftServiceStandard,
 } from "./rftCatalog.js";
 
-/**
- * Versioned RFT service-standard document + content hash (reuses Business OS canonicalize).
- */
+function canonicalizeForHash(value) {
+  if (Array.isArray(value)) return value.map((entry) => canonicalizeForHash(entry));
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const key of Object.keys(value).sort()) {
+      out[key] = canonicalizeForHash(value[key]);
+    }
+    return out;
+  }
+  return value;
+}
+
+function sha256Hex(text) {
+  try {
+    // Dynamic require so webpack does not resolve node:crypto into client bundles.
+    // eslint-disable-next-line no-eval
+    const req = eval("require");
+    const { createHash } = req("crypto");
+    return createHash("sha256").update(String(text)).digest("hex");
+  } catch {
+    return fingerprint64(String(text));
+  }
+}
+
+function fingerprint64(text) {
+  let h1 = 2166136261;
+  let h2 = 2166136261 ^ 0x9e3779b9;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 ^= c;
+    h1 = Math.imul(h1, 16777619);
+    h2 ^= c + ((h1 >>> 16) & 0xffff);
+    h2 = Math.imul(h2, 2246822519);
+  }
+  const parts = [];
+  let a = h1 >>> 0;
+  let b = h2 >>> 0;
+  for (let i = 0; i < 8; i++) {
+    parts.push((a >>> 0).toString(16).padStart(8, "0"));
+    parts.push((b >>> 0).toString(16).padStart(8, "0"));
+    a = Math.imul(a ^ (b >>> 7), 2654435761) >>> 0;
+    b = Math.imul(b ^ (a >>> 11), 1597334677) >>> 0;
+  }
+  return parts.join("").slice(0, 64);
+}
 
 function asStringArray(value, fallback = []) {
   if (Array.isArray(value)) return value.map(String).filter(Boolean);
@@ -141,7 +185,7 @@ export function hashRftServiceStandard(document) {
     outcomeTypes: document.outcomeTypes,
     states: document.states,
   });
-  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+  return sha256Hex(JSON.stringify(payload));
 }
 
 /**
