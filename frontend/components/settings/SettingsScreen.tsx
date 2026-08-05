@@ -42,8 +42,11 @@ export default function SettingsScreen({
 }) {
   const router = useRouter();
   const [restartingTour, setRestartingTour] = useState(false);
+  const [resettingLaunch, setResettingLaunch] = useState(false);
   const hubLinks = settingsHubLinks({ businessId, canManageTeam, canManageIntegrations, canManageKnowledge });
   const hasSocial = businessGrantsSocialCheckerAccess(purchasedPackages);
+  const canResetLaunch = canManageIntegrations
+    || /owner|admin/i.test(String(roleLabel ?? ""));
 
   async function restartTutorial() {
     setRestartingTour(true);
@@ -59,13 +62,27 @@ export default function SettingsScreen({
         }),
       });
       try {
-        window.localStorage.removeItem(`vt.productTour.1.${businessId}.me`);
+        for (const v of [1, 2, 3]) {
+          window.localStorage.removeItem(`vt.productTour.${v}.${businessId}.me`);
+        }
       } catch {
         /* ignore */
       }
       router.push(`/b/${encodeURIComponent(businessId)}/home?tour=1`);
     } finally {
       setRestartingTour(false);
+    }
+  }
+
+  async function resetLaunchPath() {
+    if (!window.confirm("Reset launch path for this business? Email/calendar will disconnect so you can re-film from Connect business email.")) {
+      return;
+    }
+    setResettingLaunch(true);
+    try {
+      window.location.assign(`/api/businesses/${encodeURIComponent(businessId)}/launch/reset`);
+    } finally {
+      setResettingLaunch(false);
     }
   }
 
@@ -94,6 +111,11 @@ export default function SettingsScreen({
         <SecondaryButton onClick={() => void restartTutorial()}>
           {restartingTour ? "Opening…" : "See tutorial again"}
         </SecondaryButton>
+        {canResetLaunch ? (
+          <SecondaryButton onClick={() => void resetLaunchPath()}>
+            {resettingLaunch ? "Resetting…" : "Reset launch path (demo)"}
+          </SecondaryButton>
+        ) : null}
         {hasSocial ? (
           <a
             href="https://social.vtechdevelopment.com/"

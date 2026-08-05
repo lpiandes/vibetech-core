@@ -211,16 +211,20 @@ export default function LaunchCenter({
   useEffect(() => {
     const error = searchParams.get("error");
     const connected = searchParams.get("connected");
+    const launchReset = searchParams.get("launchReset");
     if (error) {
       setFlash({ tone: "error", text: error });
     } else if (connected === "1") {
       setFlash({ tone: "success", text: "Connected. Run the test on this mission to prove it." });
+    } else if (launchReset === "1") {
+      setFlash({ tone: "success", text: "Launch path reset. Connect business email again when you’re ready to film." });
     } else {
       return;
     }
     const url = new URL(window.location.href);
     url.searchParams.delete("error");
     url.searchParams.delete("connected");
+    url.searchParams.delete("launchReset");
     router.replace(`${url.pathname}${url.search}${url.hash}`);
   }, [searchParams, router]);
 
