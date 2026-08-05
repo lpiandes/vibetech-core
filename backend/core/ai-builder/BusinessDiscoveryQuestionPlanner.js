@@ -735,10 +735,11 @@ export class BusinessDiscoveryQuestionPlanner {
         const clarifying = planNextResponsibilityQuestions({
           responsibilityRequests,
           answers,
-          limit,
+          limit: Math.min(limit, 3),
         });
         if (clarifying.length) return clarifying;
-        // Fall through to remaining required bank only after responsibilities are clarified.
+        // Lean path: after at most a few clarifies, go build — skip the legacy topic bank.
+        return deepFreeze([]);
       }
     }
 

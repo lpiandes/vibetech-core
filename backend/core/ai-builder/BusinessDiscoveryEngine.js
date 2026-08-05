@@ -182,7 +182,12 @@ export class BusinessDiscoveryEngine {
       }
     }
 
-    const progress = this.completeness.evaluate({ answers, businessSummary });
+    const progress = this.completeness.evaluate({
+      answers,
+      businessSummary,
+      responsibilityInventoryConfirmed,
+      responsibilityRequests,
+    });
     const summary = buildBusinessDiscoverySummary({
       businessSummary,
       completeness: progress,
@@ -283,7 +288,12 @@ export class BusinessDiscoveryEngine {
       else answers.push(record);
     }
 
-    const progress = this.completeness.evaluate({ answers, businessSummary });
+    const progress = this.completeness.evaluate({
+      answers,
+      businessSummary,
+      responsibilityInventoryConfirmed: Boolean(session.responsibilityInventoryConfirmed),
+      responsibilityRequests: session.responsibilityRequests ?? [],
+    });
     const summary = buildBusinessDiscoverySummary({
       businessSummary,
       completeness: progress,

@@ -3,101 +3,102 @@ import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 
 /**
  * Unresolved-contract-field-first questions for one responsibility.
- * Does not walk the old topic bank.
+ * Kept short — owners should not sit through a contract interview.
  */
+
+/** Hard session budget after inventory confirm. */
+export const MAX_CLARIFY_QUESTIONS = 3;
+
+/** Only these fields may become clarify questions (everything else uses defaults). */
+export const CLARIFY_FIELD_PRIORITY = Object.freeze([
+  "trigger",
+  "observe_where",
+  "actions",
+  "approvals",
+]);
 
 export const RESPONSIBILITY_FIELD_QUESTIONS = Object.freeze({
   trigger: {
     questionIdSuffix: "trigger",
-    prompt: "What starts this work?",
-    why: "VIBETech needs a reliable trigger — not a vague hope.",
+    prompt: "What starts this?",
+    why: "Need a clear trigger.",
     examples: [
-      "A call is missed",
       "A form is submitted",
-      "Wednesday at 8:00 AM",
-      "A proposal has had no response for five days",
+      "A call is missed",
+      "No reply for 24 hours",
     ],
   },
   observe_where: {
     questionIdSuffix: "observe_where",
-    prompt: "Where can VIBETech observe that trigger?",
-    why: "We will not invent a data source. Choose how events become visible.",
+    prompt: "Where should VIBETech see that?",
+    why: "Need a real system — not a guess.",
     examples: [
-      "Twilio / business phone",
-      "Gmail or Outlook",
-      "Calendar",
-      "MLS feed or CRM",
-      "Uploaded spreadsheet",
-      "Website webhook",
+      "CRM / Work",
+      "Business phone or SMS",
+      "Gmail or Calendar",
     ],
   },
   actions: {
     questionIdSuffix: "actions",
-    prompt: "What should VIBETech do when this fires?",
-    why: "Actions must be concrete enough to test and prove.",
-    examples: ["Research", "Draft", "Send", "Schedule", "Assign", "Escalate", "Generate a report"],
-  },
-  subjects: {
-    questionIdSuffix: "subjects",
-    prompt: "Who or what is affected?",
-    why: "Eligibility must be explicit so the wrong people are not contacted.",
-  },
-  required_information: {
-    questionIdSuffix: "required_information",
-    prompt: "What information is required to proceed?",
-    why: "Missing facts become constraints — not silent guesses.",
+    prompt: "What should happen when it fires?",
+    why: "Keep it concrete.",
+    examples: ["Call, then text", "Log and assign", "Send a reminder"],
   },
   approvals: {
     questionIdSuffix: "approvals",
-    prompt: "What requires your approval before it goes out?",
-    why: "Approval boundaries define safe autonomy.",
+    prompt: "What needs your OK before it goes out?",
+    why: "Sets safe autonomy.",
     examples: [
-      "Every first external message",
-      "Nothing for appointment reminders",
-      "Everything until shadow mode is complete",
+      "First external message",
+      "Nothing for reminders",
+      "Everything until shadow mode ends",
     ],
+  },
+  subjects: {
+    questionIdSuffix: "subjects",
+    prompt: "Who is this for?",
+    why: "Eligibility must be explicit.",
+    examples: [],
+  },
+  required_information: {
+    questionIdSuffix: "required_information",
+    prompt: "What info is required?",
+    why: "Missing facts become constraints.",
+    examples: [],
   },
   success_proof: {
     questionIdSuffix: "success_proof",
-    prompt: "What proves this succeeded?",
+    prompt: "What proves it worked?",
     why: "No proof, no live claim.",
-    examples: [
-      "SMS provider confirms send",
-      "Email delivery confirmed",
-      "Calendar event exists",
-      "CRM record updated",
-      "Meeting booked",
-    ],
+    examples: ["CRM updated", "Message sent", "Meeting booked"],
   },
   failure_behavior: {
     questionIdSuffix: "failure_behavior",
-    prompt: "What should happen when it cannot proceed?",
-    why: "Failure paths prevent silent drops.",
-    examples: [
-      "Ask the owner",
-      "Assign an operator",
-      "Retry the provider",
-      "Skip the recipient",
-      "Stop the workflow",
-    ],
+    prompt: "If it cannot proceed, what next?",
+    why: "Avoid silent drops.",
+    examples: ["Ask the owner", "Retry once", "Stop and note it"],
   },
 });
 
-export function planResponsibilityClarificationQuestions(request, { limit = 4 } = {}) {
-  const unresolved = Array.isArray(request?.unresolvedFields) ? request.unresolvedFields : [];
+export function planResponsibilityClarificationQuestions(request, { limit = 2 } = {}) {
+  const unresolved = (Array.isArray(request?.unresolvedFields) ? request.unresolvedFields : [])
+    .filter((field) => CLARIFY_FIELD_PRIORITY.includes(String(field)));
   const title = String(request?.title ?? "This responsibility");
   const questions = [];
 
-  for (const field of unresolved) {
+  for (const field of CLARIFY_FIELD_PRIORITY) {
+    if (!unresolved.includes(field)) continue;
     const meta = RESPONSIBILITY_FIELD_QUESTIONS[field];
     if (!meta) continue;
-    const examples = Array.isArray(meta.examples) && meta.examples.length
-      ? `\n\nExamples:\n${meta.examples.map((e) => `• ${e}`).join("\n")}`
+    const examples = (Array.isArray(meta.examples) ? meta.examples : []).slice(0, 3);
+    const examplesBlock = examples.length
+      ? `\n\nExamples:\n${examples.map((e) => `• ${e}`).join("\n")}`
       : "";
     questions.push(createBuilderQuestion({
       questionId: `q_resp_${request.responsibilityId}_${meta.questionIdSuffix}`,
-      prompt: `${title}\n\n${meta.prompt}${examples}`,
-      why: meta.why,
+      // Short question only — title rides in `why` as a quiet label.
+      prompt: `${meta.prompt}${examplesBlock}`,
+      why: title,
       required: true,
       topic: "responsibility_contract",
       metadata: {
@@ -112,15 +113,19 @@ export function planResponsibilityClarificationQuestions(request, { limit = 4 } 
 }
 
 /**
- * Pick the highest-value unresolved responsibility, then its missing fields.
+ * Pick missing fields across responsibilities — hard-capped session budget.
  */
 export function planNextResponsibilityQuestions({
   responsibilityRequests = [],
   answers = [],
-  limit = 3,
+  limit = MAX_CLARIFY_QUESTIONS,
 } = {}) {
   const answeredIds = new Set(
     (Array.isArray(answers) ? answers : []).map((a) => String(a.questionId)),
+  );
+  const budget = Math.min(
+    MAX_CLARIFY_QUESTIONS,
+    Math.max(0, Number(limit) || MAX_CLARIFY_QUESTIONS),
   );
   const active = (Array.isArray(responsibilityRequests) ? responsibilityRequests : [])
     .filter((r) => ["confirmed", "clarifying"].includes(String(r.status)));
@@ -128,14 +133,16 @@ export function planNextResponsibilityQuestions({
   // Prefer needs-rules / needs-access over already-ready.
   const ranked = [...active].sort((a, b) => rankMode(a.implementationMode) - rankMode(b.implementationMode));
 
+  const out = [];
   for (const request of ranked) {
-    const planned = planResponsibilityClarificationQuestions(request, { limit: 8 })
+    const planned = planResponsibilityClarificationQuestions(request, { limit: budget })
       .filter((q) => !answeredIds.has(String(q.questionId)));
-    if (planned.length) {
-      return planned.slice(0, limit);
+    for (const question of planned) {
+      out.push(question);
+      if (out.length >= budget) return deepFreeze(out);
     }
   }
-  return deepFreeze([]);
+  return deepFreeze(out);
 }
 
 function rankMode(mode) {

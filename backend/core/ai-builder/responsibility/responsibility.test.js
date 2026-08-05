@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { extractResponsibilityRequests } from "./extractResponsibilityRequests.js";
+import { extractResponsibilityRequests, pruneUnresolvedForLeanClarify } from "./extractResponsibilityRequests.js";
 import { assessResponsibilityInventory } from "./resolveResponsibilityFeasibility.js";
 import { compileResponsibilityOperatingContract } from "./compileResponsibilityOperatingContract.js";
 import { planNextResponsibilityQuestions } from "./planResponsibilityQuestions.js";
@@ -35,11 +35,48 @@ test("feasibility marks personal phone monitoring unsupported", () => {
   assert.ok(assessed.constraints.some((c) => c.type === "UNSUPPORTED_TRIGGER"));
 });
 
+test("lean extract skips interview fields when Q2 already said enough", () => {
+  const { requests } = extractResponsibilityRequests({
+    text: [
+      "• When a new inbound lead arrives, confirm contact details and log it in Work as New inbound within 15 minutes.",
+      "• Same business day: call first if there is a phone number; if no answer, send the approved SMS/email draft.",
+      "• If no reply in 24 hours, send one polite follow-up.",
+    ].join("\n"),
+  });
+  assert.equal(requests.length, 3);
+  const unresolvedTotal = requests.reduce((n, r) => n + (r.unresolvedFields?.length ?? 0), 0);
+  assert.ok(unresolvedTotal <= 3, `expected lean unresolved, got ${unresolvedTotal}`);
+  for (const req of requests) {
+    assert.ok(req.triggerDescription || req.unresolvedFields.includes("trigger"));
+    assert.ok(req.approvalExpectations);
+    assert.ok(req.failureBehavior);
+  }
+
+  const pruned = pruneUnresolvedForLeanClarify(
+    requests.map((r) => ({ ...r, status: "confirmed" })),
+    { maxQuestions: 3 },
+  );
+  const after = pruned.reduce((n, r) => n + (r.unresolvedFields?.length ?? 0), 0);
+  assert.ok(after <= 3);
+
+  const questions = planNextResponsibilityQuestions({
+    responsibilityRequests: pruned,
+    answers: [],
+    limit: 8,
+  });
+  assert.ok(questions.length <= 3);
+});
+
 test("clarification planner returns unresolved field questions after confirm", () => {
   const { requests } = extractResponsibilityRequests({
-    text: "Follow up with proposals that have had no reply for five business days.",
+    text: "Do the thing with no clear trigger wording at all for this oddball case xyz.",
   });
-  const confirmed = requests.map((r) => ({ ...r, status: "confirmed" }));
+  // Force an unresolved observe_where for the planner smoke test.
+  const confirmed = requests.map((r) => ({
+    ...r,
+    status: "confirmed",
+    unresolvedFields: ["observe_where"],
+  }));
   const questions = planNextResponsibilityQuestions({
     responsibilityRequests: confirmed,
     answers: [],
@@ -47,6 +84,7 @@ test("clarification planner returns unresolved field questions after confirm", (
   });
   assert.ok(questions.length >= 1);
   assert.match(String(questions[0].questionId), /^q_resp_/);
+  assert.match(String(questions[0].prompt), /Where should VIBETech see/i);
 });
 
 test("compileResponsibilityOperatingContract builds a dedicated contract", () => {

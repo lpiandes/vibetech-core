@@ -8,6 +8,7 @@ import {
 } from "./BuilderConversation.js";
 import { getDefaultBuilderIntelligenceProvider } from "./BuilderIntelligenceProvider.js";
 import { compileResponsibilityOperatingContract } from "./responsibility/compileResponsibilityOperatingContract.js";
+import { pruneUnresolvedForLeanClarify } from "./responsibility/extractResponsibilityRequests.js";
 
 /**
  * Durable AI Builder session orchestration façade.
@@ -190,15 +191,18 @@ export class BuilderSessionService {
       ? responsibilityRequests
       : (existing.responsibilityRequests ?? []);
     if (confirmed) {
-      requests = requests
-        .filter((r) => String(r.status) !== "removed")
-        .map((r) => ({
-          ...r,
-          status: String(r.status) === "pending_review" || String(r.status) === "draft"
-            ? "confirmed"
-            : r.status,
-          updatedAt: now,
-        }));
+      requests = pruneUnresolvedForLeanClarify(
+        requests
+          .filter((r) => String(r.status) !== "removed")
+          .map((r) => ({
+            ...r,
+            status: String(r.status) === "pending_review" || String(r.status) === "draft"
+              ? "confirmed"
+              : r.status,
+            updatedAt: now,
+          })),
+        { maxQuestions: 3 },
+      );
     }
     const industry = String(existing.businessSummary?.industry ?? "other");
     const compiledContracts = confirmed
@@ -219,14 +223,24 @@ export class BuilderSessionService {
         compiledResponsibilityContracts: compiledContracts,
       },
     }, { updatedAt: now });
-    const nextQuestions = this.discoveryEngine.nextQuestions(session, { limit: 3 });
+    const progress = this.discoveryEngine.completeness.evaluate({
+      answers: session.answers,
+      businessSummary: session.businessSummary,
+      responsibilityInventoryConfirmed: Boolean(session.responsibilityInventoryConfirmed),
+      responsibilityRequests: session.responsibilityRequests ?? [],
+    });
+    const nextQuestions = progress.readyForProposal
+      ? []
+      : this.discoveryEngine.nextQuestions(session, { limit: 3 });
     session = withBuilderSessionPatch(session, {
       questions: nextQuestions,
+      progress,
+      currentStage: progress.readyForProposal ? "assembling" : "interviewing",
       conversation: appendConversation(session.conversation, createBuilderConversationMessage({
         messageId: `msg_assistant_resp_confirm_${Date.parse(now)}`,
         role: "assistant",
         text: confirmed
-          ? (nextQuestions[0]?.prompt ?? "Responsibility inventory confirmed. Next we clarify only what is still missing.")
+          ? (nextQuestions[0]?.prompt ?? "Got it — building from what you confirmed.")
           : "OK — edit the list and confirm when it matches what you want VIBETech to operate.",
         at: now,
         relatedQuestionId: nextQuestions[0]?.questionId ?? null,

@@ -97,12 +97,13 @@ function splitDiscoveryPrompt(prompt: string): { main: string; examples: string[
 
 function DiscoveryQuestionPrompt({ prompt }: { prompt: string }) {
   const { main, examples } = splitDiscoveryPrompt(prompt);
+  const shownExamples = examples.slice(0, 3);
   return (
-    <div style={{ display: "grid", gap: 12 }}>
+    <div style={{ display: "grid", gap: 10 }}>
       <h2 style={{
         margin: 0,
         fontFamily: architect.display,
-        fontSize: "clamp(1.35rem, 2.6vw, 1.75rem)",
+        fontSize: "clamp(1.25rem, 2.4vw, 1.55rem)",
         lineHeight: 1.3,
         letterSpacing: "-0.02em",
         whiteSpace: "pre-wrap",
@@ -110,11 +111,11 @@ function DiscoveryQuestionPrompt({ prompt }: { prompt: string }) {
       >
         {main}
       </h2>
-      {examples.length ? (
-        <div style={{ display: "grid", gap: 8 }}>
+      {shownExamples.length ? (
+        <div style={{ display: "grid", gap: 6 }}>
           <div style={{
             fontFamily: architect.font,
-            fontSize: 13,
+            fontSize: 11,
             fontWeight: 700,
             letterSpacing: "0.04em",
             textTransform: "uppercase",
@@ -128,28 +129,24 @@ function DiscoveryQuestionPrompt({ prompt }: { prompt: string }) {
             padding: 0,
             listStyle: "none",
             display: "grid",
-            gap: 6,
+            gap: 4,
           }}
           >
-            {examples.map((example) => (
+            {shownExamples.map((example) => (
               <li
                 key={example}
                 style={{
                   fontFamily: architect.font,
-                  fontSize: 13,
-                  lineHeight: 1.45,
+                  fontSize: 12,
+                  lineHeight: 1.4,
                   color: architect.inkMuted,
-                  paddingLeft: 14,
+                  paddingLeft: 12,
                   position: "relative",
                 }}
               >
                 <span
                   aria-hidden
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    color: architect.accent,
-                  }}
+                  style={{ position: "absolute", left: 0, color: architect.accent }}
                 >
                   •
                 </span>
@@ -427,8 +424,17 @@ export default function DiscoveryStepWizard({
       <div style={{ display: "grid", gap: 8 }}>
         <DiscoveryQuestionPrompt prompt={step.prompt} />
         {step.why ? (
-          <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.5 }}>
-            {step.why}
+          <p style={{
+            margin: 0,
+            color: architect.inkMuted,
+            fontSize: String(step.questionId ?? "").startsWith("q_resp_") ? 12 : 14,
+            lineHeight: 1.45,
+            fontWeight: String(step.questionId ?? "").startsWith("q_resp_") ? 650 : 400,
+          }}
+          >
+            {String(step.questionId ?? "").startsWith("q_resp_")
+              ? `About: ${step.why}`
+              : step.why}
           </p>
         ) : null}
       </div>

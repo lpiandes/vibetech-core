@@ -28,7 +28,12 @@ export const DISCOVERY_MAX_OWNER_ANSWERS = 28;
  * (further narrowed by purchased sales packages when present).
  */
 export class BusinessDiscoveryCompleteness {
-  evaluate({ answers = [], businessSummary = {} } = {}) {
+  evaluate({
+    answers = [],
+    businessSummary = {},
+    responsibilityInventoryConfirmed = false,
+    responsibilityRequests = [],
+  } = {}) {
     const packIndustry = resolvePackIndustry(resolveDiscoveryIndustry({ answers, businessSummary }));
     // Keep in sync with BusinessDiscoveryQuestionPlanner — "other" industries
     // get the same sensible default follow-up subset counted as required so
@@ -78,6 +83,33 @@ export class BusinessDiscoveryCompleteness {
       || answers.some((entry) => entry.evidenceSource === "free_text_extraction" || entry.evidenceSource === "llm"),
     );
 
+    // Responsibility-driven spine: Q1 + Q2 + confirm (+ at most a few clarifies) is enough.
+    const clarifyPending = Boolean(responsibilityInventoryConfirmed)
+      && (Array.isArray(responsibilityRequests) ? responsibilityRequests : [])
+        .filter((row) => ["confirmed", "clarifying"].includes(String(row?.status)))
+        .some((row) => {
+          const fields = Array.isArray(row?.unresolvedFields) ? row.unresolvedFields : [];
+          return fields.some((field) => (
+            ["trigger", "observe_where", "actions", "approvals"].includes(String(field))
+          ));
+        });
+    const hasResponsibilityInventory = (
+      Array.isArray(responsibilityRequests)
+      && responsibilityRequests.some((row) => String(row?.status) !== "removed")
+    );
+    const responsibilitySpineReady = Boolean(responsibilityInventoryConfirmed)
+      && !clarifyPending
+      && hasIdentity
+      && (
+        answeredIds.has("q_business_understanding")
+        || answeredIds.has("q_tell_us")
+      )
+      && (
+        answeredIds.has("q_vibetech_responsibilities")
+        || answeredIds.has("q_tell_us")
+        || hasResponsibilityInventory
+      );
+
     let minRequired;
     if (fullOs) {
       minRequired = llmCovered
@@ -120,9 +152,14 @@ export class BusinessDiscoveryCompleteness {
     const readyForProposal = packageAsk
       ? (depthMet && substantiveAnswered <= DISCOVERY_MAX_OWNER_ANSWERS)
       : (
-        depthMet
-        && hasIdentity
-        && (fullOs ? hasIndustry : (hasIndustry || substantiveAnswered >= 2))
+        (
+          responsibilitySpineReady
+          || (
+            depthMet
+            && hasIdentity
+            && (fullOs ? hasIndustry : (hasIndustry || substantiveAnswered >= 2))
+          )
+        )
         && substantiveAnswered <= DISCOVERY_MAX_OWNER_ANSWERS
       );
 

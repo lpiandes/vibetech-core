@@ -186,12 +186,14 @@ export default function ArchitectWorkspace({
     packageAsk,
     addedIds: addedPackageIds,
   });
-  // Only show the "what you bought" panel during discovery, before a proposal exists.
+  // Only show the "what you bought" panel during early discovery — hide once
+  // responsibilities are confirmed (clarify/build should stay quiet).
   const showPurchasedPackages = !continuous
     && !proposal
     && centerMode === "conversation"
     && purchasedPackagesPanel.show
-    && !purchasedPackagesPanel.fullOs;
+    && !purchasedPackagesPanel.fullOs
+    && !session?.responsibilityInventoryConfirmed;
   // Package-Ask: only count answers given in this interview. Prior/installed/
   // already-connected seeds must not push the visible question to "Question 2".
   const discoveryAnswers = packageAsk

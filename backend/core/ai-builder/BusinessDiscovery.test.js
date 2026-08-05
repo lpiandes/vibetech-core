@@ -30,11 +30,10 @@ test("question planner starts with business understanding then responsibilities"
   });
   assert.deepEqual(paused, []);
 
-  const withEvidence = planner.plan({
+  const afterConfirm = planner.plan({
     answers: [
       { questionId: "q_business_understanding", answer: "Hockey club" },
       { questionId: "q_vibetech_responsibilities", answer: "Remind families." },
-      { questionId: "q_tell_us", answer: "Hockey club" },
     ],
     evidence: [{ payload: { topics: ["software"] } }],
     responsibilityInventoryConfirmed: true,
@@ -46,8 +45,8 @@ test("question planner starts with business understanding then responsibilities"
     }],
     limit: 20,
   });
-  assert.ok(withEvidence.some((question) => question.questionId === "q_communications"));
-  assert.ok(withEvidence.some((question) => question.questionId === "q_software"));
+  // Lean path: no legacy topic-bank interview after responsibilities are clear.
+  assert.deepEqual(afterConfirm, []);
 });
 
 test("answer interpreter maps industry signals without inventing certainty", () => {
@@ -227,7 +226,7 @@ test("question bank covers departments, lead sources, automation, and expansion"
   }
 });
 
-test("only active operating packs receive curated diagnostic questions", () => {
+test("responsibility spine does not reopen pack diagnostics after clarify", () => {
   const planner = new BusinessDiscoveryQuestionPlanner();
   const spineDone = {
     answers: [
@@ -245,21 +244,23 @@ test("only active operating packs receive curated diagnostic questions", () => {
     limit: 20,
   };
 
-  const unsupportedIndustryQuestions = planner.plan({
-    ...spineDone,
-    answers: [
-      { questionId: "q_business_understanding", answer: "Campaign HQ" },
-      { questionId: "q_vibetech_responsibilities", answer: "Text voters." },
-      { questionId: "q_industry", answer: "political_campaigns" },
-    ],
-    businessSummary: { industry: "political_campaigns" },
-  });
-  assert.ok(!unsupportedIndustryQuestions.some((question) => question.questionId === "q_campaign_race_type"));
-  assert.ok(!unsupportedIndustryQuestions.some((question) => question.questionId === "q_dental_pms"));
-
   const dentalQuestions = planner.plan({
     ...spineDone,
     businessSummary: { industry: "dental" },
   });
-  assert.ok(dentalQuestions.some((question) => question.questionId === "q_dental_pms"));
+  assert.deepEqual(dentalQuestions, []);
+
+  const clarifying = planner.plan({
+    ...spineDone,
+    responsibilityRequests: [{
+      responsibilityId: "resp_x",
+      status: "confirmed",
+      unresolvedFields: ["observe_where"],
+      implementationMode: "ready_after_customer_access",
+      title: "Recall",
+    }],
+  });
+  assert.equal(clarifying.length, 1);
+  assert.match(String(clarifying[0].questionId), /observe_where$/);
+  assert.match(String(clarifying[0].prompt), /Where should VIBETech see/i);
 });

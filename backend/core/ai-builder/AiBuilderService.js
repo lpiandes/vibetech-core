@@ -209,6 +209,8 @@ export class AiBuilderService {
           const progress = this.sessionService.discoveryEngine.completeness.evaluate({
             answers: session.answers,
             businessSummary: session.businessSummary,
+            responsibilityInventoryConfirmed: Boolean(session.responsibilityInventoryConfirmed),
+            responsibilityRequests: session.responsibilityRequests ?? [],
           });
           session = withBuilderSessionPatch(session, { questions, progress }, { updatedAt: this.nowISO() });
           await this.sessionService.repository.save(session);
@@ -303,9 +305,11 @@ export class AiBuilderService {
 
     const questions = this.sessionService.discoveryEngine.nextQuestions(session, { limit: 4 });
     const progress = this.sessionService.discoveryEngine.completeness.evaluate({
-      answers: session.answers,
-      businessSummary: session.businessSummary,
-    });
+            answers: session.answers,
+            businessSummary: session.businessSummary,
+            responsibilityInventoryConfirmed: Boolean(session.responsibilityInventoryConfirmed),
+            responsibilityRequests: session.responsibilityRequests ?? [],
+          });
     session = withBuilderSessionPatch(session, { questions, progress }, { updatedAt: now });
     await this.sessionService.repository.save(session);
 
@@ -522,6 +526,8 @@ export class AiBuilderService {
     const progress = this.sessionService.discoveryEngine.completeness.evaluate({
       answers: result.session.answers,
       businessSummary: result.session.businessSummary,
+      responsibilityInventoryConfirmed: Boolean(result.session.responsibilityInventoryConfirmed),
+      responsibilityRequests: result.session.responsibilityRequests ?? [],
     });
     if (progress?.readyForProposal) nextQuestions = [];
 
@@ -655,9 +661,11 @@ export class AiBuilderService {
     // questions or wipe that proposal on GET — that erases chats when switching history.
     if (!continuousAsk) {
       const progress = this.sessionService.discoveryEngine.completeness.evaluate({
-        answers: session.answers,
-        businessSummary: session.businessSummary,
-      });
+            answers: session.answers,
+            businessSummary: session.businessSummary,
+            responsibilityInventoryConfirmed: Boolean(session.responsibilityInventoryConfirmed),
+            responsibilityRequests: session.responsibilityRequests ?? [],
+          });
       // Never re-plan questions after ready — that flashes SOP/docs behind the recommendation.
       // Package-Ask uses the sync planner only (no LLM on every GET — that looped the UI).
       let questions = progress?.readyForProposal
@@ -1029,9 +1037,11 @@ export class AiBuilderService {
   async propose({ sessionId }) {
     const session = await this.requireSession(sessionId);
     const progress = this.sessionService.discoveryEngine.completeness.evaluate({
-      answers: session.answers,
-      businessSummary: session.businessSummary,
-    });
+            answers: session.answers,
+            businessSummary: session.businessSummary,
+            responsibilityInventoryConfirmed: Boolean(session.responsibilityInventoryConfirmed),
+            responsibilityRequests: session.responsibilityRequests ?? [],
+          });
     if (!progress.readyForProposal) {
       return deepFreeze({
         ok: false,

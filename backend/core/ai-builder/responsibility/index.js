@@ -14,7 +14,14 @@ export {
   CONSTRAINT_STATUSES,
 } from "./ResponsibilityConstraint.js";
 
-export { extractResponsibilityRequests } from "./extractResponsibilityRequests.js";
+export {
+  extractResponsibilityRequests,
+  pruneUnresolvedForLeanClarify,
+  applyLeanClarifyDefaults,
+  leanUnresolvedFields,
+  guessTrigger,
+  guessActions,
+} from "./extractResponsibilityRequests.js";
 
 export {
   resolveResponsibilityFeasibility,
@@ -26,6 +33,8 @@ export {
   planResponsibilityClarificationQuestions,
   planNextResponsibilityQuestions,
   RESPONSIBILITY_FIELD_QUESTIONS,
+  MAX_CLARIFY_QUESTIONS,
+  CLARIFY_FIELD_PRIORITY,
 } from "./planResponsibilityQuestions.js";
 
 export { compileResponsibilityOperatingContract } from "./compileResponsibilityOperatingContract.js";
