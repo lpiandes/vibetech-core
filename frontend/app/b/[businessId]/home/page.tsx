@@ -14,6 +14,8 @@ import { getAiBuilderService } from "@/lib/builder/getAiBuilderService";
 import { resolveOnboardingHomeHref } from "@/lib/builder/resolveOnboardingHomeHref";
 import PackageAskHomeBanner from "@/components/home/PackageAskHomeBanner";
 import { getCachedInstalledPortal } from "@/lib/platform/cachedInstalledPortal";
+import { getCachedKnowledgeDocumentCount, getCachedCapabilityProofRows } from "@/lib/platform/cachedBusinessMetrics";
+import { presentResponsibilityGoLive } from "../../../../../backend/core/ai-builder/responsibility/presentResponsibilityGoLive.js";
 
 /**
  * Home is one experience with two moments:
@@ -50,7 +52,7 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
     }
 
     const [knowledgeDocumentCount, teamInviteChecklistComplete] = await Promise.all([
-      platformStore.countActiveKnowledgeDocuments(businessId),
+      getCachedKnowledgeDocumentCount(businessId),
       platformStore.isTeamInviteChecklistComplete(businessId),
     ]);
     markRequestTiming("KNOWLEDGE_DB");
@@ -177,7 +179,7 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       setupChecklist: Array.isArray(home.checklist) ? home.checklist : [],
     });
 
-    const proofRows = await platformStore.listCapabilityProofRecords(businessId).catch(() => []);
+    const proofRows = await getCachedCapabilityProofRows(businessId);
     const proofRecords: Record<string, {
       ok: boolean;
       verified: boolean;
@@ -242,6 +244,11 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       || Boolean(pendingOps?.requestedAt)
     );
 
+    const responsibilityGoLive = presentResponsibilityGoLive({
+      responsibilityRequests: installation?.configuration?.responsibilityRequests ?? [],
+      connectionStatuses,
+    });
+
     const enrichedViewModel = {
       ...missionControlViewModel,
       proofRecords,
@@ -252,6 +259,7 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       knowledgeCount: knowledgeDocumentCount,
       liveFlags: liveIntegrationAvailability(),
       bosEmployees,
+      responsibilityGoLive,
     };
     markRequestTiming("MISSION_CONTROL", {
       bytes: JSON.stringify(enrichedViewModel).length,

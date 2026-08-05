@@ -17,6 +17,7 @@ import {
 import ConversationRail from "./ConversationRail";
 import ActionDraftCard, { type ActionDraft } from "./ActionDraftCard";
 import DiscoveryStepWizard from "./DiscoveryStepWizard";
+import ResponsibilityReviewPanel from "./ResponsibilityReviewPanel";
 import OsAssemblyCanvas from "./OsAssemblyCanvas";
 import ProposalStudio from "./ProposalStudio";
 import ApproveWalkthrough from "./ApproveWalkthrough";
@@ -674,6 +675,29 @@ export default function ArchitectWorkspace({
             ) : null}
 
             {!continuous ? (
+              (Array.isArray(session?.responsibilityRequests) && session.responsibilityRequests.length > 0
+                && !session?.responsibilityInventoryConfirmed) ? (
+                <ResponsibilityReviewPanel
+                  responsibilities={session.responsibilityRequests}
+                  busy={busy}
+                  onConfirm={async (items) => {
+                    setBusy(true);
+                    setThinking(true);
+                    setError(null);
+                    try {
+                      await refresh("confirm_responsibilities", {
+                        responsibilityRequests: items,
+                        confirmed: true,
+                      });
+                    } catch (err) {
+                      setError((err as any)?.productError ?? presentProductError(err));
+                    } finally {
+                      setBusy(false);
+                      setThinking(false);
+                    }
+                  }}
+                />
+              ) : (
               <DiscoveryStepWizard
                 answers={discoveryAnswers}
                 nextQuestion={nextQuestion}
@@ -699,6 +723,7 @@ export default function ArchitectWorkspace({
                   setCenterMode("recommendation");
                 }}
               />
+              )
             ) : (
               <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
                 <ConversationRail

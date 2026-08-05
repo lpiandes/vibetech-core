@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
-import { platformStore } from "@/lib/server/compose";
+import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceService";
+import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import GmailInboxPanel from "@/components/communications/GmailInboxPanel";
 import {
@@ -18,8 +18,8 @@ import {
 export default async function GmailInboxPage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   return runTimedPage("gmail-inbox", async () => {
-    await getAuthorizedWorkspace(businessId);
-    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    await getAuthorizedBusinessScope(businessId);
+    const installation = await getCachedBusinessOsInstallation(businessId).catch(() => null);
     const inbox = readGmailInboxState(installation);
     const sync = readGmailInboxSyncState(installation);
 

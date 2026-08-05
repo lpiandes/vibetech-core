@@ -489,6 +489,10 @@ export class AiBuilderService {
     return this.#answerPackageAskAware(input);
   }
 
+  confirmResponsibilityInventory(input) {
+    return this.sessionService.confirmResponsibilityInventory(input);
+  }
+
   async #answerPackageAskAware(input) {
     const existing = await this.requireSession(input.sessionId);
     const ensured = this.#withPackageAskFlags(existing);
@@ -1919,6 +1923,7 @@ export class AiBuilderService {
           plan,
           installation: installed.installation,
           actorUserId: actorId ?? session.actorId,
+          responsibilityRequests: session.responsibilityRequests ?? null,
         });
       } catch (canonicalError) {
         return await this.#markInstallFailed({
@@ -2034,6 +2039,7 @@ export class AiBuilderService {
         plan: stored.plan,
         installation: stored.installation,
         actorUserId: actorId ?? session.actorId,
+        responsibilityRequests: session.responsibilityRequests ?? null,
       });
       return deepFreeze({
         ok: true,
@@ -2398,6 +2404,7 @@ export class AiBuilderService {
     plan,
     installation,
     actorUserId = null,
+    responsibilityRequests = null,
   }) {
     if (!this.platformStore?.upsertBusinessOSSpecification || !this.platformStore?.upsertBusinessOSInstallation) {
       return null;
@@ -2431,6 +2438,9 @@ export class AiBuilderService {
       updatedByUserId: actorUserId,
     });
 
+    const baseConfiguration = installation?.configuration && typeof installation.configuration === "object"
+      ? installation.configuration
+      : {};
     const installRow = await this.platformStore.upsertBusinessOSInstallation({
       id: installId,
       businessId,
@@ -2442,7 +2452,12 @@ export class AiBuilderService {
       status: String(installation?.status ?? "installed"),
       plan: plan ?? installation?.plan ?? {},
       actionCheckpoints: installation?.actionCheckpoints ?? [],
-      configuration: installation?.configuration ?? {},
+      configuration: {
+        ...baseConfiguration,
+        ...(Array.isArray(responsibilityRequests) && responsibilityRequests.length
+          ? { responsibilityRequests }
+          : {}),
+      },
       history: installation?.history ?? [],
       actorUserId,
       installedAt: installation?.installedAt ?? nowISO,

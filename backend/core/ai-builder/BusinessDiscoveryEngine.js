@@ -6,6 +6,10 @@ import { buildBusinessDiscoverySummary } from "./BusinessDiscoverySummary.js";
 import { createBuilderAnswer } from "./BuilderQuestion.js";
 import { createBuilderAssumption } from "./BuilderAssumption.js";
 import { createBuilderConversationMessage, appendConversation } from "./BuilderConversation.js";
+import {
+  extractResponsibilityRequests,
+  assessResponsibilityInventory,
+} from "./responsibility/index.js";
 
 /**
  * Adaptive discovery engine. Works without a paid AI API.
@@ -25,8 +29,8 @@ export class BusinessDiscoveryEngine {
 
   initialPrompt() {
     return deepFreeze({
-      text: "Describe your business and what you want or need from VIBETech.",
-      why: "Start with the big picture — what you do and what success looks like. We’ll ask specialized follow-ups from there.",
+      text: "Tell me about your business. What do you sell, who do you serve, and how does work move through the company today?",
+      why: "Start with the business itself — VIBETech will ask what to take responsibility for next.",
     });
   }
 
@@ -35,6 +39,8 @@ export class BusinessDiscoveryEngine {
       answers: session.answers,
       evidence: session.evidence,
       businessSummary: session.businessSummary,
+      responsibilityRequests: session.responsibilityRequests ?? [],
+      responsibilityInventoryConfirmed: Boolean(session.responsibilityInventoryConfirmed),
       limit,
     });
   }
@@ -58,6 +64,8 @@ export class BusinessDiscoveryEngine {
       answers,
       evidence: sessionLike?.evidence ?? [],
       businessSummary,
+      responsibilityRequests: sessionLike?.responsibilityRequests ?? [],
+      responsibilityInventoryConfirmed: Boolean(sessionLike?.responsibilityInventoryConfirmed),
       limit: Math.max(limit, 8),
     });
     // Package-Ask must stay deterministic — LLM rewrites reintroduce the full bank prompt.
@@ -130,6 +138,50 @@ export class BusinessDiscoveryEngine {
       ...interpreted.unresolved,
     ];
 
+    let responsibilityRequests = Array.isArray(session.responsibilityRequests)
+      ? [...session.responsibilityRequests]
+      : [];
+    let responsibilityInventoryConfirmed = Boolean(session.responsibilityInventoryConfirmed);
+
+    if (
+      questionId === "q_vibetech_responsibilities"
+      && !skipped
+      && !unknown
+      && String(answer ?? "").trim()
+    ) {
+      const extracted = extractResponsibilityRequests({
+        text: String(answer),
+        businessId: session.businessId,
+        sourceAnswerId: questionId,
+      });
+      const assessed = assessResponsibilityInventory(extracted.requests, {
+        connectedSystems: businessSummary?.connectedConnectionIds ?? [],
+      });
+      responsibilityRequests = assessed.map((row) => row.request);
+      responsibilityInventoryConfirmed = false;
+    }
+
+    // Field clarifications for a responsibility — mark field resolved.
+    if (String(questionId).startsWith("q_resp_") && !skipped && !unknown) {
+      const match = String(questionId).match(/^q_resp_(.+?)_([a-z_]+)$/);
+      if (match) {
+        const [, respId, field] = match;
+        responsibilityRequests = responsibilityRequests.map((req) => {
+          if (String(req.responsibilityId) !== String(respId)) return req;
+          const unresolvedFields = (req.unresolvedFields ?? []).filter((f) => f !== field);
+          const patch = { unresolvedFields, status: "clarifying" };
+          if (field === "trigger") patch.triggerDescription = String(answer);
+          if (field === "actions") patch.actionDescription = String(answer);
+          if (field === "subjects") patch.affectedSubjects = String(answer);
+          if (field === "approvals") patch.approvalExpectations = String(answer);
+          if (field === "success_proof") patch.successDescription = String(answer);
+          if (field === "failure_behavior") patch.failureBehavior = String(answer);
+          if (field === "required_information") patch.requiredInformation = String(answer);
+          return { ...req, ...patch, updatedAt: nowISO };
+        });
+      }
+    }
+
     const progress = this.completeness.evaluate({ answers, businessSummary });
     const summary = buildBusinessDiscoverySummary({
       businessSummary,
@@ -145,12 +197,23 @@ export class BusinessDiscoveryEngine {
       relatedQuestionId: questionId,
     }));
 
+    const sessionForNext = {
+      ...session,
+      answers,
+      businessSummary,
+      responsibilityRequests,
+      responsibilityInventoryConfirmed,
+    };
+
     // Once discovery has enough evidence, do not queue another question behind
     // the recommendation transition. This prevents a question from flashing
     // briefly while the client moves to assembly.
-    const nextQuestions = progress.readyForProposal
+    // Also pause when inventory awaits confirmation.
+    const awaitingResponsibilityReview = responsibilityRequests.length > 0
+      && !responsibilityInventoryConfirmed;
+    const nextQuestions = progress.readyForProposal || awaitingResponsibilityReview
       ? []
-      : await this.#resolveNextQuestions(session, {
+      : await this.#resolveNextQuestions(sessionForNext, {
         answers,
         businessSummary,
         limit: 3,
@@ -165,6 +228,9 @@ export class BusinessDiscoveryEngine {
       summary,
       conversation,
       nextQuestions,
+      responsibilityRequests,
+      responsibilityInventoryConfirmed,
+      awaitingResponsibilityReview,
     });
   }
 

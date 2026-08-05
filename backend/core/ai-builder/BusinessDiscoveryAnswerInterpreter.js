@@ -138,8 +138,13 @@ export class BusinessDiscoveryAnswerInterpreter {
         fields.expansionPlans = splitList(text);
         break;
       case "q_tell_us":
+      case "q_business_understanding":
         fields.description = text;
         Object.assign(fields, inferFromDescription(text));
+        Object.assign(fields, inferNeedsFromDescription(text));
+        break;
+      case "q_vibetech_responsibilities":
+        fields.requestedResponsibilities = text;
         Object.assign(fields, inferNeedsFromDescription(text));
         break;
       case "q_property_inquiries":

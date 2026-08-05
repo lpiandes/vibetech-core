@@ -5,7 +5,7 @@ import PeopleDetailRenderer from "@/components/people/PeopleDetailRenderer";
 import CrmContactDetail from "@/components/people/CrmContactDetail";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
-import { platformStore } from "@/lib/server/compose";
+import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 import { readCrmState } from "../../../../../../backend/core/crm/CrmStore.js";
 import { findContact } from "../../../../../../backend/core/crm/ensureCrmContactAndOptionalCard.js";
 import { PERMISSIONS } from "@/lib/platform/permissions";
@@ -18,9 +18,9 @@ export default async function PeopleDetailPage({
   const { businessId, partyId } = await params;
 
   return runTimedPage("people-detail", async () => {
-    await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
+    const { service } = await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
 
-    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    const installation = await getCachedBusinessOsInstallation(businessId).catch(() => null);
     const crm = readCrmState(installation);
     const contact = findContact(crm, { id: partyId, partyId });
 
@@ -45,14 +45,13 @@ export default async function PeopleDetailPage({
 
       let linkedSubjects: Array<{ id?: string; displayName?: string }> = [];
       try {
-        const { service } = await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
         const viewModel = service.loadEngagementViewModel(String(contact.partyId || contact.id));
         linkedSubjects = Array.isArray(viewModel?.subjects) ? viewModel.subjects : [];
       } catch {
         linkedSubjects = [];
       }
 
-      markRequestTiming("VIEW_MODEL", { bytes: JSON.stringify(contact).length, source: "crm" });
+      markRequestTiming("VIEW_MODEL", { source: "crm" });
       return (
         <CrmContactDetail
           businessId={businessId}
@@ -61,7 +60,6 @@ export default async function PeopleDetailPage({
       );
     }
 
-    const { service } = await getAuthorizedWorkspace(businessId);
     let viewModel;
     try {
       viewModel = service.loadEngagementViewModel(partyId);
@@ -69,7 +67,7 @@ export default async function PeopleDetailPage({
       notFound();
     }
 
-    markRequestTiming("VIEW_MODEL", { bytes: JSON.stringify(viewModel).length, source: "graph" });
+    markRequestTiming("VIEW_MODEL", { source: "graph" });
     return <PeopleDetailRenderer businessId={businessId} viewModel={viewModel} />;
   });
 }

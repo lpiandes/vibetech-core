@@ -6,26 +6,54 @@ import { BusinessDiscoveryQuestionPlanner, DISCOVERY_QUESTION_BANK } from "./Bus
 import { BusinessDiscoveryAnswerInterpreter } from "./BusinessDiscoveryAnswerInterpreter.js";
 import { createBuilderSession } from "./BuilderSession.js";
 
-test("question planner asks required topics first and skips known optional topics", () => {
+test("question planner starts with business understanding then responsibilities", () => {
   const planner = new BusinessDiscoveryQuestionPlanner();
   const first = planner.plan({ answers: [], evidence: [], limit: 5 });
   assert.ok(first[0].required);
-  assert.ok(first.some((question) => question.questionId === "q_tell_us"));
+  assert.equal(first[0].questionId, "q_business_understanding");
+
+  const afterQ1 = planner.plan({
+    answers: [{ questionId: "q_business_understanding", answer: "Hockey club" }],
+    limit: 5,
+  });
+  assert.equal(afterQ1[0].questionId, "q_vibetech_responsibilities");
+
+  // Pause until inventory confirmed
+  const paused = planner.plan({
+    answers: [
+      { questionId: "q_business_understanding", answer: "Hockey club" },
+      { questionId: "q_vibetech_responsibilities", answer: "Remind families about practices." },
+    ],
+    responsibilityRequests: [{ responsibilityId: "resp_1", status: "pending_review" }],
+    responsibilityInventoryConfirmed: false,
+    limit: 5,
+  });
+  assert.deepEqual(paused, []);
 
   const withEvidence = planner.plan({
-    answers: [{ questionId: "q_tell_us", answer: "Hockey club" }],
+    answers: [
+      { questionId: "q_business_understanding", answer: "Hockey club" },
+      { questionId: "q_vibetech_responsibilities", answer: "Remind families." },
+      { questionId: "q_tell_us", answer: "Hockey club" },
+    ],
     evidence: [{ payload: { topics: ["software"] } }],
+    responsibilityInventoryConfirmed: true,
+    responsibilityRequests: [{
+      responsibilityId: "resp_1",
+      status: "confirmed",
+      unresolvedFields: [],
+      implementationMode: "ready_existing_capabilities",
+    }],
     limit: 20,
   });
   assert.ok(withEvidence.some((question) => question.questionId === "q_communications"));
-  // Software is required — always ask even if website research already hinted at tools.
   assert.ok(withEvidence.some((question) => question.questionId === "q_software"));
 });
 
 test("answer interpreter maps industry signals without inventing certainty", () => {
   const interpreter = new BusinessDiscoveryAnswerInterpreter();
   const dental = interpreter.interpret({
-    questionId: "q_tell_us",
+    questionId: "q_business_understanding",
     answer: "Bright Smile Dental serves families with cleanings and treatment plans.",
   });
   assert.equal(dental.fields.industry, "dental");
@@ -58,13 +86,31 @@ test("discovery engine progresses conversationally", async () => {
   const engine = new BusinessDiscoveryEngine();
   let session = createBuilderSession({ currentStage: "discovering" });
   const applied = await engine.applyAnswer(session, {
-    questionId: "q_tell_us",
+    questionId: "q_business_understanding",
     answer: "McBride-style property management with leasing and maintenance.",
   });
   assert.equal(applied.businessSummary.industry, "property_management");
   assert.ok(applied.nextQuestions.length >= 1);
+  assert.equal(applied.nextQuestions[0].questionId, "q_vibetech_responsibilities");
   assert.ok(DISCOVERY_QUESTION_BANK.length >= 40);
-  assert.match(engine.initialPrompt().text, /describe your business/i);
+  assert.match(engine.initialPrompt().text, /tell me about your business/i);
+});
+
+test("Q2 extracts responsibilities and pauses for review", async () => {
+  const engine = new BusinessDiscoveryEngine();
+  const session = createBuilderSession({
+    currentStage: "interviewing",
+    answers: [{ questionId: "q_business_understanding", answer: "Real estate brokerage in Tampa." }],
+    businessSummary: { description: "Real estate brokerage in Tampa." },
+  });
+  const applied = await engine.applyAnswer(session, {
+    questionId: "q_vibetech_responsibilities",
+    answer: "Find active MLS listings and send a weekly newsletter. Follow up with missed calls. Remind people about appointments.",
+  });
+  assert.ok(applied.responsibilityRequests.length >= 3);
+  assert.equal(applied.responsibilityInventoryConfirmed, false);
+  assert.equal(applied.awaitingResponsibilityReview, true);
+  assert.deepEqual(applied.nextQuestions, []);
 });
 
 test("ready discovery does not queue a question behind recommendation", async () => {
@@ -183,20 +229,37 @@ test("question bank covers departments, lead sources, automation, and expansion"
 
 test("only active operating packs receive curated diagnostic questions", () => {
   const planner = new BusinessDiscoveryQuestionPlanner();
-  const unsupportedIndustryQuestions = planner.plan({
+  const spineDone = {
     answers: [
+      { questionId: "q_business_understanding", answer: "Dental practice" },
+      { questionId: "q_vibetech_responsibilities", answer: "Recall overdue patients." },
+      { questionId: "q_industry", answer: "dental" },
+    ],
+    responsibilityInventoryConfirmed: true,
+    responsibilityRequests: [{
+      responsibilityId: "resp_x",
+      status: "confirmed",
+      unresolvedFields: [],
+      implementationMode: "ready_existing_capabilities",
+    }],
+    limit: 20,
+  };
+
+  const unsupportedIndustryQuestions = planner.plan({
+    ...spineDone,
+    answers: [
+      { questionId: "q_business_understanding", answer: "Campaign HQ" },
+      { questionId: "q_vibetech_responsibilities", answer: "Text voters." },
       { questionId: "q_industry", answer: "political_campaigns" },
     ],
     businessSummary: { industry: "political_campaigns" },
-    limit: 20,
   });
   assert.ok(!unsupportedIndustryQuestions.some((question) => question.questionId === "q_campaign_race_type"));
   assert.ok(!unsupportedIndustryQuestions.some((question) => question.questionId === "q_dental_pms"));
 
   const dentalQuestions = planner.plan({
-    answers: [{ questionId: "q_industry", answer: "dental" }],
+    ...spineDone,
     businessSummary: { industry: "dental" },
-    limit: 20,
   });
   assert.ok(dentalQuestions.some((question) => question.questionId === "q_dental_pms"));
 });

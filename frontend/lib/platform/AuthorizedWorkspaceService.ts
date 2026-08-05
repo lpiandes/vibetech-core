@@ -43,27 +43,38 @@ export async function requireSessionUser() {
 
 export const getAuthorizedBusinessScope = cache(async (businessId: string, requiredPermission?: string) => {
   const user = await requireSessionUser();
-  const cached = getCachedAuthorizationScope(user.id, businessId, requiredPermission ?? null);
+  const cached = getCachedAuthorizationScope(user.id, businessId, null);
   if (cached) {
     noteAuthorizationCacheHit();
+    const permissions = cached.permissions instanceof Set
+      ? cached.permissions
+      : new Set(cached.permissions ?? []);
+    if (requiredPermission && !permissions.has(requiredPermission) && !cached.isPlatformAdmin) {
+      throw new AuthorizationError("FORBIDDEN", "You do not have permission for this action.");
+    }
     return {
       user,
       authz: cached.authz,
       businessId,
       role: cached.role,
-      permissions: cached.permissions,
+      permissions,
       isPlatformAdmin: cached.isPlatformAdmin,
     };
   }
 
+  // Always load full membership once; check requiredPermission in memory.
   const authz = await timeRequestStage("AUTHZ_DB", () =>
     authorizeBusinessAccess({
       userId: user.id,
       businessId,
       platformRole: user.platformRole ?? null,
-      requiredPermission: requiredPermission ?? null,
+      requiredPermission: null,
     }),
   );
+
+  if (requiredPermission && !authz.permissions.has(requiredPermission) && !authz.isPlatformAdmin) {
+    throw new AuthorizationError("FORBIDDEN", "You do not have permission for this action.");
+  }
 
   const scope = {
     user,
@@ -73,7 +84,7 @@ export const getAuthorizedBusinessScope = cache(async (businessId: string, requi
     permissions: authz.permissions,
     isPlatformAdmin: authz.isPlatformAdmin,
   };
-  setCachedAuthorizationScope(user.id, businessId, requiredPermission ?? null, scope);
+  setCachedAuthorizationScope(user.id, businessId, null, scope);
   return scope;
 });
 

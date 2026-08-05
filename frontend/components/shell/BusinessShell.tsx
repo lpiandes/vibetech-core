@@ -36,12 +36,35 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
   const [needsAttentionCount, setNeedsAttentionCount] = useState(0);
   const refreshedAfterInstall = useRef(false);
   const [tourEpoch, setTourEpoch] = useState(0);
+  const [tourReady, setTourReady] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     setForceTour(params.get("tour") === "1");
   }, [pathname]);
+
+  // Defer tour until after Home/first paint so it does not compete with cold login.
+  useEffect(() => {
+    if (forceTour) {
+      setTourReady(true);
+      return;
+    }
+    let idleId: number | undefined;
+    const timeoutId = window.setTimeout(() => {
+      if (typeof (window as any).requestIdleCallback === "function") {
+        idleId = (window as any).requestIdleCallback(() => setTourReady(true), { timeout: 2000 });
+      } else {
+        setTourReady(true);
+      }
+    }, 3500);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (idleId != null && typeof (window as any).cancelIdleCallback === "function") {
+        (window as any).cancelIdleCallback(idleId);
+      }
+    };
+  }, [forceTour, scope.businessId]);
 
   // After client-side Architect install, Next can reuse a stale /b/[id] layout where
   // installedBusinessOS is still null — Home renders live content but chrome stays hidden.
@@ -74,7 +97,7 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
     // Defer badge fetch so first paint / navigation is not competing with it.
     const start = window.setTimeout(() => {
       void load();
-    }, 1200);
+    }, 4000);
     const id = window.setInterval(load, 120_000);
     return () => {
       cancelled = true;
@@ -168,7 +191,7 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
       </div>
       <NavProgressBar />
       <NavPerfDebug />
-      {hasInstalledOs && !isSetupBuilder ? (
+      {hasInstalledOs && !isSetupBuilder && tourReady ? (
         <ProductTour
           key={`${scope.businessId}-${tourEpoch}-${forceTour ? "force" : "auto"}`}
           businessId={scope.businessId}

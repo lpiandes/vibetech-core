@@ -48,6 +48,13 @@ export async function POST(request: Request, { params }: Params) {
         unknown: Boolean(body.unknown),
       }));
     }
+    if (action === "confirm_responsibilities") {
+      return NextResponse.json(await service.confirmResponsibilityInventory({
+        sessionId,
+        responsibilityRequests: body.responsibilityRequests ?? null,
+        confirmed: body.confirmed !== false,
+      }));
+    }
     if (action === "chat") {
       const result = await service.chat({
         sessionId,

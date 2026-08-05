@@ -11,6 +11,7 @@ import {
   scrubInternalWording,
 } from "@/lib/operating/businessLanguage";
 import RftLaunchPath from "@/components/home/RftLaunchPath";
+import ResponsibilityGoLivePanel from "@/components/home/ResponsibilityGoLivePanel";
 import {
   SimpleEmptyLine,
   SimplePanel,
@@ -134,6 +135,13 @@ export default function OperatingHomeExperience() {
             </p>
           ) : null}
         </section>
+      ) : null}
+
+      {viewModel?.responsibilityGoLive?.total ? (
+        <ResponsibilityGoLivePanel
+          businessId={businessId}
+          view={viewModel.responsibilityGoLive}
+        />
       ) : null}
 
       {showRftLaunch ? (

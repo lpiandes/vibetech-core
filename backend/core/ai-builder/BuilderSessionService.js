@@ -7,6 +7,7 @@ import {
   appendConversation,
 } from "./BuilderConversation.js";
 import { getDefaultBuilderIntelligenceProvider } from "./BuilderIntelligenceProvider.js";
+import { compileResponsibilityOperatingContract } from "./responsibility/compileResponsibilityOperatingContract.js";
 
 /**
  * Durable AI Builder session orchestration façade.
@@ -127,8 +128,11 @@ export class BuilderSessionService {
     });
 
     const nextQuestions = applied.nextQuestions;
+    const awaitingReview = Boolean(applied.awaitingResponsibilityReview);
     const assistantText = applied.progress.readyForProposal
       ? "I have enough to recommend how your business should run."
+      : awaitingReview
+        ? "Here is what I heard you want VIBETech to operate. Confirm, edit, or add before we ask implementation questions."
       : (nextQuestions[0]?.prompt ?? "Thanks — that helps.");
 
     const conversation = appendConversation(applied.conversation, createBuilderConversationMessage({
@@ -137,7 +141,11 @@ export class BuilderSessionService {
       text: assistantText,
       at: now,
       relatedQuestionId: nextQuestions[0]?.questionId ?? null,
-      metadata: nextQuestions[0] ? { why: nextQuestions[0].why } : {},
+      metadata: nextQuestions[0]
+        ? { why: nextQuestions[0].why }
+        : awaitingReview
+          ? { responsibilityReview: true }
+          : {},
     }));
 
     const session = withBuilderSessionPatch(existing, {
@@ -148,6 +156,10 @@ export class BuilderSessionService {
       progress: applied.progress,
       conversation,
       questions: nextQuestions,
+      responsibilityRequests: applied.responsibilityRequests ?? existing.responsibilityRequests ?? [],
+      responsibilityInventoryConfirmed: Boolean(
+        applied.responsibilityInventoryConfirmed ?? existing.responsibilityInventoryConfirmed,
+      ),
       currentStage: applied.progress.readyForProposal ? "assembling" : "interviewing",
       appearance: {
         ...existing.appearance,
@@ -162,6 +174,70 @@ export class BuilderSessionService {
       nextQuestions,
       progress: session.progress,
       summary: applied.summary,
+      awaitingResponsibilityReview: awaitingReview,
+    });
+  }
+
+  async confirmResponsibilityInventory({
+    sessionId,
+    responsibilityRequests = null,
+    confirmed = true,
+  } = {}) {
+    const existing = await this.repository.get(sessionId);
+    if (!existing) return deepFreeze({ ok: false, reason: "session_not_found" });
+    const now = this.nowISO();
+    let requests = Array.isArray(responsibilityRequests)
+      ? responsibilityRequests
+      : (existing.responsibilityRequests ?? []);
+    if (confirmed) {
+      requests = requests
+        .filter((r) => String(r.status) !== "removed")
+        .map((r) => ({
+          ...r,
+          status: String(r.status) === "pending_review" || String(r.status) === "draft"
+            ? "confirmed"
+            : r.status,
+          updatedAt: now,
+        }));
+    }
+    const industry = String(existing.businessSummary?.industry ?? "other");
+    const compiledContracts = confirmed
+      ? requests.map((request) => {
+        try {
+          return compileResponsibilityOperatingContract({ request, industry });
+        } catch {
+          return null;
+        }
+      }).filter(Boolean)
+      : (existing.metadata?.compiledResponsibilityContracts ?? []);
+    let session = withBuilderSessionPatch(existing, {
+      responsibilityRequests: requests,
+      responsibilityInventoryConfirmed: Boolean(confirmed),
+      currentStage: "interviewing",
+      metadata: {
+        ...(existing.metadata ?? {}),
+        compiledResponsibilityContracts: compiledContracts,
+      },
+    }, { updatedAt: now });
+    const nextQuestions = this.discoveryEngine.nextQuestions(session, { limit: 3 });
+    session = withBuilderSessionPatch(session, {
+      questions: nextQuestions,
+      conversation: appendConversation(session.conversation, createBuilderConversationMessage({
+        messageId: `msg_assistant_resp_confirm_${Date.parse(now)}`,
+        role: "assistant",
+        text: confirmed
+          ? (nextQuestions[0]?.prompt ?? "Responsibility inventory confirmed. Next we clarify only what is still missing.")
+          : "OK — edit the list and confirm when it matches what you want VIBETech to operate.",
+        at: now,
+        relatedQuestionId: nextQuestions[0]?.questionId ?? null,
+      })),
+    }, { updatedAt: now });
+    await this.repository.save(session);
+    return deepFreeze({
+      ok: true,
+      session,
+      nextQuestions,
+      progress: session.progress,
     });
   }
 

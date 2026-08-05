@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
+import {
+  getAuthorizedWorkspace,
+  getAuthorizedBusinessScope,
+  authorizationErrorResponse,
+} from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore, withClient } from "@/lib/server/compose";
+import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
+import { workspaceCompositionRegistry } from "@/lib/workspace/WorkspaceCompositionRegistry";
 import {
   readCrmState,
   writeCrmState,
@@ -20,7 +26,7 @@ import { PostgresPlatformJobQueue } from "../../../../../../backend/core/platfor
 import { resolveOperatingIndustry } from "../../../../../../backend/core/ai-builder/mapPackAiRolesToSelectedEmployees.js";
 
 async function loadInstallation(businessId: string) {
-  return platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+  return getCachedBusinessOsInstallation(businessId).catch(() => null);
 }
 
 async function runCalendarCapability({
@@ -101,7 +107,7 @@ export async function GET(
 ) {
   try {
     const { businessId } = await params;
-    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
+    await getAuthorizedBusinessScope(businessId, PERMISSIONS.PEOPLE_VIEW);
     const url = new URL(request.url);
     const timeMin = url.searchParams.get("timeMin") || new Date().toISOString();
     const timeMax = url.searchParams.get("timeMax") || null;
@@ -111,16 +117,18 @@ export async function GET(
     let googleMirrorConnected = false;
     let googleEvents: any[] = [];
 
+    // Prefer warm in-memory hub — do not cold-activate workspace just to list events.
     try {
-      const hub = (ctx.service as any)?.connected?.integrationPlatform;
+      const connected = workspaceCompositionRegistry.get(businessId) as any;
+      const hub = connected?.integrationPlatform;
       const connections = hub?.connectionRuntime?.getConnections?.()
-        ?? (ctx.service as any)?.connected?.connectedSystemsSnapshot?.connections
+        ?? connected?.connectedSystemsSnapshot?.connections
         ?? [];
       const calConn = (Array.isArray(connections) ? connections : []).find(
         (c: any) => String(c.connectionType ?? c.type ?? "").includes("calendar")
           || String(c.providerId ?? "").includes("calendar"),
       );
-      if (calConn) {
+      if (calConn && hub) {
         googleMirrorConnected = true;
         const result = await runCalendarCapability({
           hub,

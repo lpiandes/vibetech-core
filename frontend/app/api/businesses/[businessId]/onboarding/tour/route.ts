@@ -3,7 +3,11 @@
  */
 import { NextResponse } from "next/server";
 
-import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
+import {
+  getAuthorizedBusinessScope,
+  getAuthorizedWorkspace,
+  authorizationErrorResponse,
+} from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
 import {
@@ -17,9 +21,9 @@ export async function GET(
 ) {
   try {
     const { businessId } = await params;
-    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
-    const userId = String((ctx as any)?.user?.id ?? (ctx as any)?.user?.email ?? "anon");
-    const business = (ctx as any)?.authz?.business
+    const scope = await getAuthorizedBusinessScope(businessId, PERMISSIONS.PEOPLE_VIEW);
+    const userId = String(scope.user?.id ?? scope.user?.email ?? "anon");
+    const business = scope.authz?.business
       ?? await platformStore.getBusinessById(businessId).catch(() => null);
     const cfg = business?.packageConfiguration && typeof business.packageConfiguration === "object"
       ? business.packageConfiguration
@@ -27,22 +31,34 @@ export async function GET(
     const byUser = cfg.productTourProgress && typeof cfg.productTourProgress === "object"
       ? cfg.productTourProgress
       : {};
-    const tour = byUser[userId] ?? byUser[String((ctx as any)?.user?.email ?? "")] ?? null;
+    const tour = byUser[userId] ?? byUser[String(scope.user?.email ?? "")] ?? null;
 
     const url = new URL(request.url);
     const includeCompleted = url.searchParams.get("includeCompleted") === "1"
       || Boolean(tour?.restartedAt && !tour?.completedAt);
 
+    // Completed tours: skip adaptive assembly / workspace boot on every soft-nav.
+    if (tour?.completedAt && !includeCompleted) {
+      return NextResponse.json({
+        ok: true,
+        version: ADAPTIVE_TOUR_VERSION,
+        tour,
+        adaptive: { steps: [], version: ADAPTIVE_TOUR_VERSION },
+      });
+    }
+
+    let service: any = null;
+    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
+    service = ctx.service;
+
     const adaptive = await assembleAdaptiveTourForBusiness({
       businessId,
-      service: (ctx as any).service,
+      service,
       authzBusiness: business,
-      permissions: (ctx as any)?.permissions ?? (ctx as any)?.authz?.permissions ?? [],
-      role: (ctx as any)?.role ?? (ctx as any)?.authz?.role ?? null,
+      permissions: scope.permissions ?? scope.authz?.permissions ?? [],
+      role: scope.role ?? scope.authz?.role ?? null,
       includeCompletedMissions: includeCompleted,
-      installedBusinessOS: (ctx as any)?.installedBusinessOS
-        ?? (ctx as any)?.authz?.installedBusinessOS
-        ?? null,
+      installedBusinessOS: null,
     });
 
     return NextResponse.json({
@@ -62,8 +78,8 @@ export async function POST(
 ) {
   try {
     const { businessId } = await params;
-    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
-    const userId = String((ctx as any)?.user?.id ?? (ctx as any)?.user?.email ?? "anon");
+    const scope = await getAuthorizedBusinessScope(businessId, PERMISSIONS.PEOPLE_VIEW);
+    const userId = String(scope.user?.id ?? scope.user?.email ?? "anon");
     const body = await request.json().catch(() => ({}));
     const tour = {
       version: ADAPTIVE_TOUR_VERSION,

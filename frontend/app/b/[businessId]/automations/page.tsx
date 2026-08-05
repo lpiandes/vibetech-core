@@ -1,7 +1,8 @@
 import AutomationsIndexExperience from "@/components/automations/AutomationsIndexExperience";
-import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
+import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceService";
 import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
-import { platformStore } from "@/lib/server/compose";
+import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
+import { workspaceCompositionRegistry } from "@/lib/workspace/WorkspaceCompositionRegistry";
 import { presentAutomationPath } from "../../../../../backend/core/ai-builder/operating-contract/automationPath.js";
 import { buildOperatingContract } from "../../../../../backend/core/ai-builder/operating-contract/buildOperatingContract.js";
 import { resolveOperatingIndustry } from "../../../../../backend/core/ai-builder/mapPackAiRolesToSelectedEmployees.js";
@@ -12,9 +13,14 @@ export default async function AutomationsPage({
   params: Promise<{ businessId: string }>;
 }) {
   const { businessId } = await params;
-  const ctx = await getAuthorizedWorkspace(businessId);
-  await redirectIfModuleDenied({ businessId, role: ctx.role, moduleId: "automations" });
-  const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+  const ctx = await getAuthorizedBusinessScope(businessId);
+  const installation = await getCachedBusinessOsInstallation(businessId).catch(() => null);
+  await redirectIfModuleDenied({
+    businessId,
+    role: ctx.role,
+    moduleId: "automations",
+    installation,
+  });
   const employees = Array.isArray(installation?.configuration?.employees)
     ? installation.configuration.employees
     : [];
@@ -25,7 +31,10 @@ export default async function AutomationsPage({
     configuration: installation?.configuration,
   });
 
-  const runtimeAutos = (ctx.service as any)?.connected?.ctx?.automationRuntime?.getAutomations?.() ?? [];
+  const connected = workspaceCompositionRegistry.get(businessId) as any;
+  const runtimeAutos = connected?.operatingStack?.automationRuntime?.getAutomations?.()
+    ?? connected?.ctx?.automationRuntime?.getAutomations?.()
+    ?? [];
 
   const teammates = employees.map((emp: any) => {
     const employeeId = String(emp.employeeId ?? emp.id);

@@ -1,6 +1,7 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { createBuilderQuestion } from "./BuilderQuestion.js";
 import { questionMatchesPackageAsk, specializePackageAskQuestion } from "../platform/packages/SalesPackageCatalog.js";
+import { planNextResponsibilityQuestions } from "./responsibility/planResponsibilityQuestions.js";
 
 /**
  * Deterministic adaptive question planner.
@@ -59,10 +60,25 @@ export const OTHER_INDUSTRY_SIGNAL_QUESTIONS = Object.freeze({
 
 export const DISCOVERY_QUESTION_BANK = Object.freeze([
   createBuilderQuestion({
+    questionId: "q_business_understanding",
+    prompt: "Tell me about your business. What do you sell, who do you serve, and how does work move through the company today?\n\nYou can type, paste a website URL, or describe what is in documents you will upload.",
+    why: "VIBETech learns company identity, services, customers, systems, and constraints before assuming any responsibilities.",
+    required: true,
+    topic: "identity",
+  }),
+  createBuilderQuestion({
+    questionId: "q_vibetech_responsibilities",
+    prompt: "Tell me everything you want VIBETech to take responsibility for. Be very specific: what should happen, when should it happen, and what result should be produced? List as many responsibilities as you want.\n\nExamples:\n• When someone misses a call, text the caller within two minutes.\n• Every Wednesday, find our active listings and prepare a newsletter.\n• Follow up with proposals that have had no reply for five business days.\n• When a lead submits our form, qualify it, assign it and schedule a call.\n• After a job is won, collect the required documents and prepare the handoff.\n• Alert me when a customer request is about to miss its response deadline.",
+    why: "You describe outcomes in normal language. VIBETech determines triggers, systems, rules, approvals, and proof — after you confirm what we heard.",
+    required: true,
+    topic: "identity",
+  }),
+  // Legacy combined opener — kept so in-flight sessions that answered it still resolve.
+  createBuilderQuestion({
     questionId: "q_tell_us",
     prompt: "Describe your business and what you want or need from VIBETech.",
     why: "We tailor every follow-up from what you do and what success looks like for you.",
-    required: true,
+    required: false,
     topic: "identity",
   }),
   createBuilderQuestion({
@@ -146,7 +162,7 @@ export const DISCOVERY_QUESTION_BANK = Object.freeze([
     questionId: "q_desired_workflows",
     prompt: "What processes do you want automated? List everything, specifically.",
     why: "Each process becomes an automation path — for example: FB lead comes in → email → SMS → update pipeline.",
-    required: true,
+    required: false,
     topic: "operations",
   }),
   createBuilderQuestion({
@@ -665,23 +681,29 @@ export const DISCOVERY_QUESTION_BANK = Object.freeze([
 ]);
 
 export class BusinessDiscoveryQuestionPlanner {
-  plan({ answers = [], evidence = [], businessSummary = {}, limit = 3 } = {}) {
+  plan({
+    answers = [],
+    evidence = [],
+    businessSummary = {},
+    limit = 3,
+    responsibilityRequests = [],
+    responsibilityInventoryConfirmed = false,
+  } = {}) {
     const answered = new Set(
       answers
         .filter((entry) => !entry.skipped && !entry.unknown)
         .map((entry) => entry.questionId),
     );
+    // Legacy sessions that answered q_tell_us have already covered business understanding.
+    if (answered.has("q_tell_us")) {
+      answered.add("q_business_understanding");
+    }
+
     const knownTopics = new Set(
       evidence.flatMap((entry) => entry.payload?.topics ?? []),
     );
     const industry = resolveDiscoveryIndustry({ answers, businessSummary });
     const packIndustry = resolvePackIndustry(industry);
-    // No dedicated pack exists for "other" industries yet, so we never infer
-    // a third vertical from loose words such as "team" or "patient" — that
-    // caused false positives. Instead every "other" business gets the same
-    // sensible default subset of adaptive follow-ups (see
-    // OTHER_INDUSTRY_SIGNAL_QUESTIONS.default) so tailored follow-ups still
-    // run instead of silently reducing to zero non-universal questions.
     const activeOtherQuestionIds = defaultOtherQuestionIds(packIndustry);
 
     const purchasedPackages = businessSummary?.purchasedPackages ?? [];
@@ -691,19 +713,49 @@ export class BusinessDiscoveryQuestionPlanner {
       packageAsk,
       packageAskPackages,
     });
-    // Every owner answers the shared operating questions first. Once they
-    // deliberately choose a supported operating pack, add only that pack's
-    // questions. Purchased sales packages further narrow topics (thin SKUs).
-    // Package-add Ask uses catalog focus question IDs only.
+
+    // Responsibility-driven spine (non–package-Ask): Q1 → Q2 → pause for review → clarify.
+    if (!packageAsk) {
+      if (!answered.has("q_business_understanding")) {
+        const q1 = DISCOVERY_QUESTION_BANK.find((q) => q.questionId === "q_business_understanding");
+        return deepFreeze(q1 ? [q1] : []);
+      }
+      if (!answered.has("q_vibetech_responsibilities") && !answered.has("q_tell_us")) {
+        const q2 = DISCOVERY_QUESTION_BANK.find((q) => q.questionId === "q_vibetech_responsibilities");
+        return deepFreeze(q2 ? [q2] : []);
+      }
+      // After Q2: hard pause until owner confirms responsibility inventory.
+      if (
+        (answered.has("q_vibetech_responsibilities") || (Array.isArray(responsibilityRequests) && responsibilityRequests.length > 0))
+        && !responsibilityInventoryConfirmed
+      ) {
+        return deepFreeze([]);
+      }
+      if (responsibilityInventoryConfirmed) {
+        const clarifying = planNextResponsibilityQuestions({
+          responsibilityRequests,
+          answers,
+          limit,
+        });
+        if (clarifying.length) return clarifying;
+        // Fall through to remaining required bank only after responsibilities are clarified.
+      }
+    }
+
     const requiredQuestions = DISCOVERY_QUESTION_BANK.filter((question) => (
       question.required
       && questionMatchesIndustry(question, packIndustry, activeOtherQuestionIds)
       && matchesScope(question)
+      // After inventory confirm, skip the old workflow duplicate.
+      && !(responsibilityInventoryConfirmed && question.questionId === "q_desired_workflows")
+      // Q1/Q2 already handled above for non-package paths; still required for completeness math.
     ));
     const requiredComplete = requiredQuestions.length > 0
       && requiredQuestions.every((question) => answered.has(question.questionId));
-    // Once every required question is answered, stop — exact totals, no optional overrun.
-    if (requiredComplete) {
+    if (requiredComplete && (!responsibilityInventoryConfirmed || packageAsk)) {
+      return deepFreeze([]);
+    }
+    if (requiredComplete && responsibilityInventoryConfirmed) {
       return deepFreeze([]);
     }
 
@@ -715,9 +767,13 @@ export class BusinessDiscoveryQuestionPlanner {
     const remaining = DISCOVERY_QUESTION_BANK.filter((question) => !answered.has(question.questionId))
       .filter((question) => questionMatchesIndustry(question, packIndustry, activeOtherQuestionIds))
       .filter((question) => matchesScope(question))
-      // Prefer required; skip optionals while required remain so the count stays honest.
       .filter((question) => question.required || requiredComplete || packageAsk)
       .filter((question) => {
+        if (responsibilityInventoryConfirmed && question.questionId === "q_desired_workflows") return false;
+        // Do not re-ask Q1/Q2 via topic bank after responsibility spine.
+        if (!packageAsk && (question.questionId === "q_business_understanding" || question.questionId === "q_vibetech_responsibilities")) {
+          return false;
+        }
         if (!question.required && knownTopics.has(question.topic)) return false;
         return true;
       })

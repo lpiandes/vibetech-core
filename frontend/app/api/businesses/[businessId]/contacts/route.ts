@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
+import {
+  getAuthorizedWorkspace,
+  getAuthorizedBusinessScope,
+  authorizationErrorResponse,
+} from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
+import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 import {
   readCrmState,
   writeCrmState,
@@ -43,8 +48,8 @@ export async function GET(
 ) {
   try {
     const { businessId } = await params;
-    await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
-    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    await getAuthorizedBusinessScope(businessId, PERMISSIONS.PEOPLE_VIEW);
+    const installation = await getCachedBusinessOsInstallation(businessId).catch(() => null);
     const crm = readCrmState(installation);
     return NextResponse.json({
       ok: true,
