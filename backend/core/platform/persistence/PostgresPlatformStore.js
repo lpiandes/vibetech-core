@@ -1859,6 +1859,16 @@ export class PostgresPlatformStore {
     return rows[0] ? mapCapabilityProofRow(rows[0]) : null;
   }
 
+  async deleteCapabilityProofRecordsForBusiness(businessId) {
+    const { rowCount } = await this.withClient((client) =>
+      client.query(
+        `DELETE FROM capability_proof_records WHERE business_id = $1::uuid`,
+        [String(businessId)],
+      ),
+    );
+    return { deleted: Number(rowCount ?? 0) };
+  }
+
   async touchWorkerHeartbeat({ workerId, status = "ok", detail = {} } = {}) {
     await this.withClient((client) =>
       client.query(
