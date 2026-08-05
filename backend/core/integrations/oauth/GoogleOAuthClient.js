@@ -4,6 +4,24 @@ function safeString(v) {
   return v === null || v === undefined ? "" : String(v);
 }
 
+function isLocalhostUrl(value) {
+  return /localhost|127\.0\.0\.1/i.test(String(value ?? ""));
+}
+
+/**
+ * Prefer an explicit redirect URI, but never send production Google OAuth
+ * callbacks to localhost when APP_URL / NEXTAUTH_URL is a real host.
+ */
+export function resolveGoogleOAuthRedirectUri() {
+  const explicit = safeString(process.env.GMAIL_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI);
+  const appBase = safeString(process.env.APP_URL || process.env.NEXTAUTH_URL).replace(/\/$/, "");
+  const fromApp = appBase ? `${appBase}/api/integrations/oauth/google/callback` : "";
+
+  if (explicit && !isLocalhostUrl(explicit)) return explicit;
+  if (fromApp && !isLocalhostUrl(fromApp)) return fromApp;
+  return explicit || fromApp;
+}
+
 export const GMAIL_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -26,7 +44,7 @@ export function isGoogleOAuthAppConfigured() {
   return Boolean(
     safeString(process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID)
     && safeString(process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET)
-    && safeString(process.env.GMAIL_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI),
+    && resolveGoogleOAuthRedirectUri(),
   );
 }
 
@@ -34,7 +52,7 @@ export function getGoogleOAuthAppConfig() {
   return {
     clientId: safeString(process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID),
     clientSecret: safeString(process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET),
-    redirectUri: safeString(process.env.GMAIL_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI),
+    redirectUri: resolveGoogleOAuthRedirectUri(),
   };
 }
 
