@@ -1,5 +1,5 @@
 import CalendarExperience from "@/components/calendar/CalendarExperience";
-import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
+import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceService";
 import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
 
 export default async function CalendarPage({
@@ -8,7 +8,7 @@ export default async function CalendarPage({
   params: Promise<{ businessId: string }>;
 }) {
   const { businessId } = await params;
-  const ctx = await getAuthorizedWorkspace(businessId);
+  const ctx = await getAuthorizedBusinessScope(businessId);
   await redirectIfModuleDenied({ businessId, role: ctx.role, moduleId: "calendar" });
   const currentUserId = String((ctx as any)?.authz?.user?.id ?? (ctx as any)?.user?.id ?? "") || null;
   return (

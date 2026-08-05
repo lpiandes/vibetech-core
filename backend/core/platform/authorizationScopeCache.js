@@ -1,6 +1,6 @@
 import { markRequestTiming } from "../../../backend/core/platform/requestTiming.js";
 
-const DEFAULT_TTL_MS = 30_000;
+const DEFAULT_TTL_MS = 5 * 60_000;
 
 const cache = new Map();
 

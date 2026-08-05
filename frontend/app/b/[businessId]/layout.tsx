@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { forbidden, notFound, redirect, unauthorized } from "next/navigation";
+import { forbidden, notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
 
 import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceService";
@@ -7,10 +7,9 @@ import { BusinessScopeProvider } from "@/lib/platform/BusinessScopeContext";
 import WorkspaceRenderer from "@/components/workspace/WorkspaceRenderer";
 import RememberBusinessCookie from "@/components/platform/RememberBusinessCookie";
 import { AuthorizationError, platformStore } from "@/lib/server/compose";
-import { composePortalModel } from "@/lib/portal-renderer/composePortalModel.js";
 import { sanitizeCallbackUrl } from "@/lib/platform/routeProtection";
 import { readPurchasedPackagesFromConfig, readPendingPackageAsk } from "../../../../backend/core/platform/packages/SalesPackageCatalog.js";
-import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
+import { getCachedInstalledPortal } from "@/lib/platform/cachedInstalledPortal";
 
 export default async function BusinessScopedLayout({
   children,
@@ -72,39 +71,16 @@ export default async function BusinessScopedLayout({
     }
   }
 
-  // No server redirect to /architect?packageAsk=1 — that raced with clear/heal and looped.
-  // Home shows PackageAskHomeBanner; owner opens Ask when ready.
-
   let installedNavigation = null as any;
   let installedBusinessOS = null as any;
   try {
-    const installation = await getCachedBusinessOsInstallation(businessId);
-    let specification = null;
-    if (installation?.specificationId) {
-      try {
-        const specRow = await platformStore.getBusinessOSSpecification({
-          businessId,
-          specificationId: installation.specificationId,
-        });
-        specification = specRow?.specification ?? null;
-      } catch {
-        specification = null;
-      }
-    }
-
-    if (installation?.configuration || specification) {
-      const portalModel = composePortalModel({
-        businessId,
-        role: String(ctx.role),
-        permissions,
-        configuration: installation?.configuration ?? null,
-        specification,
-      } as any);
-      installedBusinessOS = portalModel as any;
+    const portal = await getCachedInstalledPortal(businessId, String(ctx.role), permissions);
+    if (portal.portalModel) {
+      installedBusinessOS = portal.portalModel as any;
       installedNavigation = {
-        modules: portalModel.modules,
-        navigation: portalModel.navigation,
-        roles: portalModel.roles,
+        modules: portal.portalModel.modules,
+        navigation: portal.portalModel.navigation,
+        roles: portal.portalModel.roles,
       };
     }
   } catch {

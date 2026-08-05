@@ -1,5 +1,5 @@
 import PipelinesExperience from "@/components/pipelines/PipelinesExperience";
-import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
+import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceService";
 import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
 
 export default async function PipelinesPage({
@@ -8,7 +8,7 @@ export default async function PipelinesPage({
   params: Promise<{ businessId: string }>;
 }) {
   const { businessId } = await params;
-  const ctx = await getAuthorizedWorkspace(businessId);
+  const ctx = await getAuthorizedBusinessScope(businessId);
   await redirectIfModuleDenied({ businessId, role: ctx.role, moduleId: "pipelines" });
   return <PipelinesExperience businessId={businessId} />;
 }

@@ -8,32 +8,44 @@ import ConnectionsRenderer from "@/components/connections/ConnectionsRenderer";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
 import { brand, cockpitColors } from "@/design/tokens";
-import { workspaceCompositionRegistry } from "@/lib/workspace/WorkspaceCompositionRegistry";
 import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 import {
   PACKAGE_ASK_OPTION_TO_CONNECTION,
   resolvePackageAskConnectionOptions,
 } from "../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
+import { connectionHealLikelyNeeded } from "../../../../../backend/core/integrations/credentials/reconcileConnectionsFromDurableCredentials.js";
 
 /**
  * Owner Integrations surface — connections that can operate this business.
  * Prefer Business OS integration plan over industry-package catalogs.
  * Only lists integrations that can actually connect (no coming-soon rows).
  */
-export default async function IntegrationsPage({ params }: { params: Promise<{ businessId: string }> }) {
+export default async function IntegrationsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ businessId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { businessId } = await params;
+  const sp = searchParams ? await searchParams : {};
+  const justConnected = Boolean(sp?.connected);
   return runTimedPage("integrations", async () => {
-    // Drop stale in-memory composition so durable credentials/snapshots win after OAuth.
-    workspaceCompositionRegistry.clear(businessId);
-
+    // Do NOT clear the composition registry on every visit — that forces cold
+    // snapshot/activate/hydrate and makes Integrations feel like a full reload.
     const [ctx, knowledgeDocumentCount, osInstallation] = await Promise.all([
       getAuthorizedWorkspace(businessId),
       platformStore.countActiveKnowledgeDocuments(businessId),
       getCachedBusinessOsInstallation(businessId),
     ]);
     const { service } = ctx;
-    await healWorkspaceConnections(businessId, service);
-    markRequestTiming("CONNECTION_HEAL");
+    const platform = (service as any)?.connected?.integrationPlatform;
+    if (justConnected || connectionHealLikelyNeeded(platform, businessId)) {
+      await healWorkspaceConnections(businessId, service, { force: justConnected }).catch(() => null);
+      markRequestTiming("CONNECTION_HEAL");
+    } else {
+      markRequestTiming("CONNECTION_HEAL_SKIPPED");
+    }
     await redirectIfModuleDenied({
       businessId,
       role: ctx.role,
@@ -77,7 +89,7 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ b
       businessOsIntegrations: businessOsIntegrations.length ? businessOsIntegrations : null,
       liveFlags: liveIntegrationAvailability(),
     });
-    markRequestTiming("VIEW_MODEL", { bytes: JSON.stringify(viewModel).length });
+    markRequestTiming("VIEW_MODEL");
 
     const tipBanner = {
       borderRadius: 12,

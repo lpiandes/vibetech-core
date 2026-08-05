@@ -1,9 +1,8 @@
-import { getAuthorizedWorkspace, healWorkspaceConnections } from "@/lib/platform/AuthorizedWorkspaceService";
+import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
 import { platformStore } from "@/lib/server/compose";
 import { liveIntegrationAvailability } from "@/lib/server/liveIntegrations";
 import BusinessOnboardingHome from "@/components/operating/BusinessOnboardingHome";
 import MissionControlRenderer from "@/components/mission-control/MissionControlRenderer";
-import { composePortalModel } from "@/lib/portal-renderer/composePortalModel.js";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
 import { mergeBosEmployeesForTeam } from "@/lib/team/mergeBosEmployeesForTeam.js";
@@ -14,6 +13,7 @@ import { readPendingPackageAsk } from "../../../../../backend/core/platform/pack
 import { getAiBuilderService } from "@/lib/builder/getAiBuilderService";
 import { resolveOnboardingHomeHref } from "@/lib/builder/resolveOnboardingHomeHref";
 import PackageAskHomeBanner from "@/components/home/PackageAskHomeBanner";
+import { getCachedInstalledPortal } from "@/lib/platform/cachedInstalledPortal";
 
 /**
  * Home is one experience with two moments:
@@ -24,8 +24,6 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
   const { businessId } = await params;
   return runTimedPage("home", async () => {
     const ctx = await getAuthorizedWorkspace(businessId);
-    // Heal email/calendar CONNECTED from durable vault for RFT launch status (not every tab).
-    await healWorkspaceConnections(businessId, ctx.service).catch(() => null);
 
     // Maintenance must never block first paint / login. Fire-and-forget on Home only.
     void Promise.all([
@@ -38,28 +36,15 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
     let installedSpecification: Record<string, unknown> | null = null;
     let installation: any = null;
     try {
-      installation = await platformStore.getBusinessOSInstallation(businessId);
-      let specification = null;
-      if (installation?.specificationId) {
-        const specRow = await platformStore.getBusinessOSSpecification({
-          businessId,
-          specificationId: installation.specificationId,
-        });
-        specification = specRow?.specification ?? null;
-        installedSpecification = specification && typeof specification === "object"
-          ? (specification as Record<string, unknown>)
-          : null;
-      }
-      if (installation?.configuration || specification) {
-        const portalModel = composePortalModel({
-          businessId,
-          role: String(ctx.role ?? "OWNER"),
-          permissions: Array.from((ctx.permissions as Iterable<string> | undefined) ?? []).map(String),
-          configuration: installation?.configuration ?? null,
-          specification,
-        } as any);
-        hasInstalledOs = Boolean(portalModel?.drivenByBusinessOS);
-      }
+      const permissions = Array.from((ctx.permissions as Iterable<string> | undefined) ?? []).map(String);
+      const portal = await getCachedInstalledPortal(
+        businessId,
+        String(ctx.role ?? "OWNER"),
+        permissions,
+      );
+      installation = portal.installation;
+      installedSpecification = portal.specification;
+      hasInstalledOs = portal.hasInstalledOs;
     } catch {
       hasInstalledOs = false;
     }
@@ -149,7 +134,7 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       teamInviteChecklistComplete,
       installedSpecification,
     });
-    markRequestTiming("VIEW_MODEL", { bytes: JSON.stringify(home).length });
+    markRequestTiming("VIEW_MODEL");
 
     // Pre-install: conversation with VIBETech only. No dashboard chrome.
     if (!hasInstalledOs) {
@@ -239,40 +224,21 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       return live ? { ...conn, status: live } : conn;
     });
 
-    const integrationCreds = await platformStore.listIntegrationCredentialsForWorkspace(businessId).catch(() => []);
-    const smsCred = (Array.isArray(integrationCreds) ? integrationCreds : []).find((row: any) => {
-      const provider = String(row?.providerType ?? "");
-      const id = String(row?.credentialId ?? "");
-      return provider === "twilio_sms" || id.includes("twilio_sms");
-    });
-    const smsMeta = smsCred?.metadata && typeof smsCred.metadata === "object" ? smsCred.metadata : {};
+    // Prefer runtime metadata over vault list + business re-fetch (cold login cost).
     const smsRuntime = runtimeConnections.find((c: any) => String(c?.connectionType ?? "") === "sms_channel");
     const smsRuntimeMeta = smsRuntime?.metadata && typeof smsRuntime.metadata === "object" ? smsRuntime.metadata : {};
-    const smsBrand = smsMeta.brand ?? smsRuntimeMeta.brand ?? null;
     const smsSetup = {
       connected: String(connectionStatuses.sms_channel ?? "").toUpperCase() === "CONNECTED",
-      fromNumber: String(smsMeta.fromNumber ?? smsRuntimeMeta.fromNumber ?? smsCred?.secrets?.fromNumber ?? ""),
-      a2pRegistrationStatus: String(
-        smsMeta.a2pRegistrationStatus
-        ?? smsRuntimeMeta.a2pRegistrationStatus
-        ?? "pending",
-      ),
-      brand: smsBrand,
+      fromNumber: String(smsRuntimeMeta.fromNumber ?? ""),
+      a2pRegistrationStatus: String(smsRuntimeMeta.a2pRegistrationStatus ?? "pending"),
+      brand: smsRuntimeMeta.brand ?? null,
     };
 
     const metaConnected = String(connectionStatuses.meta_lead_ads ?? "").toUpperCase() === "CONNECTED";
-    const metaCred = (Array.isArray(integrationCreds) ? integrationCreds : []).find((row: any) => {
-      const provider = String(row?.providerType ?? "");
-      const id = String(row?.credentialId ?? "");
-      return provider === "meta_lead_ads" || id.includes("meta");
-    });
-    const metaCredMeta = metaCred?.metadata && typeof metaCred.metadata === "object" ? metaCred.metadata : {};
-    const businessRow = await platformStore.getBusinessById(businessId).catch(() => null);
-    const pendingOps = businessRow?.packageConfiguration?.pendingOpsRequests?.meta_lead_ads;
+    const packageConfiguration = (ctx as any).authz?.business?.packageConfiguration ?? {};
+    const pendingOps = packageConfiguration?.pendingOpsRequests?.meta_lead_ads;
     const metaSetupPending = !metaConnected && (
-      String(metaCredMeta.status ?? "") === "pending_ops"
-      || Boolean(metaCredMeta.setupRequestedAt)
-      || String(pendingOps?.status ?? "") === "pending_ops"
+      String(pendingOps?.status ?? "") === "pending_ops"
       || Boolean(pendingOps?.requestedAt)
     );
 

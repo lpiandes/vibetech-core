@@ -61,10 +61,9 @@ const STEP_META: Array<{ id: string; label: string }> = [
  */
 export default function RftLaunchPath({
   businessId,
-  connectionStatuses = {},
-  proofRecords = {},
 }: {
   businessId: string;
+  /** @deprecated unused — kept optional so callers need not change yet */
   connectionStatuses?: Record<string, unknown>;
   proofRecords?: Record<string, unknown>;
 }) {
@@ -95,7 +94,9 @@ export default function RftLaunchPath({
 
   useEffect(() => {
     void refresh();
-  }, [refresh, connectionStatuses, proofRecords]);
+    // Do not depend on connectionStatuses/proofRecords object identity — that
+    // re-fetched the launch API on every parent render and made Home feel stuck.
+  }, [refresh]);
 
   async function runAction(action: string, extra: Record<string, unknown> = {}) {
     setBusy(action);

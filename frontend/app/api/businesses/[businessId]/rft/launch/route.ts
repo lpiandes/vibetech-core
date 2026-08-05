@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { getAuthorizedWorkspace, healWorkspaceConnections, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
+import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
+import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 import { GmailInboundSyncService } from "../../../../../../../backend/core/integrations/gmail/GmailInboundSyncService.js";
 import {
   applyRftLaunchPatch,
@@ -88,8 +89,9 @@ export async function GET(
   try {
     const { businessId } = await params;
     const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_VIEW);
-    await healWorkspaceConnections(businessId, ctx.service).catch(() => null);
-    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    // No heal on GET — soft-nav Home already pays for workspace boot; heal only
+    // on Integrations after OAuth / when connectionHealLikelyNeeded.
+    const installation = await getCachedBusinessOsInstallation(businessId).catch(() => null);
     if (!installation) {
       return NextResponse.json({ ok: false, error: "Installation not found" }, { status: 404 });
     }

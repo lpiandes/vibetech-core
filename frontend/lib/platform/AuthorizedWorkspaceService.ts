@@ -17,7 +17,10 @@ import type { WorkspaceActivationInput } from "../workspace/ConnectedBusinessWor
 import { createLiveIntegrationProviders } from "@/lib/server/liveIntegrations";
 import { platformStore } from "@/lib/server/compose";
 import { hydrateWorkspaceCredentials } from "../../../backend/core/integrations/credentials/durableCredentialVault.js";
-import { reconcileConnectionsFromDurableCredentials } from "../../../backend/core/integrations/credentials/reconcileConnectionsFromDurableCredentials.js";
+import {
+  reconcileConnectionsFromDurableCredentials,
+  connectionHealLikelyNeeded,
+} from "../../../backend/core/integrations/credentials/reconcileConnectionsFromDurableCredentials.js";
 import { getSharedCredentialVault } from "../../../backend/core/integrations/credentials/CredentialVault.js";
 
 export type AuthorizedContext = Awaited<ReturnType<typeof getAuthorizedWorkspace>>;
@@ -99,22 +102,29 @@ export const getAuthorizedWorkspace = cache(async (businessId: string, requiredP
   });
   timer.mark("WORKSPACE_SERVICE");
 
-  // Soft-nav fast path: one-time vault hydrate only. Connection heal is intentional
-  // (OAuth callback, Integrations, Home) — not every tab click.
+  // Soft-nav fast path: hydrate vault once per process composition. Skip DB if
+  // known credential ids are already in the shared vault.
   const connected = (service as any).connected as { credentialsHydrated?: boolean };
   if (!connected.credentialsHydrated) {
     const vault =
       (service as any)?.connected?.integrationPlatform?.credentialVault
       ?? getSharedCredentialVault();
-    await timer.time("CREDENTIAL_HYDRATE", () =>
-      hydrateWorkspaceCredentials({
-        platformStore,
-        vault,
-        workspaceId: businessId,
-        overwrite: false,
-      }),
-    );
-    connected.credentialsHydrated = true;
+    const knownIds = [`cred_gmail_${businessId}`, `cred_gcal_${businessId}`];
+    const vaultWarm = knownIds.some((id) => Boolean(vault?.has?.(id)));
+    if (vaultWarm) {
+      connected.credentialsHydrated = true;
+      timer.mark("CREDENTIAL_HYDRATE_VAULT_HIT");
+    } else {
+      await timer.time("CREDENTIAL_HYDRATE", () =>
+        hydrateWorkspaceCredentials({
+          platformStore,
+          vault,
+          workspaceId: businessId,
+          overwrite: false,
+        }),
+      );
+      connected.credentialsHydrated = true;
+    }
   } else {
     timer.mark("CREDENTIAL_HYDRATE_SKIPPED");
   }
@@ -131,8 +141,15 @@ export const getAuthorizedWorkspace = cache(async (businessId: string, requiredP
  * Force durable credentials → CONNECTED status. Call from Integrations / Home / OAuth
  * — never from every soft navigation.
  */
-export async function healWorkspaceConnections(businessId: string, service: WorkspaceService) {
+export async function healWorkspaceConnections(
+  businessId: string,
+  service: WorkspaceService,
+  options: { force?: boolean } = {},
+) {
   const platform = (service as any)?.connected?.integrationPlatform;
+  if (!options.force && !connectionHealLikelyNeeded(platform, businessId)) {
+    return { healed: [], skipped: true };
+  }
   const vault = platform?.credentialVault ?? getSharedCredentialVault();
   await hydrateWorkspaceCredentials({
     platformStore,
