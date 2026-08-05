@@ -16,8 +16,8 @@ export const simplePageStyle: CSSProperties = {
 
 export const simplePanelStyle: CSSProperties = {
   borderRadius: 16,
-  border: "1px solid rgba(15,23,42,.08)",
-  background: "#fff",
+  border: `1px solid ${cockpitColors.panelBorder}`,
+  background: cockpitColors.panel,
   overflow: "hidden",
 };
 
@@ -103,7 +103,7 @@ export function SimplePanel({
             justifyContent: "space-between",
             gap: 12,
             padding: "14px 18px",
-            borderBottom: "1px solid rgba(15,23,42,.06)",
+            borderBottom: `1px solid ${cockpitColors.panelBorder}`,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -173,7 +173,7 @@ export function SimpleRow({
         alignItems: "center",
         gap: 14,
         padding: "14px 18px",
-        borderBottom: "1px solid rgba(15,23,42,.06)",
+        borderBottom: `1px solid ${cockpitColors.panelBorder}`,
         textDecoration: "none",
         color: "inherit",
       }}

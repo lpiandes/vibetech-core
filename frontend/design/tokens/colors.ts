@@ -1,7 +1,6 @@
 import { brand } from "./brand";
 
 export const semanticColors = {
-  // App surfaces + text (already defined by the current shadcn/tailwind theme CSS variables).
   background: "var(--background)",
   surface: "var(--card)",
   surfaceSecondary: "var(--popover)",
@@ -13,10 +12,8 @@ export const semanticColors = {
   textSecondary: "var(--secondary-foreground)",
   textMuted: "var(--muted-foreground)",
 
-  // Brand/accent semantic slot (mapped to current theme accent).
   accent: "var(--accent)",
 
-  // Status/health semantics (foundation tokens only; values can be overridden per customer theme later).
   success: "oklch(0.77 0.18 155)",
   warning: "oklch(0.87 0.16 80)",
   danger: "oklch(0.65 0.21 25)",
@@ -31,41 +28,41 @@ export const semanticColors = {
 export type SemanticColorKey = keyof typeof semanticColors;
 
 /**
- * Operating cockpit — aligned to vtechdevelopment.com (cyan · purple · navy).
- * Light canvas for work; deep navy sidebar; cyan accent.
+ * App chrome = marketing site (vtechdevelopment.com):
+ * deep navy canvas, cyan accent, purple CTA gradient.
  */
 export const cockpitColors = {
-  background: "#f1f5f9",
-  panel: "#ffffff",
-  panelElevated: "#f8fafc",
-  panelBorder: "rgba(15, 23, 42, 0.08)",
-  inset: "#e2e8f0",
-  overlay: "rgba(7, 11, 20, 0.55)",
+  background: brand.bgDeep,
+  panel: brand.bg,
+  panelElevated: "#111827",
+  panelBorder: brand.border,
+  inset: "#0a1220",
+  overlay: "rgba(7, 11, 20, 0.72)",
   sidebar: brand.bgDeep,
   sidebarBorder: brand.border,
   sidebarText: brand.text,
   sidebarTextMuted: brand.textMuted,
-  sidebarActive: "rgba(34, 211, 238, 0.12)",
-  textPrimary: brand.navy,
-  textSecondary: "#334155",
+  sidebarActive: "rgba(34, 211, 238, 0.14)",
+  textPrimary: brand.text,
+  textSecondary: brand.textMuted,
   textMuted: "#64748b",
-  accent: brand.accentOnLight,
-  accentMuted: brand.accentMutedOnLight,
-  warning: "#b45309",
-  critical: "#b91c1c",
-  handled: "#0f766e",
-  waiting: "#a16207",
+  accent: brand.cyan,
+  accentMuted: "rgba(34, 211, 238, 0.14)",
+  warning: "#f59e0b",
+  critical: "#f87171",
+  handled: "#34d399",
+  waiting: "#fbbf24",
 } as const;
 
 /** Semantic operational status — always pair with text/icon, not color alone. */
 export const statusSemantics = {
-  critical: { label: "Critical", color: cockpitColors.critical, bg: "rgba(185,28,28,0.1)", icon: "!" },
-  high: { label: "High", color: "#c2410c", bg: "rgba(194,65,12,0.1)", icon: "▲" },
-  medium: { label: "Medium", color: cockpitColors.warning, bg: "rgba(180,83,9,0.1)", icon: "●" },
-  low: { label: "Low", color: cockpitColors.textMuted, bg: "rgba(120,113,108,0.12)", icon: "○" },
-  handled: { label: "Handled", color: cockpitColors.handled, bg: "rgba(4,120,87,0.1)", icon: "✓" },
-  resolved: { label: "Resolved", color: cockpitColors.handled, bg: "rgba(4,120,87,0.1)", icon: "✓" },
-  waiting: { label: "Waiting", color: cockpitColors.waiting, bg: "rgba(161,98,7,0.1)", icon: "…" },
+  critical: { label: "Critical", color: cockpitColors.critical, bg: "rgba(248,113,113,0.12)", icon: "!" },
+  high: { label: "High", color: "#fb923c", bg: "rgba(251,146,60,0.12)", icon: "▲" },
+  medium: { label: "Medium", color: cockpitColors.warning, bg: "rgba(245,158,11,0.12)", icon: "●" },
+  low: { label: "Low", color: cockpitColors.textMuted, bg: "rgba(100,116,139,0.18)", icon: "○" },
+  handled: { label: "Handled", color: cockpitColors.handled, bg: "rgba(52,211,153,0.12)", icon: "✓" },
+  resolved: { label: "Resolved", color: cockpitColors.handled, bg: "rgba(52,211,153,0.12)", icon: "✓" },
+  waiting: { label: "Waiting", color: cockpitColors.waiting, bg: "rgba(251,191,36,0.12)", icon: "…" },
   informational: { label: "Info", color: cockpitColors.accent, bg: cockpitColors.accentMuted, icon: "i" },
 } as const;
 

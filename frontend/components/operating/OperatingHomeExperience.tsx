@@ -95,59 +95,46 @@ export default function OperatingHomeExperience() {
     <HomeCanvas>
       <HomeHero greeting={greeting} />
 
-      <section
-        aria-label="Operation health"
-        style={{
-          display: "grid",
-          gap: spacing.sm,
-          padding: spacing.lg,
-          borderRadius: radius.large,
-          background: cockpitColors.panel,
-          border: `1px solid ${cockpitColors.panelBorder}`,
-        }}
-      >
-        <p style={{ margin: 0, fontSize: typography.cardTitle.fontSize, fontWeight: 650, color: cockpitColors.textPrimary }}>
-          {healthLine.headline}
-        </p>
-        {healthLine.detail ? (
-          <p style={{ margin: 0, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
-            {healthLine.detail}
+      {showRftLaunch ? (
+        <section
+          aria-label="Launch status"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: spacing.md,
+            padding: "14px 18px",
+            borderRadius: radius.large,
+            background: "rgba(34, 211, 238, 0.08)",
+            border: "1px solid rgba(34, 211, 238, 0.28)",
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 650, color: cockpitColors.textPrimary }}>
+            Finish setup to go live
           </p>
-        ) : null}
-      </section>
-
-      <section aria-label="Work handled today" style={{ display: "grid", gap: spacing.sm }}>
-        <h2 style={{ margin: 0, fontSize: typography.meta.fontSize, fontWeight: 700, color: cockpitColors.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-          Today
-        </h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: spacing.sm }}>
-          {completedToday > 0 || needsCount > 0 || waitingExternally > 0 || exceptionCount > 0 || workingNow.length > 0 ? (
-            <>
-              <BriefStat label="Completed" value={completedToday} href={outcomesHref} hideZero={false} />
-              <BriefStat label="Needs approval" value={approvalItems.length} href={decisionsHref} tone={approvalItems.length ? "attention" : "default"} />
-              <BriefStat label="Waiting on prospect" value={waitingExternally} href={base ? `${base}/work` : null} />
-              <BriefStat label="Exceptions" value={exceptionCount} tone={exceptionCount ? "attention" : "default"} href={decisionsHref} />
-            </>
-          ) : (
-            <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize }}>
-              No work yet today — connect email & calendar, or wait for the next lead.
+          <span style={{ fontSize: 13, color: cockpitColors.accent, fontWeight: 700, whiteSpace: "nowrap" }}>
+            Connect → Prove → Live
+          </span>
+        </section>
+      ) : healthLine.headline ? (
+        <section
+          aria-label="Operation health"
+          style={{
+            ...panelStyle,
+            display: "grid",
+            gap: 4,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: typography.cardTitle.fontSize, fontWeight: 650, color: cockpitColors.textPrimary }}>
+            {healthLine.headline}
+          </p>
+          {healthLine.detail ? (
+            <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: 14, lineHeight: 1.45 }}>
+              {healthLine.detail}
             </p>
-          )}
-        </div>
-        {(completedToday > 0 || needsCount > 0 || workingNow.length > 0) ? (
-          <p style={{ margin: 0, fontSize: typography.meta.fontSize, color: cockpitColors.textSecondary }}>
-            VIBETech handled {Math.max(completedToday, workingNow.length + completedToday)}{" "}
-            {Math.max(completedToday, workingNow.length + completedToday) === 1 ? "opportunity" : "opportunities"} in view
-            {needsCount ? ` · ${needsCount} waiting for you` : ""}.
-          </p>
-        ) : null}
-      </section>
-
-      <PerformanceBrief
-        baseline={viewModel?.outcomesLedger?.baseline ?? viewModel?.productContext?.rftObservation?.baseline ?? null}
-        metrics={viewModel?.outcomesLedger?.metrics ?? null}
-        outcomesHref={outcomesHref}
-      />
+          ) : null}
+        </section>
+      ) : null}
 
       {showRftLaunch ? (
         <RftLaunchPath
@@ -157,9 +144,30 @@ export default function OperatingHomeExperience() {
         />
       ) : null}
 
+      {!showRftLaunch && (completedToday > 0 || needsCount > 0 || waitingExternally > 0 || exceptionCount > 0 || workingNow.length > 0) ? (
+        <section aria-label="Work handled today" style={{ display: "grid", gap: spacing.sm }}>
+          <h2 style={{ margin: 0, fontSize: typography.meta.fontSize, fontWeight: 700, color: cockpitColors.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            Today
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: spacing.sm }}>
+            <BriefStat label="Completed" value={completedToday} href={outcomesHref} hideZero={false} />
+            <BriefStat label="Needs approval" value={approvalItems.length} href={decisionsHref} tone={approvalItems.length ? "attention" : "default"} />
+            <BriefStat label="Waiting on prospect" value={waitingExternally} href={base ? `${base}/work` : null} />
+            <BriefStat label="Exceptions" value={exceptionCount} tone={exceptionCount ? "attention" : "default"} href={decisionsHref} />
+          </div>
+        </section>
+      ) : null}
+
+      <PerformanceBrief
+        baseline={viewModel?.outcomesLedger?.baseline ?? viewModel?.productContext?.rftObservation?.baseline ?? null}
+        metrics={viewModel?.outcomesLedger?.metrics ?? null}
+        outcomesHref={outcomesHref}
+        hidden={showRftLaunch}
+      />
+
       <section aria-label="Needs you" style={{ display: "grid", gap: spacing.sm }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: spacing.md }}>
-          <h2 style={{ margin: 0, fontSize: typography.sectionTitle?.fontSize ?? 18, fontWeight: 700 }}>
+          <h2 style={{ margin: 0, fontSize: typography.sectionTitle?.fontSize ?? 18, fontWeight: 700, color: cockpitColors.textPrimary }}>
             Needs you
           </h2>
           {decisionsHref ? (
@@ -170,7 +178,7 @@ export default function OperatingHomeExperience() {
         </div>
         {!topDecision ? (
           <div style={{ ...panelStyle, color: cockpitColors.textSecondary }}>
-            Nothing waiting for your judgment.
+            Nothing waiting.
           </div>
         ) : (
           <DecisionCard
@@ -196,46 +204,48 @@ export default function OperatingHomeExperience() {
         )}
       </section>
 
-      <div className="vt-home-panel-grid">
-        <SimplePanel
-          title="Recent completed work"
-          action={outcomesHref ? <SimplePanelLink href={outcomesHref}>Outcomes</SimplePanelLink> : null}
-        >
-          {!outcomes.length ? (
-            <SimpleEmptyLine>No completed outcomes with evidence yet.</SimpleEmptyLine>
-          ) : (
-            outcomes.slice(0, 6).map((entry: any) => (
-              <SimpleRow
-                key={entry.id ?? entry.title}
-                title={humanizeHomeDecisionTitle(entry.title ?? "Completed work")}
-                meta={[entry.actorLabel, formatWhen(entry.timestamp ?? entry.at)].filter(Boolean).join(" · ") || null}
-                href={entry.href ?? outcomesHref}
-                trailing={entry.href || outcomesHref ? rowAction("Open") : null}
-              />
-            ))
-          )}
-        </SimplePanel>
+      {!showRftLaunch ? (
+        <div className="vt-home-panel-grid">
+          <SimplePanel
+            title="Recent completed work"
+            action={outcomesHref ? <SimplePanelLink href={outcomesHref}>Outcomes</SimplePanelLink> : null}
+          >
+            {!outcomes.length ? (
+              <SimpleEmptyLine>No completed outcomes yet.</SimpleEmptyLine>
+            ) : (
+              outcomes.slice(0, 6).map((entry: any) => (
+                <SimpleRow
+                  key={entry.id ?? entry.title}
+                  title={humanizeHomeDecisionTitle(entry.title ?? "Completed work")}
+                  meta={[entry.actorLabel, formatWhen(entry.timestamp ?? entry.at)].filter(Boolean).join(" · ") || null}
+                  href={entry.href ?? outcomesHref}
+                  trailing={entry.href || outcomesHref ? rowAction("Open") : null}
+                />
+              ))
+            )}
+          </SimplePanel>
 
-        <SimplePanel
-          title="In motion"
-          count={workingNow.length || null}
-          action={base ? <SimplePanelLink href={`${base}/work`}>Work</SimplePanelLink> : null}
-        >
-          {!workingNow.length ? (
-            <SimpleEmptyLine>Nothing live right now.</SimpleEmptyLine>
-          ) : (
-            workingNow.slice(0, 5).map((episode: any) => (
-              <SimpleRow
-                key={episode.id}
-                title={humanizeHomeDecisionTitle(episode.title)}
-                meta={[episode.relatedLabel, episode.currentStep].filter(Boolean).join(" · ") || null}
-                href={episode.openWorkHref}
-                trailing={episode.openWorkHref ? rowAction("Open") : null}
-              />
-            ))
-          )}
-        </SimplePanel>
-      </div>
+          <SimplePanel
+            title="In motion"
+            count={workingNow.length || null}
+            action={base ? <SimplePanelLink href={`${base}/work`}>Work</SimplePanelLink> : null}
+          >
+            {!workingNow.length ? (
+              <SimpleEmptyLine>Nothing live right now.</SimpleEmptyLine>
+            ) : (
+              workingNow.slice(0, 5).map((episode: any) => (
+                <SimpleRow
+                  key={episode.id}
+                  title={humanizeHomeDecisionTitle(episode.title)}
+                  meta={[episode.relatedLabel, episode.currentStep].filter(Boolean).join(" · ") || null}
+                  href={episode.openWorkHref}
+                  trailing={episode.openWorkHref ? rowAction("Open") : null}
+                />
+              ))
+            )}
+          </SimplePanel>
+        </div>
+      ) : null}
     </HomeCanvas>
   );
 }
@@ -292,47 +302,39 @@ function PerformanceBrief({
   baseline,
   metrics,
   outcomesHref,
+  hidden = false,
 }: {
   baseline: any;
   metrics: any;
   outcomesHref: string | null;
+  hidden?: boolean;
 }) {
+  if (hidden) return null;
   const first = baseline?.metrics?.firstResponse ?? null;
   const sla = metrics?.slaAttainment ?? null;
-  const delta = metrics?.baselineDelta ?? null;
   const autoVsHuman = metrics?.autoVsHuman ?? null;
+  const hasObservable =
+    (first?.status === "observable" && Number.isFinite(first.medianMinutes))
+    || sla?.status === "observable"
+    || (autoVsHuman && (autoVsHuman.auto > 0 || autoVsHuman.human > 0));
+  if (!hasObservable) return null;
+
   const rows: Array<{ label: string; value: string }> = [];
-
   if (first?.status === "observable" && Number.isFinite(first.medianMinutes)) {
-    rows.push({
-      label: "First-response (baseline)",
-      value: formatMinutes(first.medianMinutes),
-    });
-  } else {
-    rows.push({
-      label: "First-response (baseline)",
-      value: "Not observable yet",
-    });
+    rows.push({ label: "First response", value: formatMinutes(first.medianMinutes) });
   }
-
   if (sla?.status === "observable") {
     rows.push({
-      label: "SLA check",
+      label: "SLA",
       value: sla.withinSla
-        ? `Within ${sla.slaMinutes} min target (median ${formatMinutes(sla.medianMinutes)})`
-        : `Above ${sla.slaMinutes} min target (median ${formatMinutes(sla.medianMinutes)})`,
-    });
-  } else {
-    rows.push({
-      label: "Follow-ups / SLA",
-      value: delta?.reason || sla?.reason || "Not observable until baseline + live volume exist",
+        ? `Within ${sla.slaMinutes} min`
+        : `Above ${sla.slaMinutes} min`,
     });
   }
-
   if (autoVsHuman && (autoVsHuman.auto > 0 || autoVsHuman.human > 0)) {
     rows.push({
       label: "Auto vs human",
-      value: `${autoVsHuman.auto} automatic · ${autoVsHuman.human} with human judgment`,
+      value: `${autoVsHuman.auto} auto · ${autoVsHuman.human} human`,
     });
   }
 
@@ -355,9 +357,6 @@ function PerformanceBrief({
             <strong style={{ fontSize: typography.meta.fontSize, color: cockpitColors.textPrimary }}>{row.value}</strong>
           </div>
         ))}
-        <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted }}>
-          Shown only when backed by real evidence.
-        </p>
       </div>
     </section>
   );

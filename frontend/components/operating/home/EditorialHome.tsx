@@ -34,15 +34,15 @@ export function HomeCanvas({ children }: { children: ReactNode }) {
         {children}
       </div>
       <style>{`
-        .vt-operating-status { display: grid; gap: 8px; padding: 13px 16px; background: #fff; border: 1px solid rgba(15, 23, 42, .07); border-radius: 16px; box-shadow: 0 8px 24px rgba(15,23,42,.035); }
-        .vt-operating-status-title { font-size: 11px; color: #64748b; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+        .vt-operating-status { display: grid; gap: 8px; padding: 13px 16px; background: #0c1222; border: 1px solid rgba(148, 163, 184, .12); border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+        .vt-operating-status-title { font-size: 11px; color: #94a3b8; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
         .vt-operating-status-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-        .vt-status-chip { min-width: 0; display: flex; align-items: flex-start; gap: 9px; padding: 9px; color: #334155; border-radius: 10px; background: #f8fafc; text-decoration: none; }
-        .vt-status-chip:hover { background: #f1f5f9; }
+        .vt-status-chip { min-width: 0; display: flex; align-items: flex-start; gap: 9px; padding: 9px; color: #cbd5e1; border-radius: 10px; background: #111827; text-decoration: none; }
+        .vt-status-chip:hover { background: #0f172a; }
         .vt-status-chip strong, .vt-status-chip small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vt-status-chip strong { font-size: 12px; color: #0f172a; line-height: 1.35; }
-        .vt-status-chip small { margin-top: 2px; font-size: 11px; color: #64748b; line-height: 1.35; }
-        .vt-status-good svg { color: #059669; } .vt-status-warning svg { color: #d97706; } .vt-status-default svg { color: #2563eb; }
+        .vt-status-chip strong { font-size: 12px; color: #f1f5f9; line-height: 1.35; }
+        .vt-status-chip small { margin-top: 2px; font-size: 11px; color: #94a3b8; line-height: 1.35; }
+        .vt-status-good svg { color: #34d399; } .vt-status-warning svg { color: #fbbf24; } .vt-status-default svg { color: #22d3ee; }
         .vt-dash-grid-3 {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -55,15 +55,15 @@ export function HomeCanvas({ children }: { children: ReactNode }) {
           gap: 14px;
         }
         .vt-dash-card {
-          background: #fff;
-          border: 1px solid #e8edf2;
+          background: #0c1222;
+          border: 1px solid rgba(148, 163, 184, 0.12);
           border-radius: 14px;
-          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035), 0 8px 22px rgba(15, 23, 42, 0.035);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
         }
         .vt-dash-row-interactive { cursor: pointer; }
-        .vt-dash-row-interactive:hover { background: rgba(15, 118, 110, 0.04); }
+        .vt-dash-row-interactive:hover { background: rgba(34, 211, 238, 0.06); }
         .vt-dash-metric-interactive { cursor: pointer; text-decoration: none; color: inherit; display: grid; gap: 6px; }
-        .vt-dash-metric-interactive:hover { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 10px 28px rgba(15, 118, 110, 0.10); }
+        .vt-dash-metric-interactive:hover { box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.35), 0 10px 28px rgba(168, 85, 247, 0.12); }
         @media (max-width: 1100px) {
           .vt-dash-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .vt-dash-grid-3 { grid-template-columns: 1fr 1fr; }
@@ -75,7 +75,7 @@ export function HomeCanvas({ children }: { children: ReactNode }) {
         @media (prefers-reduced-motion: reduce) {
           .vt-dash-card { transition: none !important; }
         }
-        .vt-simple-row-link:hover > div { background: rgba(15, 118, 110, 0.04); }
+        .vt-simple-row-link:hover > div { background: rgba(34, 211, 238, 0.06); }
         .vt-home-panel-grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));

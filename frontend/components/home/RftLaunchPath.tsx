@@ -72,7 +72,6 @@ export default function RftLaunchPath({
   const [launch, setLaunch] = useState<LaunchView | null>(null);
   const [observation, setObservation] = useState<any>(null);
   const [replay, setReplay] = useState<any>(null);
-  const [contract, setContract] = useState<any>(null);
   const [responsibility, setResponsibility] = useState<Record<string, string>>({});
   const [responsibilityFields, setResponsibilityFields] = useState<ResponsibilityField[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -89,7 +88,6 @@ export default function RftLaunchPath({
     setLaunch(data.launch ?? null);
     setObservation(data.observation ?? null);
     setReplay(data.replay ?? null);
-    setContract(data.contract ?? null);
     setResponsibility(data.responsibility ?? {});
     setResponsibilityFields(Array.isArray(data.responsibilityFields) ? data.responsibilityFields : []);
     setError(null);
@@ -154,11 +152,11 @@ export default function RftLaunchPath({
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: spacing.md, flexWrap: "wrap" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: typography.cardTitle.fontSize, fontWeight: 700 }}>
-            Get Revenue Follow-Through live
+          <h2 style={{ margin: 0, fontSize: typography.cardTitle.fontSize, fontWeight: 700, color: cockpitColors.textPrimary }}>
+            Go live
           </h2>
-          <p style={{ margin: `${spacing.xs} 0 0`, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize }}>
-            {completeCount}/{totalSteps} steps · Real evidence only
+          <p style={{ margin: `${spacing.xs} 0 0`, color: cockpitColors.accent, fontSize: typography.meta.fontSize, fontWeight: 700 }}>
+            {completeCount}/{totalSteps} complete
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => void refresh()} disabled={busy != null}>
@@ -166,21 +164,15 @@ export default function RftLaunchPath({
         </Button>
       </div>
 
-      {contract ? (
-        <p style={{ margin: 0, fontSize: typography.meta.fontSize, color: cockpitColors.textMuted }}>
-          {contract.slaSummary}. {contract.approvalSummary}.
-        </p>
-      ) : null}
-
-      {baseline ? (
-        <BaselineStrip baseline={baseline} outcomesHref={`${base}/outcomes`} />
-      ) : null}
-
       {error ? (
         <p role="alert" style={{ margin: 0, color: cockpitColors.warning, fontSize: typography.meta.fontSize }}>{error}</p>
       ) : null}
       {message ? (
         <p style={{ margin: 0, color: cockpitColors.handled, fontSize: typography.meta.fontSize }}>{message}</p>
+      ) : null}
+
+      {baseline ? (
+        <BaselineStrip baseline={baseline} outcomesHref={`${base}/outcomes`} />
       ) : null}
 
       <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: spacing.sm }}>

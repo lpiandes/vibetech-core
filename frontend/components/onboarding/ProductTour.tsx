@@ -274,11 +274,11 @@ export default function ProductTour({
           left: cardLeft ?? "50%",
           top: cardTop ?? "50%",
           transform: cardLeft == null ? "translate(-50%, -50%)" : undefined,
-          background: "#fff",
+          background: "#0c1222",
           borderRadius: 20,
           padding: "24px 22px 18px",
-          boxShadow: "0 24px 80px rgba(0,0,0,.35)",
-          border: "1px solid rgba(15,23,42,.08)",
+          boxShadow: "0 24px 80px rgba(0,0,0,.55)",
+          border: "1px solid rgba(34, 211, 238, 0.22)",
         }}
       >
         <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: cockpitColors.accent }}>
