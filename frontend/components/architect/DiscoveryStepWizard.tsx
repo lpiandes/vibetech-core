@@ -64,6 +64,105 @@ const INTEGRATION_LABELS: Record<string, string> = {
   none_yet: "None yet",
 };
 
+/** Split main prompt from Examples / bullet list for readable discovery layout. */
+function splitDiscoveryPrompt(prompt: string): { main: string; examples: string[] } {
+  const raw = String(prompt ?? "").trim();
+  if (!raw) return { main: "", examples: [] };
+
+  const examplesMatch = raw.match(/\n*\s*Examples?\s*:\s*/i);
+  if (examplesMatch && examplesMatch.index != null) {
+    const main = raw.slice(0, examplesMatch.index).trim();
+    const rest = raw.slice(examplesMatch.index + examplesMatch[0].length).trim();
+    const examples = rest
+      .split(/\n+|(?=\s*[•\-\*]\s)/)
+      .map((line) => line.replace(/^\s*[•\-\*]\s*/, "").trim())
+      .filter(Boolean);
+    if (examples.length) return { main, examples };
+  }
+
+  // Flattened LLM rewrite: "... want. Examples: • A • B"
+  const flat = raw.match(/^(.*?)\s+Examples?\s*:\s*(.+)$/is);
+  if (flat) {
+    const examples = flat[2]
+      .split(/\s*[•\-\*]\s+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (examples.length >= 2) {
+      return { main: flat[1].trim(), examples };
+    }
+  }
+
+  return { main: raw, examples: [] };
+}
+
+function DiscoveryQuestionPrompt({ prompt }: { prompt: string }) {
+  const { main, examples } = splitDiscoveryPrompt(prompt);
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <h2 style={{
+        margin: 0,
+        fontFamily: architect.display,
+        fontSize: "clamp(1.35rem, 2.6vw, 1.75rem)",
+        lineHeight: 1.3,
+        letterSpacing: "-0.02em",
+        whiteSpace: "pre-wrap",
+      }}
+      >
+        {main}
+      </h2>
+      {examples.length ? (
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{
+            fontFamily: architect.font,
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            color: architect.inkMuted,
+          }}
+          >
+            Examples
+          </div>
+          <ul style={{
+            margin: 0,
+            padding: 0,
+            listStyle: "none",
+            display: "grid",
+            gap: 6,
+          }}
+          >
+            {examples.map((example) => (
+              <li
+                key={example}
+                style={{
+                  fontFamily: architect.font,
+                  fontSize: 13,
+                  lineHeight: 1.45,
+                  color: architect.inkMuted,
+                  paddingLeft: 14,
+                  position: "relative",
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    color: architect.accent,
+                  }}
+                >
+                  •
+                </span>
+                {example}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * One question + one answer at a time. Next requires text. Back edits a previous answer.
  */
@@ -315,15 +414,7 @@ export default function DiscoveryStepWizard({
       </div>
 
       <div style={{ display: "grid", gap: 8 }}>
-        <h2 style={{
-          margin: 0,
-          fontFamily: architect.display,
-          fontSize: "clamp(1.35rem, 2.6vw, 1.75rem)",
-          lineHeight: 1.25,
-          letterSpacing: "-0.02em",
-        }}>
-          {step.prompt}
-        </h2>
+        <DiscoveryQuestionPrompt prompt={step.prompt} />
         {step.why ? (
           <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.5 }}>
             {step.why}
