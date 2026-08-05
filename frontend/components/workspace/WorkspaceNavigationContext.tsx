@@ -105,7 +105,9 @@ export function WorkspaceNavigationProvider({ children }: { children: ReactNode 
   }, []);
 
   const isNavigating = pendingHref !== null;
-  const displayPath = pendingHref ?? normalizedPathname;
+  // Never highlight a different tab than the content on screen — pendingHref caused
+  // "Today" selected while Decisions still showed (felt broken / glitchy).
+  const displayPath = normalizedPathname;
 
   const value = useMemo(
     () => ({

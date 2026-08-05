@@ -1,7 +1,9 @@
 "use client";
 
 import type { ReactNode, MouseEvent } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   BookOpen,
@@ -179,6 +181,7 @@ export default function PrimaryNavigation({
   onNavigate?: () => void;
 }) {
   const scope = useBusinessScope();
+  const router = useRouter();
   const { displayPath, beginNavigation } = useWorkspaceNavigation();
   const specialtyModules = Array.isArray((scope.installedBusinessOS as { modules?: unknown[] } | null)?.modules)
     ? ((scope.installedBusinessOS as { modules: unknown[] }).modules as Array<Record<string, unknown>>)
@@ -204,6 +207,17 @@ export default function PrimaryNavigation({
     scope.businessId,
     items.map((item) => item.href),
   );
+
+  // Prefetch primary destinations so tab clicks feel instant.
+  useEffect(() => {
+    for (const item of items) {
+      try {
+        router.prefetch(item.href);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [router, items.map((item) => item.href).join("|")]);
 
   function onNavClick(href: string) {
     return (event: MouseEvent<HTMLAnchorElement>) => {

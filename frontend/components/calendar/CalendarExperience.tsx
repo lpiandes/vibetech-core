@@ -453,8 +453,8 @@ export default function CalendarExperience({
               gap: 12,
               padding: 14,
               borderRadius: 14,
-              border: `2px solid rgba(28,25,23,0.16)`,
-              background: "linear-gradient(180deg, #fafaf9, #fff)",
+              border: `1px solid ${cockpitColors.panelBorder}`,
+              background: cockpitColors.inset,
             }}
             >
               <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: cockpitColors.textMuted }}>

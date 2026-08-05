@@ -146,17 +146,18 @@ export function VtCard({
       onClick={onClick}
       style={{
         borderRadius: 16,
-        border: `2px solid ${accent ? "rgba(15,118,110,0.45)" : "rgba(28,25,23,0.16)"}`,
+        border: `1px solid ${accent ? "rgba(34,211,238,0.35)" : cockpitColors.panelBorder}`,
         background: accent
-          ? "linear-gradient(165deg, #ffffff 0%, #ecfdf5 100%)"
-          : "#ffffff",
+          ? "linear-gradient(165deg, #0c1222 0%, #0a1628 100%)"
+          : cockpitColors.panel,
         padding,
-        boxShadow: "0 1px 0 rgba(255,255,255,0.9) inset, 0 10px 28px rgba(28,25,23,0.1)",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.28)",
         position: "relative",
         overflow: "hidden",
         textAlign: "left",
         cursor: onClick ? "pointer" : undefined,
         font: "inherit",
+        color: cockpitColors.textPrimary,
         width: onClick ? "100%" : undefined,
         ...style,
       }}
@@ -380,20 +381,16 @@ export function VtFilterChip({
       onClick={onClick}
       style={{
         borderRadius: 999,
-        border: active ? `3px solid #0891b2` : `2px solid rgba(15,23,42,0.22)`,
+        border: active ? `1px solid ${cockpitColors.accent}` : `1px solid ${cockpitColors.panelBorder}`,
         padding: "9px 14px",
         fontWeight: 900,
         fontSize: 12,
         letterSpacing: "0.06em",
         textTransform: "uppercase",
-        background: active
-          ? "linear-gradient(180deg, #0891b2 0%, #0e7490 100%)"
-          : "#fff",
-        color: active ? "#fff" : cockpitColors.textPrimary,
+        background: active ? cockpitColors.accent : cockpitColors.panel,
+        color: active ? "#070b14" : cockpitColors.textPrimary,
         cursor: "pointer",
-        boxShadow: active
-          ? "0 6px 16px rgba(15,118,110,0.35)"
-          : "0 2px 8px rgba(28,25,23,0.08)",
+        boxShadow: "none",
       }}
     >
       {children}
@@ -404,13 +401,14 @@ export function VtFilterChip({
 export const vtInputStyle: CSSProperties = {
   width: "100%",
   borderRadius: 12,
-  border: `2px solid rgba(28,25,23,0.18)`,
+  border: `1px solid ${cockpitColors.panelBorder}`,
   padding: "12px 14px",
   font: "inherit",
   fontSize: 15,
-  background: "#fff",
+  background: cockpitColors.panel,
   fontWeight: 600,
   color: cockpitColors.textPrimary,
+  caretColor: cockpitColors.accent,
 };
 
 export const vtGridGap = spacing.md;

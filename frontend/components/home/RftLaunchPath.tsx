@@ -355,6 +355,8 @@ function ResponsibilityForm({
                 borderRadius: radius.medium,
                 border: `1px solid ${cockpitColors.panelBorder}`,
                 background: cockpitColors.inset,
+                color: cockpitColors.textPrimary,
+                caretColor: cockpitColors.accent,
                 resize: "vertical",
                 fontSize: typography.meta.fontSize,
               }}

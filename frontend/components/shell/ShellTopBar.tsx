@@ -195,6 +195,8 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
               borderRadius: radius.medium,
               border: `1px solid ${cockpitColors.panelBorder}`,
               backgroundColor: cockpitColors.panelElevated,
+              color: cockpitColors.textPrimary,
+              caretColor: cockpitColors.accent,
               paddingLeft: 30,
               paddingRight: spacing.sm,
               fontSize: typography.caption.fontSize,
