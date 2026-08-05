@@ -32,6 +32,11 @@ export async function fireSpecialtyTrigger({
   eventPayload = {},
   installation = null,
   platformStore = null,
+  integrationHub = null,
+  sendEmail = null,
+  sendSms = null,
+  platformJobQueue = null,
+  readinessSnapshot = null,
 } = {}) {
   const employeeId = String(employee?.employeeId ?? employee?.id ?? "").trim();
   const at = typeof nowISO === "function" ? nowISO() : String(nowISO);
@@ -179,6 +184,11 @@ export async function fireSpecialtyTrigger({
       approvalRuntime,
       workItemId: workId,
       workItem: existingWork,
+      integrationHub,
+      sendEmail,
+      sendSms,
+      platformJobQueue,
+      readinessSnapshot,
       nowISO,
     });
   } catch (err) {

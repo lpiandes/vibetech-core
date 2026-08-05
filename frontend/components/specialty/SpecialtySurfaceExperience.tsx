@@ -176,13 +176,13 @@ export default function SpecialtySurfaceExperience({ model }: { model: Specialty
       const workOk = Boolean(json?.result?.workItemId ?? json?.result?.ok);
       const plannedSteps = plannedPathSteps(pathPres);
       const noteSteps = pathNotes.map((n: any) => pathNoteToStep(n));
-      // Prefer live execution notes; if the API returned none, still show the PATH steps.
+      // Prefer live execution notes. Never invent Succeeded when notes are missing.
       const actionSteps = noteSteps.length
         ? noteSteps
         : plannedSteps.map((step) => ({
           label: step.label,
-          outcome: step.deferred ? "deferred" as const : "succeeded" as const,
-          detail: step.deferred ? "Draft ready — approve before send" : "Completed",
+          outcome: "failed" as const,
+          detail: "No step result returned — open Logs after Run now again",
         }));
       const steps: ActivityStep[] = [
         {
@@ -213,10 +213,10 @@ export default function SpecialtySurfaceExperience({ model }: { model: Specialty
         ...prev,
       ].slice(0, 40));
       setMessage(
-        deferred > 0
-          ? `Ran — ${summaryParts.join(", ")}. Open Work to approve Email/SMS before send.`
-          : failed > 0
-            ? `Ran with issues — ${summaryParts.join(", ")}. See Logs for details.`
+        failed > 0
+          ? `Ran with issues — ${summaryParts.join(", ")}. Connect missing channels in Integrations, then run again.`
+          : deferred > 0
+            ? `Ran — ${summaryParts.join(", ")}. Open Work to approve Email/SMS before send.`
             : `Ran — ${summaryParts.join(", ") || "all steps finished"}.`,
       );
       setTab("logs");
@@ -583,14 +583,14 @@ function pathNoteToStep(note: any): ActivityStep {
     return {
       label,
       outcome: "failed",
-      detail: humanPathReason(String(note?.reason ?? "failed")),
+      detail: String(note?.message ?? "").trim() || humanPathReason(String(note?.reason ?? "failed")),
     };
   }
   if (note?.deferred) {
     return {
       label,
       outcome: "deferred",
-      detail: "Draft ready — approve before send",
+      detail: deferredPathDetail(String(note?.reason ?? "")),
     };
   }
   return {
@@ -647,9 +647,34 @@ function humanPathReason(reason: string) {
     case "unsupported_step":
       return "Unsupported step";
     case "awaiting_approval_or_draft":
+    case "awaiting_owner_grant":
       return "Needs approval";
+    case "email_not_connected":
+      return "Business email not connected";
+    case "sms_not_connected":
+      return "SMS not connected";
+    case "sms_a2p_incomplete":
+      return "Finish SMS brand setup";
+    case "channel_not_ready":
+      return "Required channel not connected";
     default:
       return reason.replace(/_/g, " ");
+  }
+}
+
+function deferredPathDetail(reason: string) {
+  switch (reason) {
+    case "awaiting_owner_grant":
+    case "awaiting_approval_or_draft":
+      return "Draft ready — approve before send";
+    case "awaiting_owner_manual":
+      return "Waiting for owner confirmation";
+    case "auto_send_no_recipients":
+      return "No recipient — add contact details";
+    case "draft_auto":
+      return "Draft created";
+    default:
+      return humanPathReason(reason || "Needs approval");
   }
 }
 

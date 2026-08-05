@@ -13,6 +13,7 @@ import {
   PATH_STEP_TYPES,
   stepIsManual,
 } from "../operating-contract/automationPath.js";
+import { computeStepReadiness } from "../operating-contract/automationPathReadiness.js";
 import { createApprovalRequest } from "../../approvals/ApprovalRequest.js";
 import { APPROVAL_INTERNAL_EVENT_TYPES } from "../../approvals/ApprovalEventTypes.js";
 import { resolveMessagePersonalization } from "./resolveMessagePersonalization.js";
@@ -36,6 +37,7 @@ export async function executeSpecialtyPathSteps({
   sendEmail = null,
   sendSms = null,
   platformJobQueue = null,
+  readinessSnapshot = null,
   nowISO = () => new Date().toISOString(),
 } = {}) {
   const path = normalizeAutomationPath(employee?.operatingContract?.automationPath, {
@@ -49,6 +51,9 @@ export async function executeSpecialtyPathSteps({
   let crmTouched = false;
   let crm = installation ? readCrmState(installation) : null;
   const at = typeof nowISO === "function" ? nowISO() : String(nowISO);
+  const snapshot = readinessSnapshot && typeof readinessSnapshot === "object"
+    ? readinessSnapshot
+    : { businessId, connections: [], connectedTypes: [], crmAvailable: Boolean(installation && platformStore) };
 
   for (const step of steps) {
     const type = String(step.type ?? "");
@@ -238,6 +243,24 @@ export async function executeSpecialtyPathSteps({
       || type === PATH_STEP_TYPES.SEND_SMS
       || type === PATH_STEP_TYPES.NOTIFY_TEAM
     ) {
+      const readiness = computeStepReadiness(step, snapshot);
+      if (!readiness.ready) {
+        const top = readiness.blockers[0] ?? null;
+        notes.push({
+          stepId: step.id,
+          type,
+          ok: false,
+          deferred: false,
+          needsYou: false,
+          reason: String(top?.code ?? "channel_not_ready"),
+          label: step.label,
+          message: String(top?.label ?? "Connect the required channel before this step can run."),
+          href: top?.href ?? null,
+          blockers: readiness.blockers,
+        });
+        continue;
+      }
+
       let approvalId = null;
       const direction = String(step.direction ?? (type === PATH_STEP_TYPES.NOTIFY_TEAM ? "internal" : "external"));
       const needsOwnerGrant = direction === "external" && manual;
@@ -414,12 +437,14 @@ export async function executeSpecialtyPathSteps({
   }
 
   const needsYou = notes.some((n) => n.needsYou);
+  const hardFailed = notes.some((n) => n.ok === false);
   return deepFreeze({
-    ok: true,
+    ok: !hardFailed,
     notes,
     needsYou,
     executedCount: notes.filter((n) => n.ok && !n.deferred).length,
     deferredCount: notes.filter((n) => n.deferred).length,
+    failedCount: notes.filter((n) => n.ok === false).length,
   });
 }
 

@@ -200,6 +200,12 @@ test("executeSpecialtyPathSteps creates pipeline card for add_to_pipeline", asyn
     businessId: "biz_1",
     actorId: "tester",
     eventPayload: { title: "New opportunity from automation" },
+    readinessSnapshot: {
+      businessId: "biz_1",
+      connections: [{ connectionType: "business_email", status: "CONNECTED" }],
+      connectedTypes: ["business_email"],
+      crmAvailable: true,
+    },
   });
 
   assert.equal(result.ok, true);

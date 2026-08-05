@@ -44,11 +44,50 @@ test("executeSpecialtyPathSteps returns notes for default path when contract pat
         scope: { answers: { where: { value: "Email and SMS" } } },
       },
     },
+    readinessSnapshot: {
+      businessId: "biz_test",
+      connections: [
+        { connectionType: "business_email", status: "CONNECTED" },
+        { connectionType: "sms_channel", status: "CONNECTED" },
+      ],
+      connectedTypes: ["business_email", "sms_channel"],
+    },
   });
   assert.equal(result.ok, true);
   assert.ok(result.notes.length >= 2, "expected draft + channel notes");
   assert.ok(result.notes.some((note) => note.type === "send_email" && note.deferred));
   assert.ok(result.notes.some((note) => note.type === "send_sms" && note.deferred));
+});
+
+test("executeSpecialtyPathSteps fails email when business email is not connected", async () => {
+  const result = await executeSpecialtyPathSteps({
+    employee: {
+      operatingContract: {
+        automationPath: {
+          steps: [
+            {
+              id: "e1",
+              type: "send_email",
+              label: "Email",
+              requiresApproval: true,
+              enabled: true,
+              order: 0,
+            },
+          ],
+        },
+      },
+    },
+    businessId: "biz_no_email",
+    readinessSnapshot: {
+      businessId: "biz_no_email",
+      connections: [],
+      connectedTypes: [],
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.failedCount, 1);
+  assert.equal(result.notes[0]?.ok, false);
+  assert.equal(result.notes[0]?.reason, "email_not_connected");
 });
 
 test("assembly planner attaches process automations from discovery answer", () => {

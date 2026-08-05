@@ -1344,6 +1344,27 @@ export class WorkspaceService {
       nowISO: NOW_ISO,
     });
 
+    const runtimeConnections =
+      this.connected?.integrationPlatform?.connectionRuntime?.getConnections?.() ?? [];
+    const connectedOnly = (Array.isArray(runtimeConnections) ? runtimeConnections : [])
+      .filter((conn: any) => String(conn?.status ?? "").toUpperCase() === "CONNECTED")
+      .map((conn: any) => ({
+        id: String(conn.connectionType ?? ""),
+        type: String(conn.connectionType ?? ""),
+        connectionType: String(conn.connectionType ?? ""),
+        status: String(conn.status ?? ""),
+      }))
+      .filter((conn: { connectionType: string }) => Boolean(conn.connectionType));
+    const { buildPathReadinessSnapshot } = await import(
+      "../../../backend/core/ai-builder/operating-contract/automationPathReadiness.js"
+    );
+    const readinessSnapshot = buildPathReadinessSnapshot({
+      businessId: this.workspaceId,
+      connections: connectedOnly,
+      connectedTypes: connectedOnly.map((conn: { connectionType: string }) => conn.connectionType),
+      crmAvailable: Boolean(installation),
+    });
+
     const result = await fireSpecialtyTrigger({
       workRuntime: this.workRuntime,
       automationRuntime: this.connected.ctx.automationRuntime,
@@ -1360,6 +1381,8 @@ export class WorkspaceService {
       eventPayload,
       installation,
       platformStore,
+      integrationHub: this.connected?.integrationPlatform?.hub ?? null,
+      readinessSnapshot,
     });
 
     if (result.ok) {
