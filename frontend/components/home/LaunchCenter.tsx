@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition, type CSSProperties } from "react";
+import { useState, useTransition, useEffect, type CSSProperties } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   Check,
@@ -202,7 +203,26 @@ export default function LaunchCenter({
   const [isPending, startTransition] = useTransition();
   const [setupTarget, setSetupTarget] = useState<IntegrationDisplay | null>(null);
   const [proveDialog, setProveDialog] = useState<ProveDialog | null>(null);
+  const [flash, setFlash] = useState<{ tone: "error" | "success"; text: string } | null>(null);
   const { cancelNavigation } = useWorkspaceNavigation();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const error = searchParams.get("error");
+    const connected = searchParams.get("connected");
+    if (error) {
+      setFlash({ tone: "error", text: error });
+    } else if (connected === "1") {
+      setFlash({ tone: "success", text: "Connected. Run the test on this mission to prove it." });
+    } else {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("error");
+    url.searchParams.delete("connected");
+    router.replace(`${url.pathname}${url.search}${url.hash}`);
+  }, [searchParams, router]);
 
   const effectiveMissions = missions.map((m) => {
     const override = missionOverrides[m.id];
@@ -484,6 +504,24 @@ export default function LaunchCenter({
   return (
     <section style={{ display: "grid", gap: 22, maxWidth: 820 }} aria-label="Launch center">
       <style>{launchMotionCss}</style>
+
+      {flash ? (
+        <div
+          role="status"
+          style={{
+            borderRadius: 12,
+            border: `1px solid ${flash.tone === "error" ? "#fecaca" : "#a7f3d0"}`,
+            background: flash.tone === "error" ? "#fef2f2" : "#ecfdf5",
+            color: flash.tone === "error" ? "#991b1b" : "#065f46",
+            padding: "14px 16px",
+            fontSize: 14,
+            fontWeight: 650,
+            lineHeight: 1.45,
+          }}
+        >
+          {flash.text}
+        </div>
+      ) : null}
 
       <div className="vt-launch-hero" style={heroStyle}>
         <div

@@ -408,13 +408,20 @@ export default function IntegrationSetupDialog({
               lineHeight: 1.45,
             }}
           >
-            Google blocked? Add your Gmail as a test user in Google Cloud → OAuth consent screen
+            Google blocked? In Google Cloud → OAuth consent screen → <strong>Data Access</strong>, add
+            {" "}
+            <code>gmail.send</code>
+            {" "}
+            and
+            {" "}
+            <code>gmail.readonly</code>
+            , plus your Gmail as a test user
             {allowLocalDesignPartnerConnect ? (
               <>
                 , or tap <strong>Connect locally</strong>
               </>
             ) : null}
-            . On Google’s screen, approve <strong>Send email on your behalf</strong> before Continue.
+            . On Google’s screen, check <strong>Send email on your behalf</strong> before Continue.
           </div>
         ) : null}
 

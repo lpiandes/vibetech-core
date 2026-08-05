@@ -9,6 +9,7 @@ import {
   getSharedCredentialVault,
   getSharedOAuthStateStore,
   getGoogleOAuthAppConfig,
+  googleScopesIncludeGmailSend,
 } from "@/lib/server/liveIntegrations";
 import { putDurableCredential } from "../../../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
 import { workspaceCompositionRegistry } from "@/lib/workspace/WorkspaceCompositionRegistry";
@@ -71,11 +72,14 @@ export async function GET(request: Request) {
     const config = getGoogleOAuthAppConfig();
     const tokens = await exchangeGoogleAuthorizationCode({ code, redirectUri: config.redirectUri });
 
-    if (pending.providerType === "gmail" && !/gmail\.send/i.test(grantedScope) && !/gmail\.send/i.test(String(tokens.scope ?? ""))) {
+    if (
+      pending.providerType === "gmail"
+      && !googleScopesIncludeGmailSend(grantedScope, tokens.scope)
+    ) {
       return NextResponse.redirect(
         new URL(
           `${pending.redirectPath}${pending.redirectPath?.includes("?") ? "&" : "?"}error=${encodeURIComponent(
-            "Please check “Send email on your behalf” on the Google permission screen, then try again.",
+            "Google did not grant send access, so email is not connected yet. In Google Cloud → OAuth consent screen → Data Access, add gmail.send + gmail.readonly, then reconnect and check “Send email on your behalf.”",
           )}`,
           request.url,
         ),

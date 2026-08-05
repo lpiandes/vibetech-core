@@ -103,15 +103,40 @@ export async function exchangeGoogleAuthorizationCode({ code, redirectUri } = {}
     senderEmail = "";
   }
 
+  const accessToken = safeString(tokens.access_token);
+  const scopeFromToken = safeString(tokens.scope);
+  const scopeFromInfo = accessToken
+    ? await fetchGoogleAccessTokenScopes(accessToken)
+    : "";
+
   return {
-    accessToken: safeString(tokens.access_token),
+    accessToken,
     refreshToken: safeString(tokens.refresh_token),
     expiryDate: tokens.expiry_date ?? null,
-    scope: safeString(tokens.scope),
+    scope: scopeFromInfo || scopeFromToken,
     tokenType: safeString(tokens.token_type),
     senderEmail,
     tokens,
   };
+}
+
+async function fetchGoogleAccessTokenScopes(accessToken) {
+  try {
+    const res = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(String(accessToken))}`,
+      { method: "GET" },
+    );
+    if (!res.ok) return "";
+    const data = await res.json().catch(() => null);
+    return safeString(data?.scope);
+  } catch {
+    return "";
+  }
+}
+
+export function googleScopesIncludeGmailSend(...scopeParts) {
+  const joined = scopeParts.map((part) => safeString(part)).filter(Boolean).join(" ");
+  return /gmail\.send/i.test(joined);
 }
 
 export function createGoogleAuthedClient({ refreshToken, accessToken = null } = {}) {

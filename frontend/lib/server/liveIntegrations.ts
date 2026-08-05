@@ -17,6 +17,7 @@ export {
   GOOGLE_SEARCH_CONSOLE_OAUTH_SCOPES,
   isGoogleOAuthAppConfigured,
   getGoogleOAuthAppConfig,
+  googleScopesIncludeGmailSend,
 } from "../../../backend/core/integrations/oauth/GoogleOAuthClient.js";
 export { isTwilioSmsConfigured } from "../../../backend/core/integrations/adapters/TwilioSmsIntegrationAdapter.js";
 export { isTwilioVoiceConfigured } from "../../../backend/core/integrations/adapters/TwilioVoiceIntegrationAdapter.js";
