@@ -9,8 +9,8 @@ import {
   seedRftOpportunity,
   normalizeRftEvidence,
   RFT_PROVIDER_PROOF_KINDS,
-} from "../../../../../../../../backend/core/ai-builder/operating-contract/rft/index.js";
-import { resolveAutonomyDisposition } from "../../../../../../../../backend/core/company-rules/earnedAutonomy.js";
+} from "../../../../../../../backend/core/ai-builder/operating-contract/rft/index.js";
+import { resolveAutonomyDisposition } from "../../../../../../../backend/core/company-rules/earnedAutonomy.js";
 
 /**
  * POST — seed a test RFT opportunity or progress an existing one.

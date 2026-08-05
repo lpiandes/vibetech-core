@@ -11,8 +11,8 @@ import {
   revokeClass,
   persistEarnedAutonomy,
   readEarnedAutonomy,
-} from "../../../../../../../backend/core/company-rules/earnedAutonomy.js";
-import { normalizeRftServiceStandard } from "../../../../../../../backend/core/ai-builder/operating-contract/rft/rftContract.js";
+} from "../../../../../../backend/core/company-rules/earnedAutonomy.js";
+import { normalizeRftServiceStandard } from "../../../../../../backend/core/ai-builder/operating-contract/rft/rftContract.js";
 
 function rftEmployee(installation: any) {
   return (installation?.configuration?.employees ?? []).find(

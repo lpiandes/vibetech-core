@@ -13,9 +13,9 @@ import {
   rollbackRule,
   runProposalReplay,
   EDIT_REASON_CODES,
-} from "../../../../../../../backend/core/company-rules/governedLearning.js";
-import { applyOperatingContractPatch } from "../../../../../../../backend/core/ai-builder/operating-contract/buildOperatingContract.js";
-import { resolveOperatingIndustry } from "../../../../../../../backend/core/ai-builder/mapPackAiRolesToSelectedEmployees.js";
+} from "../../../../../../backend/core/company-rules/governedLearning.js";
+import { applyOperatingContractPatch } from "../../../../../../backend/core/ai-builder/operating-contract/buildOperatingContract.js";
+import { resolveOperatingIndustry } from "../../../../../../backend/core/ai-builder/mapPackAiRolesToSelectedEmployees.js";
 
 function rftEmployee(installation: any) {
   return (installation?.configuration?.employees ?? []).find(

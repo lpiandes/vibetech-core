@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
-import { GmailInboundSyncService } from "../../../../../../../../backend/core/integrations/gmail/GmailInboundSyncService.js";
+import { GmailInboundSyncService } from "../../../../../../../backend/core/integrations/gmail/GmailInboundSyncService.js";
 import {
   applyRftLaunchPatch,
   evaluateRftLaunch,
@@ -26,11 +26,11 @@ import {
   persistRftResponsibility,
   REQUIRED_RESPONSIBILITY_FIELDS,
   RESPONSIBILITY_FIELD_LABELS,
-} from "../../../../../../../../backend/core/ai-builder/operating-contract/rft/index.js";
+} from "../../../../../../../backend/core/ai-builder/operating-contract/rft/index.js";
 import {
   refreshGovernedLearning,
   persistGovernedLearning,
-} from "../../../../../../../../backend/core/company-rules/governedLearning.js";
+} from "../../../../../../../backend/core/company-rules/governedLearning.js";
 
 function connectionStatusesFrom(ctx: { service: unknown }) {
   return (ctx.service as any)?.connected?.connectedSystemsSnapshot?.connectionStatuses ?? {};
