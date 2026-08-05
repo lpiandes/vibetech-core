@@ -12,12 +12,13 @@ export default async function AdminBlueprintsPage() {
   const rows = (result.blueprints ?? []).map((blueprint: any) => [
     blueprint.name,
     blueprint.industry ?? "—",
+    blueprint.source ?? "—",
     blueprint.version ?? "—",
     blueprint.maturity ?? "—",
     <StatusBadge
       key="g"
-      label={blueprint.goldStatus ? "gold" : "package"}
-      tone={blueprint.goldStatus ? "success" : "neutral"}
+      label={blueprint.goldStatus ? "gold" : (blueprint.source === "delivery_moat" ? "moat" : "package")}
+      tone={blueprint.goldStatus ? "success" : blueprint.source === "delivery_moat" ? "info" : "neutral"}
     />,
     (blueprint.supportedCapabilities ?? []).length,
     (blueprint.dependencies ?? []).length,
@@ -26,11 +27,16 @@ export default async function AdminBlueprintsPage() {
   return (
     <AdminVtPage
       title="Blueprint library"
-      dock={<VtDockLink href="/admin">Dashboard</VtDockLink>}
+      dock={(
+        <>
+          <VtDockLink href="/admin">Dashboard</VtDockLink>
+          <VtDockLink href="/admin/patterns">Patterns</VtDockLink>
+        </>
+      )}
     >
       <AdminDataTable
         title="Registered Blueprints"
-        headers={["Name", "Industry", "Version", "Maturity", "Gold", "Capabilities", "Dependencies"]}
+        headers={["Name", "Industry", "Source", "Version", "Maturity", "Status", "Capabilities", "Dependencies"]}
         rows={rows}
         emptyLabel="No Blueprints registered."
       />

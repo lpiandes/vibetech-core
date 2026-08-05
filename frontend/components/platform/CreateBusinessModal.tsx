@@ -1,22 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import SimpleModal from "@/components/product/SimpleModal";
 import PrimaryButton from "@/components/product/PrimaryButton";
 import SecondaryButton from "@/components/product/SecondaryButton";
 import { typography, cockpitColors } from "@/design/tokens";
-import { listSellableSalesPackagesForAdmin } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
-
-type SalesPackageOption = {
-  id: string;
-  label: string;
-  description: string;
-  fullOs: boolean;
-  honestyNote: string | null;
-  commercialStatus?: string;
-  sellable?: boolean;
-};
 
 const fieldStyle = {
   padding: "10px 12px",
@@ -45,27 +34,12 @@ export default function CreateBusinessModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const packages = useMemo(
-    () => listSellableSalesPackagesForAdmin() as SalesPackageOption[],
-    [],
-  );
   const [name, setName] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
-  const [purchasedPackages, setPurchasedPackages] = useState<string[]>(["ai_business_os"]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<CreateSuccess | null>(null);
   const [copied, setCopied] = useState(false);
-
-  function togglePackage(id: string) {
-    setPurchasedPackages((current) => {
-      if (current.includes(id)) {
-        return current.filter((entry) => entry !== id);
-      }
-      // Full OS can combine with add-ons (e.g. AI Prospecting soft-cap tracking).
-      return [...current, id];
-    });
-  }
 
   function resolveInviteUrl(inviteUrl: string) {
     if (inviteUrl.startsWith("http://") || inviteUrl.startsWith("https://")) return inviteUrl;
@@ -84,7 +58,11 @@ export default function CreateBusinessModal({
     const res = await fetch("/api/platform/businesses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, ownerEmail, purchasedPackages }),
+      body: JSON.stringify({
+        name,
+        ownerEmail,
+        purchasedPackages: ["managed_revenue_follow_through"],
+      }),
     });
     const data = await res.json();
     setBusy(false);
@@ -181,7 +159,7 @@ export default function CreateBusinessModal({
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div>
               <div style={{ fontWeight: 600, fontSize: 13, color: cockpitColors.textPrimary }}>
-                Purchased packages
+                Purchase
               </div>
               <p
                 style={{
@@ -191,66 +169,27 @@ export default function CreateBusinessModal({
                   lineHeight: 1.4,
                 }}
               >
-                Check what they bought. Full OS unlocks the whole product (including Find leads).
-                You can also check add-ons alongside Full OS. Facebook / Meta leads still only appear
-                if Lead qualification &amp; follow-up is checked.
+                Every new business is created with <strong>Managed Revenue Follow-Through</strong>.
+                Customers buy the managed service, not OS seats or internal package combinations.
               </p>
             </div>
             <div
               style={{
                 border: `1px solid ${cockpitColors.panelBorder}`,
                 borderRadius: 12,
-                overflow: "hidden",
                 background: "#fff",
+                padding: "12px 14px",
+                display: "grid",
+                gap: 4,
               }}
             >
-              {packages.map((pkg, index) => {
-                const checked = purchasedPackages.includes(pkg.id);
-                return (
-                  <label
-                    key={pkg.id}
-                    title={pkg.description}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      margin: 0,
-                      padding: "11px 14px",
-                      cursor: "pointer",
-                      background: checked ? "rgba(15,118,110,0.07)" : "#fff",
-                      borderTop: index === 0 ? "none" : `1px solid ${cockpitColors.panelBorder}`,
-                      position: "relative",
-                      zIndex: 1,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => togglePackage(pkg.id)}
-                      style={{
-                        width: 15,
-                        height: 15,
-                        flexShrink: 0,
-                        margin: 0,
-                        accentColor: "#0f766e",
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: checked ? 600 : 500,
-                        lineHeight: 1.3,
-                        color: cockpitColors.textPrimary,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {pkg.label}
-                    </span>
-                  </label>
-                );
-              })}
+              <strong style={{ fontSize: 14, color: cockpitColors.textPrimary }}>
+                Managed Revenue Follow-Through
+              </strong>
+              <span style={{ fontSize: 12, color: cockpitColors.textSecondary, lineHeight: 1.45 }}>
+                VIBETech will provision the managed RFT experience automatically after the business
+                and owner invite are created.
+              </span>
             </div>
           </div>
           {error ? (

@@ -18,6 +18,8 @@ describe("routeProtection", () => {
     assert.equal(isPublicPath("/api/businesses/biz_1/integrations/meta/webhook"), true);
     assert.equal(isPublicPath("/api/businesses/biz_1/forms/submit"), true);
     assert.equal(isPublicPath("/social-checker"), true);
+    assert.equal(isPublicPath("/api/marketing/consultant"), true);
+    assert.equal(isPublicPath("/api/marketing/meeting-request"), true);
     // Search API requires auth (checked in-route so it can 401/403 with a
     // tailored payload) — it is intentionally NOT a public path.
     assert.equal(isPublicPath("/api/social-checker/search"), false);

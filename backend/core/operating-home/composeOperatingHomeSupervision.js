@@ -412,6 +412,8 @@ function buildOutcomes({ handled, improvements, base }) {
     const result = String(item.result ?? "handled");
     // Never present drafts as sent — only COMMUNICATION_SENT maps to "sent".
     if (/draft/i.test(String(item.title ?? "")) && result !== "sent") continue;
+    const proven = Boolean(item.proven ?? item.hasEvidence ?? item.providerId ?? (result === "sent"));
+    if (!proven && result !== "approved") continue;
     rows.push({
       id: String(item.id),
       title: String(item.title ?? "Outcome recorded"),
@@ -420,6 +422,7 @@ function buildOutcomes({ handled, improvements, base }) {
       who: String(item.actorName ?? "VIBETech"),
       related: formatRelated(item.relatedContext),
       href: item.href == null ? (base ? `${base}/work` : null) : String(item.href),
+      proven,
     });
   }
   for (const item of improvements) {

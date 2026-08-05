@@ -40,8 +40,8 @@ export default function AskHistorySidebar({
         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: architect.inkMuted }}>
           Conversations
         </div>
-        <ArchitectButton disabled={busy} onClick={onNewChat}>
-          New chat
+        <ArchitectButton disabled={busy} onClick={onNewChat} variant="ghost">
+          Commands home
         </ArchitectButton>
       </div>
 

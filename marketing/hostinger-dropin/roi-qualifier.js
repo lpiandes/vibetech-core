@@ -1,11 +1,24 @@
 /**
- * VibeTech ROI qualifier — published price sheet vs industry-average status-quo cost.
- * Every business × leak × today path maps to a distinct package, math, and narrative.
+ * VibeTech ROI assessment — 4 questions → rate-card package + BLS wage math.
+ *
+ * teamSize → affected headcount (band midpoints)
+ * orgType → results wording only
+ * pain → package + hours-lost-per-person/week + research citation
+ * currentState → recoverable % of the labor-cost problem
+ *
+ * monthlyGross = headcount × hoursLost × 4.33 × $20.59
+ * monthlyRecoverable = monthlyGross × recoveryPct
+ * Compared to published rate-card setup + monthly.
  */
 (function () {
-  const BOOK_CALL_URL =
-    (typeof window !== "undefined" && window.VIBETECH_BOOK_CALL_URL) ||
-    "mailto:leopiandes@vtechdevelopment.com?subject=Book%20a%20call%20%E2%80%94%20ROI%20check";
+  const STORAGE_KEY = "vt.roi.assessment.v2";
+  const BLS_WAGE = 20.59;
+  const WEEKS_PER_MONTH = 4.33;
+
+  const MEETING_MAIL =
+    "mailto:leopiandes@vtechdevelopment.com,brettbaldassare@vtechdevelopment.com,carynorthrop@vtechdevelopment.com" +
+    "?subject=" +
+    encodeURIComponent("Meeting request — ROI assessment");
 
   /** Published rate card (floor prices). */
   const PACKAGES = {
@@ -16,9 +29,6 @@
       setup: 3500,
       monthly: 0,
       blurb: "Map where time and revenue leak before you buy the wrong stack.",
-      hoursSavedPerWeek: 4,
-      capture: 0.35,
-      statusQuoKey: "discovery",
     },
     ai_strategy: {
       id: "ai_strategy",
@@ -27,9 +37,6 @@
       setup: 5000,
       monthly: 0,
       blurb: "Executive roadmap so complex teams don’t fund the wrong pilots.",
-      hoursSavedPerWeek: 6,
-      capture: 0.4,
-      statusQuoKey: "discovery",
     },
     ai_receptionist: {
       id: "ai_receptionist",
@@ -38,31 +45,6 @@
       setup: 4000,
       monthly: 997,
       blurb: "Answer inbound calls, capture notes, keep bookings from falling through.",
-      hoursSavedPerWeek: 18,
-      capture: 0.62,
-      statusQuoKey: "phones",
-    },
-    ai_inbound: {
-      id: "ai_inbound",
-      name: "AI Inbound Call Agent",
-      category: "AI Voice & Communication",
-      setup: 5000,
-      monthly: 1497,
-      blurb: "Heavier inbound volume with structured answers and handoffs.",
-      hoursSavedPerWeek: 25,
-      capture: 0.65,
-      statusQuoKey: "phones",
-    },
-    appointment_scheduling: {
-      id: "appointment_scheduling",
-      name: "Appointment Scheduling Agent",
-      category: "AI Voice & Communication",
-      setup: 4500,
-      monthly: 1297,
-      blurb: "Book, confirm, and cut no-shows without a full-time scheduler.",
-      hoursSavedPerWeek: 16,
-      capture: 0.6,
-      statusQuoKey: "phones",
     },
     lead_follow_up: {
       id: "lead_follow_up",
@@ -71,53 +53,6 @@
       setup: 3500,
       monthly: 797,
       blurb: "Chase leads fast so warm interest doesn’t go cold.",
-      hoursSavedPerWeek: 12,
-      capture: 0.68,
-      statusQuoKey: "leads",
-    },
-    lead_qualification: {
-      id: "lead_qualification",
-      name: "AI Lead Qualification System",
-      category: "Sales & Marketing",
-      setup: 4000,
-      monthly: 997,
-      blurb: "Score and route inbound so sales only talks to real opportunities.",
-      hoursSavedPerWeek: 14,
-      capture: 0.7,
-      statusQuoKey: "leads",
-    },
-    crm_automation: {
-      id: "crm_automation",
-      name: "CRM Automation",
-      category: "Sales & Marketing",
-      setup: 6000,
-      monthly: 1497,
-      blurb: "Pipeline hygiene and stage-triggered follow-through.",
-      hoursSavedPerWeek: 15,
-      capture: 0.58,
-      statusQuoKey: "ops",
-    },
-    email_marketing: {
-      id: "email_marketing",
-      name: "Email Marketing Automation",
-      category: "Sales & Marketing",
-      setup: 4000,
-      monthly: 997,
-      blurb: "Nurture sequences without daily manual sends.",
-      hoursSavedPerWeek: 10,
-      capture: 0.55,
-      statusQuoKey: "leads",
-    },
-    website_chatbot: {
-      id: "website_chatbot",
-      name: "Website Chatbot",
-      category: "Customer Service & Operations",
-      setup: 3500,
-      monthly: 797,
-      blurb: "Qualify and help site visitors 24/7.",
-      hoursSavedPerWeek: 11,
-      capture: 0.57,
-      statusQuoKey: "leads",
     },
     workflow_automation: {
       id: "workflow_automation",
@@ -126,31 +61,6 @@
       setup: 3000,
       monthly: 697,
       blurb: "Remove repetitive handoffs so teams leave the spreadsheet grind.",
-      hoursSavedPerWeek: 12,
-      capture: 0.6,
-      statusQuoKey: "ops",
-    },
-    knowledge_assistant: {
-      id: "knowledge_assistant",
-      name: "Internal Knowledge Base Assistant",
-      category: "Customer Service & Operations",
-      setup: 5000,
-      monthly: 1297,
-      blurb: "Answers from your docs so staff stop hunting Slack and PDFs.",
-      hoursSavedPerWeek: 10,
-      capture: 0.52,
-      statusQuoKey: "ops",
-    },
-    scheduling_automation: {
-      id: "scheduling_automation",
-      name: "Scheduling Automation",
-      category: "Customer Service & Operations",
-      setup: 4500,
-      monthly: 997,
-      blurb: "Calendar bookings and reminder drafts that reduce no-shows.",
-      hoursSavedPerWeek: 14,
-      capture: 0.58,
-      statusQuoKey: "phones",
     },
     essential_managed: {
       id: "essential_managed",
@@ -159,9 +69,6 @@
       setup: 3500,
       monthly: 997,
       blurb: "We run a focused AI worker set with you — setup isn’t the finish line.",
-      hoursSavedPerWeek: 16,
-      capture: 0.63,
-      statusQuoKey: "managed",
     },
     growth_managed: {
       id: "growth_managed",
@@ -170,266 +77,132 @@
       setup: 7500,
       monthly: 1997,
       blurb: "Broader managed automation for teams that need more coverage.",
-      hoursSavedPerWeek: 28,
-      capture: 0.68,
-      statusQuoKey: "managed",
     },
-    professional_managed: {
-      id: "professional_managed",
-      name: "Professional (Managed)",
-      category: "Managed Services",
-      setup: 15000,
-      monthly: 3997,
-      blurb: "Serious managed coverage for complex operations.",
-      hoursSavedPerWeek: 40,
-      capture: 0.72,
-      statusQuoKey: "managed",
+  };
+
+  /** Midpoints for each team-size band (documented). */
+  const TEAM = {
+    solo: { label: "Just me or 1–5 people", headcount: 3 },
+    small: { label: "6–20 people", headcount: 12 },
+    mid: { label: "21–75 people", headcount: 40 },
+    large: { label: "75+ people", headcount: 90 },
+  };
+
+  const ORG = {
+    insurance: {
+      label: "Insurance / financial services",
+      hypothetical: "an insurance or financial-services team where leads and quotes can’t wait",
     },
-    basic_integration: {
-      id: "basic_integration",
-      name: "Basic System Integration",
-      category: "Systems Integration & Custom",
-      setup: 3500,
-      monthly: 397,
-      blurb: "One live connection + prove so tools stop living in silos.",
-      hoursSavedPerWeek: 8,
-      capture: 0.5,
-      statusQuoKey: "ops",
+    field: {
+      label: "Home & field services",
+      hypothetical: "an appointment-driven field business juggling calls, jobs, and follow-up",
     },
-    crm_integration: {
-      id: "crm_integration",
-      name: "CRM Integration",
-      category: "Systems Integration & Custom",
-      setup: 7500,
-      monthly: 697,
-      blurb: "Wire your CRM so people, stages, and follow-ups stay in sync.",
-      hoursSavedPerWeek: 14,
-      capture: 0.55,
-      statusQuoKey: "ops",
+    professional: {
+      label: "Professional / consulting services",
+      hypothetical: "a professional services firm where partner time is the scarce resource",
     },
-    ai_business_os: {
-      id: "ai_business_os",
-      name: "AI Business Operating System",
-      category: "Systems Integration & Custom",
-      setup: 20000,
-      monthly: 3500,
-      blurb: "Connect ops, CRM, and AI workers into one workspace your team uses daily.",
-      hoursSavedPerWeek: 35,
-      capture: 0.65,
-      statusQuoKey: "ops",
+    retail: {
+      label: "Retail, e-commerce & hospitality",
+      hypothetical: "a customer-facing retail or hospitality team balancing volume and experience",
+    },
+    enterprise: {
+      label: "Enterprise or government organization",
+      hypothetical: "a larger organization where handoffs cross teams, tools, and approvals",
     },
   };
 
   /**
-   * Industry-average monthly cost of living with the problem (labor + missed revenue + tool sprawl).
-   * Explicit assumptions so the user can see the math.
+   * Pain → package + hours lost per person per week + research backing the estimate.
    */
-  const STATUS_QUO = {
+  const PAIN = {
     leads: {
-      label: "missed or slow lead follow-up",
-      assumption: "Industry average: ~12 hrs/week of rep time on chase + ~8% of inbound leads dying from slow response.",
-      baseMonthly: 7800,
-      laborHoursWeek: 12,
-      laborRate: 55,
-      opportunityMonthly: 4200,
+      label: "Inquiries going cold — slow or missed follow-up",
+      packageId: "lead_follow_up",
+      hoursLostPerPersonWeek: 6,
+      researchTitle: "21× more likely to qualify a lead within 5 minutes",
+      researchDetail:
+        "A MIT / InsideSales.com study of 100,000+ contact attempts found businesses contacting a lead within 5 minutes are 21 times more likely to qualify that lead than those who wait 30 minutes. HBR found the average firm takes 42 hours to respond.",
+      researchSource: "MIT Lead Response Management Study; Harvard Business Review, 2011",
     },
     phones: {
-      label: "unanswered calls & booking chaos",
-      assumption: "Industry average: ~20 hrs/week covering phones/scheduling + missed appointments and after-hours leaks.",
-      baseMonthly: 7200,
-      laborHoursWeek: 20,
-      laborRate: 42,
-      opportunityMonthly: 3800,
+      label: "Phones and scheduling — missed calls, booking chaos",
+      packageId: "ai_receptionist",
+      hoursLostPerPersonWeek: 8,
+      researchTitle: "Up to 16 hours saved per employee per week with automation",
+      researchDetail:
+        "Zapier’s State of Business Automation report found customer service reps who automate follow-up and status work save an average of 16 hours a week; sales pros save about 6.",
+      researchSource: "Zapier, State of Business Automation Report",
     },
     ops: {
-      label: "manual ops / disconnected tools",
-      assumption: "Industry average: ~18 hrs/week of re-entry, chasing status, and spreadsheet glue across tools.",
-      baseMonthly: 9100,
-      laborHoursWeek: 18,
-      laborRate: 48,
-      opportunityMonthly: 2600,
+      label: "Manual busywork — stuck in spreadsheets, disconnected tools",
+      packageId: "workflow_automation",
+      hoursLostPerPersonWeek: 7,
+      researchTitle: "60% of the workday lost to “work about work”",
+      researchDetail:
+        "Asana’s Anatomy of Work Index found knowledge workers spend about 60% of time searching, switching tools, and chasing status — not the job they were hired to do. HBR estimated ~9% of the work year lost to app switching alone.",
+      researchSource: "Asana Anatomy of Work; Harvard Business Review, 2022",
     },
-    managed: {
-      label: "AI that never sticks / no owner",
-      assumption: "Industry average: paid pilots + staff time babysitting tools that don’t compound (~$2–4k/mo waste + stalled ROI).",
-      baseMonthly: 10500,
-      laborHoursWeek: 10,
-      laborRate: 65,
-      opportunityMonthly: 5500,
-    },
-    discovery: {
-      label: "unclear priorities / risk of buying wrong",
-      assumption: "Industry average: one wrong tool buy or stalled pilot often burns $8–15k before anyone admits it.",
-      baseMonthly: 4500,
-      laborHoursWeek: 6,
-      laborRate: 85,
-      opportunityMonthly: 2200,
+    strategy: {
+      label: "No clear plan — need someone to run AI strategy for us",
+      packageId: "ai_strategy",
+      hoursLostPerPersonWeek: 4,
+      researchTitle: "95% of generic AI pilots show no measurable return",
+      researchDetail:
+        "MIT NANDA’s 2025 GenAI Divide study found 95% of generative AI pilots delivered no measurable financial impact — often because rigid, one-size-fits-all systems didn’t fit how the business works. Partnering on tailored builds succeeded roughly twice as often as DIY.",
+      researchSource: "MIT NANDA, The GenAI Divide: State of AI in Business 2025",
     },
   };
 
-  const BUSINESS_SCALE = {
-    services: {
-      label: "services / agency",
-      mult: 1.05,
-      wage: 58,
-      hypothetical: "a 12-person services firm where partners still jump into the inbox when volume spikes",
-    },
-    local: {
-      label: "local / home services",
-      mult: 0.9,
-      wage: 38,
-      hypothetical: "a local operator with 1–2 people covering phones between jobs",
-    },
-    retail: {
-      label: "e-commerce / retail",
-      mult: 1.15,
-      wage: 45,
-      hypothetical: "a retail / e-comm team juggling site chat, ads leads, and a thin support bench",
-    },
-    other: {
-      label: "multi-location / complex",
-      mult: 1.55,
-      wage: 72,
-      hypothetical: "a multi-site org where every handoff crosses locations and tools",
-    },
-  };
-
-  const TODAY_SCALE = {
+  /** Current state → recoverable share of the modeled labor cost. */
+  const STATE = {
     manual: {
-      label: "mostly manual / people power",
-      mult: 1.2,
-      severity: "high labor waste",
-      twist: "Almost every recovery has to come from people working harder — until the process changes.",
+      label: "All manual — people-powered, no systems in place",
+      recoveryPct: 0.7,
+      twist: "Almost every recovery has to come from changing how people spend their hours.",
     },
     tools: {
-      label: "mix of tools, nothing connected",
-      mult: 1.1,
-      severity: "re-work and gaps between systems",
-      twist: "You already pay for software; the leak is the glue work between them.",
+      label: "Scattered tools — a mix of software, nothing talking to each other",
+      recoveryPct: 0.55,
+      twist: "You already pay for software; the leak is the glue work between tools.",
     },
-    failed_ai: {
-      label: "tried AI; it didn’t stick",
-      mult: 1.35,
-      severity: "paid pilots plus the original leak still open",
-      twist: "You’ve already spent on AI once — the ROI case has to include not repeating a dead pilot.",
+    tried_ai: {
+      label: "Tried AI already — it didn’t stick or deliver",
+      recoveryPct: 0.45,
+      twist: "You’ve spent on AI once — the case has to include not repeating a dead pilot.",
     },
-    exploring: {
-      label: "still figuring it out",
-      mult: 0.82,
-      severity: "risk of buying the wrong stack",
+    figuring: {
+      label: "Still figuring it out — no real process yet",
+      recoveryPct: 0.35,
       twist: "The biggest cost isn’t today’s leak alone — it’s buying the wrong thing next.",
     },
   };
 
   const QUESTIONS = [
     {
-      id: "business",
-      prompt: "What kind of business are you?",
-      options: [
-        { label: "Services / agency", value: "services" },
-        { label: "Local / home services", value: "local" },
-        { label: "E-commerce / retail", value: "retail" },
-        { label: "Other / multi-location", value: "other" },
-      ],
+      id: "team",
+      prompt: "How big is your team?",
+      options: Object.keys(TEAM).map((value) => ({ value, label: TEAM[value].label })),
     },
     {
-      id: "leak",
+      id: "org",
+      prompt: "What kind of organization are you?",
+      options: Object.keys(ORG).map((value) => ({ value, label: ORG[value].label })),
+    },
+    {
+      id: "pain",
       prompt: "Where are you losing the most time or money?",
-      options: [
-        { label: "Missed or slow lead follow-up", value: "leads" },
-        { label: "Phones / booking chaos", value: "phones" },
-        { label: "Ops stuck in spreadsheets / tools", value: "ops" },
-        { label: "Need a partner to run AI for us", value: "managed" },
-      ],
+      options: Object.keys(PAIN).map((value) => ({ value, label: PAIN[value].label })),
     },
     {
-      id: "today",
+      id: "state",
       prompt: "How do you handle this today?",
-      options: [
-        { label: "Mostly manual / people power", value: "manual" },
-        { label: "Mix of tools, nothing connected", value: "tools" },
-        { label: "Tried AI; it didn’t stick", value: "failed_ai" },
-        { label: "Still figuring it out", value: "exploring" },
-      ],
+      options: Object.keys(STATE).map((value) => ({ value, label: STATE[value].label })),
     },
   ];
 
-  /** Full routing table — every combination is intentional. */
-  const ROUTES = {
-    "services|leads|exploring": "process_review",
-    "services|phones|exploring": "process_review",
-    "services|ops|exploring": "process_review",
-    "services|managed|exploring": "process_review",
-    "local|leads|exploring": "process_review",
-    "local|phones|exploring": "process_review",
-    "local|ops|exploring": "process_review",
-    "local|managed|exploring": "process_review",
-    "retail|leads|exploring": "process_review",
-    "retail|phones|exploring": "process_review",
-    "retail|ops|exploring": "process_review",
-    "retail|managed|exploring": "process_review",
-    "other|leads|exploring": "ai_strategy",
-    "other|phones|exploring": "ai_strategy",
-    "other|ops|exploring": "ai_strategy",
-    "other|managed|exploring": "ai_strategy",
-
-    "services|leads|manual": "lead_qualification",
-    "services|leads|tools": "crm_automation",
-    "services|leads|failed_ai": "essential_managed",
-    "local|leads|manual": "lead_follow_up",
-    "local|leads|tools": "lead_qualification",
-    "local|leads|failed_ai": "essential_managed",
-    "retail|leads|manual": "website_chatbot",
-    "retail|leads|tools": "email_marketing",
-    "retail|leads|failed_ai": "growth_managed",
-    "other|leads|manual": "lead_qualification",
-    "other|leads|tools": "crm_integration",
-    "other|leads|failed_ai": "growth_managed",
-
-    "services|phones|manual": "ai_inbound",
-    "services|phones|tools": "appointment_scheduling",
-    "services|phones|failed_ai": "essential_managed",
-    "local|phones|manual": "ai_receptionist",
-    "local|phones|tools": "scheduling_automation",
-    "local|phones|failed_ai": "essential_managed",
-    "retail|phones|manual": "ai_receptionist",
-    "retail|phones|tools": "website_chatbot",
-    "retail|phones|failed_ai": "growth_managed",
-    "other|phones|manual": "ai_inbound",
-    "other|phones|tools": "appointment_scheduling",
-    "other|phones|failed_ai": "growth_managed",
-
-    "services|ops|manual": "crm_automation",
-    "services|ops|tools": "basic_integration",
-    "services|ops|failed_ai": "growth_managed",
-    "local|ops|manual": "workflow_automation",
-    "local|ops|tools": "knowledge_assistant",
-    "local|ops|failed_ai": "essential_managed",
-    "retail|ops|manual": "workflow_automation",
-    "retail|ops|tools": "crm_automation",
-    "retail|ops|failed_ai": "growth_managed",
-    "other|ops|manual": "ai_business_os",
-    "other|ops|tools": "ai_business_os",
-    "other|ops|failed_ai": "professional_managed",
-
-    "services|managed|manual": "essential_managed",
-    "services|managed|tools": "growth_managed",
-    "services|managed|failed_ai": "growth_managed",
-    "local|managed|manual": "essential_managed",
-    "local|managed|tools": "essential_managed",
-    "local|managed|failed_ai": "essential_managed",
-    "retail|managed|manual": "growth_managed",
-    "retail|managed|tools": "growth_managed",
-    "retail|managed|failed_ai": "growth_managed",
-    "other|managed|manual": "growth_managed",
-    "other|managed|tools": "professional_managed",
-    "other|managed|failed_ai": "professional_managed",
-  };
-
-  const state = {
+  const ui = {
     step: 0,
     answers: {},
-    packageId: "lead_follow_up",
   };
 
   function money(n) {
@@ -442,127 +215,107 @@
     return `${Math.round(n)}%`;
   }
 
-  function routeKey() {
-    return [
-      state.answers.business?.value || "services",
-      state.answers.leak?.value || "leads",
-      state.answers.today?.value || "manual",
-    ].join("|");
-  }
-
   function pickPackageId() {
-    return ROUTES[routeKey()] || "lead_follow_up";
-  }
+    const painKey = ui.answers.pain?.value || "leads";
+    const team = ui.answers.team?.value;
+    const state = ui.answers.state?.value;
+    const pain = PAIN[painKey] || PAIN.leads;
 
-  function statusQuoMonthly(pkg) {
-    const leak = state.answers.leak?.value || "leads";
-    const business = state.answers.business?.value || "services";
-    const today = state.answers.today?.value || "manual";
-    const sqKey = pkg.statusQuoKey || leak;
-    const sq = STATUS_QUO[sqKey] || STATUS_QUO.leads;
-    const biz = BUSINESS_SCALE[business] || BUSINESS_SCALE.services;
-    const tod = TODAY_SCALE[today] || TODAY_SCALE.manual;
-
-    const laborMonthly = Math.round(sq.laborHoursWeek * 4.33 * biz.wage * tod.mult);
-    const opportunity = Math.round(sq.opportunityMonthly * biz.mult * tod.mult);
-    const blended = Math.round(sq.baseMonthly * biz.mult * tod.mult);
-    // Prefer explicit labor + opportunity when it tells a clearer story; blend toward catalog base.
-    const monthlyCost = Math.round(blended * 0.45 + (laborMonthly + opportunity) * 0.55);
-
-    return {
-      ...sq,
-      monthlyCost,
-      laborMonthly,
-      opportunity,
-      businessLabel: biz.label,
-      todayLabel: tod.label,
-      severity: tod.severity,
-      twist: tod.twist,
-      hypotheticalOrg: biz.hypothetical,
-      wage: biz.wage,
-    };
+    if (state === "tried_ai" && (painKey === "leads" || painKey === "phones" || painKey === "ops")) {
+      return team === "large" || team === "mid" ? "growth_managed" : "essential_managed";
+    }
+    if (painKey === "strategy") {
+      return team === "large" || team === "mid" ? "ai_strategy" : "process_review";
+    }
+    return pain.packageId;
   }
 
   function computeRoi() {
-    const pkg = PACKAGES[state.packageId];
-    const industry = statusQuoMonthly(pkg);
-    const year1VibeTech = pkg.setup + pkg.monthly * 12;
-    const effectiveMonthly = year1VibeTech / 12;
-    const clawBack = Math.round(industry.monthlyCost * pkg.capture);
-    const netMonthly = clawBack - Math.round(effectiveMonthly);
-    const year1ClawBack = clawBack * 12;
-    const year1Net = year1ClawBack - year1VibeTech;
-    const roiPct = year1VibeTech > 0 ? (year1Net / year1VibeTech) * 100 : 0;
-    let payback = null;
-    if (clawBack > pkg.monthly) {
-      payback = Math.ceil(pkg.setup / (clawBack - pkg.monthly));
-    } else if (clawBack > 0 && pkg.monthly === 0) {
-      payback = Math.ceil(pkg.setup / clawBack);
-    }
+    const team = TEAM[ui.answers.team?.value] || TEAM.solo;
+    const org = ORG[ui.answers.org?.value] || ORG.professional;
+    const pain = PAIN[ui.answers.pain?.value] || PAIN.leads;
+    const cur = STATE[ui.answers.state?.value] || STATE.manual;
+    const packageId = pickPackageId();
+    const pkg = PACKAGES[packageId] || PACKAGES.lead_follow_up;
 
-    const hoursValue = Math.round(pkg.hoursSavedPerWeek * 4.33 * industry.wage);
+    const hoursTeamWeek = team.headcount * pain.hoursLostPerPersonWeek;
+    const monthlyGross = Math.round(hoursTeamWeek * WEEKS_PER_MONTH * BLS_WAGE);
+    const monthlyRecoverable = Math.round(monthlyGross * cur.recoveryPct);
+    const year1Recoverable = monthlyRecoverable * 12;
+    const year1VibeTech = pkg.setup + pkg.monthly * 12;
+    const effectiveMonthly = Math.round(year1VibeTech / 12);
+    const netMonthly = monthlyRecoverable - effectiveMonthly;
+    const year1Net = year1Recoverable - year1VibeTech;
+    const roiPct = year1VibeTech > 0 ? (year1Net / year1VibeTech) * 100 : 0;
+
+    let payback = null;
+    if (monthlyRecoverable > pkg.monthly) {
+      payback = Math.ceil(pkg.setup / (monthlyRecoverable - pkg.monthly));
+    } else if (monthlyRecoverable > 0 && pkg.monthly === 0) {
+      payback = Math.ceil(pkg.setup / monthlyRecoverable);
+    }
 
     return {
       pkg,
-      industry,
-      effectiveMonthly: Math.round(effectiveMonthly),
+      team,
+      org,
+      pain,
+      cur,
+      hoursTeamWeek,
+      monthlyGross,
+      monthlyRecoverable,
+      year1Recoverable,
       year1VibeTech,
-      clawBack,
+      effectiveMonthly,
       netMonthly,
-      year1ClawBack,
       year1Net,
       roiPct,
       payback,
-      hoursValue,
-      path: routeKey(),
+      blsWage: BLS_WAGE,
     };
   }
 
-  function whyFit(r) {
-    const leak = state.answers.leak?.label || "this leak";
-    const today = state.answers.today?.label || "how you work today";
-    return `${r.pkg.name} fits because you’re a ${r.industry.businessLabel} team dealing with ${leak.toLowerCase()}, and today that’s ${today.toLowerCase()}.`;
-  }
-
-  function hypothetical(r) {
-    const org = r.industry.hypotheticalOrg;
-    const name = r.pkg.name;
-    if (r.pkg.monthly <= 0) {
-      return `Picture ${org}. Instead of guessing the next tool, you spend ${money(r.pkg.setup)} on ${name}, leave with a ranked map of leaks, and avoid a ${money(r.industry.monthlyCost)}/mo misfire for the next quarter.`;
+  function persist(result) {
+    try {
+      const payload = {
+        version: 2,
+        answeredAt: new Date().toISOString(),
+        answers: {
+          team: ui.answers.team?.value,
+          org: ui.answers.org?.value,
+          pain: ui.answers.pain?.value,
+          state: ui.answers.state?.value,
+        },
+        labels: {
+          team: ui.answers.team?.label,
+          org: ui.answers.org?.label,
+          pain: ui.answers.pain?.label,
+          state: ui.answers.state?.label,
+        },
+        recommendation: {
+          packageId: result.pkg.id,
+          packageName: result.pkg.name,
+          setup: result.pkg.setup,
+          monthly: result.pkg.monthly,
+        },
+        math: {
+          headcount: result.team.headcount,
+          hoursTeamWeek: result.hoursTeamWeek,
+          blsWage: result.blsWage,
+          recoveryPct: result.cur.recoveryPct,
+          monthlyGross: result.monthlyGross,
+          monthlyRecoverable: result.monthlyRecoverable,
+          netMonthly: result.netMonthly,
+          year1Net: result.year1Net,
+          roiPct: Math.round(result.roiPct),
+          paybackMonths: result.payback,
+        },
+      };
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      window.VIBETECH_ROI_ASSESSMENT = payload;
+    } catch {
+      /* ignore private mode */
     }
-    return `Picture ${org}. At industry averages you’re burning about ${money(r.industry.monthlyCost)}/mo on ${r.industry.label}. ${name} is ${money(r.pkg.monthly)}/mo after a ${money(r.pkg.setup)} setup. If you claw back ${pct(r.pkg.capture * 100)} of that drag (${money(r.clawBack)}/mo), you’re looking at roughly ${money(r.netMonthly)}/mo net — and about ${pkgHours(r)} of staff time redirected every week.`;
-  }
-
-  function pkgHours(r) {
-    return `${r.pkg.hoursSavedPerWeek} hours`;
-  }
-
-  function explanationBlocks(r) {
-    const paybackLine =
-      r.payback != null
-        ? `At that claw-back rate, setup pays back in about <strong>${r.payback} month${r.payback === 1 ? "" : "s"}</strong> (after covering the monthly fee).`
-        : `Monthly claw-back is close to the monthly fee — treat this as a capacity play and tighten scope on a call.`;
-
-    return [
-      {
-        title: "1. Industry-average cost of the status quo",
-        html: `${r.industry.assumption} Scaled for a <strong>${r.industry.businessLabel}</strong> team that is <strong>${r.industry.todayLabel}</strong> (${r.industry.severity}), that lands near <strong>${money(r.industry.monthlyCost)}/mo</strong> — about <strong>${money(r.industry.laborMonthly)}</strong> in labor-shaped cost and <strong>${money(r.industry.opportunity)}</strong> in opportunity / leakage.`,
-      },
-      {
-        title: "2. Our published price for this lane",
-        html: r.pkg.monthly > 0
-          ? `<strong>${r.pkg.name}</strong> is <strong>${money(r.pkg.setup)} setup</strong> + <strong>${money(r.pkg.monthly)}/mo</strong> on the rate card (~<strong>${money(r.effectiveMonthly)}/mo</strong> when setup is spread over year one; <strong>${money(r.year1VibeTech)}</strong> year-one total).`
-          : `<strong>${r.pkg.name}</strong> is a <strong>${money(r.pkg.setup)} one-time</strong> engagement on the rate card (~<strong>${money(r.effectiveMonthly)}/mo</strong> if you spread it across a year).`,
-      },
-      {
-        title: "3. What you claw back",
-        html: `We model reclaiming about <strong>${pct(r.pkg.capture * 100)}</strong> of that status-quo drag with this lane — <strong>${money(r.clawBack)}/mo</strong> (~${money(r.year1ClawBack)} year one), including ~<strong>${pkgHours(r)}/week</strong> of redirected effort (worth ~${money(r.hoursValue)}/mo at your segment’s wage band). ${r.industry.twist}`,
-      },
-      {
-        title: "4. Net ROI",
-        html: `Year-one net is <strong>${money(r.year1Net)}</strong> (<strong>${pct(r.roiPct)}</strong> on the year-one VibeTech spend). Monthly net after the effective price is <strong>${money(r.netMonthly)}</strong>. ${paybackLine}`,
-      },
-    ];
   }
 
   function root() {
@@ -572,13 +325,13 @@
   function renderQuestion() {
     const el = root();
     if (!el) return;
-    const q = QUESTIONS[state.step];
+    const q = QUESTIONS[ui.step];
     el.innerHTML = `
       <div class="rq-card">
         <div class="rq-progress" aria-hidden="true">
-          ${QUESTIONS.map((_, i) => `<span class="${i <= state.step ? "on" : ""}"></span>`).join("")}
+          ${QUESTIONS.map((_, i) => `<span class="${i <= ui.step ? "on" : ""}"></span>`).join("")}
         </div>
-        <p class="rq-step">Question ${state.step + 1} of ${QUESTIONS.length}</p>
+        <p class="rq-step">Question ${ui.step + 1} of ${QUESTIONS.length}</p>
         <h3 class="rq-prompt">${q.prompt}</h3>
         <div class="rq-options" role="group" aria-label="${q.prompt}">
           ${q.options
@@ -595,14 +348,10 @@
     el.querySelectorAll(".rq-option").forEach((btn) => {
       btn.addEventListener("click", () => {
         const opt = q.options.find((o) => o.value === btn.getAttribute("data-value"));
-        state.answers[q.id] = opt;
-        state.step += 1;
-        if (state.step >= QUESTIONS.length) {
-          state.packageId = pickPackageId();
-          renderResult();
-        } else {
-          renderQuestion();
-        }
+        ui.answers[q.id] = opt;
+        ui.step += 1;
+        if (ui.step >= QUESTIONS.length) renderResult();
+        else renderQuestion();
       });
     });
   }
@@ -614,67 +363,66 @@
     return `<strong>${money(pkg.monthly)}</strong><span>/mo</span> · setup <strong>${money(pkg.setup)}</strong>`;
   }
 
-  function bookHref() {
-    const r = computeRoi();
-    const price =
-      r.pkg.monthly > 0
-        ? `${money(r.pkg.monthly)}/mo + ${money(r.pkg.setup)} setup`
-        : `${money(r.pkg.setup)} one-time`;
-    const summary = [
-      `Recommended: ${r.pkg.name} (${r.pkg.category})`,
-      `Path: ${state.answers.business?.label} → ${state.answers.leak?.label} → ${state.answers.today?.label}`,
-      `VibeTech price: ${price}`,
-      `Industry-average status quo: ${money(r.industry.monthlyCost)}/mo`,
-      `Est. claw-back: ${money(r.clawBack)}/mo`,
-      `Year-1 net: ${money(r.year1Net)} (${pct(r.roiPct)} ROI)`,
-      r.payback != null ? `Payback: ~${r.payback} months` : "Payback: see call",
+  function meetingHref(r) {
+    const body = [
+      "Hi VibeTech,",
+      "",
+      "I'd like to request a meeting after the ROI assessment.",
+      "",
+      `Team: ${ui.answers.team?.label}`,
+      `Org: ${ui.answers.org?.label}`,
+      `Pain: ${ui.answers.pain?.label}`,
+      `Today: ${ui.answers.state?.label}`,
+      `Recommended: ${r.pkg.name}`,
+      `Modeled recoverable: ${money(r.monthlyRecoverable)}/mo`,
+      `Year-one net (modeled): ${money(r.year1Net)}`,
+      "",
+      "Preferred times:",
+      "",
     ].join("\n");
-
-    if (String(BOOK_CALL_URL).startsWith("mailto:")) {
-      const base = BOOK_CALL_URL.split("&body=")[0];
-      return `${base}&body=${encodeURIComponent(`Hi VibeTech,\n\nI'd like to book a call.\n\n${summary}\n`)}`;
-    }
-    try {
-      const u = new URL(BOOK_CALL_URL, window.location.origin);
-      u.searchParams.set("utm_content", r.pkg.id);
-      return u.toString();
-    } catch {
-      return BOOK_CALL_URL;
-    }
+    return `${MEETING_MAIL}&body=${encodeURIComponent(body)}`;
   }
 
   function renderResult() {
     const el = root();
     if (!el) return;
     const r = computeRoi();
-    const blocks = explanationBlocks(r);
+    persist(r);
     const netClass = r.netMonthly >= 0 ? "rq-upside" : "rq-caution";
     const yearClass = r.year1Net >= 0 ? "rq-upside" : "rq-caution";
+    const paybackLine =
+      r.payback != null
+        ? `At this recovery rate, setup pays back in about <strong>${r.payback} month${r.payback === 1 ? "" : "s"}</strong> (after covering the monthly fee).`
+        : `Monthly recovery is close to the monthly fee — treat this as a capacity play and tighten scope on a call.`;
 
     el.innerHTML = `
       <div class="rq-card rq-result">
-        <p class="rq-step">Your fit · ${r.pkg.category}</p>
+        <p class="rq-step">Your modeled estimate · ${r.pkg.category}</p>
         <p class="rq-path">
-          Based on: <strong>${state.answers.business?.label}</strong>
-          → <strong>${state.answers.leak?.label}</strong>
-          → <strong>${state.answers.today?.label}</strong>
+          Based on: <strong>${ui.answers.team?.label}</strong>
+          → <strong>${ui.answers.org?.label}</strong>
+          → <strong>${ui.answers.pain?.label}</strong>
+          → <strong>${ui.answers.state?.label}</strong>
         </p>
-        <h3 class="rq-prompt">Start here on our rate card</h3>
+        <h3 class="rq-prompt">Recommended starting point</h3>
         <div class="rq-rec">
           <div>
             <p class="rq-rec-name">${r.pkg.name}</p>
             <p class="rq-rec-blurb">${r.pkg.blurb}</p>
-            <p class="rq-fit">${whyFit(r)}</p>
+            <p class="rq-fit">
+              Fits because you’re dealing with ${r.pain.label.toLowerCase()}, and today that’s
+              ${r.cur.label.toLowerCase()}. Picture ${r.org.hypothetical}.
+            </p>
             <p class="rq-rec-price">${priceLine(r.pkg)}</p>
           </div>
           <div class="rq-metrics">
             <div>
-              <span class="rq-label">Industry-avg status quo</span>
-              <strong>${money(r.industry.monthlyCost)}<span class="rq-unit">/mo</span></strong>
+              <span class="rq-label">Modeled cost of the problem</span>
+              <strong>${money(r.monthlyGross)}<span class="rq-unit">/mo</span></strong>
             </div>
             <div class="rq-upside">
-              <span class="rq-label">Est. claw-back with this lane</span>
-              <strong>${money(r.clawBack)}<span class="rq-unit">/mo</span></strong>
+              <span class="rq-label">Recoverable at ${pct(r.cur.recoveryPct * 100)}</span>
+              <strong>${money(r.monthlyRecoverable)}<span class="rq-unit">/mo</span></strong>
             </div>
             <div class="${netClass}">
               <span class="rq-label">Net vs effective VibeTech price</span>
@@ -693,8 +441,8 @@
             <strong>${money(r.year1VibeTech)}</strong>
           </div>
           <div>
-            <span class="rq-label">Year-one claw-back</span>
-            <strong>${money(r.year1ClawBack)}</strong>
+            <span class="rq-label">Year-one recoverable</span>
+            <strong>${money(r.year1Recoverable)}</strong>
           </div>
           <div>
             <span class="rq-label">Payback</span>
@@ -703,43 +451,82 @@
         </div>
 
         <div class="rq-why">
-          <p class="rq-why-title">Full explanation</p>
-          ${blocks
-            .map(
-              (b) => `
-            <div class="rq-explain-block">
-              <p class="rq-explain-title">${b.title}</p>
-              <p class="rq-explain-body">${b.html}</p>
-            </div>`,
-            )
-            .join("")}
-        </div>
-
-        <div class="rq-hypo">
-          <p class="rq-why-title">Hypothetical that matches your answers</p>
-          <p class="rq-hypo-body">${hypothetical(r)}</p>
+          <p class="rq-why-title">How the math works</p>
+          <div class="rq-explain-block">
+            <p class="rq-explain-title">1. Affected headcount × hours lost</p>
+            <p class="rq-explain-body">
+              We treat your team band as about <strong>${r.team.headcount} people</strong> affected,
+              losing about <strong>${r.pain.hoursLostPerPersonWeek} hours/person/week</strong>
+              (<strong>${r.hoursTeamWeek} hours/week</strong> total) on this problem —
+              informed by: <em>${r.pain.researchTitle}</em>. ${r.pain.researchDetail}
+              <span class="rq-cite">Source: ${r.pain.researchSource}</span>
+            </p>
+          </div>
+          <div class="rq-explain-block">
+            <p class="rq-explain-title">2. Convert to dollars (BLS median wage)</p>
+            <p class="rq-explain-body">
+              ${r.hoursTeamWeek} hrs/week × ${WEEKS_PER_MONTH} weeks ×
+              <strong>$${BLS_WAGE.toFixed(2)}/hr</strong> (BLS median wage) =
+              <strong>${money(r.monthlyGross)}/mo</strong> gross cost of the problem.
+            </p>
+          </div>
+          <div class="rq-explain-block">
+            <p class="rq-explain-title">3. Apply a realistic recovery rate</p>
+            <p class="rq-explain-body">
+              Because you’re <strong>${r.cur.label.toLowerCase()}</strong>, we model reclaiming
+              <strong>${pct(r.cur.recoveryPct * 100)}</strong> —
+              <strong>${money(r.monthlyRecoverable)}/mo</strong>. ${r.cur.twist}
+            </p>
+          </div>
+          <div class="rq-explain-block">
+            <p class="rq-explain-title">4. Compare to the published rate card</p>
+            <p class="rq-explain-body">
+              ${
+                r.pkg.monthly > 0
+                  ? `<strong>${r.pkg.name}</strong> is <strong>${money(r.pkg.setup)} setup</strong> +
+                     <strong>${money(r.pkg.monthly)}/mo</strong> (~${money(r.effectiveMonthly)}/mo
+                     when setup is spread over year one; <strong>${money(r.year1VibeTech)}</strong> year-one total).`
+                  : `<strong>${r.pkg.name}</strong> is a <strong>${money(r.pkg.setup)} one-time</strong>
+                     engagement (~${money(r.effectiveMonthly)}/mo if spread across a year).`
+              }
+              Year-one net is <strong>${money(r.year1Net)}</strong>
+              (<strong>${pct(r.roiPct)}</strong> on year-one VibeTech spend). ${paybackLine}
+            </p>
+          </div>
         </div>
 
         <p class="rq-note">
-          Math uses our published floors vs industry-average status-quo costs (labor + leakage), scaled to your answers.
-          A call locks real scope, usage, and volume. Not a formal quote.
+          This is a <strong>modeled estimate</strong> based on named research, BLS wage assumptions,
+          and your answers — not a guaranteed result or formal quote. A conversation locks real scope and volume.
         </p>
         <div class="rq-actions">
-          <a class="btn btn-primary" href="${bookHref()}">Book a call with this estimate</a>
+          <button type="button" class="btn btn-primary" id="rq-build-plan" data-vt-open-consultant="plan">
+            Build my AI plan
+          </button>
+          <a class="btn rq-ghost" href="${meetingHref(r)}">Request a meeting</a>
           <button type="button" class="btn rq-ghost" id="rq-restart">Start over</button>
         </div>
       </div>
     `;
+
     el.querySelector("#rq-restart")?.addEventListener("click", () => {
-      state.step = 0;
-      state.answers = {};
-      state.packageId = "lead_follow_up";
+      ui.step = 0;
+      ui.answers = {};
       renderQuestion();
+    });
+    el.querySelector("#rq-build-plan")?.addEventListener("click", () => {
+      window.dispatchEvent(new CustomEvent("vt:open-consultant", { detail: { mode: "plan" } }));
     });
   }
 
   function init() {
     if (!root()) return;
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) window.VIBETECH_ROI_ASSESSMENT = JSON.parse(saved);
+    } catch {
+      /* ignore */
+    }
     renderQuestion();
   }
 

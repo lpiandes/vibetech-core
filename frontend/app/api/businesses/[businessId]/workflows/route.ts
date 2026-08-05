@@ -140,7 +140,7 @@ export async function POST(
               ],
           artifacts: {
             peopleHref: `/b/${encodeURIComponent(businessId)}/crm/contacts`,
-            needsAttentionHref: `/b/${encodeURIComponent(businessId)}/needs-attention`,
+            needsAttentionHref: `/b/${encodeURIComponent(businessId)}/intelligence`,
           },
         },
       });

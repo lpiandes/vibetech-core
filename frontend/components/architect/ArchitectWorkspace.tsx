@@ -15,6 +15,7 @@ import {
   architectRoutes,
 } from "./architectSemantics";
 import ConversationRail from "./ConversationRail";
+import ActionDraftCard, { type ActionDraft } from "./ActionDraftCard";
 import DiscoveryStepWizard from "./DiscoveryStepWizard";
 import OsAssemblyCanvas from "./OsAssemblyCanvas";
 import ProposalStudio from "./ProposalStudio";
@@ -77,6 +78,7 @@ export default function ArchitectWorkspace({
   const [researchNotice, setResearchNotice] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [askQuotaRemaining, setAskQuotaRemaining] = useState<number | null>(null);
+  const [pendingActionDraft, setPendingActionDraft] = useState<ActionDraft | null>(null);
 
   async function refresh(action?: string, body: Record<string, unknown> = {}) {
     const response = await fetch(`/api/builder/sessions/${encodeURIComponent(sessionId)}`, {
@@ -103,6 +105,11 @@ export default function ArchitectWorkspace({
     if (data.session?.appearance?.accentColor) setAccentColor(data.session.appearance.accentColor);
     if (data.quota && typeof data.quota.remaining === "number") {
       setAskQuotaRemaining(data.quota.remaining);
+    }
+    if (data.actionDraft) {
+      setPendingActionDraft(data.actionDraft as ActionDraft);
+    } else if (action === "chat") {
+      setPendingActionDraft(null);
     }
     return data;
   }
@@ -715,6 +722,9 @@ export default function ArchitectWorkspace({
                   onUploadFiles={(files) => void onUpload(files)}
                   dragOver={dragOver}
                   setDragOver={setDragOver}
+                  actionDraft={pendingActionDraft}
+                  businessId={businessId ?? undefined}
+                  onDismissActionDraft={() => setPendingActionDraft(null)}
                 />
               </div>
             )}

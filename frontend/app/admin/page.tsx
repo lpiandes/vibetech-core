@@ -40,6 +40,7 @@ export default async function AdminDashboardPage() {
       dock={(
         <>
           <VtDockLink href="/platform">Create & invite</VtDockLink>
+          <VtDockLink href="/admin/exceptions">Exceptions</VtDockLink>
           <VtDockLink href="/admin/health">Health</VtDockLink>
           <VtDockLink href="/admin/businesses">Businesses</VtDockLink>
           <VtDockLink href="/admin/support">Support</VtDockLink>
@@ -61,7 +62,14 @@ export default async function AdminDashboardPage() {
 
       <VtPanel
         title="Platform exceptions — fix these now"
-        right={operatorActions.length ? <StatusBadge label={`${operatorActions.length} open`} tone="warning" /> : null}
+        right={(
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <Link href="/admin/exceptions" style={{ fontSize: 13, fontWeight: 700, color: cockpitColors.accent, textDecoration: "none" }}>
+              Operator console →
+            </Link>
+            {operatorActions.length ? <StatusBadge label={`${operatorActions.length} open`} tone="warning" /> : null}
+          </div>
+        )}
       >
         {operatorActions.length ? (
           <div style={{ display: "grid", gap: 12 }}>
@@ -110,7 +118,7 @@ export default async function AdminDashboardPage() {
             ))}
           </div>
         ) : (
-          <VtEmpty label="Nothing waiting on you. A2P, failed installs, and similar work land here with exact steps." />
+          <VtEmpty label="Nothing waiting on you. RFT exceptions, SLA risk, failed fires, A2P, and failed installs land here — resolve in Operator console with a root cause." />
         )}
       </VtPanel>
 

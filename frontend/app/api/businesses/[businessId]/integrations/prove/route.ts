@@ -20,7 +20,50 @@ import { evaluateOutboundSendPermission } from "../../../../../../../backend/cor
 import { INTEGRATION_CAPABILITIES } from "../../../../../../../backend/core/integrations/capabilities/IntegrationCapability.js";
 import { PostgresPlatformJobQueue } from "../../../../../../../backend/core/platform/jobs/PostgresPlatformJobQueue.js";
 import { runVerticalGoldenPathLive } from "../../../../../../../backend/core/platform/golden-paths/runVerticalGoldenPathLive.js";
+import { attachProveEvidenceToRftOpportunity } from "../../../../../../../backend/core/ai-builder/operating-contract/rft/attachProveEvidenceToRft.js";
+import { readRftLaunch } from "../../../../../../../backend/core/ai-builder/operating-contract/rft/rftLaunch.js";
 
+async function maybeAttachRftEvidence({
+  platformStore,
+  businessId,
+  action,
+  result,
+}: {
+  platformStore: ReturnType<typeof getPlatformStore>;
+  businessId: string;
+  action: string;
+  result: Record<string, unknown>;
+}) {
+  const detail = (result?.detail && typeof result.detail === "object")
+    ? result.detail as Record<string, unknown>
+    : {};
+  const hasRef = Boolean(
+    detail.externalReference
+    || detail.messageId
+    || detail.eventId
+    || detail.sid
+    || detail.formSubmissionId,
+  );
+  const verified = result?.verified === true && result?.ok === true;
+  // Need a provider id; attach on verified proves, or when a launch prove card already exists.
+  if (!hasRef) return null;
+  try {
+    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    if (!installation) return null;
+    const launch = readRftLaunch(installation);
+    if (!launch.proveCardId && !verified) return null;
+    return await attachProveEvidenceToRftOpportunity({
+      platformStore,
+      installation,
+      businessId,
+      action,
+      proveResult: result,
+      actorId: "prove_route",
+    });
+  } catch {
+    return null;
+  }
+}
 const ACTION_TO_CAPABILITY: Record<string, string> = {
   send_test_email: "customer_email_send",
   create_test_event: "calendar_scheduling",
@@ -148,9 +191,16 @@ export async function POST(
           execution: detail.execution ?? {},
         },
       });
+      const rftAttach = await maybeAttachRftEvidence({
+        platformStore,
+        businessId,
+        action,
+        result: { ...result, detail: { ...detail, externalReference: ref } },
+      });
       return NextResponse.json({
         result,
         proofRecord,
+        rftAttach,
         rule: "Connected is not proven. Proven requires a successful proveAction plus owner receipt confirm for live tests.",
       });
     }
@@ -237,9 +287,19 @@ export async function POST(
       },
     });
 
+    const rftAttach = storedResult.ok || externalReference
+      ? await maybeAttachRftEvidence({
+        platformStore,
+        businessId,
+        action,
+        result: storedResult,
+      })
+      : null;
+
     return NextResponse.json({
       result: storedResult,
       proofRecord,
+      rftAttach,
       rule: "Connected is not proven. Proven requires a successful proveAction.",
     });
   } catch (err) {
@@ -334,10 +394,19 @@ async function executeProveForAction(input: {
   }
 
   if (action === PROVE_ACTIONS.submit_test_form) {
+    const formSubmissionId = `form_prove_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     return {
       ok: true,
+      verified: true,
       simulated: input.allowSimulated,
       message: "Website form intake recorded for prove.",
+      detail: {
+        formSubmissionId,
+        externalReference: formSubmissionId,
+        providerKind: "form_submission_id",
+        at: new Date().toISOString(),
+        note: "Controlled prove submission — not a live website visitor.",
+      },
     };
   }
 

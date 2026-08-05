@@ -36,10 +36,12 @@ test("manual create_draft notes needsYou; auto does not", async () => {
   assert.equal(auto.notes[0].needsYou, false);
 });
 
-test("auto outbound sends without approval when recipients exist", async () => {
+test("auto external outbound requires owner approval (pilot safety)", async () => {
   let sent = null;
+  const events = [];
   const result = await executeSpecialtyPathSteps({
     employee: {
+      employeeId: "emp_auto",
       operatingContract: {
         automationPath: {
           version: 1,
@@ -61,15 +63,28 @@ test("auto outbound sends without approval when recipients exist", async () => {
         },
       },
     },
+    workItemId: "work_auto_1",
     eventPayload: { name: "Alex", email: "alex@example.com" },
+    readinessSnapshot: {
+      businessId: "biz_1",
+      connections: [{ type: "business_email", status: "CONNECTED" }],
+      connectedTypes: ["business_email"],
+      crmAvailable: true,
+    },
+    approvalRuntime: {
+      getRequestById: () => null,
+      applyEvent: (evt) => { events.push(evt); },
+    },
     sendEmail: async (payload) => {
       sent = payload;
       return { ok: true };
     },
   });
-  assert.equal(result.needsYou, false);
-  assert.equal(result.notes[0].reason, "auto_sent");
-  assert.equal(sent?.to, "alex@example.com");
+  assert.equal(result.needsYou, true);
+  assert.equal(result.notes[0].reason, "awaiting_owner_grant");
+  assert.equal(sent, null);
+  assert.ok(result.notes[0].approvalId);
+  assert.equal(events.length, 1);
 });
 
 test("manual outbound creates approval and needsYou", async () => {
@@ -99,6 +114,12 @@ test("manual outbound creates approval and needsYou", async () => {
     },
     workItemId: "work_1",
     eventPayload: { email: "alex@example.com" },
+    readinessSnapshot: {
+      businessId: "biz_1",
+      connections: [{ type: "business_email", status: "CONNECTED" }],
+      connectedTypes: ["business_email"],
+      crmAvailable: true,
+    },
     approvalRuntime: {
       getRequestById: () => null,
       applyEvent: (evt) => { events.push(evt); },

@@ -73,9 +73,45 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: null,
     discoveryTopics: null,
     launchMissionIds: null,
-    honestyNote: null,
+    honestyNote: "Engine entitlement only — not sold as the customer-facing product. Use Managed Revenue Follow-Through for design partners.",
     commercialStatus: "product",
+    sellable: false,
+  },
+  {
+    id: "managed_revenue_follow_through",
+    label: "Managed Revenue Follow-Through",
+    description: "Primary beachhead offer — VIBETech owns follow-through ops with evidence-backed outcomes. Includes Today, Decisions, Outcomes, Company Rules, and minimum integrations.",
+    moduleIds: ["home", "for_you", "people", "work", "knowledge", "integrations", "settings", "inbox", "pipelines"],
+    canonicalNavIds: [
+      "home",
+      "needs_attention",
+      "outcomes",
+      "knowledge",
+      "work",
+      "calendar",
+      "integrations",
+      "settings",
+    ],
+    discoveryTopics: [
+      "identity",
+      "industry",
+      "services",
+      "customers",
+      "communications",
+      "integrations",
+      "outcomes",
+    ],
+    launchMissionIds: [
+      "customer_email_send",
+      "knowledge_consult",
+      "outbound_approvals",
+      "website_forms",
+    ],
+    honestyNote: "Managed ops retainer delivering Revenue Follow-Through — not à-la-carte module shopping.",
+    commercialStatus: "managed_product",
     sellable: true,
+    maxWorkers: 3,
+    maxWorkflows: 5,
   },
   {
     id: "ai_receptionist",
@@ -693,9 +729,12 @@ export function listSalesPackagesForAdmin({ includeRoadmap = true } = {}) {
   );
 }
 
-/** Packages offered on Create & invite (live sales sheet). */
+/** Packages offered on Create & invite (live sales sheet). Managed RFT leads. */
 export function listSellableSalesPackagesForAdmin() {
-  return listSalesPackagesForAdmin({ includeRoadmap: false });
+  const rows = listSalesPackagesForAdmin({ includeRoadmap: false });
+  const managed = rows.filter((row) => row.commercialStatus === "managed_product");
+  const rest = rows.filter((row) => row.commercialStatus !== "managed_product");
+  return [...managed, ...rest];
 }
 
 /**
@@ -972,7 +1011,12 @@ export function resolvePurchasedPackageScope(purchasedPackages = []) {
 export function resolveCanonicalNavIdsForPackages(purchasedPackages = []) {
   const scope = resolvePurchasedPackageScope(purchasedPackages);
   if (scope.fullOs || !scope.canonicalNavIds) return null;
-  return scope.canonicalNavIds;
+  const ids = new Set(scope.canonicalNavIds);
+  // Plan 3 primary IA: Outcomes ships with Today/Decisions for every entitled workspace.
+  if (ids.has("home") || ids.has("needs_attention")) {
+    ids.add("outcomes");
+  }
+  return ids;
 }
 
 /**
@@ -1381,7 +1425,11 @@ export function filterEmployeesForPurchasedPackages(employees = [], purchasedPac
 
   // Managed tiers must not install with an empty workforce.
   if (
-    (packages.includes("essential_managed") || packages.includes("growth_managed"))
+    (
+      packages.includes("essential_managed")
+      || packages.includes("growth_managed")
+      || packages.includes("managed_revenue_follow_through")
+    )
     && kept.length === 0
   ) {
     for (const def of [

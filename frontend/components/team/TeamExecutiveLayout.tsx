@@ -116,7 +116,7 @@ function DigitalEmployeeCard({ employee, businessId }: { employee: TeamDigitalEm
           <PrimaryButton href={specialtyHref}>Open specialty page</PrimaryButton>
         ) : (
           <Link href={detailHref} style={{ color: cockpitColors.accent, fontWeight: 600, fontSize: typography.caption.fontSize }}>
-            Open teammate
+            View contract
           </Link>
         )}
         {action?.href && action.href !== detailHref && action.href !== specialtyHref ? (
@@ -160,7 +160,7 @@ export default function TeamExecutiveLayout({
   const metricItems = useMemo(
     () => [
       { id: "human", label: "People", value: String(counts.humanTeam) },
-      { id: "digital", label: "AI", value: String(counts.digitalEmployees) },
+      { id: "digital", label: "Operating", value: String(counts.digitalEmployees) },
       { id: "ready", label: "Working", value: String(counts.ready) },
       { id: "setup", label: "Setup", value: String(counts.needsSetup) },
     ],
@@ -303,7 +303,7 @@ export default function TeamExecutiveLayout({
           })),
           aiEmployees: digitalEmployees.map((employee) => ({
             id: String(employee.id ?? employee.name),
-            label: String(employee.name ?? "AI employee"),
+            label: String(employee.name ?? "Operating responsibility"),
             detail: String(employee.responsibility ?? employee.role ?? ""),
             responsibilities: [],
           })),
@@ -315,7 +315,7 @@ export default function TeamExecutiveLayout({
           knowledgeOwnership: [],
           metrics: [
             { id: "humans", label: "Humans", value: platformMembers.length },
-            { id: "ai", label: "AI employees", value: digitalEmployees.length },
+            { id: "ai", label: "Operating responsibilities", value: digitalEmployees.length },
             { id: "departments", label: "Departments", value: 0 },
             { id: "teams", label: "Staff groups", value: 0 },
           ],
@@ -397,9 +397,9 @@ export default function TeamExecutiveLayout({
         </SimplePanel>
       ) : null}
 
-      <SimplePanel title="AI teammates">
+      <SimplePanel title="Operating specialties">
         {digitalEmployees.length === 0 ? (
-          <SimpleEmpty>No AI teammates yet.</SimpleEmpty>
+          <SimpleEmpty>No operating specialties yet.</SimpleEmpty>
         ) : (
           <div>
             {digitalEmployees.map((employee) => (

@@ -113,7 +113,7 @@ export default function AiTeammateDetail({ model }: { model: AiTeammateDetailMod
 
       <PageHeader
         title={model.name}
-        description={model.purpose || model.role || "AI teammate"}
+        description={model.purpose || model.role || "Operating responsibility"}
         action={<StatusBadge label={model.statusLabel} tone={model.statusTone} />}
       />
 
@@ -122,7 +122,7 @@ export default function AiTeammateDetail({ model }: { model: AiTeammateDetailMod
           Run a job
         </h2>
         <p style={{ margin: 0, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
-          Tell this teammate what to produce. They create durable Work with an artifact you can review.
+          Tell this operating responsibility what to produce. It creates durable Work with an artifact you can review.
           Nothing is sent to customers without approval.
         </p>
         <textarea
@@ -150,7 +150,7 @@ export default function AiTeammateDetail({ model }: { model: AiTeammateDetailMod
           <SecondaryButton onClick={runJob} disabled={busy === "run"}>
             {busy === "run" ? "Running…" : "Run job here"}
           </SecondaryButton>
-          <SecondaryButton href={model.askHref}>Ask this teammate</SecondaryButton>
+          <SecondaryButton href={model.askHref}>Ask about this responsibility</SecondaryButton>
           <SecondaryButton href={model.workHref}>Open Work</SecondaryButton>
         </div>
       </section>
@@ -201,7 +201,7 @@ export default function AiTeammateDetail({ model }: { model: AiTeammateDetailMod
             Why blocked
           </h2>
           <p style={{ margin: 0, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
-            AI teammates need Knowledge and Connections the same way people do. Fix these, then re-run.
+            Operating responsibilities need Knowledge and Connections the same way people do. Fix these, then re-run.
           </p>
           <ul style={{ margin: 0, paddingLeft: 18, color: cockpitColors.textSecondary, lineHeight: 1.55 }}>
             {model.blockers.map((item) => (

@@ -294,20 +294,31 @@ export function upsertPipelineCard(crm, { pipelineId, card }) {
     const ownerProvided = Object.prototype.hasOwnProperty.call(card, "ownerUserId");
     const next = {
       id,
-      contactId: String(card.contactId ?? ""),
-      partyId: card.partyId ?? card.contactId ?? null,
-      title: card.title == null ? "Opportunity" : String(card.title),
-      stageId: String(card.stageId ?? pipe.stages?.[0]?.id ?? "stage_new"),
-      value: Number(card.value) || 0,
+      contactId: String(card.contactId ?? existing?.contactId ?? ""),
+      partyId: card.partyId ?? card.contactId ?? existing?.partyId ?? existing?.contactId ?? null,
+      title: card.title == null
+        ? (existing?.title ?? "Opportunity")
+        : String(card.title),
+      stageId: String(card.stageId ?? existing?.stageId ?? pipe.stages?.[0]?.id ?? "stage_new"),
+      value: Number(card.value != null ? card.value : existing?.value) || 0,
       ownerUserId: ownerProvided
         ? (card.ownerUserId ? String(card.ownerUserId) : null)
         : (existing?.ownerUserId ?? null),
       expectedClose: Object.prototype.hasOwnProperty.call(card, "expectedClose")
         ? (card.expectedClose ?? null)
         : (existing?.expectedClose ?? null),
+      // Preserve RFT / evidence metadata (Revenue Follow-Through runtime).
+      rft: Object.prototype.hasOwnProperty.call(card, "rft")
+        ? card.rft
+        : (existing?.rft ?? undefined),
+      metadata: Object.prototype.hasOwnProperty.call(card, "metadata")
+        ? card.metadata
+        : (existing?.metadata ?? undefined),
       updatedAt: new Date().toISOString(),
       createdAt: card.createdAt ?? existing?.createdAt ?? new Date().toISOString(),
     };
+    if (next.rft === undefined) delete next.rft;
+    if (next.metadata === undefined) delete next.metadata;
     const cards = [...(pipe.cards ?? [])];
     const idx = cards.findIndex((c) => String(c.id) === id);
     if (idx >= 0) cards[idx] = { ...cards[idx], ...next, createdAt: cards[idx].createdAt };

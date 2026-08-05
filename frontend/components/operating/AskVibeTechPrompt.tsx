@@ -23,7 +23,7 @@ export default function AskVibeTechPrompt({
   businessId,
   context,
   placeholder = "What would you like VIBETech to handle?",
-  helperText = "Ask about your business, change how something works, or investigate an issue.",
+  helperText = "Ask about follow-through, change operating rules, or investigate an escalation. Confirm applies changes — nothing mutates until you approve.",
   large = false,
   showSuggestions = true,
 }: {

@@ -47,21 +47,33 @@ export async function POST(request: Request, { params }: Params) {
     const continuous = new ContinuousBusinessBuilderService({
       aiBuilder: getAiBuilderService(),
     });
+    const contextKeys = [
+      "intelligenceCandidateId",
+      "workId",
+      "personId",
+      "partyId",
+      "subjectId",
+      "employeeId",
+      "cardId",
+      "outcomeId",
+    ] as const;
+    const extraMetadata: Record<string, unknown> = {
+      proposeOnly: true,
+      neverInstallAutomatically: true,
+    };
+    for (const key of contextKeys) {
+      const value = body[key];
+      if (value) extraMetadata[key] = String(value);
+    }
+
     const result = await continuous.startImprovement({
       businessId,
       actorId: scope.user.id,
       installedSpecification,
       prompt: body.prompt ?? "Improve this business",
       intelligenceCandidateId: body.intelligenceCandidateId ?? null,
-      extraMetadata: body.intelligenceCandidateId
-        ? {
-            intelligenceCandidateId: body.intelligenceCandidateId,
-            proposeOnly: true,
-            neverInstallAutomatically: true,
-          }
-        : {},
+      extraMetadata,
     });
-
     if (!result.ok) {
       const productError = presentProductError(result.reason ?? result);
       return NextResponse.json({

@@ -53,7 +53,7 @@ test("canonical Home splits pre-install Ask VIBETech from post-install operating
   assert.ok(!page.includes("SetupChecklistBanner"));
 });
 
-test("operating Home is mockup-density dashboard from live supervision, not industry CRM hardcodes", () => {
+test("operating Home is an operating brief — no KPI theater or AI teammate counts", () => {
   const home = readFileSync(
     path.join(here, "../operating/OperatingHomeExperience.tsx"),
     "utf8",
@@ -61,14 +61,16 @@ test("operating Home is mockup-density dashboard from live supervision, not indu
   assert.ok(!home.includes("AskVibeTechComposer"));
   assert.ok(!home.includes("AskCard"));
   assert.match(home, /Needs you/);
-  assert.match(home, /AI team/);
-  assert.match(home, /SimpleMetrics/);
+  assert.match(home, /DecisionCard/);
+  assert.match(home, /Recent completed work/);
   assert.match(home, /SimplePanel/);
-  assert.match(home, /Today/);
-  assert.match(home, /buildMetricCards/);
-  assert.match(home, /Same queue as Needs Attention/);
-  assert.match(home, /teammateActionLabel/);
-  assert.match(home, /metricHrefForLabel/);
+  assert.ok(!home.includes("CrmReportingStrip"));
+  assert.ok(!home.includes("HomeViewToggle"));
+  assert.ok(!home.includes("AI teammates"));
+  assert.ok(!home.includes("SimpleMetrics"));
+  assert.ok(!home.includes("buildMetricCards"));
+  assert.ok(!home.includes("Operating dashboard"));
+  assert.ok(!home.includes("Same queue as Needs Attention"));
   assert.ok(!home.includes("ownerActionOutcomes"));
   assert.ok(!home.includes("needsOwnerAction"));
   assert.ok(!home.includes("estimateProgress"));

@@ -1,6 +1,7 @@
 "use client";
 
-import { useContext, useEffect, useState } from "react";
+import { useContext } from "react";
+import Link from "next/link";
 import { useOptionalBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { MissionControlViewModelContext } from "@/components/mission-control/MissionControlContext";
 import { HomeCanvas, HomeHero } from "@/components/operating/home/EditorialHome";
@@ -9,34 +10,19 @@ import {
   resolveBusinessDisplayName,
   scrubInternalWording,
 } from "@/lib/operating/businessLanguage";
-import LaunchCenter, { type LaunchMission } from "@/components/home/LaunchCenter";
-import CrmReportingStrip from "@/components/home/CrmReportingStrip";
+import RftLaunchPath from "@/components/home/RftLaunchPath";
 import {
-  buildCuratedLaunchMissions,
-  resolveLaunchVertical,
-} from "../../../backend/core/platform/launch/buildCuratedLaunchMissions.js";
-import { businessGrantsSocialCheckerAccess } from "../../../backend/core/platform/packages/socialCheckerEntitlement.js";
-import { presentLaunchPathLabel, resolveCanonicalNavIdsForPackages } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
-import { presentTeammateHomeGlance } from "../../../backend/core/operating-home/presentTeammateHomeGlance.js";
-import {
-  NextBanner,
   SimpleEmptyLine,
-  SimpleMetrics,
   SimplePanel,
   SimplePanelLink,
   SimpleRow,
 } from "@/components/product/SimpleUI";
-import { cockpitColors } from "@/design/tokens";
-
-type HomeViewMode = "setup" | "dashboard";
-
-function homeViewStorageKey(businessId: string) {
-  return `vt.homeView.${businessId}`;
-}
+import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
+import DecisionCard from "@/components/operating/DecisionCard";
 
 /**
- * Operating Home — Setup (0/N) by default after install, with a toggle into the
- * dense operating dashboard. Dashboard always shows remaining setup.
+ * Today — operating brief (Plan 3).
+ * No CRM count cards, no AI-teammate theater, no Setup/dashboard toggle.
  */
 export default function OperatingHomeExperience() {
   const viewModel = useContext(MissionControlViewModelContext) as any;
@@ -53,28 +39,6 @@ export default function OperatingHomeExperience() {
     viewModel?.businessName,
   );
 
-  const [homeView, setHomeView] = useState<HomeViewMode>("setup");
-  const [viewReady, setViewReady] = useState(false);
-
-  useEffect(() => {
-    if (!businessId || typeof window === "undefined") {
-      setViewReady(true);
-      return;
-    }
-    const stored = window.localStorage.getItem(homeViewStorageKey(businessId));
-    if (stored === "dashboard" || stored === "setup") {
-      setHomeView(stored);
-    }
-    setViewReady(true);
-  }, [businessId]);
-
-  function selectHomeView(next: HomeViewMode) {
-    setHomeView(next);
-    if (businessId && typeof window !== "undefined") {
-      window.localStorage.setItem(homeViewStorageKey(businessId), next);
-    }
-  }
-
   if (!supervision) {
     return (
       <HomeCanvas>
@@ -83,264 +47,182 @@ export default function OperatingHomeExperience() {
     );
   }
 
-  // Avoid flashing Setup when localStorage already prefers Operating dashboard.
-  if (!viewReady) {
-    return (
-      <HomeCanvas>
-        <HomeHero greeting={supervision.greeting?.headline ?? "Good day."} />
-      </HomeCanvas>
-    );
-  }
-
   const decisions = supervision.needsDecision ?? { items: [], viewAllHref: null };
-  const approvals = supervision.approvalsInbox ?? { items: [], viewAllHref: null, emptyTitle: "No outbound approvals waiting." };
+  const approvals = supervision.approvalsInbox ?? { items: [], viewAllHref: null };
   const waitingItems = (decisions.items ?? [])
     .map((item: any) => presentWaitingItem(item))
     .filter((item: { href?: string | null }) => Boolean(item.href));
   const approvalItems = Array.isArray(approvals.items) ? approvals.items : [];
-  const workingNow = supervision.workingNow ?? [];
-  const workforce = mergeHomeWorkforce(
-    supervision.digitalWorkforce ?? [],
-    viewModel?.bosEmployees ?? [],
-    businessId,
-  );
-  const recentActivity = (supervision.recentActivity ?? []).slice(0, 8);
-  const overview = supervision.businessOverview ?? [];
-  const conversations = (supervision.conversations ?? []).slice(0, 6);
-  const outcomes = (supervision.recentOutcomes ?? []).slice(0, 5);
-
+  const workingNow = Array.isArray(supervision.workingNow) ? supervision.workingNow : [];
+  const outcomes = (supervision.recentOutcomes ?? supervision.recentActivity ?? [])
+    .filter((entry: any) =>
+      entry?.proven !== false
+      && !/exception|unproven/i.test(String(entry.result ?? entry.status ?? entry.title ?? "")),
+    )
+    .slice(0, 8);
+  const summary = supervision.operatingSummary ?? null;
   const greeting = supervision.greeting?.headline ?? "Good day.";
-  const setup = supervision.setup ?? { visible: false, incomplete: [] };
-  const fullSetupChecklist = Array.isArray(viewModel?.setupChecklist)
-    ? viewModel.setupChecklist
-    : (setup.incomplete ?? []).map((item: any) => ({
-      id: String(item.id),
-      title: String(item.title),
-      actionLabel: String(item.actionLabel ?? "Continue"),
-      href: String(item.href ?? "#"),
-      complete: false,
-      summary: item.summary == null ? null : String(item.summary),
-      whereInApp: item.whereInApp == null ? null : String(item.whereInApp),
-      inApp: Array.isArray(item.inApp) ? item.inApp.map(String) : [],
-      external: Array.isArray(item.external) ? item.external.map(String) : [],
-    }));
-  const launch = buildCuratedLaunchMissions({
-    vertical: resolveVerticalFromScope(scope, viewModel, businessName),
-    businessId: businessId || null,
-    baseHref: base || null,
-    connectionStatuses: viewModel?.connectionStatuses ?? {},
-    proofRecords: viewModel?.proofRecords ?? {},
-    checklist: fullSetupChecklist,
-    connections: Array.isArray(viewModel?.connections) ? viewModel.connections : [],
-    knowledgeCount: Number(viewModel?.knowledgeCount ?? 0),
-    businessName,
-    smsSetup: viewModel?.smsSetup ?? null,
-    purchasedPackages: scope?.purchasedPackages ?? [],
-    metaSetupPending: Boolean(viewModel?.metaSetupPending),
-  } as any);
-  const launchMissions = launch.missions as LaunchMission[];
-  const entitledNavIds = resolveCanonicalNavIdsForPackages(scope?.purchasedPackages ?? []);
-  const navAllows = (id: string) => !entitledNavIds || entitledNavIds.has(id);
-  const isDeferred = (m: LaunchMission) =>
-    Boolean((m as { deferred?: boolean }).deferred) || String(m.status ?? "") === "deferred";
-  const isHardBlocked = (m: LaunchMission) => Boolean(m.blocked) && !isDeferred(m);
-  const setupIncomplete = Boolean(setup.visible) || launchMissions.some((m) => !m.complete && !isHardBlocked(m));
-  const completeCount = launchMissions.filter((m) => m.complete && !isHardBlocked(m)).length;
-  const actionableTotal = launchMissions.filter((m) => !isHardBlocked(m)).length || launchMissions.length;
-  const remainingSetup = Math.max(0, actionableTotal - completeCount);
+  const launchGoLiveAt = viewModel?.productContext?.installationResult?.configuration?.rftLaunch?.goLiveAt
+    ?? null;
+  const showRftLaunch = Boolean(businessId) && !launchGoLiveAt;
 
   const needsCount = waitingItems.length + approvalItems.length;
-  const nextSetup = fullSetupChecklist.find((item: any) => !item.complete)
-    ?? launchMissions.find((m) => !m.complete && !isHardBlocked(m) && !isDeferred(m))
-    ?? null;
-  const nextLabel = nextSetup
-    ? String((nextSetup as any).title ?? "")
-      .replace(/^Choose |^Connect |^Set up |^Add /i, "")
-      .replace(/ \(.*\)$/, "")
-    : null;
-  const metrics = buildMetricCards({
-    overview,
-    waiting: needsCount,
-    working: workingNow.length,
-    wins: outcomes.length,
-    team: workforce.length,
-    base,
+  const completedToday = outcomes.filter((entry: any) =>
+    isToday(entry.timestamp ?? entry.at ?? entry.when)
+    && entry.proven !== false
+    && !/exception/i.test(String(entry.result ?? entry.title ?? "")),
+  ).length;
+  const exceptionCount = [
+    ...waitingItems,
+    ...approvalItems,
+  ].filter((item: any) => /exception|fail|error|blocked/i.test(String(item.title ?? item.detail ?? ""))).length;
+  const waitingExternally = workingNow.filter((episode: any) =>
+    /wait|prospect|external/i.test(String(episode.currentStep ?? episode.status ?? "")),
+  ).length;
+
+  const healthLine = buildHealthLine({
+    summary,
+    needsCount,
+    remainingSetup: showRftLaunch ? 1 : 0,
+    businessName,
   });
 
-  const showSetupFirst = setupIncomplete && homeView !== "dashboard";
-
-  if (showSetupFirst) {
-    const showSocialLink = businessGrantsSocialCheckerAccess(scope?.purchasedPackages ?? []);
-    return (
-      <HomeCanvas>
-        <HomeHero greeting={greeting} />
-        {showSocialLink ? (
-          <a
-            href="https://social.vtechdevelopment.com/"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 12,
-              padding: "10px 14px",
-              borderRadius: 12,
-              background: "rgba(15,118,110,.08)",
-              border: "1px solid rgba(15,118,110,.22)",
-              color: cockpitColors.accent,
-              fontWeight: 750,
-              fontSize: 14,
-              textDecoration: "none",
-            }}
-          >
-            Open Social Checker →
-          </a>
-        ) : null}
-        <HomeViewToggle
-          mode="setup"
-          remainingSetup={remainingSetup}
-          totalSetup={actionableTotal}
-          onSelect={selectHomeView}
-        />
-        <LaunchCenter
-          businessName={businessName}
-          businessId={businessId || undefined}
-          missions={launchMissions}
-          verticalLabel={presentLaunchPathLabel({
-            purchasedPackages: scope?.purchasedPackages ?? [],
-            industry: resolveIndustryLabelFromScope(scope, viewModel),
-          }) ?? undefined}
-          liveFlags={viewModel?.liveFlags ?? {
-            business_email: true,
-            calendar: true,
-            sms_channel: true,
-            voice_channel: true,
-            social_screening: true,
-            prospecting_enrichment: true,
-            meta_lead_ads: true,
-          }}
-        />
-      </HomeCanvas>
-    );
-  }
+  const topDecision = approvalItems[0] ?? waitingItems[0] ?? null;
+  const decisionsHref = decisions.viewAllHref || (base ? `${base}/intelligence` : null);
+  const outcomesHref = base ? `${base}/outcomes` : null;
 
   return (
     <HomeCanvas>
       <HomeHero greeting={greeting} />
 
-      <HomeViewToggle
-        mode="dashboard"
-        remainingSetup={remainingSetup}
-        totalSetup={actionableTotal}
-        onSelect={selectHomeView}
-        setupAvailable={setupIncomplete}
+      <section
+        aria-label="Operation health"
+        style={{
+          display: "grid",
+          gap: spacing.sm,
+          padding: spacing.lg,
+          borderRadius: radius.large,
+          background: cockpitColors.panel,
+          border: `1px solid ${cockpitColors.panelBorder}`,
+        }}
+      >
+        <p style={{ margin: 0, fontSize: typography.cardTitle.fontSize, fontWeight: 650, color: cockpitColors.textPrimary }}>
+          {healthLine.headline}
+        </p>
+        {healthLine.detail ? (
+          <p style={{ margin: 0, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
+            {healthLine.detail}
+          </p>
+        ) : null}
+      </section>
+
+      <section aria-label="Work handled today" style={{ display: "grid", gap: spacing.sm }}>
+        <h2 style={{ margin: 0, fontSize: typography.meta.fontSize, fontWeight: 700, color: cockpitColors.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          Today
+        </h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: spacing.sm }}>
+          {completedToday > 0 || needsCount > 0 || waitingExternally > 0 || exceptionCount > 0 || workingNow.length > 0 ? (
+            <>
+              <BriefStat label="Completed" value={completedToday} href={outcomesHref} hideZero={false} />
+              <BriefStat label="Needs approval" value={approvalItems.length} href={decisionsHref} tone={approvalItems.length ? "attention" : "default"} />
+              <BriefStat label="Waiting on prospect" value={waitingExternally} href={base ? `${base}/work` : null} />
+              <BriefStat label="Exceptions" value={exceptionCount} tone={exceptionCount ? "attention" : "default"} href={decisionsHref} />
+            </>
+          ) : (
+            <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize }}>
+              No operating volume yet today — connect work and prove one opportunity, or wait for the next inbound.
+            </p>
+          )}
+        </div>
+        {(completedToday > 0 || needsCount > 0 || workingNow.length > 0) ? (
+          <p style={{ margin: 0, fontSize: typography.meta.fontSize, color: cockpitColors.textSecondary }}>
+            VIBETech handled {Math.max(completedToday, workingNow.length + completedToday)}{" "}
+            {Math.max(completedToday, workingNow.length + completedToday) === 1 ? "opportunity" : "opportunities"} in view
+            {needsCount ? ` · ${needsCount} waiting for you` : ""}.
+          </p>
+        ) : null}
+      </section>
+
+      <PerformanceBrief
+        baseline={viewModel?.outcomesLedger?.baseline ?? viewModel?.productContext?.rftObservation?.baseline ?? null}
+        metrics={viewModel?.outcomesLedger?.metrics ?? null}
+        outcomesHref={outcomesHref}
       />
 
-      {businessId ? (
-        <CrmReportingStrip
+      {showRftLaunch ? (
+        <RftLaunchPath
           businessId={businessId}
-          inboxHref={`${base}/inbox`}
-          calendarHref={`${base}/calendar`}
-          pipelinesHref={`${base}/pipelines`}
-          automationsHref={`${base}/automations`}
-          showCalendar={navAllows("calendar")}
-          showPipelines={navAllows("pipelines")}
-          showAutomations={navAllows("automations")}
+          connectionStatuses={viewModel?.connectionStatuses ?? {}}
+          proofRecords={viewModel?.proofRecords ?? {}}
         />
       ) : null}
 
-      {setupIncomplete ? (
-        <SetupRemainingStrip
-          complete={completeCount}
-          total={actionableTotal}
-          remaining={remainingSetup}
-          nextLabel={nextLabel}
-          onBackToSetup={() => selectHomeView("setup")}
-        />
-      ) : nextSetup && nextLabel ? (
-        <NextBanner label={nextLabel} href={String((nextSetup as any).href ?? "#")} />
-      ) : null}
-
-      <SimpleMetrics
-        maxColumns={5}
-        items={metrics.map((metric) => ({
-          id: metric.id,
-          label: metric.label,
-          value: metric.value,
-        }))}
-      />
+      <section aria-label="Needs you" style={{ display: "grid", gap: spacing.sm }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: spacing.md }}>
+          <h2 style={{ margin: 0, fontSize: typography.sectionTitle?.fontSize ?? 18, fontWeight: 700 }}>
+            Needs you
+          </h2>
+          {decisionsHref ? (
+            <Link href={decisionsHref} style={{ color: cockpitColors.accent, fontWeight: 650, fontSize: 13, textDecoration: "none" }}>
+              All decisions →
+            </Link>
+          ) : null}
+        </div>
+        {!topDecision ? (
+          <div style={{ ...panelStyle, color: cockpitColors.textSecondary }}>
+            Nothing waiting for your judgment.
+          </div>
+        ) : (
+          <DecisionCard
+            title={String(topDecision.title ?? "Decision needed")}
+            why={topDecision.detail ?? topDecision.why ?? topDecision.auditSummary ?? null}
+            impact={topDecision.priority ? `Priority: ${topDecision.priority}` : null}
+            timeHint={topDecision.when ?? null}
+            evidence={topDecision.meta ?? null}
+            actions={[
+              {
+                id: "review",
+                label: topDecision.actionLabel ?? "Review",
+                href: topDecision.href ?? topDecision.workHref ?? decisionsHref,
+              },
+            ]}
+            askHref={base && topDecision
+              ? `${base}/architect?${new URLSearchParams({
+                prompt: `Why was ${String(topDecision.title ?? "this")} escalated?`,
+              }).toString()}`
+              : (base ? `${base}/architect` : null)}
+            priority={topDecision.priority ?? null}
+          />
+        )}
+      </section>
 
       <div className="vt-home-panel-grid">
         <SimplePanel
-          title="Needs you"
-          count={needsCount || null}
-          action={
-            needsCount && decisions.viewAllHref
-              ? <SimplePanelLink href={decisions.viewAllHref}>View all</SimplePanelLink>
-              : null
-          }
+          title="Recent completed work"
+          action={outcomesHref ? <SimplePanelLink href={outcomesHref}>Outcomes</SimplePanelLink> : null}
         >
-          {!needsCount ? (
-            <SimpleEmptyLine>All clear.</SimpleEmptyLine>
+          {!outcomes.length ? (
+            <SimpleEmptyLine>No completed outcomes with evidence yet.</SimpleEmptyLine>
           ) : (
-            <>
-              {approvalItems.slice(0, 4).map((item: any) => (
-                <SimpleRow
-                  key={item.id}
-                  title={item.title}
-                  meta={item.auditSummary || item.why || null}
-                  href={item.workHref || (item.actions?.[0]?.href ?? null)}
-                  trailing={rowAction("Review")}
-                />
-              ))}
-              {waitingItems.slice(0, 4).map((item: any) => (
-                <SimpleRow
-                  key={item.id}
-                  title={item.title}
-                  meta={item.detail}
-                  href={item.href}
-                  trailing={rowAction(item.actionLabel ?? "Open")}
-                />
-              ))}
-            </>
-          )}
-        </SimplePanel>
-
-        <SimplePanel
-          title="AI workforce"
-          count={workforce.length || null}
-          action={base ? <SimplePanelLink href={`${base}/team`}>Team</SimplePanelLink> : null}
-        >
-          {!workforce.length ? (
-            <SimpleEmptyLine>No AI teammates yet.</SimpleEmptyLine>
-          ) : (
-            workforce.slice(0, 6).map((emp: any) => (
+            outcomes.slice(0, 6).map((entry: any) => (
               <SimpleRow
-                key={emp.id}
-                title={emp.name}
-                meta={teammateAssignment(emp) || emp.responsibility || emp.role || null}
-                href={
-                  emp.specialtyHref
-                  || emp.detailHref
-                  || emp.runJobHref
-                  || (base ? `${base}/team` : null)
-                }
-                trailing={
-                  <span style={{ fontSize: 13, fontWeight: 700, color: teammateStatusColor(emp), whiteSpace: "nowrap" }}>
-                    {scrubInternalWording(emp.statusLabel || emp.status || "Active")}
-                  </span>
-                }
+                key={entry.id ?? entry.title}
+                title={humanizeHomeDecisionTitle(entry.title ?? "Completed work")}
+                meta={[entry.actorLabel, formatWhen(entry.timestamp ?? entry.at)].filter(Boolean).join(" · ") || null}
+                href={entry.href ?? outcomesHref}
+                trailing={entry.href || outcomesHref ? rowAction("Open") : null}
               />
             ))
           )}
         </SimplePanel>
 
         <SimplePanel
-          title="Work queue"
+          title="In motion"
           count={workingNow.length || null}
           action={base ? <SimplePanelLink href={`${base}/work`}>Work</SimplePanelLink> : null}
         >
           {!workingNow.length ? (
-            <SimpleEmptyLine>Nothing live — finish a launch mission to create work.</SimpleEmptyLine>
+            <SimpleEmptyLine>Nothing live right now.</SimpleEmptyLine>
           ) : (
             workingNow.slice(0, 5).map((episode: any) => (
               <SimpleRow
@@ -354,223 +236,170 @@ export default function OperatingHomeExperience() {
           )}
         </SimplePanel>
       </div>
-
-      {recentActivity.length || conversations.length || outcomes.length ? (
-        <div className="vt-home-panel-grid">
-          <SimplePanel title="What changed">
-            {(recentActivity.length ? recentActivity : outcomes).slice(0, 6).map((entry: any) => (
-              <SimpleRow
-                key={entry.id}
-                title={humanizeHomeDecisionTitle(entry.title)}
-                meta={[entry.actorLabel, formatWhen(entry.timestamp)].filter(Boolean).join(" · ") || null}
-                href={entry.href}
-                trailing={entry.href ? rowAction("Open") : null}
-              />
-            ))}
-          </SimplePanel>
-          {conversations.length ? (
-            <SimplePanel
-              title="Conversations"
-              action={base ? <SimplePanelLink href={`${base}/people`}>People</SimplePanelLink> : null}
-            >
-              {conversations.slice(0, 5).map((entry: any) => (
-                <SimpleRow
-                  key={entry.id ?? entry.title}
-                  title={humanizeHomeDecisionTitle(entry.title ?? entry.subject ?? "Conversation")}
-                  meta={entry.channel || entry.summary || null}
-                  href={entry.href ?? null}
-                  trailing={entry.href ? rowAction("Open") : null}
-                />
-              ))}
-            </SimplePanel>
-          ) : null}
-        </div>
-      ) : null}
     </HomeCanvas>
   );
 }
 
-function HomeViewToggle({
-  mode,
-  remainingSetup,
-  totalSetup,
-  onSelect,
-  setupAvailable = true,
+const panelStyle = {
+  padding: spacing.lg,
+  borderRadius: radius.large,
+  background: cockpitColors.panel,
+  border: `1px solid ${cockpitColors.panelBorder}`,
+} as const;
+
+function BriefStat({
+  label,
+  value,
+  href,
+  tone = "default",
+  hideZero = false,
 }: {
-  mode: HomeViewMode;
-  remainingSetup: number;
-  totalSetup: number;
-  onSelect: (mode: HomeViewMode) => void;
-  setupAvailable?: boolean;
+  label: string;
+  value: number;
+  href?: string | null;
+  tone?: "default" | "attention";
+  hideZero?: boolean;
 }) {
-  return (
+  if (hideZero && !value) return null;
+  const content = (
     <div
       style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 10,
-        alignItems: "center",
-        justifyContent: "space-between",
+        padding: spacing.md,
+        borderRadius: radius.medium,
+        background: cockpitColors.panel,
+        border: `1px solid ${cockpitColors.panelBorder}`,
+        display: "grid",
+        gap: 4,
       }}
     >
-      <div style={{ display: "inline-flex", gap: 6, padding: 4, borderRadius: 999, background: "#fff", border: "1px solid rgba(15,23,42,.08)" }}>
-        <ToggleChip
-          active={mode === "setup"}
-          label={totalSetup > 0 ? `Setup ${Math.max(0, totalSetup - remainingSetup)}/${totalSetup}` : "Setup"}
-          onClick={() => onSelect("setup")}
-          disabled={!setupAvailable && mode === "dashboard"}
-        />
-        <ToggleChip
-          active={mode === "dashboard"}
-          label="Operating dashboard"
-          onClick={() => onSelect("dashboard")}
-        />
-      </div>
-      {mode === "setup" ? (
-        <button
-          type="button"
-          onClick={() => onSelect("dashboard")}
-          style={{
-            border: "1px solid rgba(15,118,110,.35)",
-            background: "#0f766e",
-            color: "#fff",
-            borderRadius: 999,
-            padding: "8px 14px",
-            fontWeight: 700,
-            fontSize: 13,
-            cursor: "pointer",
-          }}
-        >
-          View operating dashboard
-        </button>
-      ) : null}
+      <span style={{ fontSize: 11, fontWeight: 700, color: cockpitColors.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        {label}
+      </span>
+      <span style={{ fontSize: 22, fontWeight: 750, color: tone === "attention" && value > 0 ? cockpitColors.warning : cockpitColors.textPrimary }}>
+        {Number.isFinite(value) ? value : 0}
+      </span>
     </div>
   );
-}
-
-function ToggleChip({
-  active,
-  label,
-  onClick,
-  disabled = false,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
+  if (!href) return content;
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      style={{
-        border: "none",
-        borderRadius: 999,
-        padding: "8px 14px",
-        fontWeight: 700,
-        fontSize: 13,
-        cursor: disabled ? "default" : "pointer",
-        background: active ? "#0f172a" : "transparent",
-        color: active ? "#fff" : "#475569",
-        opacity: disabled ? 0.45 : 1,
-      }}
-    >
-      {label}
-    </button>
+    <Link href={href} style={{ textDecoration: "none", color: "inherit" }}>
+      {content}
+    </Link>
   );
 }
 
-function SetupRemainingStrip({
-  complete,
-  total,
-  remaining,
-  nextLabel,
-  onBackToSetup,
+function PerformanceBrief({
+  baseline,
+  metrics,
+  outcomesHref,
 }: {
-  complete: number;
-  total: number;
-  remaining: number;
-  nextLabel: string | null;
-  onBackToSetup: () => void;
+  baseline: any;
+  metrics: any;
+  outcomesHref: string | null;
 }) {
+  const first = baseline?.metrics?.firstResponse ?? null;
+  const sla = metrics?.slaAttainment ?? null;
+  const delta = metrics?.baselineDelta ?? null;
+  const autoVsHuman = metrics?.autoVsHuman ?? null;
+  const rows: Array<{ label: string; value: string }> = [];
+
+  if (first?.status === "observable" && Number.isFinite(first.medianMinutes)) {
+    rows.push({
+      label: "First-response (baseline)",
+      value: formatMinutes(first.medianMinutes),
+    });
+  } else {
+    rows.push({
+      label: "First-response (baseline)",
+      value: "Not observable yet",
+    });
+  }
+
+  if (sla?.status === "observable") {
+    rows.push({
+      label: "SLA check",
+      value: sla.withinSla
+        ? `Within ${sla.slaMinutes} min target (median ${formatMinutes(sla.medianMinutes)})`
+        : `Above ${sla.slaMinutes} min target (median ${formatMinutes(sla.medianMinutes)})`,
+    });
+  } else {
+    rows.push({
+      label: "Follow-ups / SLA",
+      value: delta?.reason || sla?.reason || "Not observable until baseline + live volume exist",
+    });
+  }
+
+  if (autoVsHuman && (autoVsHuman.auto > 0 || autoVsHuman.human > 0)) {
+    rows.push({
+      label: "Auto vs human",
+      value: `${autoVsHuman.auto} automatic · ${autoVsHuman.human} with human judgment`,
+    });
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onBackToSetup}
-      style={{
-        display: "flex",
-        width: "100%",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        textAlign: "left",
-        border: "1px solid rgba(15,118,110,.22)",
-        background: "linear-gradient(135deg, rgba(15,118,110,.10), rgba(255,255,255,.95))",
-        borderRadius: 16,
-        padding: "14px 16px",
-        cursor: "pointer",
-      }}
-    >
-      <div style={{ display: "grid", gap: 4 }}>
-        <strong style={{ fontSize: 14, color: "#0f172a" }}>
-          {complete}/{total} setup complete — {remaining} left
-        </strong>
-        <span style={{ fontSize: 13, color: "#64748b" }}>
-          {nextLabel ? `Next: ${nextLabel}` : "Finish setup to operate fully."}
-          {" · "}
-          Back to setup
-        </span>
+    <section aria-label="Performance" style={{ display: "grid", gap: spacing.sm }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: spacing.md }}>
+        <h2 style={{ margin: 0, fontSize: typography.meta.fontSize, fontWeight: 700, color: cockpitColors.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          Performance
+        </h2>
+        {outcomesHref ? (
+          <Link href={outcomesHref} style={{ color: cockpitColors.accent, fontWeight: 650, fontSize: 13, textDecoration: "none" }}>
+            Full ledger →
+          </Link>
+        ) : null}
       </div>
-      <span style={{ fontWeight: 800, color: cockpitColors.accent, whiteSpace: "nowrap" }}>Open →</span>
-    </button>
+      <div style={{ ...panelStyle, display: "grid", gap: spacing.sm }}>
+        {rows.map((row) => (
+          <div key={row.label} style={{ display: "flex", justifyContent: "space-between", gap: spacing.md, flexWrap: "wrap" }}>
+            <span style={{ color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize }}>{row.label}</span>
+            <strong style={{ fontSize: typography.meta.fontSize, color: cockpitColors.textPrimary }}>{row.value}</strong>
+          </div>
+        ))}
+        <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted }}>
+          Numbers appear only from evidence-backed baselines and outcomes — never invented.
+        </p>
+      </div>
+    </section>
   );
 }
 
-function mergeHomeWorkforce(liveWorkforce: any[] = [], bosEmployees: any[] = [], businessId = "") {
-  const byId = new Map<string, any>();
-  for (const emp of Array.isArray(liveWorkforce) ? liveWorkforce : []) {
-    const id = String(emp?.id ?? emp?.employeeId ?? "").trim();
-    if (!id) continue;
-    byId.set(id, {
-      ...emp,
-      responsibility: presentTeammateHomeGlance({
-        purpose: emp.purpose,
-        responsibility: emp.responsibility,
-        role: emp.role,
-        description: emp.description,
-      }),
-    });
+function formatMinutes(n: number) {
+  const m = Math.round(Number(n) || 0);
+  if (m < 60) return `${m} minute${m === 1 ? "" : "s"}`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem ? `${h}h ${rem}m` : `${h} hour${h === 1 ? "" : "s"}`;
+}
+
+function buildHealthLine({
+  summary,
+  needsCount,
+  remainingSetup,
+  businessName,
+}: {
+  summary: { headline?: string; detail?: string | null } | null;
+  needsCount: number;
+  remainingSetup: number;
+  businessName: string;
+}) {
+  if (remainingSetup > 0) {
+    return {
+      headline: `${businessName || "This business"} is still launching.`,
+      detail: "Finish Revenue Follow-Through launch (connect, confirm, prove, go live) before treating the operation as live.",
+    };
   }
-  const base = businessId ? `/b/${businessId}` : "";
-  for (const emp of Array.isArray(bosEmployees) ? bosEmployees : []) {
-    const id = String(emp?.employeeId ?? emp?.id ?? "").trim();
-    if (!id || byId.has(id)) continue;
-    const specialtyHref = base ? `${base}/specialty/${encodeURIComponent(id)}` : null;
-    const glance = presentTeammateHomeGlance({
-      purpose: emp.purpose,
-      responsibility: emp.responsibility,
-      role: emp.role,
-      description: emp.description,
-    });
-    const autos = Array.isArray(emp.automationDefinitions) ? emp.automationDefinitions : [];
-    const live = autos.some((a: any) => String(a?.status ?? "").toUpperCase() === "ACTIVE");
-    byId.set(id, {
-      id,
-      employeeId: id,
-      name: String(emp.label ?? emp.name ?? id),
-      responsibility: glance,
-      role: glance,
-      status: live ? "READY" : "idle",
-      statusLabel: live ? "LIVE" : "Off",
-      specialtyHref,
-      detailHref: specialtyHref ?? (base ? `${base}/team` : null),
-      runJobHref: specialtyHref,
-      // Ask VIBETech is separate (Architect) — never the primary teammate link.
-      askHref: base ? `${base}/architect?employeeId=${encodeURIComponent(id)}` : null,
-    });
+  if (needsCount > 0) {
+    return {
+      headline: `${businessName || "Operation"} needs your judgment.`,
+      detail: scrubInternalWording(summary?.detail)
+        || `${needsCount} item${needsCount === 1 ? "" : "s"} waiting in Decisions.`,
+    };
   }
-  return [...byId.values()];
+  const headline = scrubInternalWording(summary?.headline ?? "");
+  return {
+    headline: headline || `${businessName || "Operation"} is operating normally.`,
+    detail: scrubInternalWording(summary?.detail ?? "") || "VIBETech is handling follow-through and will surface exceptions here.",
+  };
 }
 
 function rowAction(label: string) {
@@ -581,248 +410,26 @@ function rowAction(label: string) {
   );
 }
 
-function teammateStatusColor(emp: any) {
-  if (emp.status === "needs_approval" || /needs your approval/i.test(String(emp.statusLabel ?? ""))) {
-    return cockpitColors.warning;
-  }
-  if (emp.status === "idle" || /standing by|idle/i.test(String(emp.statusLabel ?? emp.status ?? ""))) {
-    return cockpitColors.textMuted;
-  }
-  return cockpitColors.handled;
-}
-
-function resolveVerticalFromScope(scope: any, viewModel: any, businessName = ""): string {
-  const installationResult = viewModel?.productContext?.installationResult;
-  const operatingPackId = String(
-    scope?.installedBusinessOS?.operatingPackId
-    ?? installationResult?.configuration?.metadata?.operatingPackId
-    ?? installationResult?.operatingPackId
-    ?? installationResult?.metadata?.operatingPackId
-    ?? "",
-  );
-  const industry = String(
-    scope?.industry
-    ?? viewModel?.productContext?.identity?.industry
-    ?? viewModel?.productContext?.identity?.industryPackageId
-    ?? installationResult?.configuration?.businessProfile?.industry
-    ?? installationResult?.specification?.businessProfile?.industry
-    ?? "",
-  );
-  return resolveLaunchVertical({
-    operatingPackId,
-    industry,
-    businessName: businessName || String(scope?.businessName ?? ""),
-  });
-}
-
-function resolveIndustryLabelFromScope(scope: any, viewModel: any): string {
-  return String(
-    scope?.industry
-    ?? viewModel?.productContext?.identity?.industry
-    ?? viewModel?.productContext?.identity?.industryDisplayName
-    ?? viewModel?.productContext?.installationResult?.configuration?.businessProfile?.industry
-    ?? "",
-  );
-}
-
-function buildSubtitle({
-  businessName,
-  summary,
-  waiting,
-  approvalCount = 0,
-  platformIncomplete = false,
-  incompleteSetupCount = 0,
-}: {
-  businessName: string;
-  summary?: { headline?: string; detail?: string | null } | null;
-  waiting: number;
-  approvalCount?: number;
-  platformIncomplete?: boolean;
-  incompleteSetupCount?: number;
-}): string {
-  if (platformIncomplete && incompleteSetupCount > 0) {
-    return incompleteSetupCount === 1
-      ? "Platform incomplete — finish one connection to operate."
-      : `Platform incomplete — finish ${incompleteSetupCount} connections to operate.`;
-  }
-  if (waiting > 0) {
-    return waiting === 1
-      ? `Here’s what needs you at ${businessName} today.`
-      : `Here’s what’s happening at ${businessName} — ${waiting} items need you.`;
-  }
-  if (approvalCount > 0) {
-    return approvalCount === 1
-      ? `One teammate is waiting on your approval at ${businessName}.`
-      : `${approvalCount} teammates are waiting on your approval at ${businessName}.`;
-  }
-  const headline = scrubInternalWording(summary?.headline ?? "");
-  if (headline) return headline;
-  return `Here’s what’s happening at ${businessName} today.`;
-}
-
-/**
- * Prefer live overview metrics from the ViewModel.
- * Attention counts always match the Needs Attention queue.
- * Every metric gets a real destination when one exists.
- */
-function buildMetricCards({
-  overview,
-  waiting,
-  working,
-  wins,
-  team,
-  base,
-}: {
-  overview: Array<{ id?: string; label?: string; value?: unknown; trend?: string | null }>;
-  waiting: number;
-  working: number;
-  wins: number;
-  team: number;
-  base: string;
-}): Array<{
-  id: string;
-  label: string;
-  value: string | number;
-  detail?: string | null;
-  tone?: "default" | "attention" | "good";
-  href?: string | null;
-}> {
-  const fromOverview = overview.slice(0, 5).map((metric, index) => {
-    const label = scrubInternalWording(String(metric.label ?? "Metric"));
-    const isAttentionMetric = /needs (you|decision|attention)|waiting on you/i.test(label);
-    if (isAttentionMetric) {
-      return {
-        id: String(metric.id ?? `overview_${index}`),
-        label,
-        value: waiting,
-        detail: waiting > 0 ? "Requires your review" : "All clear",
-        tone: (waiting > 0 ? "attention" : "good") as "attention" | "good",
-        href: base ? `${base}/intelligence` : null,
-      };
-    }
-    return {
-      id: String(metric.id ?? `overview_${index}`),
-      label,
-      value: metric.value == null || metric.value === "" ? "—" : (metric.value as string | number),
-      detail: metric.trend == null ? null : scrubInternalWording(String(metric.trend)),
-      tone: "default" as const,
-      href: metricHrefForLabel(label, base),
-    };
-  });
-
-  if (fromOverview.length >= 3) return fromOverview;
-
-  const derived = [
-    {
-      id: "needs_you",
-      label: "Needs you",
-      value: waiting,
-      detail: waiting > 0 ? "Requires your review" : "All clear",
-      tone: (waiting > 0 ? "attention" : "good") as "attention" | "good",
-      href: base ? `${base}/intelligence` : null,
-    },
-    {
-      id: "in_motion",
-      label: "In motion",
-      value: working,
-      detail: working > 0 ? "Being handled now" : "Nothing live",
-      tone: "default" as const,
-      href: base ? `${base}/work` : null,
-    },
-    {
-      id: "completed_today",
-      label: "Completed today",
-      value: wins,
-      detail: wins > 0 ? "Finished by VIBETech" : "None yet",
-      tone: (wins > 0 ? "good" : "default") as "good" | "default",
-      href: base ? `${base}/work` : null,
-    },
-    {
-      id: "ai_team",
-      label: "AI teammates",
-      value: team,
-      detail: team > 0 ? "On this business" : "Not assigned yet",
-      tone: "default" as const,
-      href: base ? `${base}/team` : null,
-    },
-  ];
-
-  const usedLabels = new Set(fromOverview.map((m) => m.label.toLowerCase()));
-  const filled = [...fromOverview];
-  for (const metric of derived) {
-    if (filled.length >= 5) break;
-    if (usedLabels.has(metric.label.toLowerCase())) continue;
-    filled.push(metric);
-    usedLabels.add(metric.label.toLowerCase());
-  }
-  return filled.slice(0, 5);
-}
-
-function metricHrefForLabel(label: string, base: string): string | null {
-  if (!base) return null;
-  const lower = label.toLowerCase();
-  if (/needs (you|decision|attention)|waiting on you|urgent/.test(lower)) {
-    return `${base}/intelligence`;
-  }
-  if (/work|motion|showing|active|open work|completed/.test(lower)) {
-    return `${base}/work`;
-  }
-  if (/inquir|lead|people|response|conversation|message/.test(lower)) {
-    return `${base}/people`;
-  }
-  if (/team|teammate|employee/.test(lower)) {
-    return `${base}/team`;
-  }
-  if (/inbox|sent/.test(lower)) {
-    return `${base}/inbox`;
-  }
-  return null;
-}
-
 function presentWaitingItem(item: any) {
   const rawTitle = String(item.title ?? "Item waiting for you");
-  // Prefer Needs Attention / Work destinations — Ask is available from the shell.
   const reviewHref =
     item.actions?.find((action: any) => /review/i.test(String(action?.label ?? "")) && action?.href)?.href
     ?? item.actions?.find((action: any) => action?.href)?.href
     ?? item.askHref
     ?? null;
-  const shortAction = shortWaitingActionLabel(item);
   return {
     id: String(item.id ?? rawTitle),
-    title: humanizeConnectionTitle(rawTitle),
-    detail: usefulDetail(item.why ?? item.detail, rawTitle) ?? usefulDetail(item.proposedAction, rawTitle),
-    // Use priority level (high/medium), never tone badges like "neutral".
+    title: humanizeHomeDecisionTitle(rawTitle),
+    detail: scrubInternalWording(item.why ?? item.detail ?? "") || null,
+    why: item.why ?? null,
+    auditSummary: item.auditSummary ?? null,
+    meta: item.meta ?? null,
     priority: normalizeWaitingPriority(item.priority ?? item.urgency),
     when: formatWhen(item.when ?? item.updatedAt ?? item.createdAt ?? item.ageOrDue),
-    // Short CTA only — long recommendedAction sentences overflow QueueRow (nowrap) and overlay title text.
-    actionLabel: shortAction,
+    actionLabel: "Review",
     href: reviewHref,
+    workHref: item.workHref ?? null,
   };
-}
-
-/** Queue row CTAs must stay short; full sentences belong in detail. */
-function shortWaitingActionLabel(item: any): string {
-  const fromAction = item.actions?.find((action: any) => action?.href && action?.label)?.label;
-  const raw = scrubInternalWording(String(fromAction ?? item.proposedAction ?? "Review"));
-  if (/open connections|connect/i.test(raw)) return "Connect";
-  if (/open work|review work/i.test(raw)) return "Open";
-  if (/^review\b/i.test(raw)) return "Review";
-  if (raw.length <= 18) return raw;
-  return "Review";
-}
-
-function humanizeConnectionTitle(title: string): string {
-  let out = humanizeHomeDecisionTitle(title);
-  out = out.replace(/\s+for production$/i, "");
-  if (/^connect\s+business email$/i.test(out) || (/business email/i.test(out) && /connect/i.test(out))) {
-    return "Connect business email";
-  }
-  if (/google calendar/i.test(out)) return "Connect Google Calendar";
-  if (/text messaging|sms/i.test(out) && /connect/i.test(out)) return "Connect text messaging";
-  if (/phone|voice/i.test(out) && /connect/i.test(out)) return "Connect phone";
-  if (/facebook|meta lead/i.test(out) && /connect/i.test(out)) return "Connect Facebook Lead Ads";
-  return out;
 }
 
 function normalizeWaitingPriority(priority: unknown): string | null {
@@ -834,73 +441,14 @@ function normalizeWaitingPriority(priority: unknown): string | null {
   return null;
 }
 
-function usefulDetail(value: string | null | undefined, title?: string | null): string | null {
-  const cleaned = cleanResult(value);
-  if (!cleaned) return null;
-  if (/^(installed|handled|completed|sent)$/i.test(cleaned)) return null;
-  const titleLower = String(title ?? "").toLowerCase();
-  if (/real business provider is not yet connected/i.test(cleaned)) {
-    if (/calendar/i.test(titleLower)) {
-      return "Connect Google Calendar in Integrations so scheduling can run.";
-    }
-    if (/text|sms|messaging/i.test(titleLower)) {
-      return "Connect Twilio SMS in Integrations before texting can operate.";
-    }
-    if (/phone|voice/i.test(titleLower)) {
-      return "Connect Twilio phone in Integrations before calling can operate.";
-    }
-    if (/facebook|meta/i.test(titleLower)) {
-      return "Connect Facebook Lead Ads in Integrations to capture leads.";
-    }
-    return "Connect the required account in Integrations so VIBETech can operate this channel.";
-  }
-  if (/complete production provider setup/i.test(cleaned)) {
-    if (/calendar/i.test(titleLower)) return "Finish connecting Google Calendar in Integrations.";
-    if (/text|sms|messaging/i.test(titleLower)) return "Finish connecting Twilio SMS in Integrations.";
-    if (/phone|voice/i.test(titleLower)) return "Finish connecting Twilio phone in Integrations.";
-    return "Finish connecting the live provider in Integrations.";
-  }
-  return cleaned;
-}
-
-function teammateAssignment(emp: any): string | null {
-  if (emp.currentAssignment && emp.currentCustomer) {
-    return `${scrubInternalWording(emp.currentAssignment)} · ${scrubInternalWording(emp.currentCustomer)}`;
-  }
-  if (emp.currentAssignment) return scrubInternalWording(emp.currentAssignment);
-  if (emp.waitingFor) return humanizeTeammateNeed(emp.waitingFor);
-  if (emp.nextAction && !/standing by/i.test(String(emp.nextAction))) {
-    return humanizeTeammateNeed(emp.nextAction);
-  }
-  return null;
-}
-
-function humanizeTeammateNeed(value: string): string | null {
-  const cleaned = scrubInternalWording(value);
-  if (!cleaned) return null;
-  if (/required connection missing:\s*business_email/i.test(cleaned) || /business_email/i.test(cleaned)) {
-    return "Needs business email connected before this teammate can work.";
-  }
-  if (/required connection missing:\s*(\w+)/i.test(cleaned)) {
-    return "Needs a required connection before this teammate can work.";
-  }
-  return cleaned;
-}
-
-function teammateActionLabel(emp: any): string {
-  if (emp.status === "needs_approval") return "Review";
-  if (emp.status === "blocked" || emp.status === "needs_setup") return "Unblock";
-  if (emp.status === "idle" || emp.status === "waiting") return "Ask";
-  return "Open";
-}
-
-function cleanResult(result: string | null | undefined): string | null {
-  if (!result) return null;
-  const cleaned = scrubInternalWording(result);
-  if (/^(review_required|workflow_completed|sent|handled|ok|true|false|installed)$/i.test(cleaned.trim())) {
-    return null;
-  }
-  return cleaned;
+function isToday(value: unknown): boolean {
+  const ms = Date.parse(String(value ?? ""));
+  if (!Number.isFinite(ms)) return false;
+  const d = new Date(ms);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear()
+    && d.getMonth() === now.getMonth()
+    && d.getDate() === now.getDate();
 }
 
 function formatWhen(value: string | null | undefined): string | null {

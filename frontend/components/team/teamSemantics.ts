@@ -88,10 +88,10 @@ export function primaryEmployeeAction(employee: TeamDigitalEmployee): { label: s
     return { label: "Open specialty page", href: employee.detailHref };
   }
   if (employee.askAssisted && employee.askHref) {
-    return { label: "Ask this teammate", href: employee.askHref };
+    return { label: "Ask about this responsibility", href: employee.askHref };
   }
   if (employee.detailHref) {
-    return { label: "Open teammate", href: employee.detailHref };
+    return { label: "View contract", href: employee.detailHref };
   }
   if ((employee.openAssignmentCount ?? 0) > 0 && employee.workHref) {
     return { label: "View work", href: employee.workHref };

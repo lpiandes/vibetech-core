@@ -68,7 +68,7 @@ export default function BusinessOnboardingHome({
             maxWidth: 480,
           }}
         >
-          VIBETech recommends how your business should run — people, work, and AI teammates —
+          VIBETech recommends how your business should run — people, work, and operating responsibilities —
           then operates it with you. You supervise. Nothing goes live until you approve.
         </p>
 

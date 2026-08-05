@@ -138,6 +138,22 @@ export async function GET(request: Request) {
             credentialResolver: platform?.credentialResolver ?? null,
             maxResults: 25,
             actorId: "gmail_oauth_connect",
+            onNewInbound: async (msg) => {
+              if (!msg?.gmailMessageId) return false;
+              await (ctx.service as any).emitSpecialtyBusinessEvent({
+                eventType: "INBOUND_SALES_EMAIL",
+                brief: `Inbound sales email${msg.subject ? `: ${msg.subject}` : ""} from ${msg.from?.email ?? "unknown"}`,
+                payload: {
+                  gmailMessageId: msg.gmailMessageId,
+                  from: msg.from,
+                  subject: msg.subject,
+                  personId: msg.personId,
+                  channel: "gmail",
+                },
+                actorId: "gmail_oauth_connect",
+              });
+              return true;
+            },
           });
         }
       } catch {

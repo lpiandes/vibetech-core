@@ -21,6 +21,12 @@ test("with no role deny list, a fully-permissioned role sees every catalog modul
   const items = getCanonicalBusinessNav(businessId, fullPermissions, { role: "MANAGER" });
   assert.ok(idsOf(items).includes("pipelines"));
   assert.ok(idsOf(items).includes("settings"));
+  assert.ok(idsOf(items).includes("outcomes"));
+  assert.equal(items.find((i) => i.id === "home")?.label, "Today");
+  assert.equal(items.find((i) => i.id === "needs_attention")?.label, "Decisions");
+  assert.equal(items.find((i) => i.id === "knowledge")?.label, "Company Rules");
+  assert.equal(items.find((i) => i.id === "home")?.group, "primary");
+  assert.equal(items.find((i) => i.id === "people")?.group, "records");
 });
 
 test("a role-denied module is filtered out of the primary nav even with the underlying permission", () => {

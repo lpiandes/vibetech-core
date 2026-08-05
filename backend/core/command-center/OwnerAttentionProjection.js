@@ -37,6 +37,66 @@ function hoursWaiting(occurredAt, nowISO) {
   return `${hrs} hours`;
 }
 
+function buildApprovalEvidence({
+  approval,
+  relatedWork,
+  party,
+  subject,
+  bodyPreview,
+  subjectLine,
+}) {
+  const evidence = [];
+  const requestedAt = approval?.requestedAt ?? approval?.createdAt ?? null;
+  if (requestedAt) {
+    evidence.push({
+      kind: "approval_requested_at",
+      detail: `Approval requested at ${requestedAt}`,
+      source: "approval",
+    });
+  }
+  if (subjectLine) {
+    evidence.push({ kind: "message_subject", detail: subjectLine, source: "approval.context" });
+  }
+  if (bodyPreview) {
+    evidence.push({
+      kind: "message_preview",
+      detail: bodyPreview.slice(0, 180),
+      source: "approval.context",
+    });
+  }
+  const channel = approval?.channel ?? approval?.metadata?.channel ?? approval?.capability ?? null;
+  if (channel) {
+    evidence.push({ kind: "channel", detail: String(channel), source: "approval" });
+  }
+  if (party) {
+    evidence.push({ kind: "contact", detail: String(party), source: "business_graph" });
+  }
+  if (subject) {
+    evidence.push({ kind: "subject", detail: String(subject), source: "business_subject" });
+  }
+  const providerId =
+    approval?.context?.providerId
+    ?? approval?.metadata?.providerId
+    ?? relatedWork?.metadata?.providerId
+    ?? relatedWork?.metadata?.gmailMessageId
+    ?? null;
+  if (providerId) {
+    evidence.push({
+      kind: String(approval?.context?.evidenceKind ?? relatedWork?.metadata?.evidenceKind ?? "provider_id"),
+      providerId: String(providerId),
+      source: "provider",
+    });
+  }
+  for (const ref of safeArray(relatedWork?.metadata?.sourceRefs).slice(0, 4)) {
+    evidence.push({
+      kind: "knowledge_ref",
+      detail: String(ref.title ?? ref.id ?? ref),
+      source: "work.metadata",
+    });
+  }
+  return evidence;
+}
+
 /**
  * Deterministic owner-attention projection from canonical facts only.
  */
@@ -58,46 +118,9 @@ export function projectOwnerAttention({
 } = {}) {
   const items = [];
 
-  for (const candidate of safeArray(intelligenceCandidateRuntime?.getOpenCandidates?.())) {
-    items.push({
-      id: `attention_intelligence_${candidate.id}`,
-      title: candidate.title,
-      summary: candidate.summary,
-      reason: candidate.confidenceReason,
-      businessImpact: candidate.explanation,
-      priority: candidate.severity === "critical" ? "critical"
-        : candidate.severity === "high" ? "high"
-          : "medium",
-      dueAt: null,
-      waitingDuration: null,
-      sourceType: "intelligence_candidate",
-      sourceId: String(candidate.id),
-      intelligenceCandidateId: candidate.id,
-      partyId: candidate.relatedObjectRefs?.find((ref) => ref.objectType === "party")?.objectId ?? null,
-      partyName: partyName(
-        businessGraphRuntime,
-        candidate.relatedObjectRefs?.find((ref) => ref.objectType === "party")?.objectId,
-      ),
-      subjectName: subjectName(
-        businessSubjectRuntime,
-        candidate.relatedObjectRefs?.find((ref) => ref.objectType === "business_subject")?.objectId,
-      ),
-      recommendedAction: candidate.recommendedActions?.[0]?.label ?? "Review evidence and decide.",
-      availableActions: [
-        { id: "create_work", label: "Create Work", kind: "create_work" },
-        { id: "propose_change", label: "Propose Change", kind: "create_architect_change_proposal" },
-        { id: "ask_architect", label: "Ask Architect", href: "/architect" },
-        { id: "dismiss", label: "Dismiss", kind: "dismiss" },
-      ],
-      relatedObjects: safeArray(candidate.relatedObjectRefs).map((ref) => (
-        createEntityRef({ entityType: ref.objectType, entityId: String(ref.objectId) })
-      )),
-      evidence: candidate.evidence,
-      confidenceReason: candidate.confidenceReason,
-      explanation: candidate.explanation,
-      status: candidate.status,
-    });
-  }
+  // BI / intelligence candidates are NOT Decisions — they live under Architect recommendations.
+  // Do not push intelligence_candidate into the owner judgment queue.
+  void intelligenceCandidateRuntime;
 
   for (const approval of safeArray(approvalRuntime?.getRequests?.()).filter((a) => a.status === "PENDING")) {
     const workIdFromApproval = String(
@@ -139,6 +162,19 @@ export function projectOwnerAttention({
     }) : null);
     const bodyPreview = String(approval.context?.bodyPreview ?? "").trim();
     const subjectLine = String(approval.context?.subject ?? "").trim();
+    const evidence = buildApprovalEvidence({
+      approval,
+      relatedWork,
+      party,
+      subject,
+      bodyPreview,
+      subjectLine,
+    });
+    const workHref = glance?.workHref
+      || (relatedWork?.id && presentation?.businessId
+        ? `/b/${presentation.businessId}/work?workId=${encodeURIComponent(String(relatedWork.id))}`
+        : null);
+    const bizBase = presentation?.businessId ? `/b/${presentation.businessId}` : "";
 
     items.push({
       id: `attention_approval_${approvalId}`,
@@ -153,8 +189,8 @@ export function projectOwnerAttention({
             ? `Owner approval for ${subject} — ${approval.description ?? approval.title ?? "authorization required"}`
             : approval.description ?? `Customer-facing send needs your approval before it leaves the building.`),
       reason: glance?.whyNeedsYou
-        || "Automation without silent outbound. Owners supervise; AI executes approved work.",
-      businessImpact: "Work cannot continue until approved.",
+        || "High-impact outbound cannot leave without your judgment under the Operating Contract.",
+      businessImpact: "Work cannot continue until approved — SLA clock may be running.",
       priority: "critical",
       dueAt: approval.dueAt ?? null,
       waitingDuration: hoursWaiting(approval.requestedAt ?? approval.createdAt, nowISO),
@@ -166,26 +202,39 @@ export function projectOwnerAttention({
       subjectName: subject,
       channel: approval.channel ?? approval.metadata?.channel ?? approval.capability ?? null,
       workId: relatedWork?.id ? String(relatedWork.id) : null,
-      workHref: glance?.workHref
-        || (relatedWork?.id && presentation?.businessId
-          ? `/b/${presentation.businessId}/work?workId=${encodeURIComponent(String(relatedWork.id))}`
-          : null),
+      workHref,
+      evidence,
+      ifApproved: "VIBETech sends the prepared message, records proof, and continues the Operating Contract.",
+      ifRejected: "Outbound is blocked; the opportunity stays open for your alternative instruction.",
       knowledgeCited: Array.isArray(approval.metadata?.knowledgeCited)
         ? approval.metadata.knowledgeCited.map(String)
         : Array.isArray(relatedWork?.metadata?.sourceRefs)
           ? relatedWork.metadata.sourceRefs.map((ref) => String(ref.title ?? ref.id ?? ref)).filter(Boolean)
           : [],
-      requestedBy: approval.requestedBy ?? approval.requesterId ?? "AI teammate",
+      requestedBy: approval.requestedBy ?? approval.requesterId ?? "Revenue Follow-Through",
       requestedAt: approval.requestedAt ?? approval.createdAt ?? null,
-      recommendedAction: glance?.whyNeedsYou
-        || "Approve the prepared response if it aligns with your policies.",
+      recommendedAction: bodyPreview
+        ? `Send prepared response${party ? ` to ${party}` : ""}.`
+        : (glance?.whyNeedsYou || "Approve the prepared response if it aligns with your policies."),
       availableActions: [
-        { id: "approve", label: "Approve", mutation: { type: "approval_decision", approvalId, decision: "GRANT" } },
+        { id: "approve", label: "Approve and send", mutation: { type: "approval_decision", approvalId, decision: "GRANT" } },
+        {
+          id: "edit",
+          label: "Edit",
+          href: workHref || (bizBase ? `${bizBase}/work` : "/work"),
+        },
+        {
+          id: "assign",
+          label: "Assign only",
+          href: bizBase ? `${bizBase}/work` : "/work",
+        },
         { id: "reject", label: "Reject", mutation: { type: "approval_decision", approvalId, decision: "REJECT" } },
         {
           id: "review_approval",
           label: "Open Work",
-          href: relatedWork?.id ? `/work?workId=${encodeURIComponent(String(relatedWork.id))}` : "/work",
+          href: relatedWork?.id && bizBase
+            ? `${bizBase}/work?workId=${encodeURIComponent(String(relatedWork.id))}`
+            : (bizBase ? `${bizBase}/work` : "/work"),
         },
       ],
       relatedObjects: [createEntityRef({ entityType: "Approval", entityId: approvalId })],
@@ -368,7 +417,7 @@ export function projectOwnerAttention({
       sourceType: "automation",
       sourceId: String(run.id),
       recommendedAction: "Review automation configuration and connections.",
-      availableActions: [{ id: "review_automations", label: "Review automations", href: "/automations" }],
+      availableActions: [{ id: "review_automations", label: "Review connections", href: "/integrations" }],
       relatedObjects: [createEntityRef({ entityType: "AutomationRun", entityId: String(run.id) })],
     });
   }

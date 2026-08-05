@@ -39,7 +39,9 @@ test("Home supervision prioritizes decisions and active operations above analyti
         handledByVibeTech: [{
           id: "h1",
           title: "Maintenance follow-up was completed",
-          result: "completed",
+          result: "sent",
+          providerId: "gmail_msg_1",
+          proven: true,
           actorName: "Coordinator",
           occurredAt: "2026-07-01T12:00:00.000Z",
         }],
@@ -63,7 +65,7 @@ test("Home supervision prioritizes decisions and active operations above analyti
   assert.match(String(supervision.needsDecision.items[0].actions[0]?.href ?? ""), /\/b\/biz_1\/intelligence/);
   assert.equal(supervision.workingNow.length, 1);
   assert.equal(supervision.workingNow[0].completedSteps[0].label, "Request identified");
-  assert.equal(supervision.recentOutcomes[0].result, "Completed");
+  assert.equal(supervision.recentOutcomes[0].result, "Sent");
   assert.equal(supervision.conversations[0].direction, "Drafted — not sent");
   assert.match(supervision.conversations[0].href, /\/b\/biz_1\/inbox$/);
   assert.equal(supervision.setup.visible, true);

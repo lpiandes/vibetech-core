@@ -124,7 +124,7 @@ export function HomeHero({
   );
 }
 
-/** A truthful health readout: it only summarizes live setup, attention, and teammate state. */
+/** A truthful health readout: it only summarizes live setup, attention, and connection state. */
 export function OperatingStatusBar({
   setupComplete,
   setupRemaining,
@@ -171,12 +171,16 @@ export function OperatingStatusBar({
       icon: LoaderCircle,
     },
     {
-      id: "team",
-      label: blocked ? `${blocked} teammate${blocked === 1 ? "" : "s"} need setup` : `${workforce.length} AI teammate${workforce.length === 1 ? "" : "s"} monitored`,
-      detail: blocked ? "Open the team to see what is blocked" : "Status is based on current assignments",
+      id: "exceptions",
+      label: blocked
+        ? `${blocked} setup issue${blocked === 1 ? "" : "s"} to resolve`
+        : "Exceptions & connections",
+      detail: blocked
+        ? "Open integrations to resolve blocked coverage or missing setup"
+        : "Review connections and exception coverage",
       tone: blocked ? "warning" : "default",
-      href: teamHref,
-      icon: UsersRound,
+      href: integrationsHref ?? teamHref,
+      icon: blocked ? CircleAlert : PlugZap,
     },
   ];
   return (

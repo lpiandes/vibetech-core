@@ -8,6 +8,7 @@ import EvidencePanel from "@/components/operating/EvidencePanel";
 import OperatingStatusBadge from "@/components/operating/OperatingStatusBadge";
 import { PageHeader } from "@/components/operating/PageHeader";
 import { ActionButton } from "@/components/operating/Surface";
+import DecisionsQueue, { type DecisionAttentionItem } from "@/components/decisions/DecisionsQueue";
 
 type GovernedRecommendation = {
   recommendationId: string;
@@ -68,6 +69,7 @@ type BIView = {
   pipeline?: string[];
   observationCounts?: Record<string, number>;
   intelligenceCandidates?: IntelligenceCandidateCard[];
+  attentionItems?: DecisionAttentionItem[];
 };
 
 type IntelligenceCandidateCard = {
@@ -88,11 +90,12 @@ type IntelligenceCandidateCard = {
 };
 
 const SECTIONS = [
-  { id: "attention", label: "Waiting" },
-  { id: "more", label: "Insights" },
+  { id: "decisions", label: "Needs you" },
+  { id: "more", label: "More" },
 ] as const;
 
 const INSIGHT_SECTIONS = [
+  { id: "suggestions", label: "Suggestions" },
   { id: "executive", label: "Changes" },
   { id: "recommendations", label: "Ideas" },
   { id: "opportunities", label: "Opportunities" },
@@ -109,8 +112,8 @@ const INSIGHT_SECTIONS = [
  * Presentation only. Improve actions open Architect governed flow.
  */
 export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }) {
-  const [section, setSection] = useState<(typeof SECTIONS)[number]["id"]>("attention");
-  const [insightSection, setInsightSection] = useState<(typeof INSIGHT_SECTIONS)[number]["id"]>("executive");
+  const [section, setSection] = useState<(typeof SECTIONS)[number]["id"]>("decisions");
+  const [insightSection, setInsightSection] = useState<(typeof INSIGHT_SECTIONS)[number]["id"]>("suggestions");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +121,8 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
   const scope = useBusinessScope();
   const router = useRouter();
   const businessId = view.businessId ?? scope.businessId;
+  const attentionItems = view.attentionItems ?? [];
+  const needsYouCount = attentionItems.length;
 
   async function refreshIntelligence() {
     setBusyId("refresh");
@@ -224,31 +229,32 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
     return [];
   };
 
+  const decisionsTitle = needsYouCount === 0
+    ? "Decisions"
+    : needsYouCount === 1
+      ? "1 decision needs you"
+      : `${needsYouCount} decisions need you`;
+
   return (
     <div style={{ display: "grid", gap: spacing.xl, padding: `${spacing.lg} ${spacing.md}`, maxWidth: 880, margin: "0 auto" }}>
       <PageHeader
-        title={
-          candidates.length === 0
-            ? "All clear"
-            : candidates.length === 1
-              ? "1 decision"
-              : `${candidates.length} decisions`
-        }
+        title={decisionsTitle}
+        description="What needs your judgment now — approvals, exceptions, and follow-through blocked on you. Evidence and proposed actions are shown for each item."
         actions={
           <>
             <ActionButton variant="secondary" disabled={busyId === "refresh"} onClick={() => void refreshIntelligence()}>
-              {busyId === "refresh" ? "…" : "Refresh"}
+              {busyId === "refresh" ? "…" : "Refresh suggestions"}
             </ActionButton>
           </>
         }
       />
 
       <section style={{ display: "flex", flexWrap: "wrap", gap: 10 }} aria-label="Decision status">
-        <StatusSummaryCard label="Waiting" value={String(candidates.length)} detail="" tone={candidates.length ? "warning" : "good"} />
-        <StatusSummaryCard label="Ideas" value={String((view.recommendations ?? []).length)} detail="" tone="info" />
+        <StatusSummaryCard label="Needs you" value={String(needsYouCount)} detail="Approvals & exceptions" tone={needsYouCount ? "warning" : "good"} />
+        <StatusSummaryCard label="Suggestions" value={String(candidates.length)} detail="BI candidates (secondary)" tone="info" />
       </section>
 
-      <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }} aria-label="Needs Attention sections">
+      <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }} aria-label="Decisions sections">
         {SECTIONS.map((entry) => (
           <button
             key={entry.id}
@@ -275,28 +281,12 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
         <div style={{ ...panelStyle, color: "#B91C1C" }} role="alert">{error}</div>
       ) : null}
 
-      {section === "attention" ? (
-        <div style={{ display: "grid", gap: 12 }}>
-          {candidates.length === 0 ? (
-            <div style={{ ...panelStyle, color: cockpitColors.textSecondary }}>
-              Nothing waiting.
-            </div>
-          ) : (
-            candidates.map((candidate) => (
-              <IntelligenceCandidateCardView
-                key={candidate.id}
-                candidate={candidate}
-                expanded={expandedId === candidate.id}
-                busy={Boolean(busyId?.startsWith(candidate.id))}
-                onToggle={() => setExpandedId((current) => (current === candidate.id ? null : candidate.id))}
-                onCreateWork={() => void candidateAction(candidate.id, "create-work")}
-                onProposeChange={() => void candidateAction(candidate.id, "propose-change")}
-                onDismiss={() => void candidateAction(candidate.id, "dismiss", { reason: "Dismissed from Needs Attention" })}
-                onAskArchitect={() => void askArchitect(candidate)}
-              />
-            ))
-          )}
-        </div>
+      {section === "decisions" ? (
+        <DecisionsQueue
+          items={attentionItems}
+          businessId={businessId}
+          emptyMessage="Nothing requires your judgment. VIBETech is operating routine follow-through."
+        />
       ) : null}
 
       {section === "more" ? (
@@ -322,6 +312,30 @@ export default function BusinessIntelligenceWorkspace({ view }: { view: BIView }
               </button>
             ))}
           </nav>
+
+          {insightSection === "suggestions" ? (
+            <div style={{ display: "grid", gap: 12 }}>
+              {candidates.length === 0 ? (
+                <div style={{ ...panelStyle, color: cockpitColors.textSecondary }}>
+                  No BI suggestions right now — the primary queue is approvals and exceptions above.
+                </div>
+              ) : (
+                candidates.map((candidate) => (
+                  <IntelligenceCandidateCardView
+                    key={candidate.id}
+                    candidate={candidate}
+                    expanded={expandedId === candidate.id}
+                    busy={Boolean(busyId?.startsWith(candidate.id))}
+                    onToggle={() => setExpandedId((current) => (current === candidate.id ? null : candidate.id))}
+                    onCreateWork={() => void candidateAction(candidate.id, "create-work")}
+                    onProposeChange={() => void candidateAction(candidate.id, "propose-change")}
+                    onDismiss={() => void candidateAction(candidate.id, "dismiss", { reason: "Dismissed from Decisions" })}
+                    onAskArchitect={() => void askArchitect(candidate)}
+                  />
+                ))
+              )}
+            </div>
+          ) : null}
 
           {insightSection === "executive" ? (
             <ExecutiveBriefingPanel briefing={view.executiveBriefing} health={view.businessHealth} counts={view.observationCounts} />

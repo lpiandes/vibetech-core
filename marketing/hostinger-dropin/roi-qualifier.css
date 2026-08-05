@@ -391,3 +391,45 @@
   justify-content: center;
 }
 
+.rq-cite {
+  display: block;
+  margin-top: 0.45rem;
+  font-size: 0.8rem;
+  color: var(--text-muted, #94a3b8);
+  opacity: 0.9;
+}
+
+/* Homepage hero: ROI assessment front and center */
+.hero-roi {
+  padding-block: clamp(2.5rem, 6vw, 4rem);
+}
+
+.hero-roi-grid {
+  display: grid;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (min-width: 960px) {
+  .hero-roi-grid {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.15fr);
+    gap: 2.5rem;
+  }
+}
+
+.hero-roi .hero-title {
+  font-size: clamp(1.85rem, 4vw, 2.65rem);
+}
+
+.hero-roi .roi-qualifier {
+  max-width: none;
+  margin: 0;
+}
+
+.hero-roi-aside {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+

@@ -18,6 +18,7 @@ import {
   Sparkles,
   Users,
   Bot,
+  AlertTriangle,
 } from "lucide-react";
 
 import PageContainer from "@/components/layout/PageContainer";
@@ -40,6 +41,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Operate",
     items: [
       { href: "/admin", label: "Dashboard", icon: <LayoutDashboard size={16} aria-hidden />, exact: true },
+      { href: "/admin/exceptions", label: "Exceptions", icon: <AlertTriangle size={16} aria-hidden /> },
       { href: "/admin/health", label: "Health", icon: <Activity size={16} aria-hidden /> },
       { href: "/admin/businesses", label: "Businesses", icon: <Building2 size={16} aria-hidden /> },
       { href: "/admin/support", label: "Support", icon: <LifeBuoy size={16} aria-hidden /> },
@@ -50,6 +52,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/admin/architect", label: "Architect", icon: <Sparkles size={16} aria-hidden /> },
       { href: "/admin/blueprints", label: "Blueprints", icon: <Layers size={16} aria-hidden /> },
+      { href: "/admin/patterns", label: "Patterns", icon: <Package size={16} aria-hidden /> },
       { href: "/admin/components", label: "Components", icon: <Boxes size={16} aria-hidden /> },
       { href: "/admin/employees", label: "Employees", icon: <Bot size={16} aria-hidden /> },
       { href: "/admin/installations", label: "Installations", icon: <Package size={16} aria-hidden /> },

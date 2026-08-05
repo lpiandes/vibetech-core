@@ -13,6 +13,7 @@ import { ArrowUp, Paperclip } from "lucide-react";
 import { architect } from "./architectTheme";
 import { ArchitectButton, ThinkingDots } from "./ArchitectPrimitives";
 import { HUMAN_COPY, detectUploadHint, researchFindingCards } from "./architectSemantics";
+import ActionDraftCard, { type ActionDraft } from "./ActionDraftCard";
 
 type Props = {
   conversation: Array<{ messageId?: string; role?: string; text?: string }>;
@@ -37,6 +38,9 @@ type Props = {
   onUploadFiles?: (files: FileList | null) => void;
   dragOver?: boolean;
   setDragOver?: (value: boolean) => void;
+  actionDraft?: ActionDraft | null;
+  businessId?: string;
+  onDismissActionDraft?: () => void;
 };
 
 /**
@@ -65,6 +69,9 @@ export default function ConversationRail({
   onUploadFiles,
   dragOver,
   setDragOver,
+  actionDraft = null,
+  businessId,
+  onDismissActionDraft,
 }: Props) {
   const findings = researchFindingCards(researchFindings ?? null);
   const liveStatus = thinking ? HUMAN_COPY.rethink : "";
@@ -183,6 +190,13 @@ export default function ConversationRail({
             );
           })}
           {thinking ? <ThinkingDots label={HUMAN_COPY.rethink} /> : null}
+          {actionDraft && businessId ? (
+            <ActionDraftCard
+              draft={actionDraft}
+              businessId={businessId}
+              onDismiss={onDismissActionDraft}
+            />
+          ) : null}
           <div ref={bottomRef} aria-hidden style={{ height: 1 }} />
         </div>
 

@@ -85,7 +85,7 @@ export default function OrganizationWorkspace({
     ...filteredAiEmployees.map((employee) => ({
       id: employee.id,
       name: employee.label,
-      roleLabel: employee.archetypeId ? String(employee.archetypeId).replace(/_/g, " ") : "AI employee",
+      roleLabel: employee.archetypeId ? String(employee.archetypeId).replace(/_/g, " ") : "Operating responsibility",
       depth: 2,
       reportsToLabel: employee.reportsTo ?? "",
     })),
@@ -169,17 +169,17 @@ export default function OrganizationWorkspace({
           emptyDescription={departmentFilter === "all" ? "None yet." : "No staff in this department."}
         />
         <EmployeeCards
-          title="AI employees"
+          title="Operating responsibilities"
           permissions={canManageTeam ? ["team.manage"] : []}
           items={filteredAiEmployees.map((employee) => ({
             id: employee.id,
             name: employee.label,
             purpose: employee.detail,
             status: "ready",
-            statusLabel: employee.archetypeId ? String(employee.archetypeId).replace(/_/g, " ") : "AI",
+            statusLabel: employee.archetypeId ? String(employee.archetypeId).replace(/_/g, " ") : "Operating",
           }))}
-          emptyTitle="No AI employees"
-          emptyDescription={departmentFilter === "all" ? "None yet." : "No AI employees in this department."}
+          emptyTitle="No operating responsibilities"
+          emptyDescription={departmentFilter === "all" ? "None yet." : "No operating responsibilities in this department."}
         />
       </div>
 

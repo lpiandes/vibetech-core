@@ -54,12 +54,26 @@ export function looksLikeInternalId(value: string | null | undefined): boolean {
   return false;
 }
 
-/** Home Ask suggestions — industry-agnostic; derived from live Home state. */
+/** Plan 9 — default operating commands (Ask as command interface). */
 export const ASK_VIBETECH_SUGGESTIONS = [
-  "What needs me today?",
-  "What is VIBETech handling?",
+  "Why was the latest opportunity escalated?",
+  "Show every proposal without a next step.",
+  "What needs my approval?",
   "What changed today?",
+  "Which rule is causing the most escalations?",
+  "Where are we missing evidence?",
+  "Change response promise to one hour.",
 ] as const;
+
+const ASK_SUGGESTION = {
+  latestEscalation: ASK_VIBETECH_SUGGESTIONS[0],
+  proposalsWithoutNextStep: ASK_VIBETECH_SUGGESTIONS[1],
+  approvalsNeeded: ASK_VIBETECH_SUGGESTIONS[2],
+  changedToday: ASK_VIBETECH_SUGGESTIONS[3],
+  escalationHotspots: ASK_VIBETECH_SUGGESTIONS[4],
+  missingEvidence: ASK_VIBETECH_SUGGESTIONS[5],
+  responsePromise: ASK_VIBETECH_SUGGESTIONS[6],
+} as const;
 
 export function buildAskSuggestions({
   waitingCount = 0,
@@ -72,32 +86,33 @@ export function buildAskSuggestions({
   winCount?: number;
   approvalCount?: number;
 } = {}): string[] {
+  // Prefer operating commands; layer situational nudges first when work is waiting.
   if (waitingCount > 0) {
     return [
-      "Help me clear what’s waiting",
-      waitingCount === 1 ? "Walk me through this item" : "What should I handle first?",
-      "What can wait until later?",
+      ASK_SUGGESTION.latestEscalation,
+      ASK_SUGGESTION.proposalsWithoutNextStep,
+      ASK_SUGGESTION.missingEvidence,
     ];
   }
   if (approvalCount > 0) {
     return [
-      "Help me review what teammates need approved",
-      "What happens if I wait on these approvals?",
-      "What should I handle first?",
+      ASK_SUGGESTION.approvalsNeeded,
+      ASK_SUGGESTION.changedToday,
+      ASK_SUGGESTION.escalationHotspots,
     ];
   }
   if (workingCount > 0) {
     return [
-      "What is VIBETech handling?",
-      "Do I need to step in on anything?",
-      "What changed today?",
+      ASK_SUGGESTION.changedToday,
+      ASK_SUGGESTION.proposalsWithoutNextStep,
+      ASK_SUGGESTION.latestEscalation,
     ];
   }
   if (winCount > 0) {
     return [
-      "Summarize today’s wins",
-      "What should I focus on next?",
-      "What needs me today?",
+      ASK_SUGGESTION.changedToday,
+      ASK_SUGGESTION.escalationHotspots,
+      ASK_SUGGESTION.responsePromise,
     ];
   }
   return [...ASK_VIBETECH_SUGGESTIONS];

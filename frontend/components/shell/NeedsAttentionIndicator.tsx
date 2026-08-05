@@ -8,7 +8,7 @@ import { cockpitColors, radius, typography } from "@/design/tokens";
 export default function NeedsAttentionIndicator({ count = 0 }: { count?: number }) {
   const scope = useBusinessScope();
   const href = `/b/${encodeURIComponent(scope.businessId)}/intelligence`;
-  const label = count > 0 ? `Needs Attention, ${count} open` : "Needs Attention";
+  const label = count > 0 ? `Decisions, ${count} open` : "Decisions";
 
   return (
     <Link

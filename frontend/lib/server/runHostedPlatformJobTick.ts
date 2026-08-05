@@ -110,6 +110,22 @@ async function runHostedGmailInboxSyncSweep() {
         credentialResolver,
         maxResults: 25,
         actorId: "gmail_inbox_sync_job",
+        onNewInbound: async (msg) => {
+          if (!msg?.gmailMessageId) return false;
+          await (service as any).emitSpecialtyBusinessEvent({
+            eventType: "INBOUND_SALES_EMAIL",
+            brief: `Inbound sales email${msg.subject ? `: ${msg.subject}` : ""} from ${msg.from?.email ?? "unknown"}`,
+            payload: {
+              gmailMessageId: msg.gmailMessageId,
+              from: msg.from,
+              subject: msg.subject,
+              personId: msg.personId,
+              channel: "gmail",
+            },
+            actorId: "gmail_inbox_sync_job",
+          });
+          return true;
+        },
       });
       if (result.ok) outcome.synced += 1;
       else if (result.reason !== "gmail_not_connected") {

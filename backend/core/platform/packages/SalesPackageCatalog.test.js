@@ -362,10 +362,12 @@ test("package Ask focuses on catalog question IDs for scheduling", async () => {
   assert.equal(skipped.skipBecauseConnected, true);
 });
 
-test("sellable admin list hides roadmap voice family", () => {
+test("sellable admin list hides roadmap voice family and leads with managed RFT", () => {
   const sellable = listSellableSalesPackagesForAdmin();
   assert.ok(sellable.every((row) => row.sellable !== false));
   assert.ok(!sellable.some((row) => row.id === "voice_outbound_agent"));
+  assert.ok(!sellable.some((row) => row.id === "ai_business_os"));
+  assert.equal(sellable[0]?.id, "managed_revenue_follow_through");
   assert.ok(sellable.some((row) => row.id === "ai_receptionist"));
   assert.ok(sellable.some((row) => row.id === "addon_priority_support"));
 });
@@ -419,6 +421,21 @@ test("email marketing nav includes inbox and campaigns", () => {
   const nav = resolveCanonicalNavIdsForPackages(["email_sms_marketing"]);
   assert.ok(nav.has("inbox"));
   assert.ok(nav.has("campaigns"));
+});
+
+test("managed RFT nav prioritizes outcomes and removes people pipelines inbox", () => {
+  const nav = resolveCanonicalNavIdsForPackages(["managed_revenue_follow_through"]);
+  assert.ok(nav.has("home"));
+  assert.ok(nav.has("needs_attention"));
+  assert.ok(nav.has("outcomes"));
+  assert.ok(nav.has("knowledge"));
+  assert.ok(nav.has("work"));
+  assert.ok(nav.has("calendar"));
+  assert.ok(nav.has("integrations"));
+  assert.ok(nav.has("settings"));
+  assert.equal(nav.has("people"), false);
+  assert.equal(nav.has("pipelines"), false);
+  assert.equal(nav.has("inbox"), false);
 });
 
 test("essential managed soft-caps workflows", () => {

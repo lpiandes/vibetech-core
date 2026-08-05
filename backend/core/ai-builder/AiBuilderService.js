@@ -38,6 +38,10 @@ import {
   isAutomationHowToRequest,
 } from "./askProductGuidance.js";
 import {
+  answerOperatingCommand,
+  formatOperatingCommandReply,
+} from "./askOperatingCommand.js";
+import {
   createBuilderConversationMessage,
   appendConversation,
 } from "./BuilderConversation.js";
@@ -1100,8 +1104,47 @@ export class AiBuilderService {
       });
     }
 
-    // Live LLM Ask/builder turns consume the daily Ask quota (5/user).
-    let askQuota = null;
+    // Plan 9 — operating commands grounded on RFT/Outcomes/baseline (no quota; no invention).
+    if (stored?.specification && session.businessId && this.platformStore?.getBusinessOSInstallation) {
+      try {
+        const installation = await this.platformStore.getBusinessOSInstallation(session.businessId);
+        const grounded = answerOperatingCommand({
+          text,
+          installation,
+          businessId: session.businessId,
+        });
+        if (grounded?.handled) {
+          const reply = formatOperatingCommandReply(grounded);
+          const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+            messageId: `msg_user_ops_${Date.now()}`,
+            role: "user",
+            text,
+          }));
+          const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+            messageId: `msg_assistant_ops_${Date.now()}`,
+            role: "assistant",
+            text: reply,
+          }));
+          const updated = withBuilderSessionPatch(session, { conversation: withAssistant });
+          const saved = await this.persistChatSession(updated);
+          return deepFreeze({
+            ok: true,
+            session: saved,
+            operatingCommand: true,
+            grounded,
+            message: reply,
+            inventedFacts: false,
+            actionDraft: grounded.actionDraft ?? null,
+            quota: null,
+            aiSource: "operating_command",
+          });
+        }
+      } catch {
+        /* fall through to normal Ask */
+      }
+    }
+
+    // Live LLM Ask/builder turns consume the daily Ask quota (5/user).    let askQuota = null;
     const llmEnabled = Boolean(
       llmIsLiveAvailable()
       && (this.intelligence?.enabled === true || this.intelligence?.client?.isLive?.()),

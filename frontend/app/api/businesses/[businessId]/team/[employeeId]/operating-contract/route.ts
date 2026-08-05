@@ -110,6 +110,7 @@ export async function PATCH(
         rules: body.rules,
         scope: body.scope,
         automationPath: body.automationPath,
+        rft: body.rft,
       },
       actorId,
       nowISO: new Date().toISOString(),
@@ -197,6 +198,51 @@ export async function PATCH(
       actorUserId: installation.actorUserId ?? actorId,
       installedAt: installation.installedAt ?? null,
     });
+
+    // Plan 10 — Ask / owner contract confirms can feed governed learning.
+    if (body.learningCorrection || body.fromAsk) {
+      try {
+        const {
+          recordCorrection,
+          refreshGovernedLearning,
+          persistGovernedLearning,
+          readGovernedLearning,
+        } = await import("../../../../../../../../backend/core/company-rules/governedLearning.js");
+        const install2 = await platformStore.getBusinessOSInstallation(businessId);
+        const recorded = recordCorrection(readGovernedLearning(install2), {
+          correctionId: body.learningCorrection?.correctionId
+            ?? `ask_contract_${employeeId}_${Date.now().toString(36)}`,
+          source: body.fromAsk ? "ask_command" : "operating_contract",
+          reasonCode: body.learningCorrection?.reasonCode ?? body.reasonCode ?? "owner_preference",
+          original: body.learningCorrection?.original ?? current.operatingContract ?? null,
+          approved: body.learningCorrection?.approved ?? result.contract,
+          decision: "APPLIED",
+          note: body.learningCorrection?.note ?? body.note ?? null,
+          actorId,
+          employeeId,
+          contractVersion: result.contract?.rft?.contractVersion ?? result.contract?.version ?? null,
+          contentHash: result.contract?.rft?.contentHash ?? null,
+          evidence: [{ kind: "employee_id", providerId: String(employeeId) }],
+        });
+        if (recorded.ok) {
+          const refreshed = refreshGovernedLearning({
+            ...install2,
+            configuration: {
+              ...(install2.configuration ?? {}),
+              governedLearning: recorded.state,
+            },
+          });
+          await persistGovernedLearning({
+            platformStore,
+            installation: install2,
+            state: refreshed.state,
+            actorId,
+          });
+        }
+      } catch {
+        // Learning must not block contract patch.
+      }
+    }
 
     const schema = resolveOperatingContractSchema({ employee: nextEmployee, industry });
     return NextResponse.json({

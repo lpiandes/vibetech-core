@@ -8,6 +8,9 @@ import {
   presentAutomationPath,
   buildDefaultAutomationPath,
 } from "./automationPath.js";
+import { attachRftToOperatingContract } from "./rft/rftContract.js";
+import { normalizeRftServiceStandard } from "./rft/rftContract.js";
+import { RFT_SCHEMA_ID } from "./rft/rftCatalog.js";
 
 function asArray(value) {
   if (Array.isArray(value)) return value.map(String).filter(Boolean);
@@ -179,16 +182,21 @@ export function buildOperatingContract({
     updatedBy: prior?.updatedBy ?? null,
   };
 
+  const withRft = attachRftToOperatingContract(draft, {
+    priorRft: prior?.rft ?? null,
+    nowISO: nowISO || null,
+  });
+
   if (nowISO) {
-    draft.updatedAt = nowISO;
-    draft.updatedBy = actorId ?? prior?.updatedBy ?? null;
+    withRft.updatedAt = nowISO;
+    withRft.updatedBy = actorId ?? prior?.updatedBy ?? null;
   }
 
-  const completeness = validateOperatingContractCompleteness(draft, schema);
-  draft.scope.completeness = completeness;
+  const completeness = validateOperatingContractCompleteness(withRft, schema);
+  withRft.scope.completeness = completeness;
 
   return deepFreeze({
-    contract: draft,
+    contract: withRft,
     schema,
     completeness,
   });
@@ -286,6 +294,16 @@ export function applyOperatingContractPatch({
       ...current.trigger,
       schedule: patch.trigger.schedule,
     };
+  }
+  if (patch.rft != null && typeof patch.rft === "object") {
+    current.rft = normalizeRftServiceStandard(
+      { ...(current.rft ?? {}), ...patch.rft },
+      { nowISO: nowISO ?? new Date().toISOString() },
+    );
+  } else if (String(schema.schemaId) === RFT_SCHEMA_ID) {
+    current.rft = normalizeRftServiceStandard(current.rft ?? null, {
+      nowISO: nowISO ?? new Date().toISOString(),
+    });
   }
 
   current.version = 1;

@@ -103,7 +103,7 @@ export default function SpecialtySurfaceExperience({ model }: { model: Specialty
   const [chat, setChat] = useState<ChatTurn[]>([
     {
       role: "assistant",
-      text: "Tell me anything to change — e.g. “When a pipeline stage changes, draft an email to the team” or “Add an SMS step.”",
+      text: "Describe a path change to review — for example, “When a pipeline stage changes, draft an email to the team” or “Add an SMS step.”",
     },
   ]);
 
@@ -328,7 +328,7 @@ export default function SpecialtySurfaceExperience({ model }: { model: Specialty
       <header style={topBar}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.1em", textTransform: "uppercase", color: cockpitColors.textMuted }}>
-            Automation
+            {isAi ? "Operating responsibility" : "Automation"}
           </div>
           {editingName ? (
             <input
@@ -389,11 +389,19 @@ export default function SpecialtySurfaceExperience({ model }: { model: Specialty
           <PrimaryButton onClick={() => void runNow()} disabled={!canRun || busy === "run"}>
             {busy === "run" ? "Running…" : "Run now"}
           </PrimaryButton>
-          <SecondaryButton href={`/b/${encodeURIComponent(model.businessId)}/automations`}>
-            All automations
+          <SecondaryButton href={`/b/${encodeURIComponent(model.businessId)}/${isAi ? "intelligence" : "automations"}`}>
+            {isAi ? "Open Decisions" : "All automations"}
           </SecondaryButton>
         </div>
       </header>
+
+      {isAi ? (
+        <VtPanel title="Managed Revenue Follow-Through">
+          <p style={{ margin: 0, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
+            VIBETech runs this as Managed Revenue Follow-Through. Prefer Decisions and Company Rules over building automations.
+          </p>
+        </VtPanel>
+      ) : null}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="button" onClick={() => setTab("path")} style={tabChip(tab === "path")}>Path</button>
@@ -406,13 +414,18 @@ export default function SpecialtySurfaceExperience({ model }: { model: Specialty
         <div className="vt-auto-builder" style={builderGrid}>
           <aside style={chatPane}>
             <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: cockpitColors.textMuted }}>
-              AI assistant
+              {isAi ? "Advanced path changes" : "AI assistant"}
               {autoQuotaRemaining != null ? (
                 <span style={{ fontWeight: 650, letterSpacing: 0, textTransform: "none", marginLeft: 8, color: cockpitColors.textMuted }}>
                   · {autoQuotaRemaining}/5 today
                 </span>
               ) : null}
             </div>
+            {isAi ? (
+              <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.5 }}>
+                Use this only when the managed path needs a deliberate contract change.
+              </p>
+            ) : null}
             <div style={chatScroll}>
               {chat.map((turn, i) => (
                 <div

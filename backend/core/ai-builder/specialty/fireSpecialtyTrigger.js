@@ -10,6 +10,12 @@ import {
   readSpecialtyFireLedger,
   summarizePayload,
 } from "./specialtyFireLedger.js";
+import {
+  appendShadowProposal,
+  persistRftReplay,
+  readRftReplay,
+  resolveExecutionModeFromInstallation,
+} from "../operating-contract/rft/rftReplay.js";
 
 /**
  * Fire a specialty trigger: if employee automation is ACTIVE (or forceManual),
@@ -171,6 +177,7 @@ export async function fireSpecialtyTrigger({
   }
 
   let pathExecution = null;
+  const executionMode = resolveExecutionModeFromInstallation(installation);
   try {
     const existingWork = workId && workRuntime?.getWorkItem ? workRuntime.getWorkItem(workId) : null;
     pathExecution = await executeSpecialtyPathSteps({
@@ -190,6 +197,7 @@ export async function fireSpecialtyTrigger({
       platformJobQueue,
       readinessSnapshot,
       nowISO,
+      executionMode,
     });
   } catch (err) {
     pathExecution = {
@@ -198,6 +206,38 @@ export async function fireSpecialtyTrigger({
       notes: [],
       needsYou: false,
     };
+  }
+
+  if (executionMode === "shadow" && platformStore && installation && pathExecution?.notes?.length) {
+    try {
+      const proposed = (pathExecution.notes ?? []).filter((n) =>
+        String(n.reason ?? "").includes("shadow_proposed") || n.shadowProposal,
+      );
+      if (proposed.length) {
+        let replayState = readRftReplay(installation);
+        for (const note of proposed) {
+          replayState = appendShadowProposal(replayState, {
+            at: typeof nowISO === "function" ? nowISO() : String(nowISO ?? new Date().toISOString()),
+            eventType: type,
+            workId,
+            employeeId,
+            stepId: note.stepId,
+            label: note.label,
+            reason: note.reason,
+            shadowProposal: note.shadowProposal ?? null,
+          });
+        }
+        const fresh = await platformStore.getBusinessOSInstallation(businessId).catch(() => installation);
+        await persistRftReplay({
+          platformStore,
+          installation: fresh ?? installation,
+          replayState,
+          actorId: String(actorId || "shadow"),
+        });
+      }
+    } catch {
+      /* shadow ledger is best-effort */
+    }
   }
 
   const approvalIds = (pathExecution?.notes ?? [])
@@ -265,11 +305,41 @@ export async function fireSpecialtyTrigger({
     })),
   });
 
+  // Plan 13/16 — fail visibly: external path failures escalate linked RFT card.
+  const hardFails = (pathExecution?.notes ?? []).filter((n) =>
+    n && n.ok === false && ["send_email", "send_sms"].includes(String(n.type)),
+  );
+  let rftEscalation = null;
+  if (hardFails.length && platformStore && installation) {
+    try {
+      const { escalateRftOnExternalFailure } = await import(
+        "../operating-contract/rft/rftInboundIngest.js"
+      );
+      const providerId = String(
+        eventPayload?.gmailMessageId
+        ?? eventPayload?.messageId
+        ?? eventPayload?.formSubmissionId
+        ?? "",
+      ).trim() || null;
+      const fresh = await platformStore.getBusinessOSInstallation(businessId).catch(() => installation);
+      rftEscalation = await escalateRftOnExternalFailure({
+        platformStore,
+        installation: fresh ?? installation,
+        providerId,
+        actorId: String(actorId || "specialty_path"),
+        note: hardFails.map((f) => f.reason || f.type).join("; "),
+      });
+    } catch {
+      rftEscalation = { ok: false, code: "escalate_error" };
+    }
+  }
+
   return deepFreeze({
     ...result,
     automationActive: anyActive,
     firedEventType: type,
     pathExecution,
+    rftEscalation,
   });
 }
 

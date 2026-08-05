@@ -39,6 +39,7 @@ export async function executeSpecialtyPathSteps({
   platformJobQueue = null,
   readinessSnapshot = null,
   nowISO = () => new Date().toISOString(),
+  executionMode = "live",
 } = {}) {
   const path = normalizeAutomationPath(employee?.operatingContract?.automationPath, {
     contract: employee?.operatingContract ?? {},
@@ -47,6 +48,8 @@ export async function executeSpecialtyPathSteps({
     ? path.steps.filter((s) => s && s.enabled !== false).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     : [];
 
+  const mode = String(executionMode ?? "live");
+  const nonLive = mode === "shadow" || mode === "replay";
   const notes = [];
   let crmTouched = false;
   let crm = installation ? readCrmState(installation) : null;
@@ -60,6 +63,20 @@ export async function executeSpecialtyPathSteps({
     const manual = stepIsManual(step);
 
     if (type === PATH_STEP_TYPES.ADD_TO_PIPELINE) {
+      if (nonLive) {
+        notes.push({
+          stepId: step.id,
+          type,
+          ok: true,
+          deferred: false,
+          needsYou: false,
+          reason: `${mode}_proposed_no_crm_write`,
+          label: step.label,
+          executionMode: mode,
+          message: `${mode} mode — pipeline card not written externally.`,
+        });
+        continue;
+      }
       if (manual) {
         notes.push({
           stepId: step.id,
@@ -243,6 +260,30 @@ export async function executeSpecialtyPathSteps({
       || type === PATH_STEP_TYPES.SEND_SMS
       || type === PATH_STEP_TYPES.NOTIFY_TEAM
     ) {
+      if (nonLive) {
+        const channels = resolveChannels(step, type);
+        const recipients = resolveStepRecipients(step, eventPayload);
+        notes.push({
+          stepId: step.id,
+          type,
+          ok: true,
+          deferred: false,
+          needsYou: false,
+          reason: `${mode}_proposed_no_outbound`,
+          label: step.label,
+          runMode: manual ? "manual" : "auto",
+          executionMode: mode,
+          shadowProposal: {
+            channels,
+            recipients,
+            subject: step.subject || "Update",
+            bodyPreview: String(step.body || "").slice(0, 280),
+          },
+          message: `${mode} mode — outbound not sent.`,
+        });
+        continue;
+      }
+
       const readiness = computeStepReadiness(step, snapshot);
       if (!readiness.ready) {
         const top = readiness.blockers[0] ?? null;
@@ -263,7 +304,13 @@ export async function executeSpecialtyPathSteps({
 
       let approvalId = null;
       const direction = String(step.direction ?? (type === PATH_STEP_TYPES.NOTIFY_TEAM ? "internal" : "external"));
-      const needsOwnerGrant = direction === "external" && manual;
+      // Pilot safety: customer-facing external auto must still go through approval unless
+      // the path explicitly marked the step internal. Never silent-send to prospects.
+      const forceApprovalForExternalAuto =
+        direction === "external"
+        && !manual
+        && type !== PATH_STEP_TYPES.NOTIFY_TEAM;
+      const needsOwnerGrant = direction === "external" && (manual || forceApprovalForExternalAuto);
 
       if (manual && !needsOwnerGrant) {
         // Manual internal / team alert — wait in Needs you; don't auto-send.
@@ -374,6 +421,29 @@ export async function executeSpecialtyPathSteps({
           reason: "auto_send_no_recipients",
           label: step.label,
           runMode: "auto",
+          executionMode: mode,
+        });
+        continue;
+      }
+
+      if (nonLive) {
+        notes.push({
+          stepId: step.id,
+          type,
+          ok: true,
+          deferred: false,
+          needsYou: false,
+          reason: `${mode}_proposed_no_outbound`,
+          label: step.label,
+          runMode: "auto",
+          executionMode: mode,
+          shadowProposal: {
+            channels,
+            recipients,
+            subject: step.subject || personalizationWork.title || "Update",
+            bodyPreview: String(step.body || "").slice(0, 280),
+          },
+          message: `${mode} mode — outbound not sent.`,
         });
         continue;
       }
@@ -401,6 +471,7 @@ export async function executeSpecialtyPathSteps({
           reason: sent?.ok ? "auto_sent" : (sent?.reason ?? "auto_send_failed"),
           label: step.label,
           runMode: "auto",
+          executionMode: mode,
           send: sent,
         });
       } catch (err) {
@@ -413,6 +484,7 @@ export async function executeSpecialtyPathSteps({
           reason: err instanceof Error ? err.message : "auto_send_failed",
           label: step.label,
           runMode: "auto",
+          executionMode: mode,
         });
       }
       continue;

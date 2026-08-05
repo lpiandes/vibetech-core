@@ -1,4 +1,5 @@
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
+import { SCHEMA_REVENUE_FOLLOW_THROUGH } from "./RevenueFollowThroughSchema.js";
 
 /**
  * Universal scope keys — every teammate must answer these (or mark N/A with reason).
@@ -400,6 +401,7 @@ const SCHEMA_GENERIC = deepFreeze({
 });
 
 const ALL_SCHEMAS = deepFreeze([
+  SCHEMA_REVENUE_FOLLOW_THROUGH,
   SCHEMA_SPORTS_CLUB_INTAKE,
   SCHEMA_SPORTS_PRACTICE_PLAN,
   SCHEMA_SPORTS_FAMILY_COMMS,
@@ -444,4 +446,4 @@ export function resolveOperatingContractSchema({
   return SCHEMA_GENERIC;
 }
 
-export { SCHEMA_GENERIC };
+export { SCHEMA_GENERIC, SCHEMA_REVENUE_FOLLOW_THROUGH };

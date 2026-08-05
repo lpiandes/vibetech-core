@@ -98,10 +98,18 @@ export async function executeLiveProveAction({
     return deepFreeze({
       ok: true,
       simulated: false,
+      verified: true,
       provider: "website_forms",
       contactId,
       cardId,
-      message: "Test form lead saved to People. Share /intake for real submissions.",
+      detail: {
+        formSubmissionId: `form_prove_${contactId}`,
+        externalReference: `form_prove_${contactId}`,
+        providerKind: "form_submission_id",
+        at: new Date().toISOString(),
+        note: "Controlled website-form prove submission.",
+      },
+      message: "Test form submission recorded with form_submission_id. Share /intake for real visitor submissions.",
     });
   }
 

@@ -30,6 +30,7 @@ export const BLUEPRINT_SOURCES = Object.freeze([
   "gold",
   "business_override",
   "marketplace",
+  "delivery_moat",
 ]);
 
 /**

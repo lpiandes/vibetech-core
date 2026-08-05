@@ -1,50 +1,130 @@
 # VIBETech Product Constitution
 
-**Version:** 1.0  
+**Version:** 2.0  
 **Status:** Authoritative product document  
-**Scope:** What VIBETech is to the owner — experience principles, locked architecture boundaries, and roadmap  
-**Companion:** [Platform Constitution](../architecture/VIBETECH_PLATFORM_CONSTITUTION.md) (how we build / locked contracts)
+**Scope:** What VIBETech sells, who it is for, ownership boundaries, and how the product must feel  
+**Companion:** [Platform Constitution](../architecture/VIBETECH_PLATFORM_CONSTITUTION.md) (how we build / locked contracts)  
+**Roadmap:** [Full_Plan.md](./Full_Plan.md) · [Development freeze](./DEVELOPMENT_FREEZE.md) · [Engineering ship bar](./ENGINEERING_SHIP_BAR.md)
 
 > Platform Constitution = how we build and what stays locked in code.  
 > Product Constitution = what we sell and how it must feel to the owner.
 
 ---
 
-## The Product
+## The Product (locked company decision)
 
-VIBETech is an AI Operating System for businesses.
+VIBETech’s **initial finished product** is not “an AI CRM” and not merely software that helps companies adopt AI.
 
-Unlike a CRM, chatbot, automation platform, or dashboard, VIBETech becomes the operating layer of a business.
+**Customers purchase:** managed **Revenue Follow-Through** for B2B service businesses — a managed operating function with a written service standard.
 
-It continuously understands what is happening inside the company, recommends what should happen next, coordinates AI employees and human teammates, asks for approval when required, performs approved work, remembers every outcome, and improves how the business operates over time.
+**What that means:** VIBETech takes responsibility for responding to opportunities, coordinating follow-ups, scheduling next steps, chasing proposals, updating systems, and handing won work to delivery. The customer manages decisions and relationships; VIBETech handles the repetitive operational work.
 
-The business owner should never feel like they are using software.
+| | Do not sell as the product | Do sell / do deliver |
+|---|---|---|
+| Offer | Seats, CRM modules, AI employees, tokens, automation packages | Managed Revenue Follow-Through (service standard + proven outcomes) |
+| Comparison | CRM or automation platform | Coordinator, ops hire, agency, or BPO |
+| Success | Features enabled / packages installed | Outcomes verified with proof |
+| Pricing unit | Software capabilities / package catalog | Managed service and completed work |
 
-They should feel like they hired an operating team.
+### Engine vs offer
+
+The long-term **AI Operating System** remains the **engine** (Builder, contracts, Work, Approvals, Knowledge, Events, integrations, prove, governance).
+
+The **sellable SKU** is one managed business function: Revenue Follow-Through.  
+Do **not** lead with “AI Business OS,” package catalogs, or AI-employee counts as the customer promise.
+
+Full roadmap and phased plans: [Full_Plan.md](./Full_Plan.md).
 
 ---
 
-## The Customer Promise
+## Initial customer profile (ICP)
 
-This is the only product experience we sell.
+### Include
+- B2B service company
+- Approximately 10–75 employees
+- Approximately $1M–$20M annual revenue
+- Meaningful inbound leads, referrals, or open proposals
+- Typical customer value above a few thousand dollars
+- Sales follow-through currently handled by an owner, salesperson, assistant, or operations coordinator
+- Work spread across email, calendars, CRM, spreadsheets, forms, phone, and memory
+- Loses money when leads go unanswered, proposals are not chased, or sales-to-delivery handoffs break
 
-Everything else is implementation detail.
+### Good initial examples
+Commercial contractors · MSPs and IT service · Staffing and recruiting · Business consultancies · Commercial insurance · Marketing and professional-service agencies · Property-management service companies
 
-The experience should always feel like this:
+### Initially exclude
+Very low-volume businesses · E-commerce · Will not connect systems · Highly regulated clinical or legal decisions · Completely autonomous outbound prospecting · Chatbot-only buyers · No identifiable repeated workflow
+
+---
+
+## Ownership boundary
+
+| VIBETech owns | Customer owns |
+|---|---|
+| Opportunity detection | Sales conversations |
+| Administrative qualification | Pricing decisions outside approved policy |
+| Initial acknowledgement | Relationship judgment |
+| Follow-up coordination | Contract negotiation |
+| Scheduling (administrative) | Final commitments |
+| CRM / source-system updates | Complex exceptions |
+| Proposal monitoring | Service delivery |
+| Post-sale handoff preparation | |
+| SLA monitoring, exception detection, operating reporting | |
+
+Do not begin platform work that expands beyond this boundary until the boundary is deliberately revised.
+
+---
+
+## Service standard (what the contract promises)
+
+Example responsibilities under Managed Revenue Follow-Through:
+
+Detect every inbound opportunity · Capture it in the existing system · Research and classify · Identify missing information · Prepare or send initial response · Assign human owner · Schedule next step · Prepare salesperson before a call · Record meeting outcomes · Draft and coordinate follow-up · Monitor outstanding proposals · Escalate stalled or high-value opportunities · Update CRM · Create post-sale handoff · Verify each expected action occurred
+
+Example promises:
+- Every eligible lead acknowledged within the contracted SLA during operating hours
+- Every lead assigned an owner
+- Every meeting followed by a recorded next step
+- Every outstanding proposal reviewed on schedule
+- Every won opportunity handed to delivery with required information
+- Every failure or ambiguous case surfaced to a person
+
+That is a **service**. The platform is how VIBETech delivers it.
+
+---
+
+## Product rule: connected is not proven
+
+Integrations and capabilities must never be treated as “working” because OAuth succeeded or a toggle is on.
+
+Every integration has at least four states:
+
+1. **Not connected**
+2. **Connected**
+3. **Tested**
+4. **Proven** in a real operating outcome (provider IDs / delivery confirmation required)
+
+Never fabricate metrics, connected capabilities, business facts, readiness, or completed outcomes. Evidence references, confidence, missing-evidence visibility, and human confirmation of discovered facts are mandatory.
+
+---
+
+## Customer promise (experience shape)
 
 ```
-Tell us about your business
+Observe the business from connected systems and evidence
         ↓
-Here is how VIBETech recommends running it
+Compile a versioned Operating Contract for Revenue Follow-Through
         ↓
-Approve
+Replay historically → run in shadow → prove one real opportunity
         ↓
-Your AI Operating System is live
+Go live on approved action classes
         ↓
-Talk to VIBETech whenever your business changes
+Supervise Decisions; review Outcomes; evolve Company Rules
+        ↓
+Talk to VIBETech to interrogate or change the operation
 ```
 
-The owner should never think about Builders, Architects, Mission Control, pipelines, runtimes, installs, stages, or AI infrastructure.
+The owner should never think about Builders, Architects, Mission Control, pipelines, runtimes, installs, stages, or AI infrastructure as products.
 
 ---
 
@@ -52,235 +132,161 @@ The owner should never think about Builders, Architects, Mission Control, pipeli
 
 These principles override implementation convenience.
 
-1. **The owner supervises.** They do not configure software.
-2. **AI employees operate. Humans approve. AI executes.**
-3. **Conversations replace configuration.** If a business owner wonders where to go, the answer should almost always be: Ask VIBETech.
-4. **Everything important is explainable.** No black boxes. No magic. Every recommendation should have evidence.
-5. **Everything important is approved.** AI never silently changes the business.
-6. **Business Memory is the source of truth.** Not prompts. Not temporary state. Not chat history. Memory.
-7. **One product.** Never multiple ways to accomplish the same business goal.
+1. **The owner supervises decisions and exceptions.** They do not configure an automation platform.
+2. **VIBETech operates the contracted function.** Humans approve when judgment is required; AI executes within earned autonomy.
+3. **Ask VIBETech is a command interface grounded in live operating context** — not an empty general-purpose chat product.
+4. **Everything important is explainable.** No black boxes. Evidence for every recommendation and outcome.
+5. **Everything consequential is approved until autonomy is earned** for that action class. Autonomy is never one global switch.
+6. **Business Memory / Company Rules are the source of truth.** Not prompts. Not temporary chat.
+7. **One product surface for the managed function.** Primary IA: Today · Decisions · Outcomes · Company Rules (see Full_Plan).
 8. **Simplicity beats cleverness.** If engineers understand it but owners don’t, the product failed.
+9. **Outcomes without proof are incomplete.** Never report completed work without delivery evidence.
 
 ---
 
-## The Five Second Test
+## The Five Second Test (Today / Home)
 
-Home must answer these questions immediately.
+Today must answer these questions immediately.
 
-1. Is my business okay?
-2. What needs me?
-3. What is VIBETech doing?
-4. What changed today?
-5. What should I ask?
+1. Is the operation healthy?
+2. What has VIBETech accomplished?
+3. What requires me (Decisions)?
+4. What outcome changed?
+5. Is anything broken?
 
-If Home cannot answer these within five seconds, it is too complicated.
+If Home answers with empty contact counts, pipeline zeroes, or AI-teammate theater, it has failed.
 
 ---
 
-## What Is Locked Forever
+## What Is Locked Forever (engine)
 
-The following architecture is constitutional.
+The following architecture is constitutional. Evolve it; do not replace it for UI convenience.
 
-It should evolve. It should never be replaced because someone found a “cleaner” idea.
-
-- BusinessGraph
-- BusinessSubject
-- Business relationships
+- BusinessGraph · BusinessSubject · Business relationships
 - Canonical runtime snapshots
 - Approval model (candidate → proposal → approval → work → memory)
-- Canonical Work
-- Canonical Requests
-- Business Memory
-- Knowledge system
-- AI Employee framework
-- Employee lifecycle
-- Employee capabilities
-- Employee validation
-- Builder Capability Registry
-- Industry Packages
-- Workspace isolation
-- Permissions
-- Portal isolation
-- Business Runtime
-- Business Intelligence
-- Canonical persistence
+- Canonical Work · Canonical Requests
+- Business Memory / Knowledge
+- Operating Contracts · Business OS specifications
+- Events · Outcomes · prove / capability status
+- Workspace isolation · Permissions · Portal isolation
+- Business Runtime · Business Intelligence · Canonical persistence
+- Durable jobs, retries, credential separation, audit events
 
 ### Rule
 
 Extend these. Never fork them. Never duplicate them for UI convenience.
 
----
-
-## AI Employees
-
-AI Employees are coworkers.
-
-Not configuration objects. Not automation rules. Not workflows.
-
-Every AI employee should expose only:
-
-- Responsibilities
-- Current work
-- What it is waiting for
-- Recent outcomes
-- Next planned work
-
-The owner should never see:
-
-- Prompt engineering
-- JSON
-- Capabilities
-- Execution graphs
-- Pipelines
-- Tool calls
-- Internal runtime details
+Internal employee archetypes may remain. Externally, sell the **responsibility and outcome**, not decorative AI-employee rosters.
 
 ---
 
-## Home
+## What must leave the customer promise (implement in later plans)
 
-Home exists for one reason: to supervise the business.
+Remove from primary IA and company promise (underlying records may remain as evidence):
 
-Not to browse software. Not to view analytics. Not to configure settings.
-
-Home should always feel like: “I opened the office.”  
-Not: “I logged into a CRM.”
+- CRM-first identity (People, Pipelines, Calendar, Inbox, Campaigns, Ads as top-level destinations)
+- Setup 0/9 / dashboard toggle and nine generic installation missions
+- Record-count KPI cards and empty-state theater
+- Blank Ask / New chat as the primary AI experience
+- AI-employee counts and personas without owned Operating Contracts and measured work
+- Customer-facing automation builders (if/then, canvases, prompt/model editors)
+- Broad package catalog as the lead offer
+- Unsupported “continuously learns” claims until governed correction → Company Rule loop is live
+- New vertical expansion until Revenue Follow-Through is repeatedly successful
+- Demos that depend on empty state or fake success
 
 ---
 
 ## Ask VIBETech
 
-Ask VIBETech is the primary interface to the operating system.
+Ask remains. It is how the customer interrogates and modifies the operation.
 
-Everything else is secondary.
-
-The owner should never wonder where to go. The answer should almost always be: Ask VIBETech.
+It is **not** the product. Prefer suggested operating questions and evidence-backed actions over an empty chat canvas.
 
 ---
 
-## Architect
+## Architect / Builder
 
-Architect is not a product. Architect is not a separate application.
+Architect is not a product. It is VIBETech planning with the owner (discovery → recommendation → approval → install).
 
-Architect is simply VIBETech planning with the owner.
+**Change the output framing:** from “your customized workspace” to “the Operating Contract VIBETech will execute.”
 
-- Before launch: Architect discovers the business.
-- After launch: Architect proposes improvements.
-
-The owner should never think: “I’m opening Architect.”  
-They should think: “I’m talking to VIBETech.”
-
-### One Architect lifecycle
-
-```
-Conversation
-    ↓
-Discovery
-    ↓
-Recommendation
-    ↓
-Approval
-    ↓
-Installation
-    ↓
-Live
-    ↓
-Continuous Improvement
-```
-
-One Builder façade. One session model. One install / resume / retry / recovery story.
-
-Persisted session stages map to the platform constitution lifecycle; intelligence pipeline stages are internal only — never owner-facing, never session state.
+Keep: conversational discovery, website research, evidence extraction, gap detection, dry runs, approval, versioned changes.
 
 ---
 
-## What Must Disappear
+## What Must Disappear (UX debt)
 
 - **Multiple Homes** — One Home. One URL. One experience.
-- **Mission Control** — Remains an internal compose layer only. Owners never see that name.
-- **Dashboard mentality** — Equal-sized KPI cards, analytics-first layouts, configuration-first UX. Replace with editorial operating supervision.
+- **Mission Control** — Internal compose layer only. Owners never see that name.
+- **Dashboard mentality** — Equal-sized KPI cards, analytics-first layouts, configuration-first UX.
 - **Parallel Builder flows** — One façade. One lifecycle. One install path.
-- **Multiple install systems** — One install. One resume. One retry. One recovery story.
-- **Demo leakage** — Demo mode is quarantined. Never visible in production.
+- **Demo leakage** — Demo mode quarantined. Never visible in production.
 - **Engineering terminology** in owner UI: Mission Control, Operating Pulse, Digital Workforce, Builder, Launch, Pipeline, DNA, Assembly, Plan Mode.
-- **Configuration-first UI** — Owners should not build software. Owners should run businesses.
+- **Configuration-first UI** — Owners should not build software. Owners should supervise an operating function.
 
 ---
 
-## Things We Never Build
+## Things We Never Build (customer-facing)
 
-- Another CRM
-- Workflow builders
-- If/then editors
-- Automation canvases
-- Prompt editors
-- Agent playgrounds
-- JSON editors
+- Another CRM as the primary product
+- Workflow builders · If/then editors · Automation canvases
+- Prompt editors · Agent playgrounds · JSON editors
 - Business logic duplicated in UI
-- Industry-specific backend forks
-- Customer-specific backend forks
+- Industry-specific or customer-specific backend forks
 - Internal engineering tools exposed as owner features
 
 ---
 
-## Current Product Architecture
+## Current Product Architecture (engine path)
 
 ```
 Business Owner
     ↓
-Home
+Today (operating brief)
     ↓
-Pre-install → Business Onboarding
+Observe → Operating Contract → Replay → Shadow → Prove → Go live
     ↓
-Architect Conversation (as VIBETech)
+Decisions · Outcomes · Company Rules
     ↓
-AiBuilderService
+Ask VIBETech (command / change)
     ↓
-BusinessOSInstaller
+Canonical Runtime (Work · Approvals · Memory · Integrations · Prove)
     ↓
-Canonical Runtime
-    ↓
-Operating Home
-    ↓
-Continuous Ask VIBETech
-    ↓
-Recommendations → Approvals → Work → Business Memory
-    ↓
-Improved Business
+Improved operation
 ```
-
-This should feel like one seamless experience. Not multiple products.
 
 ---
 
 ## Execution Roadmap
 
-| Phase | Intent |
+Authoritative phased plans and checkboxes: [Full_Plan.md](./Full_Plan.md).
+
+| Batch | Focus |
 |------|--------|
-| **1** | One Architect lifecycle |
-| **2** | Beautiful product — hired an operating partner, not software |
-| **3** | Conversation-first business management; configuration disappears |
-| **4** | Living AI Employees — real teammates, not static cards |
-| **5** | Business Memory — explainable, searchable, living |
-| **6** | Operating Timeline — business story, not activity logs |
-| **7** | Business Brain — answers from memory, not guesses |
-| **8** | Continuous Recommendations — hiring, automation, optimization, expansion |
+| **A** | Positioning & freeze · RFT contract runtime · Today / Decisions / Outcomes / Company Rules |
+| **B** | Outcome launch · Min integrations · Historical observation · Replay / shadow · Operator console |
+| **C** | Ask as command · Governed learning · Earned autonomy · Delivery → blueprint moat |
 
-**Deferred:** Marketplace, Integrations, Learning, Multi-industry scale-out, Enterprise, Platform APIs.
+**Deferred while RFT is the beachhead:** Marketplace, broad vertical packs, CRM feature parity, campaign/ad expansion, visual automation tooling, cosmetic empty-state work.
 
-The operating experience comes first.
+Development freeze vs continue: [DEVELOPMENT_FREEZE.md](./DEVELOPMENT_FREEZE.md).
 
 ---
 
 ## Engineering Rules
 
-1. Never redesign stable architecture because it looks cleaner. Architecture changes require correctness, scalability, or product coherence. Code cleanliness alone is never sufficient.
+1. Never redesign stable architecture because it looks cleaner. Architecture changes require correctness, scalability, or product coherence.
 2. Never expose implementation details.
 3. Never create parallel systems.
 4. Never fork canonical models.
 5. Demo stays isolated.
 6. Product language always wins over engineering language.
 7. One business concept. One implementation. One customer experience.
+8. Connected is never proven. Outcomes without proof are incomplete.
+9. Do not expand beyond the Revenue Follow-Through ownership boundary without an explicit constitution revision.
+10. Ship bar: reuse existing modules and UI (`Button`, Tailwind theme tokens); extend locked architecture; test before DONE — see [ENGINEERING_SHIP_BAR.md](./ENGINEERING_SHIP_BAR.md).
 
 ---
 
@@ -288,6 +294,6 @@ The operating experience comes first.
 
 Every decision should be evaluated with one question:
 
-> Does this make VIBETech feel more like an AI Operating System that runs a business alongside its owner, or does it expose the internal machinery behind it?
+> Does this help VIBETech **own and prove** Revenue Follow-Through for a B2B service customer — or does it sell software modules / expose internal machinery?
 
-If it exposes the machinery, it is the wrong direction.
+If it exposes the machinery or expands the package catalog instead of deepening the managed function, it is the wrong direction.

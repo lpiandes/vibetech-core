@@ -37,6 +37,7 @@ export default function GlobalAskVibeTechEntry({
       href={href}
       aria-label="Ask VIBETech"
       aria-current={active ? "page" : undefined}
+      data-tour-nav="ask"
       onClick={(event) => {
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
         if (active) {

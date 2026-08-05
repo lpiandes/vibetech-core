@@ -71,7 +71,7 @@ test("Renderer: team page uses executive shell sections and metrics", () => {
   assert.ok(html.includes("Staff") || html.includes("workforce"));
   assert.ok(html.includes("People"));
   assert.ok(html.includes("Pending invites") || html.includes("Pending"));
-  assert.ok(html.includes("AI teammates"));
+  assert.ok(html.includes("Operating specialties"));
   assert.ok(html.includes("Working") || html.includes("Ready") || html.includes("Active"));
 });
 

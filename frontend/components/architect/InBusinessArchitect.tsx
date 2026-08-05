@@ -44,6 +44,8 @@ const CONTEXT_KEYS = [
   "integrationId",
   "proposalId",
   "employeeId",
+  "cardId",
+  "outcomeId",
 ] as const;
 
 /**
@@ -273,24 +275,13 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
           return;
         }
 
-        // Installed: leaving and returning always starts a fresh chat.
+        // Installed: land on operating commands — do not mint an empty New-chat session.
         if (hasInstalledOs) {
-          const data = await startContinuousSession({
-            businessId,
-            prompt: "",
-            context: {},
-          });
-          if (!data.ok) {
-            throw Object.assign(new Error(data.error ?? data.reason ?? "Could not open Ask VIBETech."), {
-              productError: data.productError ?? presentProductError(data.error ?? data.reason),
-            });
-          }
-          const nextId = data.session?.sessionId as string | undefined;
-          if (!nextId) throw new Error("No Ask VIBETech session returned.");
           if (cancelled) return;
-          setSessionId(nextId);
-          await refreshHistory(nextId);
-          router.replace(`/b/${encodeURIComponent(businessId)}/architect?sessionId=${encodeURIComponent(nextId)}`);
+          setSessionId(null);
+          setSessionContinuous(true);
+          await refreshHistory(null);
+          router.replace(`/b/${encodeURIComponent(businessId)}/architect`);
           return;
         }
 
@@ -341,13 +332,19 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
     setHistoryBusy(true);
     setError(null);
     try {
-      const data = hasInstalledOs
-        ? await startContinuousSession({ businessId, prompt: "", context: {} })
-        : await startDiscoverySession({
-          businessId,
-          prompt: "",
-          businessName: scope.businessName,
-        });
+      if (hasInstalledOs) {
+        // Command home — not a blank conversation.
+        setSessionId(null);
+        setSessionContinuous(true);
+        await refreshHistory(null);
+        router.replace(`/b/${encodeURIComponent(businessId)}/architect`);
+        return;
+      }
+      const data = await startDiscoverySession({
+        businessId,
+        prompt: "",
+        businessName: scope.businessName,
+      });
       if (!data.ok) {
         throw Object.assign(new Error(data.error ?? data.reason ?? "Could not start a new chat."), {
           productError: data.productError ?? presentProductError(data.error ?? data.reason),
@@ -356,7 +353,7 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
       const nextId = data.session?.sessionId as string | undefined;
       if (!nextId) throw new Error("No Ask VIBETech session returned.");
       setSessionId(nextId);
-      setSessionContinuous(hasInstalledOs);
+      setSessionContinuous(false);
       await refreshHistory(nextId);
       router.replace(`/b/${encodeURIComponent(businessId)}/architect?sessionId=${encodeURIComponent(nextId)}`);
     } catch (err) {
@@ -504,20 +501,72 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
     return (
       <ArchitectShell maxWidth={720} fullBleed={false}>
         <ArchitectPanel style={{ display: "grid", gap: 18, padding: "32px 28px" }}>
-          <div>
-            <h1 style={{
-              margin: "0 0 8px",
-              fontFamily: architect.display,
-              fontSize: "clamp(1.6rem, 3vw, 2.1rem)",
-              letterSpacing: "-0.02em",
-            }}>
-              Set up your business
-            </h1>
-            <p style={{ margin: 0, color: architect.inkMuted, lineHeight: 1.55 }}>
-              Answer a few questions so VIBETech can recommend how to run this business. Nothing goes live until you approve.
-            </p>
-          </div>
-          <AskVibeTechPrompt businessId={businessId} large showSuggestions={false} />
+          {hasInstalledOs ? (
+            <>
+              <div>
+                <h1 style={{
+                  margin: "0 0 8px",
+                  fontFamily: architect.display,
+                  fontSize: "clamp(1.6rem, 3vw, 2.1rem)",
+                  letterSpacing: "-0.02em",
+                }}>
+                  Ask — command your operation
+                </h1>
+                <p style={{ margin: 0, color: architect.inkMuted, lineHeight: 1.55 }}>
+                  Ask about escalations, stalled proposals, SLAs, and coverage. Answers cite stored evidence — nothing is invented, and contract changes need your confirm.
+                </p>
+              </div>
+              <AskVibeTechPrompt
+                businessId={businessId}
+                large
+                showSuggestions
+                placeholder="Ask an operating question…"
+                helperText="Pick a suggested command or type your own. Blank New chat is not the product."
+              />
+              {history.length ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: architect.inkMuted }}>
+                    Recent conversations
+                  </div>
+                  {history.slice(0, 5).map((item) => (
+                    <button
+                      key={item.sessionId}
+                      type="button"
+                      onClick={() => openPastChat(item.sessionId)}
+                      style={{
+                        textAlign: "left",
+                        border: `1px solid ${architect.border}`,
+                        background: architect.panelSolid,
+                        borderRadius: 12,
+                        padding: "10px 12px",
+                        cursor: "pointer",
+                        color: architect.ink,
+                      }}
+                    >
+                      {item.title || "Conversation"}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <div>
+                <h1 style={{
+                  margin: "0 0 8px",
+                  fontFamily: architect.display,
+                  fontSize: "clamp(1.6rem, 3vw, 2.1rem)",
+                  letterSpacing: "-0.02em",
+                }}>
+                  Set up your business
+                </h1>
+                <p style={{ margin: 0, color: architect.inkMuted, lineHeight: 1.55 }}>
+                  Answer a few questions so VIBETech can recommend how to run this business. Nothing goes live until you approve.
+                </p>
+              </div>
+              <AskVibeTechPrompt businessId={businessId} large showSuggestions={false} />
+            </>
+          )}
         </ArchitectPanel>
       </ArchitectShell>
     );

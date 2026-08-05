@@ -1,7 +1,7 @@
 /**
- * Canonical primary navigation for `/b/[businessId]/**`.
- * Secondary destinations (Mission Control, For You, Performance, Engagement)
- * map into Home / Needs Attention / People without competing in the main nav.
+ * Canonical navigation for `/b/[businessId]/**`.
+ * Primary IA (Plan 3): Today · Decisions · Outcomes · Company Rules.
+ * CRM modules live under Records; connections/admin under System.
  */
 
 import { filterCanonicalNavForPurchasedPackages } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
@@ -11,62 +11,82 @@ const resolveRoleAccess = resolveRoleAccessRaw as (input: Record<string, unknown
   deniedModuleIds: string[];
 };
 
+export type NavGroup = "primary" | "records" | "system";
+
 export type CanonicalNavItem = {
   id: string;
   label: string;
   href: string;
   iconName: string;
   permission: string | null;
+  group: NavGroup;
   /** Badge source key — shell may overlay live counts */
   badgeKey?: "needsAttention" | null;
 };
 
-const CANONICAL_ORDER: Array<{
+type NavDef = {
   id: string;
   label: string;
   path: string;
   iconName: string;
   permission: string | null;
+  group: NavGroup;
   badgeKey?: "needsAttention";
-}> = [
-  { id: "home", label: "Home", path: "home", iconName: "home", permission: null },
+};
+
+const CANONICAL_ORDER: NavDef[] = [
+  // Primary — managed operation
+  { id: "home", label: "Today", path: "home", iconName: "home", permission: null, group: "primary" },
   {
     id: "needs_attention",
-    label: "Needs Attention",
+    label: "Decisions",
     path: "intelligence",
     iconName: "alert-circle",
     permission: null,
+    group: "primary",
     badgeKey: "needsAttention",
   },
-  { id: "calendar", label: "Calendar", path: "calendar", iconName: "calendar", permission: "people.view" },
-  { id: "people", label: "People", path: "people", iconName: "users", permission: "people.view" },
-  { id: "pipelines", label: "Pipelines", path: "pipelines", iconName: "kanban", permission: "people.view" },
-  { id: "work", label: "Work", path: "work", iconName: "inbox", permission: "work.view" },
-  { id: "inbox", label: "Inbox", path: "inbox", iconName: "mail", permission: "work.view" },
-  { id: "campaigns", label: "Campaigns", path: "campaigns", iconName: "mail", permission: "work.view" },
-  { id: "ads", label: "Ads", path: "ads", iconName: "trending-up", permission: "performance.view" },
+  {
+    id: "outcomes",
+    label: "Outcomes",
+    path: "outcomes",
+    iconName: "check-circle",
+    permission: "work.view",
+    group: "primary",
+  },
+  {
+    id: "knowledge",
+    label: "Company Rules",
+    path: "knowledge",
+    iconName: "book",
+    permission: null,
+    group: "primary",
+  },
+  // Records — evidence / systems of record (secondary)
+  { id: "people", label: "People", path: "people", iconName: "users", permission: "people.view", group: "records" },
+  { id: "pipelines", label: "Pipelines", path: "pipelines", iconName: "kanban", permission: "people.view", group: "records" },
+  { id: "calendar", label: "Calendar", path: "calendar", iconName: "calendar", permission: "people.view", group: "records" },
+  { id: "work", label: "Work", path: "work", iconName: "inbox", permission: "work.view", group: "records" },
+  { id: "inbox", label: "Inbox", path: "inbox", iconName: "mail", permission: "work.view", group: "records" },
+  { id: "campaigns", label: "Campaigns", path: "campaigns", iconName: "mail", permission: "work.view", group: "records" },
+  { id: "ads", label: "Ads", path: "ads", iconName: "trending-up", permission: "performance.view", group: "records" },
   {
     id: "subjects",
     label: "Properties",
     path: "properties",
     iconName: "home",
     permission: "people.view",
+    group: "records",
   },
-  { id: "knowledge", label: "Knowledge", path: "knowledge", iconName: "book", permission: null },
-  { id: "team", label: "Team", path: "team", iconName: "users", permission: "team.manage" },
-  {
-    id: "automations",
-    label: "Automations",
-    path: "automations",
-    iconName: "zap",
-    permission: "team.manage",
-  },
+  // System — Connections + Settings only for beachhead (no Automations builder as product)
+  { id: "team", label: "Team", path: "team", iconName: "users", permission: "team.manage", group: "system" },
   {
     id: "integrations",
-    label: "Integrations",
+    label: "Connections",
     path: "integrations",
     iconName: "link",
     permission: "integrations.manage",
+    group: "system",
   },
   {
     id: "settings",
@@ -74,6 +94,7 @@ const CANONICAL_ORDER: Array<{
     path: "settings",
     iconName: "settings",
     permission: "settings.manage",
+    group: "system",
   },
 ];
 
@@ -97,8 +118,8 @@ export type SpecialtyNavSource = {
 };
 
 /**
- * Build primary nav for the business shell. Labels may be terminology-adjusted by caller.
- * Specialty modules (owner_mod_* / specialty_ai_*) append after canonical items.
+ * Build shell nav. Labels may be terminology-adjusted by caller.
+ * Specialty modules append in the System group after Team.
  */
 export function getCanonicalBusinessNav(
   businessId: string,
@@ -106,22 +127,9 @@ export function getCanonicalBusinessNav(
   options?: {
     role?: string;
     subjectLabel?: string;
-    /**
-     * The installed Business OS is the source of truth for vertical-only
-     * surfaces.  In particular, a non-property business must never receive
-     * the property portfolio simply because it uses BusinessSubject records.
-     */
     installedModuleIds?: string[] | null;
     specialtyModules?: SpecialtyNavSource[] | null;
-    /** Commercial SKUs — thin packages hide Calendar/Team/Automations etc. */
     purchasedPackages?: string[] | null;
-    /**
-     * Owner-editable per-role module deny list — `installation.configuration.roles`
-     * entries with `{ membershipRole, deniedModules }` (see BusinessOSRoleAccessConfig.js
-     * / RoleAccessPanel). Applied on top of permission-based visibility so a
-     * denied module never appears in the primary nav for that role, even if
-     * the role otherwise has the underlying permission.
-     */
     roleDefinitions?: Array<Record<string, unknown>> | null;
   },
 ): CanonicalNavItem[] {
@@ -129,13 +137,7 @@ export function getCanonicalBusinessNav(
   const installedModuleIds = Array.isArray(options?.installedModuleIds)
     ? new Set(options!.installedModuleIds.map(String))
     : null;
-  // Legacy property portfolios are opt-in only. A missing or incomplete
-  // installation must never make a new dental or sports workspace look like
-  // a property-management product.
   const hasPropertyPortfolio = installedModuleIds?.has("properties") === true;
-  // Owner and platform admin always see everything — deny lists are not
-  // editable for those roles (see EDITABLE_MEMBERSHIP_ROLES) and must never
-  // lock out the person who configures access in the first place.
   const isUnrestrictedRole = options?.role === "OWNER" || options?.role === "PLATFORM_ADMIN";
   const deniedModuleIds = isUnrestrictedRole
     ? new Set<string>()
@@ -164,6 +166,7 @@ export function getCanonicalBusinessNav(
       href: `${base}/${item.path}`,
       iconName: item.iconName,
       permission: item.permission,
+      group: item.group,
       badgeKey: item.badgeKey ?? null,
     }),
   );
@@ -198,7 +201,6 @@ export function getCanonicalBusinessNav(
       const normalizedHref = href.startsWith("/b/")
         ? href
         : `${base}/specialty/${encodeURIComponent(surfaceId)}`;
-      // Prefer employee specialty path for AI teammates so nav highlight matches Team redirects.
       const finalHref = (module.surfaceKind === "ai_teammate" || moduleId.startsWith("specialty_ai_"))
         ? `${base}/specialty/${encodeURIComponent(surfaceId)}`
         : normalizedHref;
@@ -208,11 +210,11 @@ export function getCanonicalBusinessNav(
         href: finalHref,
         iconName: String(module.iconName || (module.surfaceKind === "ai_teammate" ? "users" : "folder")),
         permission: null as string | null,
+        group: "system" as NavGroup,
         badgeKey: null as "needsAttention" | null,
       };
     });
 
-  // Keep unique by href; specialty after Team, before Integrations when possible.
   const seen = new Set(canonical.map((item) => item.href));
   const uniqueSpecialty = specialty.filter((item) => {
     if (seen.has(item.href)) return false;
@@ -231,14 +233,28 @@ export function getCanonicalBusinessNav(
   return [...canonical, ...uniqueSpecialty];
 }
 
+/** Group nav items for sectioned shell rendering. */
+export function groupCanonicalNav(items: CanonicalNavItem[]): {
+  primary: CanonicalNavItem[];
+  records: CanonicalNavItem[];
+  system: CanonicalNavItem[];
+} {
+  return {
+    primary: items.filter((item) => item.group === "primary"),
+    records: items.filter((item) => item.group === "records"),
+    system: items.filter((item) => item.group === "system" || !item.group),
+  };
+}
+
 /** Paths that should redirect into canonical destinations (relative to business). */
 export const CANONICAL_REDIRECTS: Record<string, string> = {
   "mission-control": "home",
   "for-you": "intelligence",
   attention: "intelligence",
+  decisions: "intelligence",
+  "company-rules": "knowledge",
   engagement: "people",
   performance: "home",
   analytics: "home",
   "digital-workforce": "team",
-  // Keep legacy automations→integrations redirect out — Automations is first-class now.
 };

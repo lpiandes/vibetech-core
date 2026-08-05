@@ -6,9 +6,11 @@ import {
   AlertCircle,
   BookOpen,
   Calendar,
+  CheckCircle2,
   Home,
   Kanban,
   Link2,
+  Mail,
   Settings,
   Users,
   ClipboardList,
@@ -18,7 +20,11 @@ import {
 
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { useWorkspaceNavigation } from "@/components/workspace/WorkspaceNavigationContext";
-import { getCanonicalBusinessNav } from "@/components/workspace/canonicalBusinessNavigation";
+import {
+  getCanonicalBusinessNav,
+  groupCanonicalNav,
+  type CanonicalNavItem,
+} from "@/components/workspace/canonicalBusinessNavigation";
 import { findActiveNavHref } from "@/components/shell/navActivePath";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 
@@ -36,6 +42,8 @@ function iconForName(iconName: string): ReactNode {
       return <Settings size={16} aria-hidden />;
     case "alert-circle":
       return <AlertCircle size={16} aria-hidden />;
+    case "check-circle":
+      return <CheckCircle2 size={16} aria-hidden />;
     case "folder":
       return <ClipboardList size={16} aria-hidden />;
     case "calendar":
@@ -46,6 +54,8 @@ function iconForName(iconName: string): ReactNode {
       return <Zap size={16} aria-hidden />;
     case "trending-up":
       return <TrendingUp size={16} aria-hidden />;
+    case "mail":
+      return <Mail size={16} aria-hidden />;
     default:
       return <Home size={16} aria-hidden />;
   }
@@ -62,6 +72,104 @@ function subjectLabelFromScope(scope: ReturnType<typeof useBusinessScope>): stri
     ?? "Business record";
   const label = String(subject).replace(/_/g, " ");
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function NavSection({
+  title,
+  items,
+  activeHref,
+  needsAttentionCount,
+  onNavClick,
+}: {
+  title?: string;
+  items: CanonicalNavItem[];
+  activeHref: string | null;
+  needsAttentionCount: number;
+  onNavClick: (href: string) => (event: MouseEvent<HTMLAnchorElement>) => void;
+}) {
+  if (!items.length) return null;
+  return (
+    <div style={{ display: "grid", gap: 2 }}>
+      {title ? (
+        <div
+          style={{
+            padding: `${spacing.sm} ${spacing.md} 4px`,
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            color: cockpitColors.sidebarTextMuted,
+            opacity: 0.85,
+          }}
+        >
+          {title}
+        </div>
+      ) : null}
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 2 }}>
+        {items.map((item) => {
+          const active = activeHref === item.href;
+          const badge =
+            item.badgeKey === "needsAttention" && needsAttentionCount > 0 ? needsAttentionCount : null;
+          return (
+            <li key={item.id}>
+              <Link
+                href={item.href}
+                onClick={onNavClick(item.href)}
+                data-tour-nav={item.id}
+                aria-current={active ? "page" : undefined}
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: spacing.sm,
+                  padding: `${spacing.sm} ${spacing.md}`,
+                  borderRadius: radius.medium,
+                  textDecoration: "none",
+                  color: active ? "#fff" : cockpitColors.sidebarTextMuted,
+                  backgroundColor: active ? "rgba(255,255,255,0.14)" : "transparent",
+                  boxShadow: active ? `inset 3px 0 0 ${cockpitColors.accent}` : "none",
+                  fontSize: typography.body.fontSize,
+                  fontWeight: active ? 650 : 500,
+                }}
+              >
+                <span
+                  style={{
+                    flexShrink: 0,
+                    display: "flex",
+                    color: active ? cockpitColors.accent : "inherit",
+                    opacity: active ? 1 : 0.75,
+                  }}
+                >
+                  {iconForName(item.iconName)}
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>{item.label}</span>
+                {badge != null ? (
+                  <span
+                    aria-label={`${badge} decisions waiting`}
+                    style={{
+                      minWidth: 20,
+                      height: 20,
+                      borderRadius: radius.pill,
+                      backgroundColor: cockpitColors.warning,
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "0 6px",
+                    }}
+                  >
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                ) : null}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 export default function PrimaryNavigation({
@@ -90,6 +198,7 @@ export default function PrimaryNavigation({
     purchasedPackages: scope.purchasedPackages ?? [],
     roleDefinitions,
   });
+  const grouped = groupCanonicalNav(items);
   const supportAccess = scope.supportAccess;
   const activeHref = findActiveNavHref(
     displayPath,
@@ -135,68 +244,28 @@ export default function PrimaryNavigation({
         ) : null}
       </div>
 
-      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 2, alignContent: "start", flex: 1, minHeight: 0 }}>
-        {items.map((item) => {
-          const active = activeHref === item.href;
-          const badge =
-            item.badgeKey === "needsAttention" && needsAttentionCount > 0 ? needsAttentionCount : null;
-          return (
-            <li key={item.id}>
-              <Link
-                href={item.href}
-                onClick={onNavClick(item.href)}
-                aria-current={active ? "page" : undefined}
-                style={{
-                  position: "relative",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: spacing.sm,
-                  padding: `${spacing.sm} ${spacing.md}`,
-                  borderRadius: radius.medium,
-                  textDecoration: "none",
-                  color: active ? "#fff" : cockpitColors.sidebarTextMuted,
-                  backgroundColor: active ? "rgba(255,255,255,0.14)" : "transparent",
-                  boxShadow: active ? `inset 3px 0 0 ${cockpitColors.accent}` : "none",
-                  fontSize: typography.body.fontSize,
-                  fontWeight: active ? 650 : 500,
-                }}
-              >
-                <span
-                  style={{
-                    flexShrink: 0,
-                    display: "flex",
-                    color: active ? cockpitColors.accent : "inherit",
-                    opacity: active ? 1 : 0.75,
-                  }}
-                >
-                  {iconForName(item.iconName)}
-                </span>
-                <span style={{ flex: 1, minWidth: 0 }}>{item.label}</span>
-                {badge != null ? (
-                  <span
-                    aria-label={`${badge} need attention`}
-                    style={{
-                      minWidth: 20,
-                      height: 20,
-                      borderRadius: radius.pill,
-                      backgroundColor: cockpitColors.warning,
-                      color: "#fff",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "0 6px",
-                    }}
-                  >
-                    {badge > 99 ? "99+" : badge}
-                  </span>
-                ) : null}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      <div style={{ display: "grid", gap: spacing.md, alignContent: "start", flex: 1, minHeight: 0, overflow: "auto" }}>
+        <NavSection
+          items={grouped.primary}
+          activeHref={activeHref}
+          needsAttentionCount={needsAttentionCount}
+          onNavClick={onNavClick}
+        />
+        <NavSection
+          title="Records"
+          items={grouped.records}
+          activeHref={activeHref}
+          needsAttentionCount={needsAttentionCount}
+          onNavClick={onNavClick}
+        />
+        <NavSection
+          title="System"
+          items={grouped.system}
+          activeHref={activeHref}
+          needsAttentionCount={needsAttentionCount}
+          onNavClick={onNavClick}
+        />
+      </div>
     </nav>
   );
 }

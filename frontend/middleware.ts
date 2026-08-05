@@ -11,11 +11,38 @@ import {
 
 const { auth } = NextAuth(authConfig);
 
+const MARKETING_CORS_ORIGINS = new Set([
+  "https://vtechdevelopment.com",
+  "https://www.vtechdevelopment.com",
+]);
+
+function withMarketingCors(request: Request, response: NextResponse) {
+  const origin = String(request.headers.get("origin") ?? "");
+  if (MARKETING_CORS_ORIGINS.has(origin)) {
+    response.headers.set("Access-Control-Allow-Origin", origin);
+    response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    response.headers.set("Access-Control-Allow-Headers", "Content-Type");
+    response.headers.set("Vary", "Origin");
+  }
+  return response;
+}
+
 export default auth((request) => {
   const mwStart = Date.now();
   const { pathname, search } = request.nextUrl;
   const host = String(request.headers.get("host") ?? "").toLowerCase();
   const isSocialHost = host.startsWith("social.") || host.startsWith("social-checker.");
+
+  // Preflight for public marketing APIs (browser CORS from Hostinger site).
+  if (
+    request.method === "OPTIONS"
+    && (pathname === "/api/marketing/consultant" || pathname === "/api/marketing/meeting-request")
+  ) {
+    return withMarketingCors(
+      request,
+      new NextResponse(null, { status: 204 }),
+    );
+  }
 
   // social.vtechdevelopment.com → public Social Checker surface
   if (isSocialHost && (pathname === "/" || pathname === "")) {
@@ -40,6 +67,18 @@ export default auth((request) => {
     url.pathname = `/b/${forYou[1]}/intelligence`;
     return NextResponse.redirect(url);
   }
+  const decisions = pathname.match(/^\/b\/([^/]+)\/decisions\/?$/);
+  if (decisions) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/b/${decisions[1]}/intelligence`;
+    return NextResponse.redirect(url);
+  }
+  const companyRules = pathname.match(/^\/b\/([^/]+)\/company-rules\/?$/);
+  if (companyRules) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/b/${companyRules[1]}/knowledge`;
+    return NextResponse.redirect(url);
+  }
 
   if (!isPublicPath(pathname)) {
     if (pathname.startsWith("/api/dev/") && process.env.NODE_ENV === "production") {
@@ -51,9 +90,12 @@ export default auth((request) => {
 
     if (!isLoggedIn) {
       if (isApiPath(pathname)) {
-        return NextResponse.json(
-          { error: "Sign in required.", code: "UNAUTHENTICATED" },
-          { status: 401 },
+        return withMarketingCors(
+          request,
+          NextResponse.json(
+            { error: "Sign in required.", code: "UNAUTHENTICATED" },
+            { status: 401 },
+          ),
         );
       }
       const loginUrl = request.nextUrl.clone();

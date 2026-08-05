@@ -194,3 +194,31 @@ test("not-configured provider fails fast without listing/fetching", async () => 
   assert.equal(result.reason, "gmail_not_connected");
   assert.equal(provider.listInboxCalls, 0);
 });
+
+test("onNewInbound callback fires for newly synced messages", async () => {
+  const platformStore = makeFakePlatformStore();
+  const installation = baseInstallation();
+  const provider = makeFakeProvider({
+    messagesByPage: [["m1"]],
+    messagesById: {
+      m1: fixtureMessage({ id: "m1", threadId: "t1", email: "lead@example.com", name: "Lead" }),
+    },
+  });
+  const seen = [];
+  const service = new GmailInboundSyncService();
+  const result = await service.sync({
+    businessId: "biz_1",
+    platformStore,
+    installation,
+    provider,
+    onNewInbound: async (msg) => {
+      seen.push(msg);
+      return true;
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].gmailMessageId, "m1");
+  assert.equal(result.inboundEvents?.length, 1);
+  assert.equal(result.inboundEvents[0].ok, true);
+});

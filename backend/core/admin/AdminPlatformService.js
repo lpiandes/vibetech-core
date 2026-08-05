@@ -7,6 +7,30 @@ import { listDashboardComponentTypes, BUSINESS_OS_DASHBOARD_COMPONENTS } from ".
 import { getDefaultCapabilityPackageRegistry } from "../ai-builder/capability-packages/CapabilityPackageRegistry.js";
 import { buildOperatorActions } from "./buildOperatorActions.js";
 import { notifyPlatformOperators } from "./notifyPlatformOperators.js";
+import { buildRftOperatorQueue, composeOperatorCaseTrace } from "./buildRftOperatorQueue.js";
+import { composePilotScorecard } from "./composePilotScorecard.js";
+import {
+  closeOperatorIntervention,
+  persistOperatorInterventions,
+  readOperatorInterventions,
+  summarizeRootCauseRoadmap,
+} from "./operatorInterventions.js";
+import { presentRootCauseOptions } from "./operatorRootCause.js";
+import { progressRftOpportunity } from "../ai-builder/operating-contract/rft/rftOpportunityRuntime.js";
+import {
+  refreshGovernedLearning,
+  persistGovernedLearning,
+  readGovernedLearning,
+} from "../company-rules/governedLearning.js";
+import {
+  extractMoatCandidates,
+  upsertCandidates,
+  promoteCandidateToBlueprint,
+  rejectCandidate,
+  refuseRawPromotion,
+  readDeliveryMoatCatalog,
+  assertScrubbed,
+} from "../company-rules/deliveryMoat.js";
 
 function fail(message) {
   throw new Error(`AdminPlatformService: ${message}`);
@@ -89,21 +113,31 @@ export class AdminPlatformService {
         })),
     });
 
+    const rftOperatorQueue = await buildRftOperatorQueue({
+      businesses,
+      getInstallation: (businessId) =>
+        safeGet(this.platformStore, "getBusinessOSInstallation", businessId),
+      nowISO: this.nowISO(),
+    });
+
+    const allOperatorActions = [...rftOperatorQueue, ...operatorActions];
+
     // Fire-and-forget email/Slack notify when configured (deduped; never blocks dashboard).
-    void notifyPlatformOperators({ actions: operatorActions, force: false }).catch(() => {});
+    void notifyPlatformOperators({ actions: allOperatorActions, force: false }).catch(() => {});
 
     return deepFreeze({
       ok: true,
       metrics: {
         totalBusinesses: businesses.length,
         activeBusinesses: businesses.filter((entry) => !entry.archivedAt && entry.status !== "archived").length,
-        needingAttention: Math.max(needsAttention, operatorActions.length),
+        needingAttention: Math.max(needsAttention, allOperatorActions.length),
         // Totals — never the length of a "recent" slice (that looked like hardcoded 8s).
         architectSessions: sessions.length,
         installations: installations.length,
         failedOrPartialInstalls: failedInstalls,
         activeSupportSessions: supportActive.length,
-        operatorActions: operatorActions.length,
+        operatorActions: allOperatorActions.length,
+        rftOperatorCases: rftOperatorQueue.length,
         // Keep legacy keys for older UI bindings.
         recentArchitectSessions: sessions.length,
         recentInstallations: installations.length,
@@ -117,9 +151,10 @@ export class AdminPlatformService {
         failedInstalls,
         needsAttention,
         supportActive,
-        operatorActions,
+        operatorActions: allOperatorActions,
       }),
-      operatorActions,
+      operatorActions: allOperatorActions,
+      rftOperatorQueue,
       recentAudits: audits.slice(0, 6).map(summarizeAudit),
       capabilityGaps: collectGaps(sessions),
       businesses: businesses
@@ -133,6 +168,310 @@ export class AdminPlatformService {
           href: `/admin/businesses/${encodeURIComponent(business.id)}`,
         })),
       integrationHealth: { status: "projected", note: "Per-business integration health appears on business detail." },
+    });
+  }
+
+  /**
+   * Cross-client RFT operator console queue + roadmap root-cause rollup.
+   */
+  async getOperatorQueue({ adminUserId, platformRole }) {
+    const gate = this.assertAdmin(platformRole);
+    if (!gate.ok) return deepFreeze(gate);
+
+    const allBusinesses = await this.platformStore.listBusinesses();
+    const businesses = allBusinesses.filter((business) => !isTestBusiness(business));
+    const cases = await buildRftOperatorQueue({
+      businesses,
+      getInstallation: (businessId) =>
+        safeGet(this.platformStore, "getBusinessOSInstallation", businessId),
+      nowISO: this.nowISO(),
+    });
+
+    const platformActions = await buildOperatorActions({
+      businesses,
+      listCredentials: (businessId) =>
+        this.platformStore.listIntegrationCredentialsForWorkspace?.(businessId) ?? [],
+      failedInstalls: [],
+    });
+
+    const closedByBusiness = [];
+    for (const business of businesses) {
+      const installation = await safeGet(this.platformStore, "getBusinessOSInstallation", business.id);
+      if (!installation) continue;
+      const interventions = readOperatorInterventions(installation);
+      closedByBusiness.push({
+        businessId: String(business.id),
+        closed: interventions.closed,
+      });
+    }
+
+    await this.platformStore.recordAuditEvent?.({
+      actorUserId: adminUserId,
+      action: "admin.operator_queue_viewed",
+      targetType: "platform",
+      targetId: "operator_queue",
+    });
+
+    return deepFreeze({
+      ok: true,
+      cases,
+      platformActions,
+      rootCauseOptions: presentRootCauseOptions(),
+      roadmapFeed: summarizeRootCauseRoadmap(closedByBusiness),
+      honesty: {
+        message: "Cases only appear from stored RFT exceptions, SLA breaches, failed specialty fires, stalled approvals, and low-confidence AutoEligible cards. Closing requires a root cause.",
+      },
+    });
+  }
+
+  async getOperatorCaseDetail({ adminUserId, platformRole, caseId }) {
+    const gate = this.assertAdmin(platformRole);
+    if (!gate.ok) return deepFreeze(gate);
+    const id = String(caseId ?? "");
+    const parts = id.split(":");
+    const businessId = parts[1] ?? null;
+    if (!businessId) {
+      return deepFreeze({ ok: false, reason: "invalid_case_id" });
+    }
+    const installation = await safeGet(this.platformStore, "getBusinessOSInstallation", businessId);
+    if (!installation) {
+      return deepFreeze({ ok: false, reason: "installation_missing" });
+    }
+    const queue = await buildRftOperatorQueue({
+      businesses: [{ id: businessId, name: businessId }],
+      getInstallation: async () => installation,
+      nowISO: this.nowISO(),
+    });
+    const caseRow = queue.find((c) => c.id === id) ?? null;
+    let platformAction = null;
+    if (!caseRow) {
+      const businesses = await this.platformStore.listBusinesses?.() ?? [];
+      const business = businesses.find((entry) => String(entry.id) === businessId) ?? {
+        id: businessId,
+        name: businessId,
+      };
+      const failedInstalls = /fail|partial/i.test(String(installation.status ?? ""))
+        ? [{
+          businessId,
+          businessName: business.name ?? businessId,
+          status: installation.status ?? null,
+          specificationId: installation.specificationId ?? null,
+          updatedAt: installation.updatedAt ?? installation.installedAt ?? null,
+        }]
+        : [];
+      const actions = await buildOperatorActions({
+        businesses: [business],
+        listCredentials: (bid) =>
+          this.platformStore.listIntegrationCredentialsForWorkspace?.(bid) ?? [],
+        failedInstalls,
+      });
+      platformAction = actions.find((action) => action.id === id) ?? null;
+    }
+    const cardId = caseRow?.cardId ?? parts[2] ?? null;
+    if (!caseRow && !platformAction) {
+      return deepFreeze({ ok: false, reason: "case_not_found" });
+    }
+    const trace = composeOperatorCaseTrace({
+      installation,
+      caseId: id,
+      cardId,
+    });
+    await this.platformStore.recordAuditEvent?.({
+      actorUserId: adminUserId,
+      businessId,
+      action: "admin.operator_case_viewed",
+      targetType: "operator_case",
+      targetId: id,
+    });
+    return deepFreeze({
+      ok: true,
+      case: caseRow ?? platformAction,
+      trace: caseRow ? trace : null,
+      interventions: readOperatorInterventions(installation),
+      rootCauseOptions: presentRootCauseOptions(),
+    });
+  }
+
+  /**
+   * Resolve an operator case — root cause mandatory. Optionally advances RFT Exception.
+   */
+  async resolveOperatorCase({
+    adminUserId,
+    platformRole,
+    caseId,
+    rootCause,
+    category = null,
+    note = null,
+    workflowRunId = null,
+    operatorId = null,
+    startedAt = null,
+    endedAt = null,
+    minutesSpent = null,
+    actionPerformed = null,
+    wasNecessary = null,
+    canAutomate = null,
+    laborCostClass = null,
+    resolutionOutcome = null,
+    linkedTraceRef = null,
+    retryException = true,
+  }) {
+    const gate = this.assertAdmin(platformRole);
+    if (!gate.ok) return deepFreeze(gate);
+    const id = String(caseId ?? "");
+    const parts = id.split(":");
+    const kind = parts[0] ?? null;
+    const businessId = parts[1] ?? null;
+    const cardId = parts[2] ?? null;
+    if (!businessId) {
+      return deepFreeze({ ok: false, reason: "invalid_case_id" });
+    }
+
+    let installation = await safeGet(this.platformStore, "getBusinessOSInstallation", businessId);
+    if (!installation) {
+      return deepFreeze({ ok: false, reason: "installation_missing" });
+    }
+
+    const closed = closeOperatorIntervention({
+      installation,
+      caseId: id,
+      kind,
+      rootCause: rootCause ?? category,
+      category,
+      note,
+      businessId,
+      partnerId: businessId,
+      workflowRunId: workflowRunId ?? cardId ?? null,
+      operatorId: operatorId ?? adminUserId ?? "platform_admin",
+      actorId: operatorId ?? adminUserId ?? "platform_admin",
+      startedAt,
+      endedAt,
+      minutesSpent,
+      actionPerformed,
+      wasNecessary,
+      canAutomate,
+      laborCostClass,
+      resolutionOutcome,
+      linkedTraceRef: linkedTraceRef ?? cardId ?? null,
+      nowISO: this.nowISO(),
+      payload: { cardId },
+    });
+    if (!closed.ok) {
+      return deepFreeze(closed);
+    }
+
+    await persistOperatorInterventions({
+      platformStore: this.platformStore,
+      installation,
+      state: closed.state,
+      actorId: adminUserId ?? "platform_admin",
+    });
+
+    // Plan 10 — ingest closed intervention into governed learning + propose if repeats.
+    try {
+      installation = await safeGet(this.platformStore, "getBusinessOSInstallation", businessId);
+      if (installation) {
+        const refreshed = refreshGovernedLearning(installation, { nowISO: this.nowISO() });
+        await persistGovernedLearning({
+          platformStore: this.platformStore,
+          installation,
+          state: refreshed.state,
+          actorId: adminUserId ?? "platform_admin",
+        });
+      }
+    } catch {
+      // Learning must not block operator resolve.
+    }
+
+    let progress = null;
+    if (retryException && kind === "rft_exception" && cardId) {
+      installation = await safeGet(this.platformStore, "getBusinessOSInstallation", businessId);
+      progress = await progressRftOpportunity({
+        platformStore: this.platformStore,
+        installation,
+        cardId,
+        toState: "ActionProposed",
+        eventType: "EXCEPTION_RESOLVED",
+        actorId: adminUserId ?? "platform_admin",
+        note: `Operator resolve · ${closed.intervention.rootCause}${note ? `: ${note}` : ""}`,
+      });
+    }
+
+    await this.platformStore.recordAuditEvent?.({
+      actorUserId: adminUserId,
+      businessId,
+      action: "admin.operator_case_resolved",
+      targetType: "operator_case",
+      targetId: id,
+      metadata: {
+        rootCause: closed.intervention.rootCause,
+        minutesSpent: closed.intervention.minutesSpent,
+        resolutionOutcome: closed.intervention.resolutionOutcome,
+      },
+    });
+
+    return deepFreeze({
+      ok: true,
+      intervention: closed.intervention,
+      progress,
+    });
+  }
+
+  async getPilotScorecard({
+    adminUserId,
+    platformRole,
+    businessId = null,
+    windowDays = 7,
+  }) {
+    const gate = this.assertAdmin(platformRole);
+    if (!gate.ok) return deepFreeze(gate);
+
+    if (businessId) {
+      const installation = await safeGet(this.platformStore, "getBusinessOSInstallation", businessId);
+      if (!installation) {
+        return deepFreeze({ ok: false, reason: "installation_missing" });
+      }
+      await this.platformStore.recordAuditEvent?.({
+        actorUserId: adminUserId,
+        businessId,
+        action: "admin.pilot_scorecard_viewed",
+        targetType: "business",
+        targetId: businessId,
+      });
+      return deepFreeze({
+        ok: true,
+        scorecard: composePilotScorecard({
+          installation,
+          businessId,
+          windowDays,
+          nowISO: this.nowISO(),
+        }),
+      });
+    }
+
+    const allBusinesses = await this.platformStore.listBusinesses();
+    const businesses = allBusinesses.filter((business) => !isTestBusiness(business));
+    const scorecards = [];
+    for (const business of businesses) {
+      const installation = await safeGet(this.platformStore, "getBusinessOSInstallation", business.id);
+      if (!installation) continue;
+      scorecards.push(composePilotScorecard({
+        installation,
+        businessId: String(business.id),
+        windowDays,
+        nowISO: this.nowISO(),
+      }));
+    }
+    await this.platformStore.recordAuditEvent?.({
+      actorUserId: adminUserId,
+      action: "admin.pilot_scorecard_viewed",
+      targetType: "platform",
+      targetId: "pilot_scorecard",
+      metadata: { businessCount: scorecards.length },
+    });
+    return deepFreeze({
+      ok: true,
+      aggregate: aggregatePilotScorecards(scorecards, { windowDays, nowISO: this.nowISO() }),
+      scorecards,
     });
   }
 
@@ -262,8 +601,131 @@ export class AdminPlatformService {
         supportedCapabilities: blueprint.supportedCapabilities ?? [],
         requiredCapabilities: blueprint.requiredCapabilities ?? [],
         dependencies: blueprint.dependencies ?? [],
+        patternKind: blueprint.metadata?.patternKind ?? null,
+        provenance: blueprint.metadata?.provenance
+          ? {
+            anonymizedTenantCount: blueprint.metadata.provenance.anonymizedTenantCount ?? null,
+            sourceTypes: blueprint.metadata.provenance.sourceTypes ?? [],
+            promotedAt: blueprint.metadata.provenance.promotedAt ?? null,
+          }
+          : null,
       })),
     });
+  }
+
+  /**
+   * Plan 12 — extract scrubbed pattern candidates from delivery across tenants.
+   */
+  async extractDeliveryMoatCandidates({ adminUserId, platformRole }) {
+    const gate = this.assertAdmin(platformRole);
+    if (!gate.ok) return deepFreeze(gate);
+
+    const allBusinesses = await this.platformStore.listBusinesses();
+    const businesses = allBusinesses.filter((business) => !isTestBusiness(business));
+    const interventionsByBusiness = [];
+    const rulesByBusiness = [];
+
+    for (const business of businesses) {
+      const installation = await safeGet(this.platformStore, "getBusinessOSInstallation", business.id);
+      if (!installation) continue;
+      interventionsByBusiness.push({
+        businessId: String(business.id),
+        closed: readOperatorInterventions(installation).closed,
+      });
+      rulesByBusiness.push({
+        businessId: String(business.id),
+        rules: readGovernedLearning(installation).ruleVersions,
+      });
+    }
+
+    const extracted = extractMoatCandidates({
+      interventionsByBusiness,
+      rulesByBusiness,
+      nowISO: this.nowISO(),
+    });
+    const catalog = upsertCandidates(extracted.candidates, { nowISO: this.nowISO() });
+
+    await this.platformStore.recordAuditEvent?.({
+      actorUserId: adminUserId,
+      action: "admin.delivery_moat_extracted",
+      targetType: "platform",
+      targetId: "delivery_moat",
+      metadata: {
+        candidateCount: catalog.candidates.length,
+        // Never store business ids in moat audit metadata
+        tenantScanCount: businesses.length,
+      },
+    });
+
+    return deepFreeze({
+      ok: true,
+      catalog,
+      honesty: {
+        message: "Candidates are scrubbed structure only — no names, emails, bodies, or provider account ids. Never auto-published into customer installs.",
+      },
+    });
+  }
+
+  getDeliveryMoatCatalog({ platformRole }) {
+    const gate = this.assertAdmin(platformRole);
+    if (!gate.ok) return deepFreeze(gate);
+    return deepFreeze({
+      ok: true,
+      catalog: readDeliveryMoatCatalog(),
+      honesty: {
+        message: "Promote only scrubbed candidates. Raw customer content fails closed.",
+      },
+    });
+  }
+
+  async promoteDeliveryMoatCandidate({ adminUserId, platformRole, candidateId }) {
+    const gate = this.assertAdmin(platformRole);
+    if (!gate.ok) return deepFreeze(gate);
+
+    const result = promoteCandidateToBlueprint({
+      candidateId,
+      actorId: adminUserId ?? "platform_admin",
+      blueprintRegistry: this.blueprintRegistry,
+      nowISO: this.nowISO(),
+    });
+
+    if (result.ok) {
+      await this.platformStore.recordAuditEvent?.({
+        actorUserId: adminUserId,
+        action: "admin.delivery_moat_promoted",
+        targetType: "blueprint",
+        targetId: result.blueprint?.blueprintId ?? result.blueprintId ?? null,
+        metadata: {
+          candidateId: String(candidateId),
+          patternKind: result.published?.patternKind ?? null,
+          anonymizedTenantCount: result.published?.provenance?.anonymizedTenantCount ?? null,
+        },
+      });
+    }
+
+    return deepFreeze(result);
+  }
+
+  rejectDeliveryMoatCandidate({ adminUserId, platformRole, candidateId, note = null }) {
+    const gate = this.assertAdmin(platformRole);
+    if (!gate.ok) return deepFreeze(gate);
+    const catalog = rejectCandidate(candidateId, {
+      actorId: adminUserId ?? "platform_admin",
+      note,
+      nowISO: this.nowISO(),
+    });
+    return deepFreeze({ ok: true, catalog });
+  }
+
+  /**
+   * Explicit fail-closed path for attempts to promote raw payloads.
+   */
+  refuseRawDeliveryMoatPromotion({ platformRole, payload }) {
+    const gate = this.assertAdmin(platformRole);
+    if (!gate.ok) return deepFreeze(gate);
+    const scrub = assertScrubbed(payload);
+    if (!scrub.ok) return deepFreeze(scrub);
+    return deepFreeze(refuseRawPromotion(payload));
   }
 
   listComponents({ platformRole }) {
@@ -577,4 +1039,77 @@ async function safeGet(store, method, ...args) {
   } catch {
     return null;
   }
+}
+
+function sumObservableCounts(scorecards, key) {
+  return scorecards.reduce((sum, row) => sum + (Number(row?.[key]?.count) || 0), 0);
+}
+
+function aggregatePilotScorecards(scorecards = [], { windowDays = 7, nowISO = null } = {}) {
+  const window = Math.max(1, Number(windowDays) || 7);
+  const at = nowISO ?? new Date().toISOString();
+  const eligibleObservable = scorecards.filter((row) => row?.eligibleEvents?.status === "observable");
+  const responseObservable = scorecards.filter((row) => row?.medianResponseMinutes?.status === "observable");
+  const humanMinuteRows = scorecards.filter((row) => row?.humanMinutesPerOutcome?.status === "observable");
+  const slaObservable = scorecards.filter((row) => row?.slaAttainment?.status === "observable");
+  const exceptions = {};
+  for (const row of scorecards) {
+    for (const bucket of row?.exceptionsByCategory ?? []) {
+      const key = String(bucket.category ?? "");
+      if (!key) continue;
+      exceptions[key] = (exceptions[key] ?? 0) + (Number(bucket.count) || 0);
+    }
+  }
+  const exceptionsByCategory = Object.entries(exceptions)
+    .map(([category, count]) => ({ category, count }))
+    .sort((left, right) => right.count - left.count || left.category.localeCompare(right.category));
+
+  return deepFreeze({
+    generatedAt: at,
+    windowDays: window,
+    businessCount: scorecards.length,
+    eligibleEvents: eligibleObservable.length
+      ? { status: "observable", count: eligibleObservable.reduce((sum, row) => sum + (Number(row.eligibleEvents.count) || 0), 0) }
+      : { status: "not_observable", reason: "No business has an observable eligible-event baseline yet." },
+    detectedEvents: { status: "observable", count: sumObservableCounts(scorecards, "detectedEvents") },
+    completed: { status: "observable", count: sumObservableCounts(scorecards, "completed") },
+    verifiedOutcomes: { status: "observable", count: sumObservableCounts(scorecards, "verifiedOutcomes") },
+    slaAttainment: slaObservable.length
+      ? {
+        status: "observable",
+        businessesWithinSla: slaObservable.filter((row) => row.slaAttainment.withinSla).length,
+        businessCount: slaObservable.length,
+      }
+      : { status: "not_observable", reason: "No business has observable SLA attainment yet." },
+    automaticCompletions: { status: "observable", count: sumObservableCounts(scorecards, "automaticCompletions") },
+    approvalRequiredCompletions: { status: "observable", count: sumObservableCounts(scorecards, "approvalRequiredCompletions") },
+    operatorInterventions: { status: "observable", count: sumObservableCounts(scorecards, "operatorInterventions") },
+    operatorRescueCompletions: { status: "observable", count: sumObservableCounts(scorecards, "operatorRescueCompletions") },
+    failedExternalActions: { status: "observable", count: sumObservableCounts(scorecards, "failedExternalActions") },
+    unresolvedEvents: { status: "observable", count: sumObservableCounts(scorecards, "unresolvedEvents") },
+    humanMinutesTotal: { status: "observable", count: sumObservableCounts(scorecards, "humanMinutesTotal") },
+    humanMinutesPerOutcome: humanMinuteRows.length
+      ? {
+        status: "observable",
+        minutes: Math.round(
+          (humanMinuteRows.reduce((sum, row) => sum + (Number(row.humanMinutesPerOutcome.minutes) || 0), 0) / humanMinuteRows.length) * 100,
+        ) / 100,
+      }
+      : { status: "not_observable", reason: "No proof-backed completed outcomes in the aggregate window." },
+    medianResponseMinutes: responseObservable.length
+      ? {
+        status: "observable",
+        currentMedianMinutes: Math.round(
+          (responseObservable.reduce((sum, row) => sum + (Number(row.medianResponseMinutes.currentMedianMinutes) || 0), 0) / responseObservable.length) * 100,
+        ) / 100,
+        baselineMedianMinutes: Math.round(
+          (responseObservable.reduce((sum, row) => sum + (Number(row.medianResponseMinutes.baselineMedianMinutes) || 0), 0) / responseObservable.length) * 100,
+        ) / 100,
+      }
+      : { status: "not_observable", reason: "No business has both baseline and current response samples yet." },
+    exceptionsByCategory,
+    honesty: {
+      message: "Aggregate scorecards sum stored evidence only. Automatic completions remain separate from operator rescues.",
+    },
+  });
 }

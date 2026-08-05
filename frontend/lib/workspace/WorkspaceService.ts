@@ -16,6 +16,7 @@ import { adaptBusinessIntelligenceWorkspace } from "../../../backend/core/busine
 import { MissionControlGenerator } from "../../../backend/core/mission-control/MissionControlGenerator.js";
 import { MissionControlViewAdapter } from "../../../backend/core/mission-control/views/MissionControlViewAdapter.js";
 import { composeMissionControlExperience } from "../../../backend/core/mission-control/composeMissionControlExperience.js";
+import { composeOutcomesLedger } from "../../../backend/core/operating-home/composeOutcomesLedger.js";
 import { composeBusinessCommandCenter } from "../../../backend/core/command-center/BusinessCommandCenterComposer.js";
 import { adaptBusinessCommandCenterView } from "../../../backend/core/command-center/views/BusinessCommandCenterViewAdapter.js";
 import { buildPackageNavigation } from "../../../backend/core/workspace/navigation/PackageNavigationBuilder.js";
@@ -653,7 +654,7 @@ export class WorkspaceService {
       recentCommunications = [];
     }
 
-    return (composeMissionControlExperience as any)({
+    const composed = (composeMissionControlExperience as any)({
       missionControlViewModel: merged,
       businessIntelligenceView: intelligenceView,
       recentCommunications,
@@ -662,6 +663,28 @@ export class WorkspaceService {
       setupChecklist: Array.isArray(options.setupChecklist) ? options.setupChecklist : [],
       businessId: this.workspaceId,
     });
+
+    // Honest Outcomes ledger for Today Performance + Outcomes page reuse.
+    // Never invents metrics — composeOutcomesLedger marks not_observable when evidence is missing.
+    let outcomesLedger = null;
+    try {
+      const recentOutcomes =
+        composed?.experience?.supervision?.recentOutcomes
+        ?? composed?.supervision?.recentOutcomes
+        ?? [];
+      outcomesLedger = composeOutcomesLedger({
+        installation: this.connected.installationResult ?? null,
+        recentOutcomes,
+        businessId: this.workspaceId,
+      });
+    } catch {
+      outcomesLedger = null;
+    }
+
+    return {
+      ...composed,
+      outcomesLedger,
+    };
   }
 
   loadAttentionViewModel() {
@@ -741,12 +764,21 @@ export class WorkspaceService {
         ?? null,
     });
 
+    let attentionItems: unknown[] = [];
+    try {
+      const mission = this.loadMissionControlViewModel({});
+      attentionItems = (mission as { needsYourAttention?: unknown[] }).needsYourAttention ?? [];
+    } catch {
+      attentionItems = [];
+    }
+
     return attachProductContext({
       ...view,
       intelligenceCandidates: intelligence.candidates,
       intelligenceHistory: intelligence.history,
       recentImprovements,
       businessMemory: memory,
+      attentionItems,
     } as Record<string, unknown>, this.connected);
   }
 

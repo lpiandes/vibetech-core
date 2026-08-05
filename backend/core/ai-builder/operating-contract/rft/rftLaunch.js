@@ -1,0 +1,340 @@
+/**
+ * Revenue Follow-Through launch progress on installation.configuration.rftLaunch.
+ * Seven-step outcome launch — observe/replay/shadow unlock via Plans 6–7 artifacts.
+ */
+import { deepFreeze } from "../../../workspace/_utils/deepFreeze.js";
+import { readRftObservation } from "./rftObservation.js";
+import { readRftReplay } from "./rftReplay.js";
+
+export const RFT_LAUNCH_STEPS = Object.freeze([
+  "connect",
+  "observe",
+  "confirm",
+  "replay",
+  "shadow",
+  "prove",
+  "goLive",
+]);
+
+export const RFT_LAUNCH_STEP_STATUS = Object.freeze({
+  pending: "pending",
+  ready: "ready",
+  complete: "complete",
+  blocked: "blocked",
+});
+
+function emptySteps() {
+  return {
+    connect: { status: "pending", at: null, detail: null },
+    observe: { status: "pending", at: null, detail: null },
+    confirm: { status: "pending", at: null, detail: null },
+    replay: { status: "pending", at: null, detail: null },
+    shadow: { status: "pending", at: null, detail: null },
+    prove: { status: "pending", at: null, detail: null },
+    goLive: { status: "pending", at: null, detail: null },
+  };
+}
+
+export function readRftLaunch(installation = null) {
+  const raw = installation?.configuration?.rftLaunch;
+  const steps = emptySteps();
+  if (raw?.steps && typeof raw.steps === "object") {
+    for (const key of RFT_LAUNCH_STEPS) {
+      const prior = raw.steps[key];
+      if (!prior || typeof prior !== "object") continue;
+      steps[key] = {
+        status: ["pending", "ready", "complete", "blocked"].includes(String(prior.status))
+          ? String(prior.status)
+          : "pending",
+        at: prior.at ?? null,
+        detail: prior.detail ?? null,
+        reason: prior.reason ?? null,
+      };
+    }
+  }
+  return {
+    version: 1,
+    steps,
+    confirmedContentHash: raw?.confirmedContentHash ? String(raw.confirmedContentHash) : null,
+    confirmedContractVersion: raw?.confirmedContractVersion
+      ? String(raw.confirmedContractVersion)
+      : null,
+    proveCardId: raw?.proveCardId ? String(raw.proveCardId) : null,
+    goLiveAt: raw?.goLiveAt ? String(raw.goLiveAt) : null,
+    observeCompletedAt: raw?.observeCompletedAt ?? null,
+    replayPassedAt: raw?.replayPassedAt ?? null,
+    shadowPassedAt: raw?.shadowPassedAt ?? null,
+    updatedAt: raw?.updatedAt ?? null,
+  };
+}
+
+/**
+ * Derive step statuses from live connection + proof + observation/replay/shadow state.
+ */
+export function evaluateRftLaunch({
+  installation = null,
+  connectionStatuses = {},
+  proofRecords = {},
+} = {}) {
+  const launch = readRftLaunch(installation);
+  const observation = readRftObservation(installation);
+  const replayState = readRftReplay(installation);
+
+  const emailConnected = isConnected(connectionStatuses, ["business_email", "gmail"]);
+  const calendarConnected = isConnected(connectionStatuses, ["calendar", "google_calendar"]);
+  const emailProven = isProven(proofRecords, ["customer_email_send"]);
+  const calendarProven = isProven(proofRecords, ["calendar_scheduling"]);
+  const formsProven = isProven(proofRecords, ["website_forms"]);
+  const smsProven = isProven(proofRecords, ["sms_send"]);
+
+  const leadSourceReady = formsProven || smsProven || Boolean(launch.proveCardId);
+  const connectComplete = emailConnected && calendarConnected;
+  const connectProvenEnough = emailProven && (calendarProven || leadSourceReady);
+
+  launch.steps.connect = {
+    status: connectComplete ? "complete" : "pending",
+    at: launch.steps.connect.at,
+    detail: connectComplete
+      ? "Email and calendar connected."
+      : "Connect business email and calendar.",
+  };
+
+  const hasBaseline = Boolean(observation.baseline && observation.importedAt);
+  launch.steps.observe = {
+    status: hasBaseline
+      ? "complete"
+      : (connectComplete ? "ready" : "pending"),
+    at: launch.observeCompletedAt ?? observation.importedAt ?? launch.steps.observe.at,
+    detail: hasBaseline
+      ? `Baseline ready (${observation.events?.length ?? 0} evidence-linked events).`
+      : (connectComplete
+        ? "Import history and build an evidence-linked baseline."
+        : "Connect channels before observing history."),
+  };
+
+  launch.steps.confirm = {
+    status: launch.confirmedContentHash
+      ? "complete"
+      : (hasBaseline || connectComplete ? "ready" : "pending"),
+    at: launch.steps.confirm.at,
+    detail: launch.confirmedContentHash
+      ? `Contract confirmed (${String(launch.confirmedContentHash).slice(0, 10)}…)`
+      : "Confirm Revenue Follow-Through SLAs and approval boundaries.",
+  };
+
+  const replayPassed = Boolean(replayState.lastReplay?.passed) || Boolean(launch.replayPassedAt);
+  launch.steps.replay = {
+    status: replayPassed
+      ? "complete"
+      : (hasBaseline && launch.confirmedContentHash ? "ready" : "pending"),
+    at: launch.replayPassedAt ?? replayState.lastReplay?.ranAt ?? launch.steps.replay.at,
+    detail: replayPassed
+      ? (replayState.lastReplay?.passDetail ?? "Historical replay passed.")
+      : (hasBaseline
+        ? "Run contract replay against imported history (no outbound)."
+        : "Complete observation before replay."),
+  };
+
+  const shadowPassed = Boolean(replayState.shadow?.passed) || Boolean(launch.shadowPassedAt);
+  const shadowEnabled = Boolean(replayState.shadow?.enabled);
+  launch.steps.shadow = {
+    status: shadowPassed
+      ? "complete"
+      : (replayPassed ? (shadowEnabled ? "ready" : "ready") : "pending"),
+    at: launch.shadowPassedAt ?? replayState.shadow?.passedAt ?? launch.steps.shadow.at,
+    detail: shadowPassed
+      ? `Shadow passed (${replayState.shadow?.proposals?.length ?? 0} proposals reviewed).`
+      : (replayPassed
+        ? (shadowEnabled
+          ? "Shadow on — review live proposals, then mark passed."
+          : "Enable shadow mode (propose only; no external sends).")
+        : "Pass replay before enabling shadow."),
+  };
+
+  launch.steps.prove = {
+    status: launch.proveCardId && connectProvenEnough
+      ? "complete"
+      : (launch.confirmedContentHash ? "ready" : "pending"),
+    at: launch.steps.prove.at,
+    detail: launch.proveCardId
+      ? `Prove opportunity ${launch.proveCardId}`
+      : "Prove one real opportunity with provider evidence.",
+  };
+
+  const canGoLive = Boolean(
+    launch.steps.connect.status === "complete"
+    && hasBaseline
+    && launch.confirmedContentHash
+    && replayPassed
+    && shadowPassed
+    && launch.proveCardId
+    && connectProvenEnough,
+  );
+  launch.steps.goLive = {
+    status: launch.goLiveAt ? "complete" : (canGoLive ? "ready" : "pending"),
+    at: launch.goLiveAt ?? launch.steps.goLive.at,
+    detail: launch.goLiveAt
+      ? `Live since ${launch.goLiveAt}`
+      : (canGoLive
+        ? "Ready to go live (approval-gated execution)."
+        : "Complete observe, confirm, replay, shadow, and prove before go-live."),
+  };
+
+  const completeCount = RFT_LAUNCH_STEPS.filter((id) => launch.steps[id].status === "complete").length;
+  return deepFreeze({
+    ...launch,
+    summary: {
+      completeCount,
+      totalSteps: RFT_LAUNCH_STEPS.length,
+      canGoLive,
+      goLiveAt: launch.goLiveAt,
+      observeReady: hasBaseline,
+      replayPassed,
+      shadowPassed,
+      shadowEnabled,
+    },
+  });
+}
+
+function isConnected(connectionStatuses, keys) {
+  for (const key of keys) {
+    const raw = connectionStatuses?.[key];
+    const status = String(
+      typeof raw === "object" ? (raw.status ?? raw.state ?? "") : (raw ?? ""),
+    ).toUpperCase();
+    if (status === "CONNECTED" || status === "VERIFIED" || status === "PROVEN" || status === "OK") {
+      return true;
+    }
+    if (raw === true) return true;
+  }
+  return false;
+}
+
+function isProven(proofRecords, capabilityIds) {
+  for (const id of capabilityIds) {
+    const row = proofRecords?.[id];
+    if (!row) continue;
+    if (row.ok === true && row.verified === true) return true;
+    if (row.verified === true && row.detail?.externalReference) return true;
+  }
+  return false;
+}
+
+export function applyRftLaunchPatch(launch, patch = {}, { nowISO = null } = {}) {
+  const at = nowISO ?? new Date().toISOString();
+  const next = {
+    version: 1,
+    steps: { ...emptySteps(), ...(launch.steps ?? {}) },
+    confirmedContentHash: launch.confirmedContentHash ?? null,
+    confirmedContractVersion: launch.confirmedContractVersion ?? null,
+    proveCardId: launch.proveCardId ?? null,
+    goLiveAt: launch.goLiveAt ?? null,
+    observeCompletedAt: launch.observeCompletedAt ?? null,
+    replayPassedAt: launch.replayPassedAt ?? null,
+    shadowPassedAt: launch.shadowPassedAt ?? null,
+    updatedAt: at,
+  };
+
+  if (patch.confirmedContentHash != null) {
+    next.confirmedContentHash = String(patch.confirmedContentHash);
+    next.confirmedContractVersion = patch.confirmedContractVersion
+      ? String(patch.confirmedContractVersion)
+      : next.confirmedContractVersion;
+    next.steps.confirm = {
+      status: "complete",
+      at,
+      detail: `Contract hash ${String(patch.confirmedContentHash).slice(0, 12)}…`,
+    };
+  }
+  if (patch.proveCardId != null) {
+    next.proveCardId = String(patch.proveCardId);
+    next.steps.prove = {
+      status: "complete",
+      at,
+      detail: `Opportunity ${patch.proveCardId}`,
+    };
+  }
+  if (patch.observeCompleted === true) {
+    next.observeCompletedAt = at;
+    next.steps.observe = {
+      status: "complete",
+      at,
+      detail: patch.observeDetail ?? "Baseline observation complete.",
+    };
+  }
+  if (patch.replayPassed === true) {
+    next.replayPassedAt = at;
+    next.steps.replay = {
+      status: "complete",
+      at,
+      detail: patch.replayDetail ?? "Historical replay passed.",
+    };
+  }
+  if (patch.shadowPassed === true) {
+    next.shadowPassedAt = at;
+    next.steps.shadow = {
+      status: "complete",
+      at,
+      detail: patch.shadowDetail ?? "Shadow mode passed.",
+    };
+  }
+  if (patch.goLive === true) {
+    if (!next.confirmedContentHash || !next.proveCardId) {
+      return {
+        ok: false,
+        code: "go_live_requirements",
+        message: "Confirm contract and prove one opportunity before go-live.",
+        launch: deepFreeze(next),
+      };
+    }
+    if (!next.observeCompletedAt || !next.replayPassedAt || !next.shadowPassedAt) {
+      return {
+        ok: false,
+        code: "go_live_gate",
+        message: "Observe, replay, and shadow must pass before go-live.",
+        launch: deepFreeze(next),
+      };
+    }
+    next.goLiveAt = at;
+    next.steps.goLive = { status: "complete", at, detail: "Go live enabled (approval-gated)." };
+  }
+  if (patch.markConnectComplete === true) {
+    next.steps.connect = {
+      status: "complete",
+      at,
+      detail: patch.connectDetail ?? "Connections marked complete.",
+    };
+  }
+
+  return { ok: true, launch: deepFreeze(next) };
+}
+
+export async function persistRftLaunch({
+  platformStore,
+  installation,
+  launch,
+  actorId = "rft_launch",
+} = {}) {
+  if (!platformStore || !installation) return null;
+  await platformStore.upsertBusinessOSInstallation({
+    id: installation.id ?? installation.installationId ?? `install_${installation.businessId}`,
+    businessId: installation.businessId,
+    specificationRowId: installation.specificationRowId ?? null,
+    specificationId: installation.specificationId,
+    specificationVersion: installation.specificationVersion ?? 1,
+    specificationContentHash: installation.specificationContentHash
+      ?? installation.contentHash
+      ?? "rft_launch",
+    planId: installation.planId ?? `plan_${installation.businessId}`,
+    status: installation.status ?? "installed",
+    plan: installation.plan ?? {},
+    configuration: {
+      ...(installation.configuration ?? {}),
+      rftLaunch: launch,
+    },
+    installedAt: installation.installedAt ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    updatedBy: actorId,
+  });
+  return launch;
+}

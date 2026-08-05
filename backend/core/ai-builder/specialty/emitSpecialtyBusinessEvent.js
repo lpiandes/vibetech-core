@@ -178,6 +178,33 @@ export async function emitSpecialtyBusinessEvent({
     }
   }
 
+  // Plan 13 — continuous RFT loop (inbound → seed/progress), independent of specialty draft success.
+  let rftIngest = null;
+  if (platformStore && installation) {
+    try {
+      const { ingestRftInboundEvent, RFT_INBOUND_EVENT_TYPES } = await import(
+        "../operating-contract/rft/rftInboundIngest.js"
+      );
+      if (RFT_INBOUND_EVENT_TYPES.includes(type)) {
+        // Refresh installation after specialty fires may have written CRM.
+        const fresh = await platformStore.getBusinessOSInstallation(businessId).catch(() => installation);
+        rftIngest = await ingestRftInboundEvent({
+          platformStore,
+          installation: fresh ?? installation,
+          eventType: type,
+          payload,
+          actorId,
+        });
+      }
+    } catch (err) {
+      rftIngest = {
+        ok: false,
+        code: "ingest_error",
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   return deepFreeze({
     ok: true,
     eventType: type,
@@ -186,5 +213,6 @@ export async function emitSpecialtyBusinessEvent({
     skipped,
     firedCount: fired.length,
     workflows: workflowResult,
+    rftIngest,
   });
 }

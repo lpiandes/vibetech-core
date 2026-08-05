@@ -1,5 +1,7 @@
 "use client";
 
+/** @deprecated Plan 4 — replaced by RftLaunchPath on Today. Retained for legacy imports only. */
+
 import { useState, useTransition, useEffect, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";

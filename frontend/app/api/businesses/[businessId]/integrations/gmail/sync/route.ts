@@ -54,6 +54,22 @@ export async function POST(
       credentialResolver,
       maxResults,
       actorId: "owner",
+      onNewInbound: async (msg) => {
+        if (!msg?.gmailMessageId) return false;
+        await ctx.service.emitSpecialtyBusinessEvent({
+          eventType: "INBOUND_SALES_EMAIL",
+          brief: `Inbound sales email${msg.subject ? `: ${msg.subject}` : ""} from ${msg.from?.email ?? "unknown"}`,
+          payload: {
+            gmailMessageId: msg.gmailMessageId,
+            from: msg.from,
+            subject: msg.subject,
+            personId: msg.personId,
+            channel: "gmail",
+          },
+          actorId: "gmail_inbox_sync",
+        });
+        return true;
+      },
     });
 
     if (!result.ok) {

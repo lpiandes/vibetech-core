@@ -3,6 +3,7 @@ import { createBlueprintDefinition } from "./BlueprintDefinition.js";
 import { resolveBlueprintDependencies } from "./BlueprintDependencyResolver.js";
 import { validateBlueprintCompatibility } from "./BlueprintCompatibilityValidator.js";
 import { createPropertyManagementGoldBlueprint } from "./PropertyManagementGoldBlueprint.js";
+import { createRevenueFollowThroughBlueprint } from "../ai-builder/operating-contract/rft/rftBlueprint.js";
 import {
   BLUEPRINT_RESOLUTION_ORDER,
   resolveReusePreference,
@@ -10,7 +11,7 @@ import {
 
 /**
  * Multi-source Blueprint Registry.
- * Sources: platform, package, gold, business_override, marketplace (future).
+ * Sources: platform, package, gold, business_override, marketplace, delivery_moat.
  */
 export class BlueprintRegistry {
   constructor() {
@@ -121,6 +122,7 @@ export function createBlueprintRegistry({ includeDefaults = true } = {}) {
       migrationCompatibility: { minSchemaVersion: 1, maxSchemaVersion: 1 },
       acceptanceTests: ["universal_core_modules_present"],
     }));
+    registry.register(createRevenueFollowThroughBlueprint());
   }
   return registry;
 }

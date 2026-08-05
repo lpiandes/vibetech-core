@@ -1,0 +1,8 @@
+# Optional: add to your Hostinger public_html .htaccess
+# so /privacy and /terms work without .html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^privacy/?$ privacy.html [L]
+  RewriteRule ^terms/?$ terms.html [L]
+</IfModule>

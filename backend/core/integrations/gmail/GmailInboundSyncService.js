@@ -62,7 +62,9 @@ export class GmailInboundSyncService {
     credentialResolver = null,
     provider = null,
     maxResults = 25,
+    query = null,
     actorId = "gmail_inbox_sync",
+    onNewInbound = null,
   } = {}) {
     if (!businessId || !platformStore || !installation) {
       return deepFreeze({ ok: false, reason: "business_and_installation_required" });
@@ -79,7 +81,10 @@ export class GmailInboundSyncService {
 
     let listing;
     try {
-      listing = await gmailProvider.listInbox({ maxResults });
+      listing = await gmailProvider.listInbox({
+        maxResults,
+        query: query || undefined,
+      });
     } catch (err) {
       const message = String(err?.message ?? err);
       const scopeIssue = /insufficient|scope/i.test(message);
@@ -145,7 +150,13 @@ export class GmailInboundSyncService {
           // Non-fatal: still store the message without a linked person.
         }
       }
-      enrichedMessages.push({ ...record, personId, syncedAt: this._nowISO() });
+      enrichedMessages.push({
+        ...record,
+        id: safeString(record.id) || safeString(record.gmailMessageId),
+        gmailMessageId: safeString(record.gmailMessageId) || safeString(record.id),
+        personId,
+        syncedAt: this._nowISO(),
+      });
     }
 
     const { state: mergedInbox, added } = mergeInboundMessages(currentInbox, enrichedMessages);
@@ -164,6 +175,30 @@ export class GmailInboundSyncService {
       actorId,
     });
 
+    const inboundEvents = [];
+    if (typeof onNewInbound === "function" && enrichedMessages.length) {
+      for (const record of enrichedMessages) {
+        const gmailMessageId = safeString(record.gmailMessageId) || safeString(record.id);
+        try {
+          // eslint-disable-next-line no-await-in-loop -- sequential emit keeps tenant work ordered.
+          const emitted = await onNewInbound({
+            gmailMessageId,
+            from: record.from ?? null,
+            subject: record.subject ?? null,
+            personId: record.personId ?? null,
+            snippet: record.snippet ?? null,
+          });
+          inboundEvents.push({ gmailMessageId, ok: emitted !== false });
+        } catch (err) {
+          inboundEvents.push({
+            gmailMessageId,
+            ok: false,
+            error: String(err?.message ?? err),
+          });
+        }
+      }
+    }
+
     return deepFreeze({
       ok: true,
       businessId: String(businessId),
@@ -175,6 +210,7 @@ export class GmailInboundSyncService {
       contactsMatched,
       totalStoredMessages: persisted.inbox.messages.length,
       syncedAt: nowISO,
+      inboundEvents,
     });
   }
 
