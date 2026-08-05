@@ -258,16 +258,22 @@ export default function DiscoveryStepWizard({
     };
   }, [draft, draftStorageKey]);
 
-  // Package-Ask: once there is nothing left to ask, finish without forcing another Save click
-  // on a stale generic bank question.
+  // Once discovery has nothing left to ask: briefly show the package-ready card,
+  // then auto-advance into the build stage (no "See recommendation" click).
   const onFinishRef = useRef(onFinish);
   onFinishRef.current = onFinish;
   const finishOnceRef = useRef(false);
   useEffect(() => {
-    if (!packageAsk || !discoveryComplete || busy || thinking) return;
+    if (!discoveryComplete || busy || thinking) return;
     if (finishOnceRef.current) return;
-    finishOnceRef.current = true;
-    onFinishRef.current?.();
+    // Package-Ask finishes immediately; setup lingers so owners see their package card.
+    const delayMs = packageAsk ? 0 : 1400;
+    const timer = window.setTimeout(() => {
+      if (finishOnceRef.current) return;
+      finishOnceRef.current = true;
+      onFinishRef.current?.();
+    }, delayMs);
+    return () => window.clearTimeout(timer);
   }, [packageAsk, discoveryComplete, busy, thinking]);
 
   useEffect(() => {
@@ -390,19 +396,24 @@ export default function DiscoveryStepWizard({
 
   if (!step) {
     return (
-      <div style={{ display: "grid", gap: 16 }}>
-        <div style={{ color: architect.inkMuted, lineHeight: 1.55 }}>
-          {thinking
-            ? <ThinkingDots label="Preparing the next question" />
-            : packageAsk
-              ? "That’s everything for the new packages."
-              : "You’re ready for a recommendation."}
-        </div>
-        {!thinking && onFinish ? (
-          <ArchitectButton type="button" disabled={busy} onClick={() => onFinish()}>
-            {packageAsk ? "Save" : "See recommendation"}
-          </ArchitectButton>
-        ) : null}
+      <div style={{ display: "grid", gap: 12 }}>
+        {thinking || busy ? (
+          <ThinkingDots label={packageAsk ? "Saving…" : "Starting your build…"} />
+        ) : packageAsk ? (
+          <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.5 }}>
+            That’s everything for the new packages.
+          </p>
+        ) : (
+          <>
+            <p style={{ margin: 0, color: architect.ink, fontSize: 15, fontWeight: 650, lineHeight: 1.4 }}>
+              You’re ready
+            </p>
+            <p style={{ margin: 0, color: architect.inkMuted, fontSize: 13, lineHeight: 1.5 }}>
+              VIBETech will build your recommendation next — no extra click needed.
+            </p>
+            <ThinkingDots label="Starting your build…" />
+          </>
+        )}
       </div>
     );
   }

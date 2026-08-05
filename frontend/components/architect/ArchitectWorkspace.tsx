@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 
 import { architect } from "./architectTheme";
 import {
-  ArchitectButton,
   ArchitectPanel,
   ArchitectShell,
   ArchitectSkeleton,
@@ -139,9 +138,8 @@ export default function ArchitectWorkspace({
           }
           if (!cancelled) onPackageAskComplete?.();
           return;
-        } else if (data.proposal) {
-          setCenterMode("proposal");
-        } else if (data.journey?.readyForProposal) {
+        } else if (data.proposal || data.journey?.readyForProposal) {
+          // Assembly canvas: auto-build if needed, then Continue to business.
           setCenterMode("recommendation");
         } else {
           setCenterMode("conversation");
@@ -320,8 +318,8 @@ export default function ArchitectWorkspace({
     setCenterMode("recommendation");
     try {
       await refresh("propose");
-      setCenterMode("proposal");
       setChangeImpact(null);
+      // Stay on the assembly screen so build completion + Continue are visible.
     } catch (err) {
       setError((err as any)?.productError ?? presentProductError(err));
     } finally {
@@ -499,8 +497,8 @@ export default function ArchitectWorkspace({
 
   const showingProposal = centerMode === "proposal" && Boolean(proposal);
   const showingPreview = centerMode === "preview";
-  const showingRecommendationPrep = centerMode === "recommendation" && !proposal;
-  const inConversation = !showingProposal && !showingPreview && !showingRecommendationPrep;
+  const showingAssembly = centerMode === "recommendation";
+  const inConversation = !showingProposal && !showingPreview && !showingAssembly;
 
   const chatFill = continuous && embedded && inConversation;
 
@@ -554,7 +552,11 @@ export default function ArchitectWorkspace({
         </div>
         {!chatFill && !packageAsk ? (
           <p style={{ margin: continuous && embedded ? "4px 0 0" : "8px 0 0", color: architect.inkMuted, fontSize: continuous && embedded ? 13 : 15, lineHeight: 1.5 }}>
-            {showingProposal
+            {showingAssembly
+              ? (proposal
+                ? "Your recommendation is ready — continue when you are."
+                : "VIBETech is building from what you confirmed.")
+              : showingProposal
               ? "Here is how VIBETech recommends running your business."
               : showingPreview
                 ? continuous
@@ -625,30 +627,59 @@ export default function ArchitectWorkspace({
                 border: `1px solid ${architect.border}`,
                 borderRadius: 12,
                 background: "rgba(15,23,42,.45)",
-                padding: "12px 14px",
+                padding: "14px 16px",
                 display: "grid",
-                gap: 8,
+                gap: 10,
               }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: architect.inkMuted, letterSpacing: "0.02em" }}>
+                <div style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: architect.accent,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                }}>
                   {purchasedPackagesPanel.heading}
                 </div>
-                <div style={{ display: "grid", gap: purchasedPackagesPanel.compact ? 4 : 6 }}>
-                  {purchasedPackagesPanel.packages.map((pkg) => (
+                <div style={{ display: "grid", gap: purchasedPackagesPanel.compact ? 6 : 12 }}>
+                  {purchasedPackagesPanel.packages.map((pkg) => {
+                    const bullets = packageDescriptionBullets(pkg.description);
+                    return (
                     <div
                       key={pkg.id}
                       style={{
                         display: "flex",
-                        alignItems: "baseline",
+                        alignItems: "flex-start",
                         justifyContent: "space-between",
                         gap: 10,
                       }}
                     >
-                      <div>
-                        <div style={{ fontWeight: 650, fontSize: 14 }}>{pkg.label}</div>
-                        {!purchasedPackagesPanel.compact && pkg.description ? (
-                          <div style={{ color: architect.inkMuted, fontSize: 12, lineHeight: 1.45 }}>
-                            {pkg.description}
-                          </div>
+                      <div style={{ minWidth: 0, display: "grid", gap: 6 }}>
+                        <div style={{ fontWeight: 650, fontSize: 15, color: architect.ink }}>{pkg.label}</div>
+                        {!purchasedPackagesPanel.compact && bullets.length ? (
+                          <ul style={{
+                            margin: 0,
+                            padding: 0,
+                            listStyle: "none",
+                            display: "grid",
+                            gap: 4,
+                          }}
+                          >
+                            {bullets.map((bullet) => (
+                              <li
+                                key={bullet}
+                                style={{
+                                  fontSize: 12,
+                                  lineHeight: 1.45,
+                                  color: architect.inkMuted,
+                                  paddingLeft: 12,
+                                  position: "relative",
+                                }}
+                              >
+                                <span aria-hidden style={{ position: "absolute", left: 0, color: architect.accent }}>•</span>
+                                {bullet}
+                              </li>
+                            ))}
+                          </ul>
                         ) : null}
                       </div>
                       {pkg.added ? (
@@ -664,7 +695,8 @@ export default function ArchitectWorkspace({
                         </span>
                       ) : null}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 {purchasedPackagesPanel.note ? (
                   <div style={{ color: architect.inkMuted, fontSize: 12, lineHeight: 1.45 }}>
@@ -753,37 +785,20 @@ export default function ArchitectWorkspace({
                 />
               </div>
             )}
-
-            {!continuous && journey?.readyForProposal && !proposal ? (
-              <div style={{
-                borderTop: `1px solid ${architect.border}`,
-                paddingTop: 16,
-                display: "grid",
-                gap: 10,
-              }}>
-                <p style={{ margin: 0, color: architect.inkMuted, fontSize: 14, lineHeight: 1.5 }}>
-                  VIBETech has enough to show what will be built.
-                </p>
-                <ArchitectButton disabled={busy} onClick={() => void propose()}>
-                  See what we’ll build
-                </ArchitectButton>
-              </div>
-            ) : null}
           </ArchitectPanel>
         ) : null}
 
-        {showingRecommendationPrep ? (
+        {showingAssembly ? (
           <ArchitectPanel style={{ display: "grid", gap: 16, padding: "24px 22px" }}>
             <OsAssemblyCanvas
               proposal={proposal}
-              readyForProposal={readyForProposal}
+              readyForProposal={readyForProposal || Boolean(journey?.readyForProposal)}
               busy={busy}
               onPropose={() => void propose()}
-              onOpenProposal={() => setCenterMode("proposal")}
+              onContinueToBusiness={() => {
+                router.push(`${routes.install}?launch=1`);
+              }}
             />
-            <ArchitectButton variant="ghost" onClick={() => setCenterMode("conversation")}>
-              {continuous ? "Back to conversation" : "Back"}
-            </ArchitectButton>
           </ArchitectPanel>
         ) : null}
 
@@ -820,6 +835,17 @@ export default function ArchitectWorkspace({
   );
 
   return embedded ? body : <ArchitectShell maxWidth={760}>{body}</ArchitectShell>;
+}
+
+/** Split catalog copy into short bullets for the package-ready card. */
+function packageDescriptionBullets(description?: string): string[] {
+  const raw = String(description ?? "").trim();
+  if (!raw) return [];
+  const parts = raw
+    .split(/\s+[—–]\s+|(?<=\.)\s+(?=[A-Z])/)
+    .map((part) => part.trim().replace(/\.$/, ""))
+    .filter(Boolean);
+  return parts.length > 1 ? parts : [raw];
 }
 
 /** Optimistic UI merge so owner additions show before the server round-trip. */
