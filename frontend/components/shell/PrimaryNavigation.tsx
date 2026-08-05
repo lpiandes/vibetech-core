@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode, MouseEvent } from "react";
-import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -82,12 +81,14 @@ function NavSection({
   activeHref,
   needsAttentionCount,
   onNavClick,
+  onNavIntent,
 }: {
   title?: string;
   items: CanonicalNavItem[];
   activeHref: string | null;
   needsAttentionCount: number;
   onNavClick: (href: string) => (event: MouseEvent<HTMLAnchorElement>) => void;
+  onNavIntent: (href: string) => () => void;
 }) {
   if (!items.length) return null;
   return (
@@ -117,6 +118,8 @@ function NavSection({
               <Link
                 href={item.href}
                 onClick={onNavClick(item.href)}
+                onMouseEnter={onNavIntent(item.href)}
+                onFocus={onNavIntent(item.href)}
                 data-tour-nav={item.id}
                 aria-current={active ? "page" : undefined}
                 style={{
@@ -208,22 +211,22 @@ export default function PrimaryNavigation({
     items.map((item) => item.href),
   );
 
-  // Prefetch primary destinations so tab clicks feel instant.
-  useEffect(() => {
-    for (const item of items) {
-      try {
-        router.prefetch(item.href);
-      } catch {
-        /* ignore */
-      }
-    }
-  }, [router, items.map((item) => item.href).join("|")]);
-
+  // Prefetch on hover only — mass prefetch after login flooded cold serverless and slowed tabs.
   function onNavClick(href: string) {
     return (event: MouseEvent<HTMLAnchorElement>) => {
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
       beginNavigation(href);
       onNavigate?.();
+    };
+  }
+
+  function onNavIntent(href: string) {
+    return () => {
+      try {
+        router.prefetch(href);
+      } catch {
+        /* ignore */
+      }
     };
   }
 
@@ -263,6 +266,7 @@ export default function PrimaryNavigation({
           activeHref={activeHref}
           needsAttentionCount={needsAttentionCount}
           onNavClick={onNavClick}
+          onNavIntent={onNavIntent}
         />
         <NavSection
           title="Records"
@@ -270,6 +274,7 @@ export default function PrimaryNavigation({
           activeHref={activeHref}
           needsAttentionCount={needsAttentionCount}
           onNavClick={onNavClick}
+          onNavIntent={onNavIntent}
         />
         <NavSection
           title="System"
@@ -277,6 +282,7 @@ export default function PrimaryNavigation({
           activeHref={activeHref}
           needsAttentionCount={needsAttentionCount}
           onNavClick={onNavClick}
+          onNavIntent={onNavIntent}
         />
       </div>
     </nav>

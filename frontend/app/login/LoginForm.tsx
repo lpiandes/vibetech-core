@@ -24,18 +24,24 @@ export default function LoginForm() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-      callbackUrl,
-    });
-    setBusy(false);
-    if (result?.error) {
-      setError("Email or password is incorrect.");
-      return;
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+        callbackUrl,
+      });
+      if (result?.error) {
+        setError("Email or password is incorrect.");
+        setBusy(false);
+        return;
+      }
+      // Keep "Signing in…" until the browser leaves this page.
+      window.location.assign(result?.url ?? callbackUrl);
+    } catch {
+      setError("Could not sign in. Try again.");
+      setBusy(false);
     }
-    window.location.href = result?.url ?? callbackUrl;
   }
 
   return (

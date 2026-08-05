@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
+import { getAuthorizedWorkspace, healWorkspaceConnections } from "@/lib/platform/AuthorizedWorkspaceService";
 import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
 import { platformStore } from "@/lib/server/compose";
 import { liveIntegrationAvailability } from "@/lib/server/liveIntegrations";
@@ -8,6 +8,8 @@ import ConnectionsRenderer from "@/components/connections/ConnectionsRenderer";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
 import { brand, cockpitColors } from "@/design/tokens";
+import { workspaceCompositionRegistry } from "@/lib/workspace/WorkspaceCompositionRegistry";
+import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 import {
   PACKAGE_ASK_OPTION_TO_CONNECTION,
   resolvePackageAskConnectionOptions,
@@ -21,12 +23,17 @@ import {
 export default async function IntegrationsPage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   return runTimedPage("integrations", async () => {
+    // Drop stale in-memory composition so durable credentials/snapshots win after OAuth.
+    workspaceCompositionRegistry.clear(businessId);
+
     const [ctx, knowledgeDocumentCount, osInstallation] = await Promise.all([
       getAuthorizedWorkspace(businessId),
       platformStore.countActiveKnowledgeDocuments(businessId),
-      platformStore.getBusinessOSInstallation(businessId),
+      getCachedBusinessOsInstallation(businessId),
     ]);
     const { service } = ctx;
+    await healWorkspaceConnections(businessId, service);
+    markRequestTiming("CONNECTION_HEAL");
     await redirectIfModuleDenied({
       businessId,
       role: ctx.role,

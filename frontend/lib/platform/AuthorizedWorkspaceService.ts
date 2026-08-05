@@ -18,6 +18,7 @@ import { createLiveIntegrationProviders } from "@/lib/server/liveIntegrations";
 import { platformStore } from "@/lib/server/compose";
 import { hydrateWorkspaceCredentials } from "../../../backend/core/integrations/credentials/durableCredentialVault.js";
 import { reconcileConnectionsFromDurableCredentials } from "../../../backend/core/integrations/credentials/reconcileConnectionsFromDurableCredentials.js";
+import { getSharedCredentialVault } from "../../../backend/core/integrations/credentials/CredentialVault.js";
 
 export type AuthorizedContext = Awaited<ReturnType<typeof getAuthorizedWorkspace>>;
 
@@ -98,51 +99,25 @@ export const getAuthorizedWorkspace = cache(async (businessId: string, requiredP
   });
   timer.mark("WORKSPACE_SERVICE");
 
-  const connected = (service as any).connected as {
-    credentialsHydrated?: boolean;
-    connectionsReconciled?: boolean;
-  };
+  // Soft-nav fast path: one-time vault hydrate only. Connection heal is intentional
+  // (OAuth callback, Integrations, Home) — not every tab click.
+  const connected = (service as any).connected as { credentialsHydrated?: boolean };
   if (!connected.credentialsHydrated) {
     const vault =
       (service as any)?.connected?.integrationPlatform?.credentialVault
-      ?? undefined;
+      ?? getSharedCredentialVault();
     await timer.time("CREDENTIAL_HYDRATE", () =>
       hydrateWorkspaceCredentials({
         platformStore,
         vault,
         workspaceId: businessId,
+        overwrite: false,
       }),
     );
     connected.credentialsHydrated = true;
   } else {
     timer.mark("CREDENTIAL_HYDRATE_SKIPPED");
   }
-
-  // Credentials survive cold starts; connection status is a runtime snapshot.
-  // Heal CONNECTED from vault when the snapshot is missing/stale.
-  if (!connected.connectionsReconciled) {
-    await timer.time("CONNECTION_RECONCILE", () =>
-      reconcileConnectionsFromDurableCredentials({
-        workspaceId: businessId,
-        integrationPlatform: (service as any)?.connected?.integrationPlatform,
-        operatingStack: (service as any)?.connected?.operatingStack,
-        vault: (service as any)?.connected?.integrationPlatform?.credentialVault,
-      }).then(async (result) => {
-        if (result?.healed?.length) {
-          const knowledgeCount = await platformStore.countActiveKnowledgeDocuments(businessId).catch(() => 0);
-          service.refreshOperationalState(knowledgeCount);
-        }
-        return result;
-      }),
-    );
-    connected.connectionsReconciled = true;
-  } else {
-    timer.mark("CONNECTION_RECONCILE_SKIPPED");
-  }
-
-  // Do NOT reconcile subject interests or materialize campaigns here.
-  // Those are write-side maintenance and used to run on every soft navigation,
-  // making tab switches multi-second. Home / job tick own that work.
 
   timer.finish("TOTAL");
 
@@ -151,6 +126,32 @@ export const getAuthorizedWorkspace = cache(async (businessId: string, requiredP
     service,
   };
 });
+
+/**
+ * Force durable credentials → CONNECTED status. Call from Integrations / Home / OAuth
+ * — never from every soft navigation.
+ */
+export async function healWorkspaceConnections(businessId: string, service: WorkspaceService) {
+  const platform = (service as any)?.connected?.integrationPlatform;
+  const vault = platform?.credentialVault ?? getSharedCredentialVault();
+  await hydrateWorkspaceCredentials({
+    platformStore,
+    vault,
+    workspaceId: businessId,
+    overwrite: true,
+  });
+  const result = await reconcileConnectionsFromDurableCredentials({
+    workspaceId: businessId,
+    integrationPlatform: platform,
+    operatingStack: (service as any)?.connected?.operatingStack,
+    vault,
+  });
+  if (result?.healed?.length) {
+    const knowledgeCount = await platformStore.countActiveKnowledgeDocuments(businessId).catch(() => 0);
+    service.refreshOperationalState(knowledgeCount);
+  }
+  return result;
+}
 
 export function authorizationErrorResponse(err: unknown) {
   if (err instanceof AuthorizationError) {

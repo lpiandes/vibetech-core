@@ -28,13 +28,15 @@ export async function putDurableCredential({
 }
 
 /**
- * Load encrypted credentials for a workspace into the shared vault (idempotent).
+ * Load encrypted credentials for a workspace into the shared vault.
+ * When overwrite=true, always refresh from durable rows (needed after OAuth on another isolate).
  */
-/** @param {{platformStore: any, vault?: any, workspaceId: string}} input */
+/** @param {{platformStore: any, vault?: any, workspaceId: string, overwrite?: boolean}} input */
 export async function hydrateWorkspaceCredentials({
   platformStore,
   vault = getSharedCredentialVault(),
   workspaceId,
+  overwrite = false,
 } = {}) {
   if (!workspaceId || !platformStore?.listIntegrationCredentialsForWorkspace) {
     return { loaded: 0 };
@@ -42,7 +44,7 @@ export async function hydrateWorkspaceCredentials({
   const rows = await platformStore.listIntegrationCredentialsForWorkspace(workspaceId);
   let loaded = 0;
   for (const row of rows) {
-    if (vault.has(row.credentialId)) continue;
+    if (!overwrite && vault.has(row.credentialId)) continue;
     vault.put({
       credentialId: row.credentialId,
       providerType: row.providerType,

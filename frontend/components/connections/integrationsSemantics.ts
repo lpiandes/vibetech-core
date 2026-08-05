@@ -140,7 +140,8 @@ export function partitionIntegrationSections(
     const display = resolveDisplay(conn);
     if (display.listed === false) continue;
     const item = { conn, display };
-    if (String(conn.requirementLevel ?? "").toLowerCase() === "required") {
+    if (String(conn.requirementLevel ?? "").toLowerCase() === "required"
+      && !isConnectionConnected(String(conn.status ?? ""))) {
       required.push(item);
     }
     if (isConnectionConnected(String(conn.status ?? ""))) {

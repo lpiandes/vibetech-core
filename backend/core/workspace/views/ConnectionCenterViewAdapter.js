@@ -16,6 +16,7 @@ const OS_INTEGRATION_TO_CONNECTION = Object.freeze({
   voice_channel: "voice_channel",
   phone: "voice_channel",
   calendar: "calendar",
+  google_calendar: "calendar",
   accounting: "accounting",
   document_storage: "document_storage",
   documents: "document_storage",

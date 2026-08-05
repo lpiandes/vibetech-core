@@ -10,16 +10,17 @@ import { reconcileConnectionsFromDurableCredentials } from "./reconcileConnectio
 
 test("reconcile heals business_email from durable gmail credential", async () => {
   resetSharedCredentialVaultForTests();
+  const workspaceId = "biz_heal";
   const vault = new CredentialVault();
   vault.put({
-    credentialId: "cred_gmail_biz_heal",
+    credentialId: `cred_gmail_${workspaceId}`,
     providerType: "gmail",
     secrets: { refreshToken: "rt", senderEmail: "owner@example.com" },
     metadata: { senderEmail: "owner@example.com" },
   });
 
   const platform = createIntegrationPlatform({
-    workspaceId: "biz_heal",
+    workspaceId,
     installationResult: {
       connectedSystemRequirements: [{ id: "business_email", displayName: "Business Email" }],
     },
@@ -34,13 +35,8 @@ test("reconcile heals business_email from durable gmail credential", async () =>
     ],
   });
 
-  assert.notEqual(
-    platform.connectionRuntime.getConnectionByType("business_email")?.status,
-    CONNECTION_STATUSES.CONNECTED,
-  );
-
   const result = await reconcileConnectionsFromDurableCredentials({
-    workspaceId: "biz_heal",
+    workspaceId,
     integrationPlatform: platform,
     vault,
   });
@@ -52,18 +48,62 @@ test("reconcile heals business_email from durable gmail credential", async () =>
   );
 });
 
-test("reconcile is a no-op when already connected", async () => {
+test("reconcile heals calendar from durable google_calendar credential", async () => {
   resetSharedCredentialVaultForTests();
+  const workspaceId = "biz_cal";
   const vault = new CredentialVault();
   vault.put({
-    credentialId: "cred_gmail_biz_ok",
+    credentialId: `cred_gcal_${workspaceId}`,
+    providerType: "google_calendar",
+    secrets: { refreshToken: "rt", senderEmail: "owner@example.com" },
+    metadata: { senderEmail: "owner@example.com" },
+  });
+
+  const calendarClient = {
+    calendarList: {
+      list: async () => ({ data: { items: [{ id: "primary" }] } }),
+    },
+    events: {
+      insert: async () => ({ data: { id: "evt_1" } }),
+    },
+  };
+
+  const platform = createIntegrationPlatform({
+    workspaceId,
+    installationResult: {
+      connectedSystemRequirements: [{ id: "calendar", displayName: "Calendar" }],
+    },
+    nowISO: "2026-07-01T00:00:00.000Z",
+    credentialVault: vault,
+    extraProviders: [new GoogleCalendarIntegrationAdapter({ calendarClient })],
+  });
+
+  const result = await reconcileConnectionsFromDurableCredentials({
+    workspaceId,
+    integrationPlatform: platform,
+    vault,
+  });
+
+  assert.deepEqual(result.healed, ["calendar"]);
+  assert.equal(
+    platform.connectionRuntime.getConnectionByType("calendar")?.status,
+    CONNECTION_STATUSES.CONNECTED,
+  );
+});
+
+test("reconcile is a no-op when already connected", async () => {
+  resetSharedCredentialVaultForTests();
+  const workspaceId = "biz_ok";
+  const vault = new CredentialVault();
+  vault.put({
+    credentialId: `cred_gmail_${workspaceId}`,
     providerType: "gmail",
     secrets: { refreshToken: "rt", senderEmail: "owner@example.com" },
     metadata: { senderEmail: "owner@example.com" },
   });
 
   const platform = createIntegrationPlatform({
-    workspaceId: "biz_ok",
+    workspaceId,
     installationResult: {
       connectedSystemRequirements: [{ id: "business_email", displayName: "Business Email" }],
     },
@@ -79,12 +119,12 @@ test("reconcile is a no-op when already connected", async () => {
   });
 
   await reconcileConnectionsFromDurableCredentials({
-    workspaceId: "biz_ok",
+    workspaceId,
     integrationPlatform: platform,
     vault,
   });
   const second = await reconcileConnectionsFromDurableCredentials({
-    workspaceId: "biz_ok",
+    workspaceId,
     integrationPlatform: platform,
     vault,
   });

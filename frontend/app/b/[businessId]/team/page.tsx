@@ -58,38 +58,52 @@ export default async function TeamPage({ params }: { params: Promise<{ businessI
       ?? "",
     );
 
-    const reconciled = await reconcilePackWorkforce({
-      platformStore,
-      businessId,
-      installation,
-      specification,
-      industry,
-      businessName,
-      operatingPackId: String(
-        specification?.operatingPackId
-        ?? installation?.configuration?.operatingPackId
-        ?? "",
-      ),
-    });
+    const existingEmployees = Array.isArray(installation?.configuration?.employees)
+      ? installation.configuration.employees
+      : [];
+    const needsWorkforceHeal = existingEmployees.length === 0;
+
+    const reconciled = needsWorkforceHeal
+      ? await reconcilePackWorkforce({
+        platformStore,
+        businessId,
+        installation,
+        specification,
+        industry,
+        businessName,
+        operatingPackId: String(
+          specification?.operatingPackId
+          ?? installation?.configuration?.operatingPackId
+          ?? "",
+        ),
+      })
+      : { employees: existingEmployees, healed: false, added: 0, industry: industry || null };
 
     const installationAfterPack = reconciled.healed
       ? await platformStore.getBusinessOSInstallation(businessId).catch(() => installation)
       : installation;
 
-    const contractReconcile = await reconcileOperatingContracts({
-      platformStore,
-      businessId,
-      installation: {
-        ...(installationAfterPack ?? installation ?? {}),
-        configuration: {
-          ...(installationAfterPack?.configuration ?? installation?.configuration ?? {}),
-          employees: Array.isArray(reconciled.employees) ? reconciled.employees : [],
+    const contractReconcile = needsWorkforceHeal
+      ? await reconcileOperatingContracts({
+        platformStore,
+        businessId,
+        installation: {
+          ...(installationAfterPack ?? installation ?? {}),
+          configuration: {
+            ...(installationAfterPack?.configuration ?? installation?.configuration ?? {}),
+            employees: Array.isArray(reconciled.employees) ? reconciled.employees : [],
+          },
         },
-      },
-      specification,
-      industry: reconciled.industry ?? industry,
-      businessName,
-    });
+        specification,
+        industry: reconciled.industry ?? industry,
+        businessName,
+      })
+      : {
+        employees: Array.isArray(reconciled.employees) ? reconciled.employees : existingEmployees,
+        healed: false,
+        updated: 0,
+        industry: (reconciled.industry ?? industry) || null,
+      };
 
     // Always prefer reconciled employees (includes pack heal even when industry was blank).
     const configurationWithPack = {

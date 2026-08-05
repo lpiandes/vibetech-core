@@ -234,7 +234,15 @@ export async function GET(request: Request) {
     }
 
     cookieStore.delete(OAUTH_STATE_COOKIE);
-    const successPath = `${pending.redirectPath}${pending.redirectPath?.includes("?") ? "&" : "?"}connected=1`;
+    const connectedKey =
+      pending.providerType === "gmail"
+        ? "business_email"
+        : pending.providerType === "google_calendar"
+          ? "calendar"
+          : pending.providerType === "google_search_console"
+            ? "google_search_console"
+            : "1";
+    const successPath = `${pending.redirectPath}${pending.redirectPath?.includes("?") ? "&" : "?"}connected=${encodeURIComponent(connectedKey)}`;
     return NextResponse.redirect(new URL(successPath, request.url));
   } catch (err) {
     const message = err instanceof Error ? err.message : "oauth_failed";

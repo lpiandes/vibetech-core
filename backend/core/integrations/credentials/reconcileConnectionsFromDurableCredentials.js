@@ -22,57 +22,47 @@ export async function reconcileConnectionsFromDurableCredentials({
   const credentialVault = vault ?? integrationPlatform.credentialVault ?? null;
   const healed = [];
   const runtime = integrationPlatform.connectionRuntime;
-  const summaries = listVaultSummaries(credentialVault, workspaceId);
 
-  const gmail = summaries.find((row) => String(row.providerType) === "gmail")
-    ?? (credentialVault?.has?.(`cred_gmail_${workspaceId}`)
-      ? { credentialId: `cred_gmail_${workspaceId}`, providerType: "gmail", metadata: {} }
-      : null);
-  if (gmail?.credentialId) {
+  const gmailId = `cred_gmail_${workspaceId}`;
+  const gcalId = `cred_gcal_${workspaceId}`;
+
+  if (credentialVault?.has?.(gmailId)) {
     const conn = runtime.getConnectionByType?.("business_email");
     const status = String(conn?.status ?? CONNECTION_STATUSES.NOT_CONNECTED).toUpperCase();
     if (status !== CONNECTION_STATUSES.CONNECTED) {
-      const record = credentialVault?.get?.(gmail.credentialId);
-      await connectBusinessEmailGmail({
+      const record = credentialVault.get?.(gmailId);
+      const connection = await connectBusinessEmailGmail({
         integrationPlatform,
         workspaceId,
-        credentialId: gmail.credentialId,
-        senderEmail:
-          gmail.metadata?.senderEmail
-          ?? record?.metadata?.senderEmail
-          ?? record?.secrets?.senderEmail
-          ?? null,
+        credentialId: gmailId,
+        senderEmail: record?.metadata?.senderEmail ?? record?.secrets?.senderEmail ?? null,
       });
-      healed.push("business_email");
+      if (String(connection?.status ?? "").toUpperCase() === CONNECTION_STATUSES.CONNECTED) {
+        healed.push("business_email");
+      }
     }
   }
 
-  const gcal = summaries.find((row) => String(row.providerType) === "google_calendar")
-    ?? (credentialVault?.has?.(`cred_gcal_${workspaceId}`)
-      ? { credentialId: `cred_gcal_${workspaceId}`, providerType: "google_calendar", metadata: {} }
-      : null);
-  if (gcal?.credentialId) {
+  if (credentialVault?.has?.(gcalId)) {
     const conn = runtime.getConnectionByType?.("calendar");
     const status = String(conn?.status ?? CONNECTION_STATUSES.NOT_CONNECTED).toUpperCase();
     if (status !== CONNECTION_STATUSES.CONNECTED) {
-      const record = credentialVault?.get?.(gcal.credentialId);
-      const senderEmail =
-        gcal.metadata?.senderEmail
-        ?? record?.metadata?.senderEmail
-        ?? record?.secrets?.senderEmail
-        ?? null;
-      await connectProviderConnection({
+      const record = credentialVault.get?.(gcalId);
+      const senderEmail = record?.metadata?.senderEmail ?? record?.secrets?.senderEmail ?? null;
+      const connection = await connectProviderConnection({
         integrationPlatform,
         workspaceId,
         connectionType: "calendar",
         displayName: "Calendar",
         providerType: "google_calendar",
-        credentialId: gcal.credentialId,
+        credentialId: gcalId,
         credentialType: "oauth2",
-        externalAccountReference: senderEmail ? `gcal:${senderEmail}` : `gcal:${gcal.credentialId}`,
+        externalAccountReference: senderEmail ? `gcal:${senderEmail}` : `gcal:${gcalId}`,
         metadata: { senderEmail },
       });
-      healed.push("calendar");
+      if (String(connection?.status ?? "").toUpperCase() === CONNECTION_STATUSES.CONNECTED) {
+        healed.push("calendar");
+      }
     }
   }
 
@@ -88,26 +78,12 @@ export async function reconcileConnectionsFromDurableCredentials({
   return { healed, skipped: false };
 }
 
-function listVaultSummaries(vault, workspaceId) {
-  if (!vault) return [];
-  if (typeof vault.listSummaries === "function") {
-    return vault.listSummaries() ?? [];
-  }
-  const known = [];
-  for (const credentialId of [`cred_gmail_${workspaceId}`, `cred_gcal_${workspaceId}`]) {
-    if (typeof vault.summarize === "function") {
-      const summary = vault.summarize(credentialId);
-      if (summary) known.push(summary);
-    } else if (typeof vault.has === "function" && vault.has(credentialId)) {
-      const record = vault.get?.(credentialId);
-      if (record) {
-        known.push({
-          credentialId: record.credentialId,
-          providerType: record.providerType,
-          metadata: record.metadata ?? {},
-        });
-      }
-    }
-  }
-  return known;
+/** True when runtime still needs heal after credentials may exist in DB/vault. */
+export function connectionHealLikelyNeeded(integrationPlatform, workspaceId) {
+  const runtime = integrationPlatform?.connectionRuntime;
+  if (!runtime?.getConnectionByType) return true;
+  const email = String(runtime.getConnectionByType("business_email")?.status ?? "").toUpperCase();
+  const calendar = String(runtime.getConnectionByType("calendar")?.status ?? "").toUpperCase();
+  // During RFT setup both matter; if either is not connected, refresh from durable vault/DB.
+  return email !== CONNECTION_STATUSES.CONNECTED || calendar !== CONNECTION_STATUSES.CONNECTED;
 }

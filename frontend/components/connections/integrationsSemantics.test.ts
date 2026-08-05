@@ -111,7 +111,8 @@ test("partition sections never build a roadmap of unavailable channels", () => {
   );
 
   assert.equal(sections.roadmap.length, 0);
-  assert.equal(sections.required.length, 1);
+  // Connected required integrations leave Required and appear only under Connected.
+  assert.equal(sections.required.length, 0);
   assert.equal(sections.connected.length, 1);
   assert.ok(sections.available.some((item) => item.display.id === "sms_channel"));
   assert.ok(!sections.available.some((item) => item.display.id === "accounting"));

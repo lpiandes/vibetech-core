@@ -31,31 +31,27 @@ export async function getSystemWorkspaceForBusiness(businessId: string) {
     extraProviders: createLiveIntegrationProviders({ nowISO: new Date().toISOString() }),
   });
 
-  const connected = (service as any).connected as {
-    credentialsHydrated?: boolean;
-    connectionsReconciled?: boolean;
-  };
+  const connected = (service as any).connected as { credentialsHydrated?: boolean };
+  const vault = (service as any)?.connected?.integrationPlatform?.credentialVault;
   if (!connected.credentialsHydrated) {
-    const vault = (service as any)?.connected?.integrationPlatform?.credentialVault;
     await hydrateWorkspaceCredentials({
       platformStore,
       vault,
       workspaceId: id,
+      overwrite: false,
     });
     connected.credentialsHydrated = true;
   }
-  if (!connected.connectionsReconciled) {
-    const result = await reconcileConnectionsFromDurableCredentials({
-      workspaceId: id,
-      integrationPlatform: (service as any)?.connected?.integrationPlatform,
-      operatingStack: (service as any)?.connected?.operatingStack,
-      vault: (service as any)?.connected?.integrationPlatform?.credentialVault,
-    });
-    if (result?.healed?.length) {
-      service.refreshOperationalState(0);
-    }
-    connected.connectionsReconciled = true;
-  }
+
+  // System/webhook paths need durable connect heal (inbound email etc.).
+  await reconcileConnectionsFromDurableCredentials({
+    workspaceId: id,
+    integrationPlatform: (service as any)?.connected?.integrationPlatform,
+    operatingStack: (service as any)?.connected?.operatingStack,
+    vault,
+  }).then((result) => {
+    if (result?.healed?.length) service.refreshOperationalState(0);
+  });
 
   return { service, installation, businessId: id };
 }

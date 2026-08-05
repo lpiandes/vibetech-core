@@ -1,4 +1,4 @@
-import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
+import { getAuthorizedWorkspace, healWorkspaceConnections } from "@/lib/platform/AuthorizedWorkspaceService";
 import { platformStore } from "@/lib/server/compose";
 import { liveIntegrationAvailability } from "@/lib/server/liveIntegrations";
 import BusinessOnboardingHome from "@/components/operating/BusinessOnboardingHome";
@@ -24,6 +24,8 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
   const { businessId } = await params;
   return runTimedPage("home", async () => {
     const ctx = await getAuthorizedWorkspace(businessId);
+    // Heal email/calendar CONNECTED from durable vault for RFT launch status (not every tab).
+    await healWorkspaceConnections(businessId, ctx.service).catch(() => null);
 
     // Maintenance must never block first paint / login. Fire-and-forget on Home only.
     void Promise.all([

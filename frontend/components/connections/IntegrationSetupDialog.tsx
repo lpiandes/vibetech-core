@@ -408,17 +408,40 @@ export default function IntegrationSetupDialog({
               lineHeight: 1.45,
             }}
           >
-            On Google’s screen, keep <strong>Send email on your behalf</strong> checked.
-            If connect fails, remove VIBETech under{" "}
-            <a
-              href="https://myaccount.google.com/permissions"
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: cockpitColors.accent, fontWeight: 700 }}
-            >
-              Google Account → Third-party access
-            </a>
-            {" "}and try again.
+            {integration.id === "business_email" ? (
+              <>
+                On Google’s screen, keep <strong>Send email on your behalf</strong> checked.
+                If connect fails, remove VIBETech under{" "}
+                <a
+                  href="https://myaccount.google.com/permissions"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: cockpitColors.accent, fontWeight: 700 }}
+                >
+                  Google Account → Third-party access
+                </a>
+                {" "}and try again.
+              </>
+            ) : integration.id === "calendar" ? (
+              <>
+                On Google’s screen, approve <strong>calendar access</strong> for this business.
+                If connect fails, remove VIBETech under{" "}
+                <a
+                  href="https://myaccount.google.com/permissions"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: cockpitColors.accent, fontWeight: 700 }}
+                >
+                  Google Account → Third-party access
+                </a>
+                {" "}and try again.
+              </>
+            ) : (
+              <>
+                Approve the Google access requested on the next screen.
+                If connect fails, remove VIBETech under Google Account → Third-party access and try again.
+              </>
+            )}
           </div>
         ) : null}
 
@@ -1116,15 +1139,12 @@ export default function IntegrationSetupDialog({
               <p style={{ ...typography.caption, color: cockpitColors.textSecondary, margin: `${spacing.xs} 0 0`, lineHeight: 1.45 }}>
                 {isBusinessEmail
                   ? "Nothing sends without your OK."
+                  : integration.id === "calendar"
+                  ? "Events stay on your Google Calendar. Meet links are optional."
                   : setupMode === "oauth"
-                  ? "Sign in with Google. Nothing sends without your OK."
+                  ? "Sign in with Google to connect."
                   : "Connect this tool."}
               </p>
-              {isGoogleOAuth ? (
-                <p style={{ ...typography.caption, color: cockpitColors.textMuted, margin: `${spacing.sm} 0 0`, lineHeight: 1.45 }}>
-                  After Google, click <strong>Run test</strong> on Home — connect alone is not proven.
-                </p>
-              ) : null}
             </>
           ) : (
             <>

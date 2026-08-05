@@ -117,8 +117,27 @@ export default function ConnectionsExecutiveLayout() {
   const [provingId, setProvingId] = useState<string | null>(null);
   const [proveMessage, setProveMessage] = useState<string | null>(null);
   const consumedFocusRef = useRef<string | null>(null);
+  const consumedConnectedRef = useRef<string | null>(null);
   const connectError = searchParams.get("error");
-  const justConnected = searchParams.get("connected") === "1";
+  const connectedParam = searchParams.get("connected");
+  const justConnectedType =
+    connectedParam === "1" || connectedParam === "business_email" || connectedParam === "calendar" || connectedParam === "google_search_console"
+      ? connectedParam === "1"
+        ? "any"
+        : connectedParam
+      : null;
+  const actuallyConnected = useMemo(() => {
+    if (!justConnectedType) return false;
+    return connections.some((conn) => {
+      const status = String(conn.status ?? "").toUpperCase();
+      if (status !== "CONNECTED" && status !== "VERIFIED" && status !== "PROVEN") return false;
+      if (justConnectedType === "any") return true;
+      if (justConnectedType === "business_email") return conn.id === "business_email";
+      if (justConnectedType === "calendar") return conn.id === "calendar";
+      return conn.id === justConnectedType;
+    });
+  }, [connections, justConnectedType]);
+  const justConnected = Boolean(justConnectedType && actuallyConnected);
   const connectErrorMessage = useMemo(() => {
     if (!connectError) return null;
     if (connectError === "access_denied") {
@@ -207,16 +226,29 @@ export default function ConnectionsExecutiveLayout() {
     }
   }, [pathname, router, searchParams]);
 
-  // After OAuth: never reopen the modal; refresh so connection status reloads from vault/snapshot.
+  // After OAuth: never reopen the modal. Only keep the success banner when status is real.
   useEffect(() => {
-    if (!justConnected) return;
+    if (!connectedParam) {
+      consumedConnectedRef.current = null;
+      return;
+    }
+    if (consumedConnectedRef.current === connectedParam) return;
+    consumedConnectedRef.current = connectedParam;
     setSetupTarget(null);
+    if (!actuallyConnected) {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("connected");
+      const query = next.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      router.refresh();
+      return;
+    }
     router.refresh();
     const returnTo = searchParams.get("returnTo");
     if (returnTo) {
       const safe = resolveOAuthReturnPath(returnTo, "");
       if (safe) {
-        const dest = `${safe}${safe.includes("?") ? "&" : "?"}connected=1`;
+        const dest = `${safe}${safe.includes("?") ? "&" : "?"}connected=${encodeURIComponent(connectedParam)}`;
         router.replace(dest);
         return;
       }
@@ -227,7 +259,7 @@ export default function ConnectionsExecutiveLayout() {
       const query = next.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     }
-  }, [justConnected, pathname, router, searchParams]);
+  }, [actuallyConnected, connectedParam, pathname, router, searchParams]);
 
   useEffect(() => {
     const focus = searchParams.get("focus");
@@ -310,7 +342,7 @@ export default function ConnectionsExecutiveLayout() {
             lineHeight: 1.5,
           }}
         >
-          Connected. Prove it works next.
+          Connected. Use Prove on this row when you are ready to verify a real send or calendar action.
         </div>
       ) : null}
       {proveMessage ? (

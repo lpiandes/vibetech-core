@@ -10,6 +10,7 @@ import { AuthorizationError, platformStore } from "@/lib/server/compose";
 import { composePortalModel } from "@/lib/portal-renderer/composePortalModel.js";
 import { sanitizeCallbackUrl } from "@/lib/platform/routeProtection";
 import { readPurchasedPackagesFromConfig, readPendingPackageAsk } from "../../../../backend/core/platform/packages/SalesPackageCatalog.js";
+import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 
 export default async function BusinessScopedLayout({
   children,
@@ -77,7 +78,7 @@ export default async function BusinessScopedLayout({
   let installedNavigation = null as any;
   let installedBusinessOS = null as any;
   try {
-    const installation = await platformStore.getBusinessOSInstallation(businessId);
+    const installation = await getCachedBusinessOsInstallation(businessId);
     let specification = null;
     if (installation?.specificationId) {
       try {
