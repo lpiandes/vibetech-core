@@ -17,6 +17,7 @@ import type { WorkspaceActivationInput } from "../workspace/ConnectedBusinessWor
 import { createLiveIntegrationProviders } from "@/lib/server/liveIntegrations";
 import { platformStore } from "@/lib/server/compose";
 import { hydrateWorkspaceCredentials } from "../../../backend/core/integrations/credentials/durableCredentialVault.js";
+import { reconcileConnectionsFromDurableCredentials } from "../../../backend/core/integrations/credentials/reconcileConnectionsFromDurableCredentials.js";
 
 export type AuthorizedContext = Awaited<ReturnType<typeof getAuthorizedWorkspace>>;
 
@@ -97,7 +98,10 @@ export const getAuthorizedWorkspace = cache(async (businessId: string, requiredP
   });
   timer.mark("WORKSPACE_SERVICE");
 
-  const connected = (service as any).connected as { credentialsHydrated?: boolean };
+  const connected = (service as any).connected as {
+    credentialsHydrated?: boolean;
+    connectionsReconciled?: boolean;
+  };
   if (!connected.credentialsHydrated) {
     const vault =
       (service as any)?.connected?.integrationPlatform?.credentialVault
@@ -112,6 +116,28 @@ export const getAuthorizedWorkspace = cache(async (businessId: string, requiredP
     connected.credentialsHydrated = true;
   } else {
     timer.mark("CREDENTIAL_HYDRATE_SKIPPED");
+  }
+
+  // Credentials survive cold starts; connection status is a runtime snapshot.
+  // Heal CONNECTED from vault when the snapshot is missing/stale.
+  if (!connected.connectionsReconciled) {
+    await timer.time("CONNECTION_RECONCILE", () =>
+      reconcileConnectionsFromDurableCredentials({
+        workspaceId: businessId,
+        integrationPlatform: (service as any)?.connected?.integrationPlatform,
+        operatingStack: (service as any)?.connected?.operatingStack,
+        vault: (service as any)?.connected?.integrationPlatform?.credentialVault,
+      }).then(async (result) => {
+        if (result?.healed?.length) {
+          const knowledgeCount = await platformStore.countActiveKnowledgeDocuments(businessId).catch(() => 0);
+          service.refreshOperationalState(knowledgeCount);
+        }
+        return result;
+      }),
+    );
+    connected.connectionsReconciled = true;
+  } else {
+    timer.mark("CONNECTION_RECONCILE_SKIPPED");
   }
 
   // Do NOT reconcile subject interests or materialize campaigns here.

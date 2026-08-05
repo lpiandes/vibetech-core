@@ -401,21 +401,24 @@ export default function IntegrationSetupDialog({
             style={{
               padding: spacing.md,
               borderRadius: 8,
-              backgroundColor: "rgba(251,191,36,0.12)",
-              border: "1px solid rgba(251,191,36,0.35)",
-              color: "#fbbf24",
+              backgroundColor: cockpitColors.panelElevated,
+              border: `1px solid ${cockpitColors.panelBorder}`,
+              color: cockpitColors.textSecondary,
               fontSize: typography.caption.fontSize,
               lineHeight: 1.45,
             }}
           >
-            Google blocked? Keep <strong>Send email on your behalf</strong> checked on Google’s screen.
-            If it fails again, revoke VibeTech at myaccount.google.com/permissions and reconnect.
-            Clients never open Google Cloud — only VIBETech’s OAuth app is configured once.
-            {allowLocalDesignPartnerConnect ? (
-              <>
-                {" "}Or tap <strong>Connect locally</strong> for a design-partner mock.
-              </>
-            ) : null}
+            On Google’s screen, keep <strong>Send email on your behalf</strong> checked.
+            If connect fails, remove VIBETech under{" "}
+            <a
+              href="https://myaccount.google.com/permissions"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: cockpitColors.accent, fontWeight: 700 }}
+            >
+              Google Account → Third-party access
+            </a>
+            {" "}and try again.
           </div>
         ) : null}
 

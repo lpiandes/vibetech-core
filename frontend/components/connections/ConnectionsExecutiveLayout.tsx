@@ -207,10 +207,11 @@ export default function ConnectionsExecutiveLayout() {
     }
   }, [pathname, router, searchParams]);
 
-  // After OAuth: never reopen the modal; send people back where they started (usually Home).
+  // After OAuth: never reopen the modal; refresh so connection status reloads from vault/snapshot.
   useEffect(() => {
     if (!justConnected) return;
     setSetupTarget(null);
+    router.refresh();
     const returnTo = searchParams.get("returnTo");
     if (returnTo) {
       const safe = resolveOAuthReturnPath(returnTo, "");

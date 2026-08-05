@@ -6,6 +6,7 @@ import { createLiveIntegrationProviders } from "@/lib/server/liveIntegrations";
 import { platformStore } from "@/lib/server/compose";
 import { resolveWorkspaceRuntimeSnapshots } from "../../../backend/core/persistence/resolveWorkspaceRuntimeSnapshots.js";
 import { hydrateWorkspaceCredentials } from "../../../backend/core/integrations/credentials/durableCredentialVault.js";
+import { reconcileConnectionsFromDurableCredentials } from "../../../backend/core/integrations/credentials/reconcileConnectionsFromDurableCredentials.js";
 import { workspaceCompositionRegistry } from "@/lib/workspace/WorkspaceCompositionRegistry";
 
 export async function getSystemWorkspaceForBusiness(businessId: string) {
@@ -30,7 +31,10 @@ export async function getSystemWorkspaceForBusiness(businessId: string) {
     extraProviders: createLiveIntegrationProviders({ nowISO: new Date().toISOString() }),
   });
 
-  const connected = (service as any).connected as { credentialsHydrated?: boolean };
+  const connected = (service as any).connected as {
+    credentialsHydrated?: boolean;
+    connectionsReconciled?: boolean;
+  };
   if (!connected.credentialsHydrated) {
     const vault = (service as any)?.connected?.integrationPlatform?.credentialVault;
     await hydrateWorkspaceCredentials({
@@ -39,6 +43,18 @@ export async function getSystemWorkspaceForBusiness(businessId: string) {
       workspaceId: id,
     });
     connected.credentialsHydrated = true;
+  }
+  if (!connected.connectionsReconciled) {
+    const result = await reconcileConnectionsFromDurableCredentials({
+      workspaceId: id,
+      integrationPlatform: (service as any)?.connected?.integrationPlatform,
+      operatingStack: (service as any)?.connected?.operatingStack,
+      vault: (service as any)?.connected?.integrationPlatform?.credentialVault,
+    });
+    if (result?.healed?.length) {
+      service.refreshOperationalState(0);
+    }
+    connected.connectionsReconciled = true;
   }
 
   return { service, installation, businessId: id };

@@ -67,6 +67,19 @@ export class CredentialVault {
       secretKeys: Object.keys(record.secrets ?? {}),
     });
   }
+
+  /** Non-secret inventory — never includes secrets. */
+  listSummaries() {
+    return Array.from(this._store.values()).map((record) =>
+      deepFreeze({
+        credentialId: record.credentialId,
+        providerType: record.providerType,
+        metadata: deepFreeze(record.metadata ?? {}),
+        updatedAt: record.updatedAt,
+        secretKeys: Object.keys(record.secrets ?? {}),
+      }),
+    );
+  }
 }
 
 let sharedVault = null;

@@ -122,6 +122,20 @@ export async function GET(request: Request) {
         senderEmail: tokens.senderEmail,
         platformActiveKnowledgeCount: knowledgeCount,
       });
+      const emailStatus = String(
+        ctx.service.connected?.integrationPlatform?.connectionRuntime?.getConnectionByType?.("business_email")?.status
+        ?? "",
+      ).toUpperCase();
+      if (emailStatus !== "CONNECTED") {
+        return NextResponse.redirect(
+          new URL(
+            `${pending.redirectPath}${pending.redirectPath?.includes("?") ? "&" : "?"}error=${encodeURIComponent(
+              "Google signed in, but email connection did not verify. Reconnect and keep “Send email on your behalf” checked.",
+            )}`,
+            request.url,
+          ),
+        );
+      }
 
       // Best-effort first sync so the inbox isn't empty until the next "Sync now"
       // click or hosted job tick sweep — never block/fail the OAuth redirect on this.
