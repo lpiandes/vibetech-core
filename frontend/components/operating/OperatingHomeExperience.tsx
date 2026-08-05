@@ -130,7 +130,7 @@ export default function OperatingHomeExperience() {
             </>
           ) : (
             <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize }}>
-              No operating volume yet today — connect work and prove one opportunity, or wait for the next inbound.
+              No work yet today — connect email & calendar, or wait for the next lead.
             </p>
           )}
         </div>
@@ -344,7 +344,7 @@ function PerformanceBrief({
         </h2>
         {outcomesHref ? (
           <Link href={outcomesHref} style={{ color: cockpitColors.accent, fontWeight: 650, fontSize: 13, textDecoration: "none" }}>
-            Full ledger →
+            Outcomes →
           </Link>
         ) : null}
       </div>
@@ -356,7 +356,7 @@ function PerformanceBrief({
           </div>
         ))}
         <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted }}>
-          Numbers appear only from evidence-backed baselines and outcomes — never invented.
+          Shown only when backed by real evidence.
         </p>
       </div>
     </section>
@@ -385,7 +385,7 @@ function buildHealthLine({
   if (remainingSetup > 0) {
     return {
       headline: `${businessName || "This business"} is still launching.`,
-      detail: "Finish Revenue Follow-Through launch (connect, confirm, prove, go live) before treating the operation as live.",
+      detail: "Finish the launch checklist before treating this as live.",
     };
   }
   if (needsCount > 0) {

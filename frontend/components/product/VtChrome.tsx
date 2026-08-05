@@ -237,12 +237,12 @@ export function VtHero({
       style={{
         borderRadius: 18,
         border: "2px solid rgba(45,212,191,0.55)",
-        background: "linear-gradient(135deg, #0f766e 0%, #115e59 42%, #1c1917 100%)",
+        background: "linear-gradient(135deg, #0c1222 0%, #0891b2 48%, #a855f7 100%)",
         color: "#fff",
         padding: "18px 20px",
         display: "grid",
         gap: 14,
-        boxShadow: "0 16px 44px rgba(15,118,110,0.28), inset 0 1px 0 rgba(255,255,255,0.14)",
+        boxShadow: "0 16px 44px rgba(8,145,178,0.28), inset 0 1px 0 rgba(255,255,255,0.14)",
         position: "relative",
         overflow: "hidden",
       }}
@@ -253,7 +253,7 @@ export function VtHero({
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(ellipse at 12% 0%, rgba(45,212,191,0.32), transparent 55%), radial-gradient(ellipse at 100% 100%, rgba(0,0,0,0.4), transparent 50%)",
+            "radial-gradient(ellipse at 12% 0%, rgba(34,211,238,0.32), transparent 55%), radial-gradient(ellipse at 100% 100%, rgba(168,85,247,0.25), transparent 50%)",
           pointerEvents: "none",
         }}
       />
@@ -380,14 +380,14 @@ export function VtFilterChip({
       onClick={onClick}
       style={{
         borderRadius: 999,
-        border: active ? `3px solid #0f766e` : `2px solid rgba(28,25,23,0.22)`,
+        border: active ? `3px solid #0891b2` : `2px solid rgba(15,23,42,0.22)`,
         padding: "9px 14px",
         fontWeight: 900,
         fontSize: 12,
         letterSpacing: "0.06em",
         textTransform: "uppercase",
         background: active
-          ? "linear-gradient(180deg, #0f766e 0%, #115e59 100%)"
+          ? "linear-gradient(180deg, #0891b2 0%, #0e7490 100%)"
           : "#fff",
         color: active ? "#fff" : cockpitColors.textPrimary,
         cursor: "pointer",

@@ -58,7 +58,7 @@ export default function GlobalAskVibeTechEntry({
         height: compact ? 34 : 40,
         padding: compact ? `0 ${spacing.md}` : `0 ${spacing.lg}`,
         borderRadius: radius.medium,
-        backgroundColor: active ? "#0d9488" : cockpitColors.accent,
+        backgroundColor: active ? "#0e7490" : cockpitColors.accent,
         color: "#fff",
         textDecoration: "none",
         fontWeight: 700,

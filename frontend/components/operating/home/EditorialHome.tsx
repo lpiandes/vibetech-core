@@ -19,7 +19,7 @@ export function HomeCanvas({ children }: { children: ReactNode }) {
         margin: `-${spacing.lg} -${spacing.lg} -${spacing.xl}`,
         padding: `${spacing.lg} ${spacing.lg} ${spacing["2xl"]}`,
         minHeight: "calc(100vh - 72px)",
-        background: "#eef1f4",
+        background: cockpitColors.background,
       }}
     >
       <div
@@ -283,7 +283,7 @@ function metricVisual(label: string, tone?: "default" | "attention" | "good") {
   if (/work|motion|active|deal|showing/.test(normalized)) return { icon: BriefcaseBusiness, color: "#047857", background: "#e5f7ef" };
   if (/inquir|lead|people|conversation|message/.test(normalized)) return { icon: Mail, color: "#2563eb", background: "#e8f1ff" };
   if (tone === "good" || /complete|win|outcome/.test(normalized)) return { icon: ClipboardCheck, color: "#059669", background: "#e5f7ef" };
-  return { icon: BarChart3, color: "#0f766e", background: "#e4f7f3" };
+  return { icon: BarChart3, color: "#0891b2", background: "#ecfeff" };
 }
 
 export function DashGrid({ children }: { children: ReactNode }) {
@@ -564,7 +564,7 @@ export function WorkforceRow({
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
         <div style={{ display: "flex", gap: 9, minWidth: 0 }}>
-          <span aria-hidden style={{ width: 30, height: 30, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 999, background: "linear-gradient(135deg, #0f766e, #155e75)", color: "#fff", fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{initials}</span>
+          <span aria-hidden style={{ width: 30, height: 30, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 999, background: "linear-gradient(135deg, #0891b2, #a855f7)", color: "#fff", fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{initials}</span>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 13, color: cockpitColors.textPrimary }}>
               {scrubInternalWording(name)}

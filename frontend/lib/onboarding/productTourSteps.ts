@@ -21,16 +21,16 @@ export type ProductTourStep = {
 export const PRODUCT_TOUR_STEPS: ProductTourStep[] = [
   {
     id: "welcome",
-    title: "Welcome to your operating system",
-    body: "We’re loading a walkthrough tailored to this business. Tap Next to continue on Home.",
+    title: "Welcome",
+    body: "A short walkthrough for this business. Tap Next to continue.",
     navTarget: "home",
-    navHint: "Home",
+    navHint: "Today",
     hrefSuffix: "/home",
   },
   {
     id: "ask",
-    title: "Ask VIBETech",
-    body: "Describe custom builds here — newsletters, quote flows, automations — then approve before they go live.",
+    title: "Ask",
+    body: "Tell VIBETech what you need — approve before anything goes live.",
     navTarget: "ask",
     navHint: "Ask",
     hrefSuffix: "/architect",
@@ -38,7 +38,7 @@ export const PRODUCT_TOUR_STEPS: ProductTourStep[] = [
   {
     id: "settings",
     title: "Settings",
-    body: "Replay this tutorial anytime from Settings → See tutorial again.",
+    body: "Replay this tour anytime from Settings.",
     navTarget: "settings",
     navHint: "Settings",
     hrefSuffix: "/settings",

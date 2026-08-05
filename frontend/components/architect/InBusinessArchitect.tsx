@@ -510,18 +510,18 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
                   fontSize: "clamp(1.6rem, 3vw, 2.1rem)",
                   letterSpacing: "-0.02em",
                 }}>
-                  Ask — command your operation
+                  Ask
                 </h1>
                 <p style={{ margin: 0, color: architect.inkMuted, lineHeight: 1.55 }}>
-                  Ask about escalations, stalled proposals, SLAs, and coverage. Answers cite stored evidence — nothing is invented, and contract changes need your confirm.
+                  Tell us what you need. You’ll approve before anything changes.
                 </p>
               </div>
               <AskVibeTechPrompt
                 businessId={businessId}
                 large
                 showSuggestions
-                placeholder="Ask an operating question…"
-                helperText="Pick a suggested command or type your own. Blank New chat is not the product."
+                placeholder="What do you need?"
+                helperText="Pick a suggestion or type your own."
               />
               {history.length ? (
                 <div style={{ display: "grid", gap: 8 }}>

@@ -60,7 +60,7 @@ function metricVisual(label: string) {
   if (/ready|connected|complete|sent|working/.test(value)) return { icon: CheckCircle2, color: "#047857", background: "#e5f7ef" };
   if (/team|people|employee/.test(value)) return { icon: UsersRound, color: "#7c3aed", background: "#f1eaff" };
   if (/knowledge|document/.test(value)) return { icon: FileText, color: "#2563eb", background: "#e8f1ff" };
-  if (/connection|integration/.test(value)) return { icon: PlugZap, color: "#0f766e", background: "#e4f7f3" };
+  if (/connection|integration/.test(value)) return { icon: PlugZap, color: "#0891b2", background: "#ecfeff" };
   if (/work|queue|open/.test(value)) return { icon: ListChecks, color: "#2563eb", background: "#e8f1ff" };
-  return { icon: Activity, color: "#0f766e", background: "#e4f7f3" };
+  return { icon: Activity, color: "#0891b2", background: "#ecfeff" };
 }

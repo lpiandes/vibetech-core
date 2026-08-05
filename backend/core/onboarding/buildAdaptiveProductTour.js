@@ -8,7 +8,7 @@ import {
 } from "../platform/packages/SalesPackageCatalog.js";
 import { isSocialCheckerOnlyPurchasedScope } from "../platform/packages/socialCheckerEntitlement.js";
 
-export const ADAPTIVE_TOUR_VERSION = 3;
+export const ADAPTIVE_TOUR_VERSION = 4;
 
 /** Mission / capability id → where to take the user in the shell. */
 const MISSION_ROUTES = Object.freeze({
@@ -33,8 +33,8 @@ const NAV_INTROS = Object.freeze([
     navTarget: "people",
     hrefSuffix: "/people",
     navHint: "People",
-    title: "People — your leads & customers",
-    body: "Contacts from Meta, forms, and SMS land here. Open a person to see their timeline so nothing stays stuck in a spreadsheet.",
+    title: "People",
+    body: "Leads and customers land here. Open anyone to see their timeline.",
     priority: 40,
   },
   {
@@ -43,8 +43,8 @@ const NAV_INTROS = Object.freeze([
     navTarget: "pipelines",
     hrefSuffix: "/pipelines",
     navHint: "Pipelines",
-    title: "Pipelines — deal motion",
-    body: "Stages show where every opportunity sits. Move cards as the relationship progresses so the team shares one view of the book.",
+    title: "Pipelines",
+    body: "See where every opportunity sits — one shared view for the team.",
     priority: 42,
   },
   {
@@ -53,8 +53,8 @@ const NAV_INTROS = Object.freeze([
     navTarget: "subjects",
     hrefSuffix: "/properties",
     navHint: "Properties",
-    title: "Properties — your listings",
-    body: "Property records live here. Keep them current so newsletters, follow-ups, and reporting can reference real inventory.",
+    title: "Properties",
+    body: "Keep listings current so follow-ups reference real inventory.",
     priority: 43,
   },
   {
@@ -63,8 +63,8 @@ const NAV_INTROS = Object.freeze([
     navTarget: "automations",
     hrefSuffix: "/automations",
     navHint: "Automations",
-    title: "Automations — prove before you go live",
-    body: "Workflows fire when leads arrive or events happen. Use Test workflow to see each action run before customers feel it.",
+    title: "Automations",
+    body: "Test a workflow before customers feel it.",
     priority: 45,
   },
   {
@@ -73,8 +73,8 @@ const NAV_INTROS = Object.freeze([
     navTarget: "campaigns",
     hrefSuffix: "/campaigns",
     navHint: "Campaigns",
-    title: "Campaigns — drafts you approve",
-    body: "Email and newsletter work shows up here as drafts. Review and GRANT before anything sends to your list.",
+    title: "Campaigns",
+    body: "Drafts appear here. Approve before anything sends.",
     priority: 46,
   },
   {
@@ -83,8 +83,8 @@ const NAV_INTROS = Object.freeze([
     navTarget: "inbox",
     hrefSuffix: "/inbox",
     navHint: "Inbox",
-    title: "Inbox — conversations in the OS",
-    body: "Customer threads live with the rest of the operating system — not a separate mailbox you have to chase.",
+    title: "Inbox",
+    body: "Customer conversations live with the rest of the business.",
     priority: 47,
   },
 ]);
@@ -120,8 +120,8 @@ function missionToStep(mission, { businessId, priority }) {
     id: `mission:${id}`,
     title: String(mission.title ?? id),
     body: incomplete
-      ? `${detail || "This is still open for your business."} Tap Next after you review — then use “${action}” on Home when you’re ready to finish it.`
-      : `${detail || "Already in good shape."} We’ll still show you where it lives so your team knows the path.`,
+      ? `${detail || "Still open."} Finish with “${action}” on Today when ready.`
+      : `${detail || "Done."} You’ll find it on Today.`,
     hrefSuffix: fromMission || route.hrefSuffix,
     navTarget: route.navTarget,
     navHint: route.navHint,
@@ -194,10 +194,12 @@ export function buildAdaptiveProductTour({
   steps.push({
     id: "welcome",
     title: `Welcome${businessName ? ` — ${businessName}` : ""}`,
-    body: `This walkthrough is built for what you bought and what still needs setup — not a generic product tour. Right now you’re on: ${packageLabel}. We’ll highlight the exact screens that matter for you.`,
+    body: managedRevenueFollowThrough
+      ? "You’re on Managed Revenue Follow-Through. We’ll show the few screens that matter."
+      : `You’re set up for ${packageLabel}. We’ll show the screens that matter for you.`,
     hrefSuffix: "/home",
     navTarget: "home",
-    navHint: "Home",
+    navHint: "Today",
     priority: 1,
     reason: "Personalized welcome from purchased packages",
     source: "package",
@@ -205,11 +207,13 @@ export function buildAdaptiveProductTour({
 
   steps.push({
     id: "home:launch",
-    title: "Home — your Launch missions",
-    body: "Home is the checklist for this business. Incomplete missions below are ordered by what will unblock your team first. Come back here whenever something is still Pending or needs Prove.",
+    title: "Today",
+    body: managedRevenueFollowThrough
+      ? "Start here. Finish the launch checklist, then run the day from this screen."
+      : "Start here. Finish open setup items, then come back for the day’s work.",
     hrefSuffix: "/home",
     navTarget: "home",
-    navHint: "Home",
+    navHint: "Today",
     priority: 2,
     reason: "Every entitled workspace starts on Home / Launch",
     source: "nav_intro",
@@ -258,21 +262,49 @@ export function buildAdaptiveProductTour({
   if (navIds.has("needs_attention")) {
     steps.push({
       id: "nav:needs_attention",
-      title: "Needs Attention",
-      body: "Open this when something needs a human decision — intelligence candidates and exceptions. Treat it like an inbox for running the business.",
+      title: "Decisions",
+      body: "Anything that needs your judgment shows up here.",
       hrefSuffix: "/intelligence",
       navTarget: "needs_attention",
-      navHint: "Needs Attention",
+      navHint: "Decisions",
       priority: 50,
       reason: "Entitled Needs Attention surface",
       source: "nav_intro",
     });
   }
 
+  if (managedRevenueFollowThrough && navIds.has("outcomes")) {
+    steps.push({
+      id: "nav:outcomes",
+      title: "Outcomes",
+      body: "Completed work with real proof — nothing invented.",
+      hrefSuffix: "/outcomes",
+      navTarget: "outcomes",
+      navHint: "Outcomes",
+      priority: 52,
+      reason: "RFT outcomes ledger",
+      source: "nav_intro",
+    });
+  }
+
+  if (managedRevenueFollowThrough && navIds.has("knowledge")) {
+    steps.push({
+      id: "nav:company_rules",
+      title: "Company Rules",
+      body: "How your business should operate — SLAs, approvals, and memory.",
+      hrefSuffix: "/knowledge",
+      navTarget: "knowledge",
+      navHint: "Company Rules",
+      priority: 54,
+      reason: "RFT company rules",
+      source: "nav_intro",
+    });
+  }
+
   steps.push({
     id: "ask",
-    title: "Ask VIBETech — describe what you need",
-    body: "Need a weekly listing newsletter, a quote flow, or a new automation? Describe it in Ask. We’ll propose the change for your approval — that’s how custom builds get into this OS.",
+    title: "Ask",
+    body: "Tell VIBETech what you need. You’ll approve before anything changes.",
     hrefSuffix: "/architect",
     navTarget: "ask",
     navHint: "Ask",
@@ -284,8 +316,8 @@ export function buildAdaptiveProductTour({
   if (navIds.has("settings") || true) {
     steps.push({
       id: "settings",
-      title: "Settings — replay anytime",
-      body: "Team and account live in Settings. You can restart this personalized tutorial anytime — it will rebuild from your current packages and open missions.",
+      title: "Settings",
+      body: "Team and account. Replay this tour anytime from here.",
       hrefSuffix: "/settings",
       navTarget: "settings",
       navHint: "Settings",

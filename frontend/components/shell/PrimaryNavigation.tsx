@@ -126,8 +126,8 @@ function NavSection({
                   borderRadius: radius.medium,
                   textDecoration: "none",
                   color: active ? "#fff" : cockpitColors.sidebarTextMuted,
-                  backgroundColor: active ? "rgba(255,255,255,0.14)" : "transparent",
-                  boxShadow: active ? `inset 3px 0 0 ${cockpitColors.accent}` : "none",
+                  backgroundColor: active ? "rgba(34,211,238,0.12)" : "transparent",
+                  boxShadow: active ? "inset 3px 0 0 #22d3ee" : "none",
                   fontSize: typography.body.fontSize,
                   fontWeight: active ? 650 : 500,
                 }}
@@ -136,7 +136,7 @@ function NavSection({
                   style={{
                     flexShrink: 0,
                     display: "flex",
-                    color: active ? cockpitColors.accent : "inherit",
+                    color: active ? "#22d3ee" : "inherit",
                     opacity: active ? 1 : 0.75,
                   }}
                 >

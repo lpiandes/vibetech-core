@@ -17,18 +17,18 @@ export const REQUIRED_RESPONSIBILITY_FIELDS = Object.freeze([
 ]);
 
 export const RESPONSIBILITY_FIELD_LABELS = Object.freeze({
-  eligibleLeadSources: "Eligible lead sources",
-  operatingHours: "Operating hours",
-  responseSla: "Response SLA",
-  qualificationBoundaries: "Qualification boundaries",
-  assignmentRules: "Assignment rules",
-  approvedActions: "Approved actions",
-  approvalRequiredActions: "Approval-required actions",
-  escalationOwner: "Escalation owner",
-  successDefinition: "Success definition",
-  lostDisqualifiedDefinition: "Lost / disqualified definition",
-  proposalFollowUpSchedule: "Proposal follow-up schedule",
-  wonWorkHandoffRequirements: "Won-work handoff requirements",
+  eligibleLeadSources: "Where leads come from",
+  operatingHours: "Business hours",
+  responseSla: "How fast you respond",
+  qualificationBoundaries: "Who counts as a fit",
+  assignmentRules: "Who owns each opportunity",
+  approvedActions: "What VIBETech can do",
+  approvalRequiredActions: "What always needs approval",
+  escalationOwner: "Who handles exceptions",
+  successDefinition: "What “won” means",
+  lostDisqualifiedDefinition: "What “lost” means",
+  proposalFollowUpSchedule: "Proposal follow-up cadence",
+  wonWorkHandoffRequirements: "Handoff after a win",
 });
 
 function asString(value, fallback = "") {
@@ -58,26 +58,35 @@ function defaultResponsibilityFromContract(installation = null) {
   }
   return {
     eligibleLeadSources: "",
-    operatingHours: rft.sla.operatingHoursOnly ? "Operate inside defined business hours only." : "",
+    operatingHours: rft.sla.operatingHoursOnly ? "Business hours only." : "",
     responseSla: `Acknowledge within ${rft.sla.acknowledgeWithinMinutes} minutes.`,
     qualificationBoundaries: "",
     assignmentRules: rft.sla.assignmentRequired
-      ? "Every opportunity needs a clear assignment owner before close."
+      ? "Every opportunity needs a clear owner before close."
       : "",
-    approvedActions: Array.isArray(rft.permittedActions) ? rft.permittedActions.join("\n") : "",
+    approvedActions: Array.isArray(rft.permittedActions) && rft.permittedActions.length
+      ? "Detect opportunities, capture in CRM, classify, draft acknowledgements."
+      : "",
     approvalRequiredActions: approvalRequired.join("\n"),
-    escalationOwner: asString(rft.exceptionOwner, ""),
+    escalationOwner: humanizeOwner(asString(rft.exceptionOwner, "")),
     successDefinition: rft.successProof.requireProviderIdsBeforeVerified
-      ? "Verified requires provider-backed evidence before success is claimed."
+      ? "Won only with real provider proof."
       : "",
     lostDisqualifiedDefinition: "",
     proposalFollowUpSchedule: rft.sla.proposalReviewCadenceDays
       ? `Review open proposals every ${rft.sla.proposalReviewCadenceDays} day(s).`
       : "",
     wonWorkHandoffRequirements: rft.sla.wonHandoffRequired
-      ? "Won-work handoff is required before close."
+      ? "Hand off won work before close."
       : "",
   };
+}
+
+function humanizeOwner(raw) {
+  if (!raw) return "";
+  if (raw === "customer_owner" || raw === "account_owner") return "Account owner";
+  if (raw === "owner") return "Business owner";
+  return raw.replace(/_/g, " ");
 }
 
 function normalizeResponsibility(raw = {}, installation = null) {

@@ -47,11 +47,11 @@ type ShadowProposal = {
 };
 
 const STEP_META: Array<{ id: string; label: string }> = [
-  { id: "connect", label: "Connect the work" },
+  { id: "connect", label: "Connect email & calendar" },
   { id: "observe", label: "See how work happens" },
-  { id: "confirm", label: "Confirm responsibility" },
+  { id: "confirm", label: "Confirm how you operate" },
   { id: "replay", label: "Review the replay" },
-  { id: "shadow", label: "Run in shadow mode" },
+  { id: "shadow", label: "Try shadow mode" },
   { id: "prove", label: "Prove one real case" },
   { id: "goLive", label: "Go live" },
 ];
@@ -155,10 +155,10 @@ export default function RftLaunchPath({
       <div style={{ display: "flex", justifyContent: "space-between", gap: spacing.md, flexWrap: "wrap" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: typography.cardTitle.fontSize, fontWeight: 700 }}>
-            Launch Revenue Follow-Through
+            Get Revenue Follow-Through live
           </h2>
           <p style={{ margin: `${spacing.xs} 0 0`, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize }}>
-            {completeCount}/{totalSteps} steps · Observe, replay, and shadow use real evidence — never invented metrics or fake sends.
+            {completeCount}/{totalSteps} steps · Real evidence only
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => void refresh()} disabled={busy != null}>
@@ -168,7 +168,7 @@ export default function RftLaunchPath({
 
       {contract ? (
         <p style={{ margin: 0, fontSize: typography.meta.fontSize, color: cockpitColors.textMuted }}>
-          Contract v{contract.contractVersion}: {contract.slaSummary}. {contract.approvalSummary}.
+          {contract.slaSummary}. {contract.approvalSummary}.
         </p>
       ) : null}
 
@@ -196,7 +196,7 @@ export default function RftLaunchPath({
                 padding: spacing.md,
                 borderRadius: radius.medium,
                 border: `1px solid ${cockpitColors.panelBorder}`,
-                background: status === "complete" ? "rgba(15,118,110,.06)" : "transparent",
+                background: status === "complete" ? "rgba(8,145,178,.08)" : "transparent",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: spacing.sm, flexWrap: "wrap" }}>
@@ -236,7 +236,7 @@ export default function RftLaunchPath({
                     disabled={busy != null || status === "pending"}
                     onClick={() => void runAction("confirm", { responsibility })}
                   >
-                    {busy === "confirm" ? "Confirming…" : "Confirm responsibility"}
+                    {busy === "confirm" ? "Confirming…" : "Confirm"}
                   </Button>
                 ) : null}
                 {meta.id === "replay" && status !== "complete" ? (
@@ -348,7 +348,7 @@ function ResponsibilityForm({
   return (
     <div style={{ display: "grid", gap: spacing.sm, marginTop: spacing.sm }}>
       <p style={{ margin: 0, fontSize: typography.meta.fontSize, color: cockpitColors.textMuted }}>
-        Confirm the real operating envelope before go-live. These answers come from the owner and block go-live when missing.
+        Fill any blanks, then confirm.
       </p>
       <div style={{ display: "grid", gap: spacing.sm, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
         {fields.map((field) => (

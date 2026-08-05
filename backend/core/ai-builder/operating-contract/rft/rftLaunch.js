@@ -106,10 +106,10 @@ export function evaluateRftLaunch({
       : (connectComplete ? "ready" : "pending"),
     at: launch.observeCompletedAt ?? observation.importedAt ?? launch.steps.observe.at,
     detail: hasBaseline
-      ? `Baseline ready (${observation.events?.length ?? 0} evidence-linked events).`
+      ? `Baseline ready (${observation.events?.length ?? 0} events).`
       : (connectComplete
-        ? "Import history and build an evidence-linked baseline."
-        : "Connect channels before observing history."),
+        ? "Build a baseline from connected history."
+        : "Connect channels first."),
   };
 
   launch.steps.confirm = {
@@ -118,8 +118,8 @@ export function evaluateRftLaunch({
       : (hasBaseline || connectComplete ? "ready" : "pending"),
     at: launch.steps.confirm.at,
     detail: launch.confirmedContentHash
-      ? `Contract confirmed (${String(launch.confirmedContentHash).slice(0, 10)}…)`
-      : "Confirm Revenue Follow-Through SLAs and approval boundaries.",
+      ? "Operating rules confirmed."
+      : "Confirm SLAs and what needs your approval.",
   };
 
   const replayPassed = Boolean(replayState.lastReplay?.passed) || Boolean(launch.replayPassedAt);
@@ -129,10 +129,10 @@ export function evaluateRftLaunch({
       : (hasBaseline && launch.confirmedContentHash ? "ready" : "pending"),
     at: launch.replayPassedAt ?? replayState.lastReplay?.ranAt ?? launch.steps.replay.at,
     detail: replayPassed
-      ? (replayState.lastReplay?.passDetail ?? "Historical replay passed.")
+      ? (replayState.lastReplay?.passDetail ?? "Replay passed.")
       : (hasBaseline
-        ? "Run contract replay against imported history (no outbound)."
-        : "Complete observation before replay."),
+        ? "Replay history against your rules (no sends)."
+        : "Complete the baseline first."),
   };
 
   const shadowPassed = Boolean(replayState.shadow?.passed) || Boolean(launch.shadowPassedAt);
@@ -143,12 +143,12 @@ export function evaluateRftLaunch({
       : (replayPassed ? (shadowEnabled ? "ready" : "ready") : "pending"),
     at: launch.shadowPassedAt ?? replayState.shadow?.passedAt ?? launch.steps.shadow.at,
     detail: shadowPassed
-      ? `Shadow passed (${replayState.shadow?.proposals?.length ?? 0} proposals reviewed).`
+      ? `Shadow passed (${replayState.shadow?.proposals?.length ?? 0} reviewed).`
       : (replayPassed
         ? (shadowEnabled
-          ? "Shadow on — review live proposals, then mark passed."
-          : "Enable shadow mode (propose only; no external sends).")
-        : "Pass replay before enabling shadow."),
+          ? "Review proposals, then mark passed."
+          : "Propose only — nothing sends outside.")
+        : "Pass replay first."),
   };
 
   launch.steps.prove = {
@@ -157,8 +157,8 @@ export function evaluateRftLaunch({
       : (launch.confirmedContentHash ? "ready" : "pending"),
     at: launch.steps.prove.at,
     detail: launch.proveCardId
-      ? `Prove opportunity ${launch.proveCardId}`
-      : "Prove one real opportunity with provider evidence.",
+      ? `Prove opportunity ready`
+      : "Prove one real opportunity with evidence.",
   };
 
   const canGoLive = Boolean(
@@ -176,8 +176,8 @@ export function evaluateRftLaunch({
     detail: launch.goLiveAt
       ? `Live since ${launch.goLiveAt}`
       : (canGoLive
-        ? "Ready to go live (approval-gated execution)."
-        : "Complete observe, confirm, replay, shadow, and prove before go-live."),
+        ? "Ready to go live."
+        : "Finish the steps above first."),
   };
 
   const completeCount = RFT_LAUNCH_STEPS.filter((id) => launch.steps[id].status === "complete").length;

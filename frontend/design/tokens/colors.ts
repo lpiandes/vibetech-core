@@ -1,3 +1,5 @@
+import { brand } from "./brand";
+
 export const semanticColors = {
   // App surfaces + text (already defined by the current shadcn/tailwind theme CSS variables).
   background: "var(--background)",
@@ -29,29 +31,29 @@ export const semanticColors = {
 export type SemanticColorKey = keyof typeof semanticColors;
 
 /**
- * Operating cockpit surfaces — supervision UI (not CRM dashboard chrome).
- * Calm canvas, clear hierarchy, restrained accent.
+ * Operating cockpit — aligned to vtechdevelopment.com (cyan · purple · navy).
+ * Light canvas for work; deep navy sidebar; cyan accent.
  */
 export const cockpitColors = {
-  background: "#f3f1ec",
+  background: "#f1f5f9",
   panel: "#ffffff",
-  panelElevated: "#faf9f7",
-  panelBorder: "rgba(28, 25, 23, 0.08)",
-  inset: "#ebe8e2",
-  overlay: "rgba(15, 18, 22, 0.45)",
-  sidebar: "#14181d",
-  sidebarBorder: "rgba(255,255,255,0.07)",
-  sidebarText: "rgba(255,255,255,0.94)",
-  sidebarTextMuted: "rgba(255,255,255,0.52)",
-  sidebarActive: "rgba(255,255,255,0.1)",
-  textPrimary: "#1c1917",
-  textSecondary: "#44403c",
-  textMuted: "#78716c",
-  accent: "#0f766e",
-  accentMuted: "rgba(15, 118, 110, 0.12)",
+  panelElevated: "#f8fafc",
+  panelBorder: "rgba(15, 23, 42, 0.08)",
+  inset: "#e2e8f0",
+  overlay: "rgba(7, 11, 20, 0.55)",
+  sidebar: brand.bgDeep,
+  sidebarBorder: brand.border,
+  sidebarText: brand.text,
+  sidebarTextMuted: brand.textMuted,
+  sidebarActive: "rgba(34, 211, 238, 0.12)",
+  textPrimary: brand.navy,
+  textSecondary: "#334155",
+  textMuted: "#64748b",
+  accent: brand.accentOnLight,
+  accentMuted: brand.accentMutedOnLight,
   warning: "#b45309",
   critical: "#b91c1c",
-  handled: "#047857",
+  handled: "#0f766e",
   waiting: "#a16207",
 } as const;
 

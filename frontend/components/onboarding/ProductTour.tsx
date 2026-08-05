@@ -65,7 +65,6 @@ export default function ProductTour({
   const [open, setOpen] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [steps, setSteps] = useState<ProductTourStep[]>(PRODUCT_TOUR_STEPS);
-  const [packageLabel, setPackageLabel] = useState<string | null>(null);
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null);
   const [cardSize, setCardSize] = useState({ w: 420, h: 320 });
 
@@ -131,9 +130,6 @@ export default function ProductTour({
           if (data?.tour) server = data.tour as TourState;
           if (Array.isArray(data?.adaptive?.steps) && data.adaptive.steps.length) {
             adaptiveSteps = data.adaptive.steps as ProductTourStep[];
-          }
-          if (data?.adaptive?.packageLabel) {
-            setPackageLabel(String(data.adaptive.packageLabel));
           }
         }
       } catch {
@@ -288,7 +284,6 @@ export default function ProductTour({
         <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: cockpitColors.accent }}>
           Step {stepIndex + 1} of {total}
           {step.navHint ? ` · ${step.navHint}` : ""}
-          {packageLabel ? ` · ${packageLabel}` : ""}
         </div>
         <h2 id="vt-tour-title" style={{ margin: "10px 0 0", fontSize: "1.35rem", fontWeight: 800, letterSpacing: "-0.02em", color: cockpitColors.textPrimary }}>
           {step.title}
@@ -296,11 +291,6 @@ export default function ProductTour({
         <p style={{ margin: "12px 0 0", fontSize: 15, lineHeight: 1.55, color: cockpitColors.textSecondary }}>
           {step.body}
         </p>
-        {step.reason ? (
-          <p style={{ margin: "10px 0 0", fontSize: 12, lineHeight: 1.4, color: cockpitColors.textMuted }}>
-            Why you’re seeing this: {step.reason}
-          </p>
-        ) : null}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20, flexWrap: "wrap" }}>
           <SecondaryButton onClick={() => void go(-1)} disabled={stepIndex === 0}>
             Back

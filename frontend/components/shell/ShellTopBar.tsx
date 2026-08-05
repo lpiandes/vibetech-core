@@ -113,7 +113,7 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
           justifyContent: "space-between",
           gap: spacing.md,
           padding: `${spacing.sm} ${spacing.lg}`,
-          background: "#0f766e",
+          background: "#0891b2",
           color: "#fff",
           fontSize: 13,
           fontWeight: 600,

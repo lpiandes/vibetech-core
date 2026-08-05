@@ -169,8 +169,7 @@ export default function CreateBusinessModal({
                   lineHeight: 1.4,
                 }}
               >
-                Every new business is created with <strong>Managed Revenue Follow-Through</strong>.
-                Customers buy the managed service, not OS seats or internal package combinations.
+                Every new business starts with <strong>Managed Revenue Follow-Through</strong>.
               </p>
             </div>
             <div
@@ -187,8 +186,7 @@ export default function CreateBusinessModal({
                 Managed Revenue Follow-Through
               </strong>
               <span style={{ fontSize: 12, color: cockpitColors.textSecondary, lineHeight: 1.45 }}>
-                VIBETech will provision the managed RFT experience automatically after the business
-                and owner invite are created.
+                We own follow-through ops with evidence-backed outcomes.
               </span>
             </div>
           </div>
