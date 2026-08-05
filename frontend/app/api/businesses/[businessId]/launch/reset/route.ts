@@ -6,7 +6,7 @@ import { platformStore } from "@/lib/server/compose";
 import { workspaceCompositionRegistry } from "@/lib/workspace/WorkspaceCompositionRegistry";
 import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
 import { persistAffectedRuntimes } from "../../../../../../../backend/core/persistence/PersistedMutationCoordinator.js";
-import { RUNTIME_SNAPSHOT_KINDS } from "../../../../../../../backend/core/persistence/RuntimeSnapshot.js";
+import { RUNTIME_SNAPSHOT_KINDS } from "../../../../../../../backend/core/persistence/RuntimeSnapshotKinds.js";
 
 /**
  * Demo / support: clear launch proofs and disconnect Google email (+ calendar)
