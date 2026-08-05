@@ -104,7 +104,7 @@ export function ArchitectButton({
     transition: "transform .15s ease, background .15s ease",
   };
   const styles: Record<string, CSSProperties> = {
-    primary: { ...base, background: accent, color: "#042F2E" },
+    primary: { ...base, background: accent, color: architect.primaryOnAccent },
     secondary: {
       ...base,
       background: "transparent",

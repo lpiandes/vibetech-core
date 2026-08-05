@@ -1,28 +1,35 @@
-/** Premium Architect design tokens — consultant-grade, not default AI purple. */
+/**
+ * Architect / Ask tokens — aligned to product brand (cyan on deep navy).
+ * Keep in sync with frontend/design/tokens/brand.ts.
+ */
+import { brand } from "@/design/tokens/brand";
+
 export const architect = {
   font: '"Segoe UI", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif',
   display: '"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif',
-  bg: "radial-gradient(1100px 640px at 8% -8%, #1a2f38 0%, #0b1419 42%, #070c10 100%)",
+  bg: `radial-gradient(1100px 640px at 8% -8%, #122033 0%, ${brand.bgDeep} 42%, #05080f 100%)`,
   bgLight: "linear-gradient(180deg, #F7F8F6 0%, #EEF3F1 48%, #F3F5F4 100%)",
-  ink: "#E8EEF2",
-  inkMuted: "rgba(226, 232, 240, 0.62)",
-  inkDark: "#0F172A",
-  mutedDark: "#64748B",
-  panel: "rgba(12, 20, 26, 0.78)",
-  panelSolid: "#0F171C",
+  ink: brand.text,
+  inkMuted: brand.textMuted,
+  inkDark: brand.navy,
+  mutedDark: brand.textMuted,
+  panel: brand.surface,
+  panelSolid: brand.bg,
   panelLight: "#FFFFFF",
-  border: "rgba(148, 163, 184, 0.16)",
+  border: brand.border,
   borderLight: "rgba(15, 23, 42, 0.08)",
-  accent: "#14B8A6",
-  accentSoft: "rgba(20, 184, 166, 0.16)",
-  accentSecondary: "#5EEAD4",
+  borderGlow: brand.borderGlow,
+  accent: brand.cyan,
+  accentSoft: "rgba(34, 211, 238, 0.14)",
+  accentSecondary: brand.cyanSoft,
   success: "#34D399",
   warning: "#FBBF24",
   danger: "#F87171",
-  shadow: "0 28px 80px rgba(0, 0, 0, 0.38)",
+  shadow: "0 28px 80px rgba(0, 0, 0, 0.45)",
   shadowLight: "0 18px 50px rgba(15, 23, 42, 0.08)",
   radius: 22,
   radiusSm: 14,
+  primaryOnAccent: brand.primaryOnGradient,
 } as const;
 
 export const architectKeyframes = `
