@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
+import { getAuthorizedWorkspace, healWorkspaceConnections, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
 import { GmailInboundSyncService } from "../../../../../../../backend/core/integrations/gmail/GmailInboundSyncService.js";
@@ -33,7 +33,32 @@ import {
 } from "../../../../../../../backend/core/company-rules/governedLearning.js";
 
 function connectionStatusesFrom(ctx: { service: unknown }) {
-  return (ctx.service as any)?.connected?.connectedSystemsSnapshot?.connectionStatuses ?? {};
+  const connected = (ctx.service as any)?.connected;
+  const statuses: Record<string, string> = {};
+  const snapshotConnections = connected?.connectedSystemsSnapshot?.connections ?? [];
+  for (const conn of snapshotConnections) {
+    if (conn?.id) statuses[String(conn.id)] = String(conn.status ?? "NOT_CONNECTED");
+  }
+  // Live runtime wins (post-OAuth heal / registry warm).
+  const runtimeConnections =
+    connected?.integrationPlatform?.connectionRuntime?.getConnections?.() ?? [];
+  for (const conn of runtimeConnections) {
+    const id = String(conn?.connectionType ?? "");
+    if (!id) continue;
+    statuses[id] = String(conn?.status ?? "NOT_CONNECTED");
+  }
+  // Legacy shape some callers still set.
+  const legacy = connected?.connectedSystemsSnapshot?.connectionStatuses;
+  if (legacy && typeof legacy === "object") {
+    for (const [key, value] of Object.entries(legacy)) {
+      if (value && typeof value === "object" && "status" in (value as object)) {
+        statuses[key] = String((value as { status?: string }).status ?? "NOT_CONNECTED");
+      } else if (value != null) {
+        statuses[key] = String(value);
+      }
+    }
+  }
+  return statuses;
 }
 
 async function proofRecordsFor(businessId: string) {
@@ -63,6 +88,7 @@ export async function GET(
   try {
     const { businessId } = await params;
     const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_VIEW);
+    await healWorkspaceConnections(businessId, ctx.service).catch(() => null);
     const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
     if (!installation) {
       return NextResponse.json({ ok: false, error: "Installation not found" }, { status: 404 });
