@@ -76,10 +76,11 @@ export async function GET(request: Request) {
       pending.providerType === "gmail"
       && !googleScopesIncludeGmailSend(grantedScope, tokens.scope)
     ) {
+      const seen = [grantedScope, tokens.scope].filter(Boolean).join(" ").trim() || "(none)";
       return NextResponse.redirect(
         new URL(
           `${pending.redirectPath}${pending.redirectPath?.includes("?") ? "&" : "?"}error=${encodeURIComponent(
-            "Google did not grant send access, so email is not connected yet. In Google Cloud → OAuth consent screen → Data Access, add gmail.send + gmail.readonly, then reconnect and check “Send email on your behalf.”",
+            `Google did not grant send access (got: ${seen}). Revoke VibeTech at myaccount.google.com/permissions, reconnect, and keep “Send email on your behalf” checked. Clients never configure Google Cloud — only this platform OAuth app does.`,
           )}`,
           request.url,
         ),

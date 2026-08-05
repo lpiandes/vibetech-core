@@ -22,7 +22,15 @@ export function resolveGoogleOAuthRedirectUri() {
   return explicit || fromApp;
 }
 
+// Connect only needs send. gmail.readonly is restricted and often omitted on
+// unverified apps — requesting it with send can leave owners with neither.
 export const GMAIL_OAUTH_SCOPES = [
+  "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/userinfo.email",
+];
+
+/** Optional later upgrade for Inbox sync (restricted). */
+export const GMAIL_INBOX_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/userinfo.email",

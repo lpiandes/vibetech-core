@@ -408,20 +408,14 @@ export default function IntegrationSetupDialog({
               lineHeight: 1.45,
             }}
           >
-            Google blocked? In Google Cloud → OAuth consent screen → <strong>Data Access</strong>, add
-            {" "}
-            <code>gmail.send</code>
-            {" "}
-            and
-            {" "}
-            <code>gmail.readonly</code>
-            , plus your Gmail as a test user
+            Google blocked? Keep <strong>Send email on your behalf</strong> checked on Google’s screen.
+            If it fails again, revoke VibeTech at myaccount.google.com/permissions and reconnect.
+            Clients never open Google Cloud — only VIBETech’s OAuth app is configured once.
             {allowLocalDesignPartnerConnect ? (
               <>
-                , or tap <strong>Connect locally</strong>
+                {" "}Or tap <strong>Connect locally</strong> for a design-partner mock.
               </>
             ) : null}
-            . On Google’s screen, check <strong>Send email on your behalf</strong> before Continue.
           </div>
         ) : null}
 
