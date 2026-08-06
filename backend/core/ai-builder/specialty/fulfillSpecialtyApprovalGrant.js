@@ -117,7 +117,27 @@ export async function fulfillSpecialtyApprovalGrant({
     });
   }
 
-  const workItem = workRuntime?.getWorkItem?.(workItemId) ?? null;
+  const workItem = workRuntime?.getWorkItem?.(workItemId)
+    ?? (approvalRequest?.metadata?.synthesizeWork
+      ? {
+        id: workItemId,
+        title: String(approvalRequest?.context?.subject ?? approvalRequest?.context?.label ?? "Outbound"),
+        metadata: {
+          ...(approvalRequest.metadata ?? {}),
+          eventPayload: approvalRequest.metadata?.eventPayload
+            ?? {
+              email: approvalRequest.context?.recipientEmail ?? null,
+              name: approvalRequest.context?.partyName ?? null,
+              phone: approvalRequest.context?.recipientPhone ?? null,
+            },
+          rftCardId: approvalRequest.metadata?.rftCardId ?? null,
+          contact: {
+            email: approvalRequest.context?.recipientEmail ?? null,
+            name: approvalRequest.context?.partyName ?? null,
+          },
+        },
+      }
+      : null);
   if (!workItem) {
     return deepFreeze({
       ok: false,

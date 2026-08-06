@@ -18,10 +18,17 @@ import { createApprovalRequest } from "../../approvals/ApprovalRequest.js";
 import { APPROVAL_INTERNAL_EVENT_TYPES } from "../../approvals/ApprovalEventTypes.js";
 import { resolveMessagePersonalization } from "./resolveMessagePersonalization.js";
 import { sendSpecialtyOutbound } from "./specialtyOutbound.js";
+import { inferActionClass, isClassAutoEligible, readEarnedAutonomy } from "../../company-rules/earnedAutonomy.js";
 
-/**
- * @param {object} params
- */
+function classAllowsAutoSend(installation, classId) {
+  if (!installation || !classId) return false;
+  // Trust last evaluated snapshot + owner delegation for live path (Plan 22).
+  const row = readEarnedAutonomy(installation).classes[String(classId)];
+  if (row?.lastStatus === "auto_eligible" && row.delegatedAt && !row.revokedAt) {
+    return true;
+  }
+  return isClassAutoEligible(installation, classId);
+}
 export async function executeSpecialtyPathSteps({
   employee = {},
   installation = null,
@@ -304,12 +311,20 @@ export async function executeSpecialtyPathSteps({
 
       let approvalId = null;
       const direction = String(step.direction ?? (type === PATH_STEP_TYPES.NOTIFY_TEAM ? "internal" : "external"));
-      // Pilot safety: customer-facing external auto must still go through approval unless
-      // the path explicitly marked the step internal. Never silent-send to prospects.
+      // Plan 22 — external auto still requires owner GRANT unless the action class
+      // earned auto-eligibility (delegated). Never silent-send when ineligible.
+      const actionClassId = inferActionClass({
+        event: eventPayload,
+        title: step.label ?? workItem?.title ?? brief ?? type,
+      });
+      const classAutoEligible = Boolean(
+        installation && actionClassId && classAllowsAutoSend(installation, actionClassId),
+      );
       const forceApprovalForExternalAuto =
         direction === "external"
         && !manual
-        && type !== PATH_STEP_TYPES.NOTIFY_TEAM;
+        && type !== PATH_STEP_TYPES.NOTIFY_TEAM
+        && !classAutoEligible;
       const needsOwnerGrant = direction === "external" && (manual || forceApprovalForExternalAuto);
 
       if (manual && !needsOwnerGrant) {
@@ -468,10 +483,14 @@ export async function executeSpecialtyPathSteps({
           ok: Boolean(sent?.ok),
           deferred: false,
           needsYou: false,
-          reason: sent?.ok ? "auto_sent" : (sent?.reason ?? "auto_send_failed"),
+          reason: sent?.ok
+            ? (classAutoEligible ? "auto_sent_earned_autonomy" : "auto_sent")
+            : (sent?.reason ?? "auto_send_failed"),
           label: step.label,
           runMode: "auto",
           executionMode: mode,
+          actionClassId,
+          classAutoEligible,
           send: sent,
         });
       } catch (err) {

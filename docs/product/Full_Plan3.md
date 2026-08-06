@@ -51,9 +51,9 @@ Parallel tracks: Ops · Commercial · Demo (real execution, not paper).
 ## Progress checklist
 
 ### Wave 1
-- [ ] Plan 19 — Approve and send executes
-- [ ] Plan 20 — Today + Outcomes honesty
-- [ ] Plan 21 — Fix + Connections
+- [x] Plan 19 — Approve and send executes
+- [x] Plan 20 — Today + Outcomes honesty
+- [x] Plan 21 — Fix + Connections
 
 ### Wave 2
 - [ ] Plan 22 — Earned autonomy live

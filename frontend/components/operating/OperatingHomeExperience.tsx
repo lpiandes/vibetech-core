@@ -1,7 +1,8 @@
 "use client";
 
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useOptionalBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { MissionControlViewModelContext } from "@/components/mission-control/MissionControlContext";
 import { HomeCanvas, HomeHero } from "@/components/operating/home/EditorialHome";
@@ -20,6 +21,7 @@ import {
 } from "@/components/product/SimpleUI";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 import DecisionCard from "@/components/operating/DecisionCard";
+import { Button } from "@/components/ui/button";
 
 /**
  * Today — operating brief (Plan 3).
@@ -197,6 +199,7 @@ export default function OperatingHomeExperience() {
                   Revenue Follow-Through is watching connected email and calendar.
                   When something eligible arrives, it will show up here for your approval.
                 </p>
+                <SeedTestDecisionButton businessId={businessId} />
               </>
             ) : (
               "Nothing waiting."
@@ -428,6 +431,55 @@ function rowAction(label: string) {
     <span style={{ fontSize: 13, fontWeight: 700, color: cockpitColors.accent, whiteSpace: "nowrap" }}>
       {label} →
     </span>
+  );
+}
+
+function SeedTestDecisionButton({ businessId }: { businessId: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!businessId) return null;
+  return (
+    <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+      <Button
+        type="button"
+        size="sm"
+        disabled={busy}
+        onClick={() => {
+          void (async () => {
+            setBusy(true);
+            setError(null);
+            try {
+              const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/rft/launch`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "seedDecision" }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok || data.ok === false) {
+                setError(String(data.error ?? data.message ?? "Could not create test decision"));
+                return;
+              }
+              router.push(`/b/${encodeURIComponent(businessId)}/intelligence`);
+              router.refresh();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Network error");
+            } finally {
+              setBusy(false);
+            }
+          })();
+        }}
+      >
+        {busy ? "Creating…" : "Create a test decision"}
+      </Button>
+      {error ? (
+        <p style={{ margin: 0, fontSize: 13, color: cockpitColors.critical ?? "#f87171" }}>{error}</p>
+      ) : (
+        <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted }}>
+          Creates one Approve-and-send item so you can prove the live loop without waiting for inbound mail.
+        </p>
+      )}
+    </div>
   );
 }
 

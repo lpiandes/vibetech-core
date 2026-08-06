@@ -471,6 +471,95 @@ export async function POST(
       }, { status: 403 });
     }
 
+    if (action === "seedDecision") {
+      // Plan 23 — create a real pending Decisions item so Approve-and-send can be proven.
+      const approvalRuntime = (ctx.service as any)?.connected?.ctx?.approvalRuntime
+        ?? (ctx.service as any)?.approvalRuntime
+        ?? null;
+      if (!approvalRuntime?.applyEvent) {
+        return NextResponse.json({
+          ok: false,
+          error: "Approval runtime unavailable — cannot seed a decision.",
+        }, { status: 500 });
+      }
+      const employee = rftEmployee(installation);
+      const employeeId = String(employee?.employeeId ?? employee?.id ?? "revenue_follow_through");
+      const ownerEmail = String(
+        (ctx.user as any)?.email
+        ?? installation?.configuration?.businessProfile?.ownerEmail
+        ?? "",
+      ).trim();
+      if (!ownerEmail) {
+        return NextResponse.json({
+          ok: false,
+          error: "No owner email on session — cannot seed an outbound decision.",
+        }, { status: 400 });
+      }
+      const proveCardId = String(readRftLaunch(installation)?.proveCardId ?? "").trim() || null;
+      const at = new Date().toISOString();
+      const workItemId = `work_seed_decision_${Date.now()}`;
+      const approvalId = `apr_seed_decision_${String(businessId).slice(0, 8)}_${Date.now()}`;
+      const { createApprovalRequest } = await import(
+        "../../../../../../../backend/core/approvals/ApprovalRequest.js"
+      );
+      const { APPROVAL_INTERNAL_EVENT_TYPES } = await import(
+        "../../../../../../../backend/core/approvals/ApprovalEventTypes.js"
+      );
+      approvalRuntime.applyEvent({
+        id: `evt_approval_requested_${approvalId}`,
+        timestampISO: at,
+        type: APPROVAL_INTERNAL_EVENT_TYPES.APPROVAL_REQUESTED,
+        payload: {
+          request: createApprovalRequest({
+            id: approvalId,
+            requestType: "specialty_email",
+            source: "specialty_automation",
+            sourceReference: {
+              workItemId,
+              stepId: "seed_ack",
+              employeeId,
+              businessId,
+            },
+            status: "PENDING",
+            requestedAt: at,
+            requestedBy: "rft_seed_decision",
+            requiredApprover: "role:owner",
+            context: {
+              workItemId,
+              relatedWorkId: workItemId,
+              channel: "email",
+              label: "Acknowledge inbound opportunity",
+              audience: "scope_who",
+              subject: "Thanks — we received your inquiry",
+              bodyPreview: "Thanks for reaching out. We received your inquiry and will follow up shortly with next steps.",
+              recipientEmail: ownerEmail,
+              partyName: "Launch prove contact",
+              triggeredBy: "Revenue Follow-Through",
+            },
+            metadata: {
+              specialtyPath: true,
+              synthesizeWork: true,
+              relatedWorkId: workItemId,
+              workItemId,
+              channel: "email",
+              rftCardId: proveCardId,
+              eventPayload: {
+                email: ownerEmail,
+                name: "Launch prove contact",
+              },
+              bodyTemplate: "Thanks for reaching out. We received your inquiry and will follow up shortly with next steps.",
+            },
+          }),
+        },
+      });
+      return NextResponse.json({
+        ok: true,
+        approvalId,
+        workItemId,
+        message: "Test decision ready — open Decisions and Approve and send.",
+      });
+    }
+
     if (action === "goLive") {
       const responsibilityGate = assertRftResponsibilityComplete(readRftResponsibility(installation));
       if (!responsibilityGate.ok) {
