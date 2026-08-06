@@ -259,6 +259,7 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
     const responsibilityGoLive = presentResponsibilityGoLive({
       responsibilityRequests: installation?.configuration?.responsibilityRequests ?? [],
       connectionStatuses,
+      proofRecords,
     });
     // Live install config — do not trust activation productContext.installationResult (often stale/partial).
     const rftGoLiveAt = installation?.configuration?.rftLaunch?.goLiveAt

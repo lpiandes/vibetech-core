@@ -56,6 +56,8 @@ export async function POST(request: Request, { params }: Params) {
       "employeeId",
       "cardId",
       "outcomeId",
+      "responsibilityId",
+      "constraintId",
     ] as const;
     const extraMetadata: Record<string, unknown> = {
       proposeOnly: true,

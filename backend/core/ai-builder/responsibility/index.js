@@ -39,3 +39,10 @@ export {
 
 export { compileResponsibilityOperatingContract } from "./compileResponsibilityOperatingContract.js";
 export { presentResponsibilityGoLive } from "./presentResponsibilityGoLive.js";
+export {
+  findResponsibilityConstraint,
+  canResolveResponsibilityConstraintInAsk,
+  buildResponsibilityConstraintQuestion,
+  isUsableConstraintAnswer,
+  resolveResponsibilityConstraintFromAsk,
+} from "./resolveResponsibilityConstraint.js";

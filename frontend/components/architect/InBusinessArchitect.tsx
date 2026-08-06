@@ -46,6 +46,8 @@ const CONTEXT_KEYS = [
   "employeeId",
   "cardId",
   "outcomeId",
+  "responsibilityId",
+  "constraintId",
 ] as const;
 
 /**

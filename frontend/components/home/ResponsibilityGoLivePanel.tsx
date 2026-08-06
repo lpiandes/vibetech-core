@@ -4,6 +4,7 @@ import Link from "next/link";
 import { cockpitColors, radius } from "@/design/tokens";
 
 type ConstraintLite = {
+  constraintId?: string;
   type?: string;
   status?: string;
   owner?: string;
@@ -17,6 +18,8 @@ type GoLiveItem = {
   primaryAction?: string | null;
   shortActions?: string[];
   primaryConstraintType?: string | null;
+  primaryConnectionId?: string | null;
+  primaryCapabilityId?: string | null;
   constraints?: ConstraintLite[];
   checklistHints?: { businessEmailConnected?: boolean; calendarConnected?: boolean };
 };
@@ -128,6 +131,8 @@ function hrefForFix(base: string, item: GoLiveItem, actionLabel: string) {
     type === "ACCOUNT_CONNECTION_REQUIRED"
     || /connect|account|email|calendar|sms|phone|oauth/.test(blob)
   ) {
+    const focused = item.primaryConnectionId;
+    if (focused) return `${base}/integrations?focus=${encodeURIComponent(focused)}`;
     if (/calendar/.test(blob)) return `${base}/integrations?focus=calendar`;
     if (/email|gmail|outlook/.test(blob)) return `${base}/integrations?focus=business_email`;
     if (/sms|twilio|text/.test(blob)) return `${base}/integrations?focus=sms_channel`;
@@ -141,7 +146,10 @@ function hrefForFix(base: string, item: GoLiveItem, actionLabel: string) {
     actionLabel ? `Next needed: ${actionLabel}.` : "",
     "Ask only the missing operating questions, then update the operating contract.",
   ].filter(Boolean).join(" ");
-  return `${base}/architect?${new URLSearchParams({ prompt }).toString()}`;
+  const params = new URLSearchParams({ prompt, responsibilityId: item.responsibilityId });
+  const constraintId = item.constraints?.find((c) => ["open", "in_progress"].includes(String(c.status ?? "open")))?.constraintId;
+  if (constraintId) params.set("constraintId", constraintId);
+  return `${base}/architect?${params.toString()}`;
 }
 
 function SetupRow({

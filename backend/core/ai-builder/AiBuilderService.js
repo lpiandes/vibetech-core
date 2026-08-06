@@ -59,6 +59,12 @@ import {
 import { buildDryRunChecklist } from "./BuilderDryRunChecklist.js";
 import { sanitizeSpecificationEmployeeArchetypes } from "./sanitizeSpecificationEmployeeArchetypes.js";
 import { buildBuilderPortalPreview } from "./BuilderPortalPreview.js";
+import {
+  findResponsibilityConstraint,
+  canResolveResponsibilityConstraintInAsk,
+  buildResponsibilityConstraintQuestion,
+  resolveResponsibilityConstraintFromAsk,
+} from "./responsibility/resolveResponsibilityConstraint.js";
 
 // Proposals assembled before this version can contain retired template defaults.
 // They must be regenerated from the owner's answers before anything is approved.
@@ -1093,6 +1099,83 @@ export class AiBuilderService {
   async chat({ sessionId, text, stack = null, actorId = null }) {
     const session = await this.requireSession(sessionId);
     const stored = await this.loadProposalState(session);
+
+    // A Today → Fix → Ask turn is scoped to one known constraint. First ask the
+    // missing rule; the owner's next answer is written back to the installed
+    // responsibility and closes the blocker with an audit reference.
+    const responsibilityId = session.metadata?.responsibilityId ?? null;
+    const constraintId = session.metadata?.constraintId ?? null;
+    if (
+      stored?.specification
+      && session.businessId
+      && responsibilityId
+      && constraintId
+      && this.platformStore?.getBusinessOSInstallation
+    ) {
+      const installation = await this.platformStore.getBusinessOSInstallation(session.businessId).catch(() => null);
+      const found = findResponsibilityConstraint(installation, { responsibilityId, constraintId });
+      if (found.constraint && canResolveResponsibilityConstraintInAsk(found.constraint)) {
+        const alreadyResolved = ["resolved", "accepted_fallback", "wont_fix"]
+          .includes(String(found.constraint.status ?? "open"));
+        const prompted = Boolean(session.metadata?.constraintResolutionPromptedAt);
+        let reply;
+        let resolution = null;
+
+        if (alreadyResolved) {
+          reply = `This rule for “${found.request?.title ?? "the responsibility"}” is already resolved. Return to Today to continue setup.`;
+        } else if (!prompted) {
+          reply = buildResponsibilityConstraintQuestion(found);
+        } else {
+          resolution = await resolveResponsibilityConstraintFromAsk({
+            platformStore: this.platformStore,
+            installation,
+            responsibilityId,
+            constraintId,
+            answer: text,
+            actorId: actorId ?? session.actorId ?? null,
+            sessionId,
+            nowISO: this.nowISO(),
+          });
+          reply = resolution.ok
+            ? `Saved. “${resolution.title}” is no longer blocked by that rule. Return to Today to continue with shadow testing.`
+            : `I still need a specific operating rule before I can close this blocker. ${buildResponsibilityConstraintQuestion(found)}`;
+        }
+
+        const conversation = appendConversation(session.conversation, createBuilderConversationMessage({
+          messageId: `msg_user_constraint_${Date.now()}`,
+          role: "user",
+          text,
+        }));
+        const withAssistant = appendConversation(conversation, createBuilderConversationMessage({
+          messageId: `msg_assistant_constraint_${Date.now()}`,
+          role: "assistant",
+          text: reply,
+        }));
+        const updated = withBuilderSessionPatch(session, {
+          conversation: withAssistant,
+          metadata: {
+            ...session.metadata,
+            constraintResolutionPromptedAt: session.metadata?.constraintResolutionPromptedAt ?? this.nowISO(),
+            ...(resolution?.ok ? {
+              constraintResolvedAt: this.nowISO(),
+              constraintProofReference: resolution.proofReference,
+            } : {}),
+          },
+        });
+        const saved = await this.persistChatSession(updated);
+        return deepFreeze({
+          ok: true,
+          session: saved,
+          contextualConstraint: true,
+          resolved: Boolean(resolution?.ok || alreadyResolved),
+          resolution,
+          message: reply,
+          returnHref: resolution?.returnHref ?? `/b/${encodeURIComponent(String(session.businessId))}/home`,
+          quota: null,
+          aiSource: "responsibility_constraint",
+        });
+      }
+    }
 
     // Product how-to (Automations UI) — answer without spending Ask quota.
     if (stored?.specification && isAutomationHowToRequest({ text, session })) {
