@@ -170,6 +170,7 @@ export async function POST(
   try {
     const { businessId } = await params;
     const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_MANAGE);
+    const actorId = String(ctx.user?.id ?? "").trim() || null;
     let installation = await reloadInstallation(businessId);
     if (!installation) {
       return NextResponse.json({ ok: false, error: "Installation not found" }, { status: 404 });
@@ -213,7 +214,7 @@ export async function POST(
         installation,
         connectionStatuses,
         windowDays,
-        actorId: "owner",
+        actorId,
       });
       installation = await reloadInstallation(businessId);
       const patched = applyRftLaunchPatch(readRftLaunch(installation), {
@@ -225,7 +226,7 @@ export async function POST(
           platformStore,
           installation,
           launch: patched.launch,
-          actorId: "owner",
+          actorId,
         });
       }
       installation = await reloadInstallation(businessId);
@@ -252,7 +253,7 @@ export async function POST(
         platformStore,
         installation,
         responsibility: responsibilityGate.responsibility,
-        actorId: "owner",
+        actorId,
       });
       installation = await reloadInstallation(businessId);
       const employee = rftEmployee(installation);
@@ -268,7 +269,7 @@ export async function POST(
         platformStore,
         installation,
         launch: patched.launch,
-        actorId: "owner",
+        actorId,
       });
       return NextResponse.json({ ok: true, launch: patched.launch, contractHash: rft.contentHash });
     }
@@ -287,7 +288,7 @@ export async function POST(
         platformStore,
         installation,
         replayState,
-        actorId: "owner",
+        actorId,
       });
       installation = await reloadInstallation(businessId);
       if (lastReplay.passed) {
@@ -300,7 +301,7 @@ export async function POST(
             platformStore,
             installation,
             launch: patched.launch,
-            actorId: "owner",
+            actorId,
           });
         }
       }
@@ -318,7 +319,7 @@ export async function POST(
         platformStore,
         installation,
         replayState,
-        actorId: "owner",
+        actorId,
       });
       installation = await reloadInstallation(businessId);
       return NextResponse.json({
@@ -340,7 +341,7 @@ export async function POST(
         platformStore,
         installation,
         replayState: result.state,
-        actorId: "owner",
+        actorId,
       });
       installation = await reloadInstallation(businessId);
       const patched = applyRftLaunchPatch(readRftLaunch(installation), {
@@ -352,7 +353,7 @@ export async function POST(
           platformStore,
           installation,
           launch: patched.launch,
-          actorId: "owner",
+          actorId,
         });
       }
       installation = await reloadInstallation(businessId);
@@ -374,7 +375,7 @@ export async function POST(
         platformStore,
         installation,
         replayState,
-        actorId: "owner",
+        actorId,
       });
       // Plan 10 — feed shadow corrections into governed learning.
       try {
@@ -384,7 +385,7 @@ export async function POST(
           platformStore,
           installation: install2,
           state: refreshed.state,
-          actorId: "owner",
+          actorId,
         });
       } catch {
         // Learning must not block shadow correction.
@@ -404,7 +405,7 @@ export async function POST(
           },
           title: body.title ?? "Launch prove opportunity",
           triggerEvent: "WEBSITE_INQUIRY",
-          actorId: "owner",
+          actorId,
         });
       } catch (err) {
         return NextResponse.json({
@@ -435,7 +436,7 @@ export async function POST(
           platformStore,
           installation: install,
           launch: patched.launch,
-          actorId: "owner",
+          actorId,
         });
       } catch (err) {
         return NextResponse.json({
@@ -508,7 +509,7 @@ export async function POST(
         platformStore,
         installation,
         launch: patched.launch,
-        actorId: "owner",
+        actorId,
       });
       return NextResponse.json({ ok: true, launch: patched.launch });
     }

@@ -123,6 +123,14 @@ export function readCrmState(installation = null) {
   };
 }
 
+function asUuidOrNull(value) {
+  const s = String(value ?? "").trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)) {
+    return null;
+  }
+  return s;
+}
+
 export async function writeCrmState({ platformStore, installation, crm, actorId = null }) {
   if (!platformStore || !installation) {
     throw new Error("writeCrmState requires platformStore and installation");
@@ -160,7 +168,8 @@ export async function writeCrmState({ platformStore, installation, crm, actorId 
       crm: nextCrm,
     },
     history,
-    actorUserId: installation.actorUserId ?? actorId,
+    // Postgres actor_user_id is UUID — never pass labels like "owner".
+    actorUserId: asUuidOrNull(installation.actorUserId) ?? asUuidOrNull(actorId),
     installedAt: installation.installedAt ?? null,
   });
   return nextCrm;

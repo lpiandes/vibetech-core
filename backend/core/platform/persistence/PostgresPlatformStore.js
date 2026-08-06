@@ -1293,7 +1293,7 @@ export class PostgresPlatformStore {
           JSON.stringify(actionCheckpoints),
           JSON.stringify(configuration),
           JSON.stringify(history),
-          actorUserId ? String(actorUserId) : null,
+          isUuidLike(actorUserId) ? String(actorUserId) : null,
           installedAt,
         ],
       ),

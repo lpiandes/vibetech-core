@@ -47,13 +47,17 @@ type ShadowProposal = {
   } | null;
 };
 
-const STEP_META: Array<{ id: string; label: string }> = [
+const STEP_META: Array<{ id: string; label: string; hint?: string }> = [
   { id: "connect", label: "Connect email & calendar" },
   { id: "observe", label: "See how work happens" },
   { id: "confirm", label: "Confirm how you operate" },
   { id: "replay", label: "Review the replay" },
   { id: "shadow", label: "Try shadow mode" },
-  { id: "prove", label: "Prove one real case" },
+  {
+    id: "prove",
+    label: "Prove email & calendar work",
+    hint: "Create one test opportunity, then send yourself a real test email and calendar event so go-live isn’t guesswork.",
+  },
   { id: "goLive", label: "Go live" },
 ];
 
@@ -477,6 +481,11 @@ export default function RftLaunchPath({
                   {shortDetail}
                 </p>
               ) : null}
+              {meta.hint && status !== "complete" ? (
+                <p style={{ margin: 0, fontSize: typography.meta.fontSize, color: cockpitColors.textSecondary, lineHeight: 1.45 }}>
+                  {meta.hint}
+                </p>
+              ) : null}
               <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
                 {meta.id === "connect" ? (
                   <Button asChild variant="outline" size="sm">
@@ -561,7 +570,7 @@ export default function RftLaunchPath({
                       disabled={busy != null}
                       onClick={() => void runAction("prove")}
                     >
-                      {busy === "prove" ? "Seeding…" : "Seed prove opportunity"}
+                      {busy === "prove" ? "Creating…" : "1. Create test opportunity"}
                     </Button>
                     <Button
                       type="button"
@@ -570,7 +579,7 @@ export default function RftLaunchPath({
                       disabled={busy != null}
                       onClick={() => void runChannelProve()}
                     >
-                      {busy === "proveChannels" ? "Proving…" : "Run channel prove"}
+                      {busy === "proveChannels" ? "Sending…" : "2. Send yourself a test"}
                     </Button>
                   </>
                 ) : null}
