@@ -19,7 +19,7 @@ import { cockpitColors, spacing } from "@/design/tokens";
 
 /**
  * Unified business shell for `/b/[businessId]/**`.
- * Brand · switcher · primary nav · Needs Attention · account · mobile drawer.
+ * Brand · switcher · primary nav · account · mobile drawer.
  * Ask lives in the top bar (and mobile drawer), not the desktop sidebar foot.
  */
 export default function BusinessShell({ children }: { children: ReactNode }) {
@@ -172,7 +172,7 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
           backgroundColor: isAskSurface ? "#070c10" : undefined,
         }}
       >
-            {!isSetupBuilder ? <ShellTopBar attentionCount={needsAttentionCount} /> : null}
+            {!isSetupBuilder ? <ShellTopBar /> : null}
             <main
               id="main-content"
               className="vt-shell-main"

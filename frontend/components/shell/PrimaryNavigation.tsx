@@ -132,6 +132,7 @@ function NavSection({
                   textDecoration: "none",
                   color: active ? brand.text : cockpitColors.sidebarTextMuted,
                   backgroundColor: active ? cockpitColors.sidebarActive : "transparent",
+                  boxShadow: active ? `inset 3px 0 0 ${brand.cyan}` : "none",
                   fontSize: typography.body.fontSize,
                   fontWeight: active ? 650 : 500,
                 }}

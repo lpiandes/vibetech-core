@@ -88,6 +88,9 @@ export default async function IntegrationsPage({
     const viewModel = service.loadConnectionCenterViewModel({
       businessOsIntegrations: businessOsIntegrations.length ? businessOsIntegrations : null,
       liveFlags: liveIntegrationAvailability(),
+      employees: Array.isArray(osInstallation?.configuration?.employees)
+        ? osInstallation.configuration.employees
+        : null,
     });
     markRequestTiming("VIEW_MODEL");
 

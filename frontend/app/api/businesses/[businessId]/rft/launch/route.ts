@@ -78,15 +78,30 @@ function rftEmployee(installation: any) {
   ) ?? buildDefaultRevenueFollowThroughEmployee();
 }
 
+function isLiveConnectedStatus(value: unknown) {
+  const status = String(
+    typeof value === "object" && value != null
+      ? ((value as { status?: string }).status ?? "")
+      : (value ?? ""),
+  ).toUpperCase();
+  return status === "CONNECTED" || status === "VERIFIED" || status === "PROVEN" || status === "OK";
+}
+
 function connectionStatusesFromCredentials(rows: any[] = []) {
   const statuses: Record<string, string> = {};
   for (const row of rows) {
     const provider = String(row?.providerType ?? "").toLowerCase();
     const id = String(row?.credentialId ?? "").toLowerCase();
-    if (provider.includes("gmail") || id.includes("gmail")) {
+    if (provider.includes("gmail") || id.includes("gmail") || id.startsWith("cred_gmail_")) {
       statuses.business_email = "CONNECTED";
     }
-    if (provider.includes("calendar") || id.includes("gcal") || id.includes("calendar")) {
+    if (
+      provider.includes("calendar")
+      || provider.includes("google_calendar")
+      || id.includes("gcal")
+      || id.includes("calendar")
+      || id.startsWith("cred_gcal_")
+    ) {
       statuses.calendar = "CONNECTED";
     }
     if (provider.includes("twilio_sms") || id.includes("twilio_sms") || provider.includes("sms")) {
@@ -97,6 +112,23 @@ function connectionStatusesFromCredentials(rows: any[] = []) {
     }
     if (provider.includes("meta") || id.includes("meta")) {
       statuses.meta_lead_ads = "CONNECTED";
+    }
+  }
+  return statuses;
+}
+
+/**
+ * Snapshot is often stale after OAuth on cold serverless. Credentials + live
+ * CONNECTED always win — never demote a durable connect back to NOT_CONNECTED.
+ */
+function mergeConnectionStatuses(
+  snapshotStatuses: Record<string, string> = {},
+  credentialStatuses: Record<string, string> = {},
+) {
+  const statuses: Record<string, string> = { ...snapshotStatuses };
+  for (const [id, status] of Object.entries(credentialStatuses)) {
+    if (isLiveConnectedStatus(status) || !isLiveConnectedStatus(statuses[id])) {
+      statuses[id] = status;
     }
   }
   return statuses;
@@ -121,13 +153,16 @@ export async function GET(
     const credentialRows = await platformStore
       .listIntegrationCredentialsForWorkspace(businessId)
       .catch(() => []);
-    const connectionStatuses = connectionStatusesFromCredentials(credentialRows);
+    const credentialStatuses = connectionStatusesFromCredentials(credentialRows);
+    const snapshotStatuses: Record<string, string> = {};
     const snap = (installation as any)?.configuration?.connectedSystemsSnapshot?.connections;
     if (Array.isArray(snap)) {
       for (const conn of snap) {
-        if (conn?.id) connectionStatuses[String(conn.id)] = String(conn.status ?? "NOT_CONNECTED");
+        if (conn?.id) snapshotStatuses[String(conn.id)] = String(conn.status ?? "NOT_CONNECTED");
       }
     }
+    // Credentials first in merge priority — snapshot only fills gaps / confirms live.
+    const connectionStatuses = mergeConnectionStatuses(snapshotStatuses, credentialStatuses);
     const proofRecords = await proofRecordsFor(businessId);
     const evaluated = evaluateRftLaunch({ installation, connectionStatuses, proofRecords });
     const employee = rftEmployee(installation);

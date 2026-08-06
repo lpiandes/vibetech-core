@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
@@ -56,14 +56,75 @@ const STEP_META: Array<{ id: string; label: string }> = [
   { id: "goLive", label: "Go live" },
 ];
 
+function statusLooksConnected(raw: unknown) {
+  const status = String(
+    typeof raw === "object" && raw != null
+      ? ((raw as { status?: string; state?: string }).status
+        ?? (raw as { status?: string; state?: string }).state
+        ?? "")
+      : (raw ?? ""),
+  ).toUpperCase();
+  return status === "CONNECTED" || status === "VERIFIED" || status === "PROVEN" || status === "OK" || raw === true;
+}
+
+function isConnectedInStatuses(connectionStatuses: Record<string, unknown> | undefined, keys: string[]) {
+  if (!connectionStatuses) return false;
+  return keys.some((key) => statusLooksConnected(connectionStatuses[key]));
+}
+
+/**
+ * Home SSR already has live runtime statuses — overlay connect step so Today
+ * cannot lag a stale launch GET that still reads a NOT_CONNECTED snapshot.
+ */
+function applyLiveConnectionOverlay(
+  launch: LaunchView | null,
+  connectionStatuses?: Record<string, unknown>,
+): LaunchView | null {
+  if (!launch?.steps?.connect || !connectionStatuses || !Object.keys(connectionStatuses).length) {
+    return launch;
+  }
+  const emailConnected = isConnectedInStatuses(connectionStatuses, ["business_email", "gmail"]);
+  const calendarConnected = isConnectedInStatuses(connectionStatuses, ["calendar", "google_calendar"]);
+  const connectComplete = emailConnected && calendarConnected;
+  let detail = "Connect business email and calendar.";
+  if (connectComplete) detail = "Email and calendar connected.";
+  else if (emailConnected) detail = "Email connected — connect calendar next.";
+  else if (calendarConnected) detail = "Calendar connected — connect business email next.";
+
+  const nextSteps = { ...launch.steps };
+  nextSteps.connect = {
+    ...nextSteps.connect,
+    status: connectComplete ? "complete" : "pending",
+    detail,
+  };
+  if (connectComplete && nextSteps.observe?.status === "pending") {
+    nextSteps.observe = {
+      ...nextSteps.observe,
+      status: "ready",
+      detail: nextSteps.observe.detail ?? "Build a baseline from connected history.",
+    };
+  }
+  const completeCount = STEP_META.filter((s) => nextSteps[s.id]?.status === "complete").length;
+  return {
+    ...launch,
+    steps: nextSteps,
+    summary: {
+      ...launch.summary,
+      completeCount,
+      totalSteps: launch.summary?.totalSteps ?? STEP_META.length,
+    },
+  };
+}
+
 /**
  * Seven-step RFT outcome launch on Today.
  */
 export default function RftLaunchPath({
   businessId,
+  connectionStatuses,
 }: {
   businessId: string;
-  /** @deprecated unused — kept optional so callers need not change yet */
+  /** Live statuses from Home SSR / Mission Control — overlays connect truth. */
   connectionStatuses?: Record<string, unknown>;
   proofRecords?: Record<string, unknown>;
 }) {
@@ -76,6 +137,8 @@ export default function RftLaunchPath({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const connectionStatusesRef = useRef(connectionStatuses);
+  connectionStatusesRef.current = connectionStatuses;
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/rft/launch`);
@@ -84,7 +147,7 @@ export default function RftLaunchPath({
       setError(data.error ?? "Could not load launch path");
       return;
     }
-    setLaunch(data.launch ?? null);
+    setLaunch(applyLiveConnectionOverlay(data.launch ?? null, connectionStatusesRef.current));
     setObservation(data.observation ?? null);
     setReplay(data.replay ?? null);
     setResponsibility(data.responsibility ?? {});
@@ -94,9 +157,12 @@ export default function RftLaunchPath({
 
   useEffect(() => {
     void refresh();
-    // Do not depend on connectionStatuses/proofRecords object identity — that
-    // re-fetched the launch API on every parent render and made Home feel stuck.
   }, [refresh]);
+
+  // Overlay live Home SSR statuses without re-fetching on object identity churn.
+  useEffect(() => {
+    setLaunch((prev) => applyLiveConnectionOverlay(prev, connectionStatuses));
+  }, [connectionStatuses]);
 
   async function runAction(action: string, extra: Record<string, unknown> = {}) {
     setBusy(action);

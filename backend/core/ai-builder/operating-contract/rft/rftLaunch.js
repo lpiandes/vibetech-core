@@ -91,12 +91,19 @@ export function evaluateRftLaunch({
   const connectComplete = emailConnected && calendarConnected;
   const connectProvenEnough = emailProven && (calendarProven || leadSourceReady);
 
+  let connectDetail = "Connect business email and calendar.";
+  if (connectComplete) {
+    connectDetail = "Email and calendar connected.";
+  } else if (emailConnected && !calendarConnected) {
+    connectDetail = "Email connected — connect calendar next.";
+  } else if (calendarConnected && !emailConnected) {
+    connectDetail = "Calendar connected — connect business email next.";
+  }
+
   launch.steps.connect = {
     status: connectComplete ? "complete" : "pending",
     at: launch.steps.connect.at,
-    detail: connectComplete
-      ? "Email and calendar connected."
-      : "Connect business email and calendar.",
+    detail: connectDetail,
   };
 
   const hasBaseline = Boolean(observation.baseline && observation.importedAt);

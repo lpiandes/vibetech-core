@@ -8,12 +8,11 @@ import { useRouter } from "next/navigation";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import BusinessSwitcher from "@/components/shell/BusinessSwitcher";
 import GlobalAskVibeTechEntry from "@/components/shell/GlobalAskVibeTechEntry";
-import NeedsAttentionIndicator from "@/components/shell/NeedsAttentionIndicator";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 
 type SearchResult = { id: string; label: string; sublabel?: string; href: string };
 
-export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: number }) {
+export default function ShellTopBar() {
   const scope = useBusinessScope();
   const base = `/b/${scope.businessId}`;
 
@@ -321,7 +320,6 @@ export default function ShellTopBar({ attentionCount = 0 }: { attentionCount?: n
           ) : null}
         </div>
 
-        <NeedsAttentionIndicator count={attentionCount} />
         <GlobalAskVibeTechEntry compact />
       </div>
     </header>

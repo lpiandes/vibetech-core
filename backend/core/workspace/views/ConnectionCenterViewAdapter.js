@@ -10,6 +10,7 @@ function safeArray(v) {
 const OS_INTEGRATION_TO_CONNECTION = Object.freeze({
   business_email: "business_email",
   email: "business_email",
+  gmail: "business_email",
   sms: "sms_channel",
   sms_channel: "sms_channel",
   voice: "voice_channel",
@@ -29,34 +30,74 @@ const OS_INTEGRATION_TO_CONNECTION = Object.freeze({
   prospecting_enrichment: "prospecting_enrichment",
 });
 
+function normalizeRequirementEntry(entry) {
+  const rawId = String(entry?.integrationId ?? entry?.id ?? "").toLowerCase();
+  const id = OS_INTEGRATION_TO_CONNECTION[rawId] ?? rawId;
+  if (!id) return null;
+  const status = String(entry?.status ?? "required").toLowerCase();
+  if (status === "deferred" || status === "not_yet" || status === "prohibited") {
+    return null;
+  }
+  return {
+    id,
+    displayName: String(entry?.label ?? entry?.displayName ?? id.replace(/_/g, " ")),
+    requirementLevel: status === "optional" || status === "recommended" ? status : "required",
+  };
+}
+
+/**
+ * Teammate connectionDependencies (e.g. RFT needs calendar) must surface even
+ * when discovery only listed email — otherwise Connections can't offer the gap.
+ */
+export function connectionRequirementsFromEmployees(employees = []) {
+  const byId = new Map();
+  for (const emp of safeArray(employees)) {
+    const deps = safeArray(
+      emp?.connectionDependencies
+      ?? emp?.operatingContract?.rules?.connectionDependencies,
+    );
+    for (const raw of deps) {
+      const rawId = String(raw ?? "").toLowerCase();
+      const id = OS_INTEGRATION_TO_CONNECTION[rawId] ?? rawId;
+      if (!id || byId.has(id)) continue;
+      byId.set(id, {
+        id,
+        displayName: id.replace(/_/g, " "),
+        requirementLevel: "required",
+      });
+    }
+  }
+  return [...byId.values()];
+}
+
 /**
  * Prefer Business OS integration plan when present.
+ * Merge employee connectionDependencies so runtime needs aren't orphaned.
  * Fall back to industry-package connectedSystemRequirements.
  * Never invent rows from the frontend display catalog alone.
  */
 export function resolveConnectionRequirements({
   installationResult = null,
   businessOsIntegrations = null,
+  employees = null,
 } = {}) {
-  const osIntegrations = safeArray(businessOsIntegrations);
-  if (osIntegrations.length) {
-    return osIntegrations
-      .map((entry) => {
-        const rawId = String(entry.integrationId ?? entry.id ?? "").toLowerCase();
-        const id = OS_INTEGRATION_TO_CONNECTION[rawId] ?? rawId;
-        if (!id) return null;
-        const status = String(entry.status ?? "required").toLowerCase();
-        if (status === "deferred" || status === "not_yet" || status === "prohibited") {
-          return null;
-        }
-        return {
-          id,
-          displayName: String(entry.label ?? entry.displayName ?? id.replace(/_/g, " ")),
-          requirementLevel: status === "optional" || status === "recommended" ? status : "required",
-        };
-      })
-      .filter(Boolean);
+  const byId = new Map();
+
+  for (const entry of safeArray(businessOsIntegrations)) {
+    const normalized = normalizeRequirementEntry(entry);
+    if (normalized) byId.set(normalized.id, normalized);
   }
+
+  const employeeList = safeArray(
+    employees
+    ?? installationResult?.configuration?.employees
+    ?? installationResult?.employees,
+  );
+  for (const req of connectionRequirementsFromEmployees(employeeList)) {
+    if (!byId.has(req.id)) byId.set(req.id, req);
+  }
+
+  if (byId.size) return [...byId.values()];
 
   return safeArray(installationResult?.connectedSystemRequirements).map((req) => ({
     id: String(req.id ?? ""),
@@ -101,10 +142,12 @@ export function buildConnectionCenterViewModel({
   connectionDependencyProjection,
   providerRegistry,
   businessOsIntegrations = null,
+  employees = null,
 } = {}) {
   const requirements = resolveConnectionRequirements({
     installationResult,
     businessOsIntegrations,
+    employees,
   });
   const guidance = safeArray(installationResult?.connectionGuidance);
   const snapshotConnections = safeArray(connectedSystemsSnapshot?.connections);

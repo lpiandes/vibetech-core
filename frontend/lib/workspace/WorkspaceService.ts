@@ -1031,10 +1031,15 @@ export class WorkspaceService {
   loadConnectionCenterViewModel(options: {
     businessOsIntegrations?: unknown[] | null;
     liveFlags?: Record<string, boolean>;
+    employees?: unknown[] | null;
   } = {}) {
     const adapter = new ConnectionCenterViewAdapter();
     const businessOsIntegrations = options.businessOsIntegrations
       ?? this.resolveBusinessOsIntegrations();
+    const employees = options.employees
+      ?? (this.connected as any)?.operatingStack?.configuration?.employees
+      ?? (this.connected as any)?.installationResult?.configuration?.employees
+      ?? null;
     const viewModel = attachProductContext(
       adapter.translate({
         identity: this.connected.identityViewModel,
@@ -1043,6 +1048,7 @@ export class WorkspaceService {
         connectionDependencyProjection: this.connected.connectionDependencyProjection,
         providerRegistry: this.connected.integrationPlatform?.providerRegistry,
         businessOsIntegrations,
+        employees,
       }),
       this.connected,
     );
