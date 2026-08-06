@@ -106,14 +106,13 @@ export function buildOperatorCasesForInstallation({
               "Support-enter if coaching the owner is needed",
               "Classify root cause when closing (often customer_delay)",
             ],
-              payload: {
-                state,
-                ageMinutes: Math.round(ageMs / 60_000),
-                slaMinutes,
-                slaDeadlineAt: new Date((parseTime(cardRft.lastTransitionAt) ?? nowMs) + slaMinutes * 60_000).toISOString(),
-              },
-            }));
-          }
+            payload: {
+              state,
+              ageMinutes: Math.round(ageMs / 60_000),
+              slaMinutes,
+              slaDeadlineAt: new Date((parseTime(cardRft.lastTransitionAt) ?? nowMs) + slaMinutes * 60_000).toISOString(),
+            },
+          }));
         }
       }
     }
