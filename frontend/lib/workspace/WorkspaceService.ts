@@ -635,24 +635,10 @@ export class WorkspaceService {
       this.connected,
     );
 
-    // Compose Business Intelligence + communications into Mission Control experience.
-    // Reuses existing engines/loaders only — no new backend engines.
+    // Compose Mission Control for Today without BI mega-layer.
+    // Full BI lives on Decisions / intelligence routes — loading it here doubled Today CPU.
     let intelligenceView: Record<string, unknown> | null = null;
-    try {
-      intelligenceView = this.loadBusinessIntelligenceWorkspace() as Record<string, unknown>;
-    } catch {
-      intelligenceView = null;
-    }
-
     let recentCommunications: unknown[] = [];
-    try {
-      const executiveHome = this.loadExecutiveWorkspaceHomeViewModel({});
-      recentCommunications = Array.isArray((executiveHome as any)?.recentCommunications)
-        ? (executiveHome as any).recentCommunications
-        : [];
-    } catch {
-      recentCommunications = [];
-    }
 
     const composed = (composeMissionControlExperience as any)({
       missionControlViewModel: merged,
@@ -766,8 +752,10 @@ export class WorkspaceService {
 
     let attentionItems: unknown[] = [];
     try {
-      const mission = this.loadMissionControlViewModel({});
-      attentionItems = (mission as { needsYourAttention?: unknown[] }).needsYourAttention ?? [];
+      // Do NOT call loadMissionControlViewModel here — that recursed and doubled Today CPU.
+      attentionItems = Array.isArray(intelligence?.candidates)
+        ? intelligence.candidates.filter((c: any) => !c?.status || c.status === "open").slice(0, 12)
+        : [];
     } catch {
       attentionItems = [];
     }

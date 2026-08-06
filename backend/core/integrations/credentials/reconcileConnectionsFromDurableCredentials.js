@@ -78,12 +78,23 @@ export async function reconcileConnectionsFromDurableCredentials({
   return { healed, skipped: false };
 }
 
-/** True when runtime still needs heal after credentials may exist in DB/vault. */
+/** True when durable credentials exist but runtime is still not CONNECTED. */
 export function connectionHealLikelyNeeded(integrationPlatform, workspaceId) {
   const runtime = integrationPlatform?.connectionRuntime;
-  if (!runtime?.getConnectionByType) return true;
+  const vault = integrationPlatform?.credentialVault;
+  if (!runtime?.getConnectionByType || !workspaceId) return false;
+
+  const gmailId = `cred_gmail_${workspaceId}`;
+  const gcalId = `cred_gcal_${workspaceId}`;
   const email = String(runtime.getConnectionByType("business_email")?.status ?? "").toUpperCase();
   const calendar = String(runtime.getConnectionByType("calendar")?.status ?? "").toUpperCase();
-  // During RFT setup both matter; if either is not connected, refresh from durable vault/DB.
-  return email !== CONNECTION_STATUSES.CONNECTED || calendar !== CONNECTION_STATUSES.CONNECTED;
+
+  const hasGmailCred = Boolean(vault?.has?.(gmailId));
+  const hasGcalCred = Boolean(vault?.has?.(gcalId));
+
+  // Never heal just because a channel was never connected — that made every
+  // mid-setup Connections visit pay hydrate+reconcile.
+  if (hasGmailCred && email !== CONNECTION_STATUSES.CONNECTED) return true;
+  if (hasGcalCred && calendar !== CONNECTION_STATUSES.CONNECTED) return true;
+  return false;
 }

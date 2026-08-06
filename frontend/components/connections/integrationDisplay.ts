@@ -30,22 +30,22 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
     listed: false, // quarantined — only shown when workspaceGate / liveFlags.property_management
   },
   business_email: {
-    title: "Send approved customer email",
-    description: "Draft freely; send only after approval. Reconnect Gmail to also enable inbox sync (manual \"Sync now\", read-only) — replies stay draft-only until approved.",
+    title: "Business email",
+    description: "Send customer email after you approve it.",
     tier: "live",
     icon: Mail,
     setupMode: "oauth",
     listed: true,
-    unlocks: "Teammates can draft/send approved email + sync inbox",
+    unlocks: "Approved customer email",
   },
   calendar: {
     title: "Google Calendar",
-    description: "Sync your business calendar. Add a Google Meet link when you choose Meet on an event.",
+    description: "Keep your business calendar in sync.",
     tier: "live",
     icon: Calendar,
     setupMode: "oauth",
     listed: false, // promoted when Google OAuth app is configured (see isIntegrationListed)
-    unlocks: "Org calendar sync + optional Meet links",
+    unlocks: "Calendar sync",
   },
   zoom: {
     title: "Zoom",

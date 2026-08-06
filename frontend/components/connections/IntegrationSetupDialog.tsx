@@ -348,13 +348,15 @@ export default function IntegrationSetupDialog({
     <SimpleModal
       title={
         isBusinessEmail
-          ? "Choose your customer email inbox"
+          ? "Connect business email"
           : integration.id === "sms_channel"
             ? "Set up text messaging"
             : integration.id === "meta_lead_ads"
               ? "Request Meta Lead Forms setup"
               : integration.id === "voice_channel"
                 ? "Set up missed-call texts"
+              : integration.id === "calendar"
+                ? "Connect calendar"
               : `Connect ${integration.title}`
       }
       onClose={onClose}
@@ -397,52 +399,13 @@ export default function IntegrationSetupDialog({
         </div>
 
         {isGoogleOAuth ? (
-          <div
-            style={{
-              padding: spacing.md,
-              borderRadius: 8,
-              backgroundColor: cockpitColors.panelElevated,
-              border: `1px solid ${cockpitColors.panelBorder}`,
-              color: cockpitColors.textSecondary,
-              fontSize: typography.caption.fontSize,
-              lineHeight: 1.45,
-            }}
-          >
-            {integration.id === "business_email" ? (
-              <>
-                On Google’s screen, keep <strong>Send email on your behalf</strong> checked.
-                If connect fails, remove VIBETech under{" "}
-                <a
-                  href="https://myaccount.google.com/permissions"
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: cockpitColors.accent, fontWeight: 700 }}
-                >
-                  Google Account → Third-party access
-                </a>
-                {" "}and try again.
-              </>
-            ) : integration.id === "calendar" ? (
-              <>
-                On Google’s screen, approve <strong>calendar access</strong> for this business.
-                If connect fails, remove VIBETech under{" "}
-                <a
-                  href="https://myaccount.google.com/permissions"
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: cockpitColors.accent, fontWeight: 700 }}
-                >
-                  Google Account → Third-party access
-                </a>
-                {" "}and try again.
-              </>
-            ) : (
-              <>
-                Approve the Google access requested on the next screen.
-                If connect fails, remove VIBETech under Google Account → Third-party access and try again.
-              </>
-            )}
-          </div>
+          <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: 14, lineHeight: 1.45 }}>
+            {integration.id === "business_email"
+              ? "You’ll sign in with Google. Nothing sends until you approve it."
+              : integration.id === "calendar"
+                ? "You’ll sign in with Google to sync this business calendar."
+                : "You’ll sign in with Google on the next screen."}
+          </p>
         ) : null}
 
         <div
@@ -468,7 +431,7 @@ export default function IntegrationSetupDialog({
                     A2P business + messaging details
                   </div>
                   <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
-                    Carriers require this to approve US texting. Exact legal name + EIN must match IRS records. VIBETech provisions the number; brand/campaign registration uses what you enter here.
+                    Needed for US texting approval. Use your exact legal business name.
                   </p>
 
                   <div style={{ fontWeight: 700, fontSize: 12, color: cockpitColors.textPrimary, marginTop: 4 }}>Brand</div>
@@ -1015,7 +978,6 @@ export default function IntegrationSetupDialog({
                   </div>
                   <div style={{
                     fontSize: 13,
-                    color: cockpitColors.textSecondary,
                     lineHeight: 1.5,
                     padding: 10,
                     borderRadius: 10,
@@ -1024,10 +986,10 @@ export default function IntegrationSetupDialog({
                     color: cockpitColors.inkOnLight,
                   }}>
                     <p style={{ margin: 0, color: cockpitColors.inkOnLight }}>
-                      You should <strong>not</strong> use Meta Developers or Graph API. Most businesses already have a Facebook Page — just put the name below. If you have no Facebook Page or Lead Ads yet, say so and we’ll set that up with you.
+                      Most businesses already have a Facebook Page — put the name below. If you don’t have one yet, say so and we’ll help.
                     </p>
                     <p style={{ margin: "10px 0 0", color: cockpitColors.inkMutedOnLight }}>
-                      After we’re done, new Lead Ad submissions land in <strong>People</strong> and fire <strong>META_LEAD</strong> automations (drafts until you GRANT).
+                      After setup, new leads land in People for your team to follow up.
                     </p>
                   </div>
                   <div style={{ display: "grid", gap: 8 }}>
@@ -1134,13 +1096,13 @@ export default function IntegrationSetupDialog({
           ) : canConnect ? (
             <>
               <div style={{ fontWeight: 700, fontSize: 15, color: cockpitColors.textPrimary }}>
-                {isBusinessEmail ? "Pick the inbox you use for customers" : integration.title}
+                {isBusinessEmail ? "Use the inbox you write customers from" : integration.title}
               </div>
               <p style={{ ...typography.caption, color: cockpitColors.textSecondary, margin: `${spacing.xs} 0 0`, lineHeight: 1.45 }}>
                 {isBusinessEmail
                   ? "Nothing sends without your OK."
                   : integration.id === "calendar"
-                  ? "Events stay on your Google Calendar. Meet links are optional."
+                  ? "Events stay on your Google Calendar."
                   : setupMode === "oauth"
                   ? "Sign in with Google to connect."
                   : "Connect this tool."}

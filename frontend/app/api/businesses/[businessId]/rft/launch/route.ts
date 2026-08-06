@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
+import { getAuthorizedWorkspace, getAuthorizedBusinessScope, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
 import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
@@ -78,8 +78,33 @@ function rftEmployee(installation: any) {
   ) ?? buildDefaultRevenueFollowThroughEmployee();
 }
 
+function connectionStatusesFromCredentials(rows: any[] = []) {
+  const statuses: Record<string, string> = {};
+  for (const row of rows) {
+    const provider = String(row?.providerType ?? "").toLowerCase();
+    const id = String(row?.credentialId ?? "").toLowerCase();
+    if (provider.includes("gmail") || id.includes("gmail")) {
+      statuses.business_email = "CONNECTED";
+    }
+    if (provider.includes("calendar") || id.includes("gcal") || id.includes("calendar")) {
+      statuses.calendar = "CONNECTED";
+    }
+    if (provider.includes("twilio_sms") || id.includes("twilio_sms") || provider.includes("sms")) {
+      statuses.sms_channel = "CONNECTED";
+    }
+    if (provider.includes("twilio_voice") || id.includes("voice") || provider.includes("voice")) {
+      statuses.voice_channel = "CONNECTED";
+    }
+    if (provider.includes("meta") || id.includes("meta")) {
+      statuses.meta_lead_ads = "CONNECTED";
+    }
+  }
+  return statuses;
+}
+
 /**
  * GET — evaluated RFT launch path + observation/replay summaries
+ * Light path: no WorkspaceService boot (Home already paid for that on SSR).
  * POST actions: confirm | observe | replay | enableShadow | passShadow | correctShadow | prove | goLive | attach_prove
  */
 export async function GET(
@@ -88,14 +113,21 @@ export async function GET(
 ) {
   try {
     const { businessId } = await params;
-    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_VIEW);
-    // No heal on GET — soft-nav Home already pays for workspace boot; heal only
-    // on Integrations after OAuth / when connectionHealLikelyNeeded.
+    await getAuthorizedBusinessScope(businessId, PERMISSIONS.WORK_VIEW);
     const installation = await getCachedBusinessOsInstallation(businessId).catch(() => null);
     if (!installation) {
       return NextResponse.json({ ok: false, error: "Installation not found" }, { status: 404 });
     }
-    const connectionStatuses = connectionStatusesFrom(ctx);
+    const credentialRows = await platformStore
+      .listIntegrationCredentialsForWorkspace(businessId)
+      .catch(() => []);
+    const connectionStatuses = connectionStatusesFromCredentials(credentialRows);
+    const snap = (installation as any)?.configuration?.connectedSystemsSnapshot?.connections;
+    if (Array.isArray(snap)) {
+      for (const conn of snap) {
+        if (conn?.id) connectionStatuses[String(conn.id)] = String(conn.status ?? "NOT_CONNECTED");
+      }
+    }
     const proofRecords = await proofRecordsFor(businessId);
     const evaluated = evaluateRftLaunch({ installation, connectionStatuses, proofRecords });
     const employee = rftEmployee(installation);

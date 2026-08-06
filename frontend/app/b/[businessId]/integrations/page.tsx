@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { getAuthorizedWorkspace, healWorkspaceConnections } from "@/lib/platform/AuthorizedWorkspaceService";
 import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
 import { platformStore } from "@/lib/server/compose";
@@ -7,7 +5,6 @@ import { liveIntegrationAvailability } from "@/lib/server/liveIntegrations";
 import ConnectionsRenderer from "@/components/connections/ConnectionsRenderer";
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
-import { brand, cockpitColors } from "@/design/tokens";
 import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 import {
   PACKAGE_ASK_OPTION_TO_CONNECTION,
@@ -40,7 +37,8 @@ export default async function IntegrationsPage({
     ]);
     const { service } = ctx;
     const platform = (service as any)?.connected?.integrationPlatform;
-    if (justConnected || connectionHealLikelyNeeded(platform, businessId)) {
+    const needsHeal = justConnected || connectionHealLikelyNeeded(platform, businessId);
+    if (needsHeal) {
       await healWorkspaceConnections(businessId, service, { force: justConnected }).catch(() => null);
       markRequestTiming("CONNECTION_HEAL");
     } else {
@@ -53,7 +51,9 @@ export default async function IntegrationsPage({
       installation: osInstallation,
     });
     markRequestTiming("KNOWLEDGE_DB");
-    service.refreshOperationalState(knowledgeDocumentCount);
+    if (needsHeal) {
+      service.refreshOperationalState(knowledgeDocumentCount);
+    }
 
     let businessOsIntegrations = Array.isArray(osInstallation?.configuration?.integrations)
       ? [...osInstallation.configuration.integrations]
@@ -73,7 +73,7 @@ export default async function IntegrationsPage({
       );
       for (const option of packageOptions) {
         if (option === "none_yet") continue;
-        const connectionId = PACKAGE_ASK_OPTION_TO_CONNECTION[option] ?? option;
+        const connectionId = (PACKAGE_ASK_OPTION_TO_CONNECTION as Record<string, string>)[option] ?? option;
         if (!connectionId || existing.has(String(connectionId).toLowerCase())) continue;
         existing.add(String(connectionId).toLowerCase());
         businessOsIntegrations.push({
@@ -91,39 +91,8 @@ export default async function IntegrationsPage({
     });
     markRequestTiming("VIEW_MODEL");
 
-    const tipBanner = {
-      borderRadius: 12,
-      border: `1px solid ${cockpitColors.panelBorder}`,
-      background: cockpitColors.panelElevated,
-      color: cockpitColors.textPrimary,
-      padding: "10px 14px",
-      fontSize: 13,
-      display: "flex",
-      flexWrap: "wrap" as const,
-      gap: 8,
-      alignItems: "center",
-      justifyContent: "space-between",
-    };
-    const tipLink = { fontWeight: 800, color: brand.cyan, textDecoration: "none" as const };
-
     return (
       <div style={{ display: "grid", gap: 12 }}>
-        <div style={tipBanner}>
-          <span style={{ color: cockpitColors.textSecondary }}>
-            Reconnected Gmail? Sync recent inbox messages (read-only, manual sync).
-          </span>
-          <Link href={`/b/${encodeURIComponent(businessId)}/integrations/gmail/inbox`} style={tipLink}>
-            Open Gmail inbox →
-          </Link>
-        </div>
-        <div style={tipBanner}>
-          <span style={{ color: cockpitColors.textSecondary }}>
-            Running Meta, Google, or TikTok ads? See spend, clicks, and campaigns in-platform.
-          </span>
-          <Link href={`/b/${encodeURIComponent(businessId)}/ads`} style={tipLink}>
-            Open Ad performance →
-          </Link>
-        </div>
         <ConnectionsRenderer viewModel={viewModel} />
       </div>
     );

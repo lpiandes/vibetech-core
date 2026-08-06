@@ -19,7 +19,7 @@ export default function BusinessScopedLoading() {
         style={{
           height: 28,
           width: "42%",
-          borderRadius: radius.md,
+          borderRadius: radius.medium,
           background: cockpitColors.panelElevated,
         }}
       />
@@ -27,7 +27,7 @@ export default function BusinessScopedLoading() {
         style={{
           height: 14,
           width: "68%",
-          borderRadius: radius.sm,
+          borderRadius: radius.small,
           background: cockpitColors.panel,
         }}
       />
@@ -43,7 +43,7 @@ export default function BusinessScopedLoading() {
             key={i}
             style={{
               height: 88,
-              borderRadius: radius.lg,
+              borderRadius: radius.large,
               border: `1px solid ${cockpitColors.panelBorder}`,
               background: cockpitColors.panel,
             }}
