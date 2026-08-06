@@ -247,7 +247,7 @@ export async function persistRftReplay({
     id: installation.id ?? installation.installationId ?? `install_${installation.businessId}`,
     businessId: installation.businessId,
     specificationRowId: installation.specificationRowId ?? null,
-    specificationId: installation.specificationId,
+    specificationId: installation.specificationId ?? `spec_${installation.businessId}`,
     specificationVersion: installation.specificationVersion ?? 1,
     specificationContentHash: installation.specificationContentHash
       ?? installation.contentHash
@@ -255,10 +255,12 @@ export async function persistRftReplay({
     planId: installation.planId ?? `plan_${installation.businessId}`,
     status: installation.status ?? "installed",
     plan: installation.plan ?? {},
+    actionCheckpoints: Array.isArray(installation.actionCheckpoints) ? installation.actionCheckpoints : [],
     configuration: {
       ...(installation.configuration ?? {}),
-      rftReplay: replayState,
+      rftReplay: JSON.parse(JSON.stringify(replayState)),
     },
+    history: Array.isArray(installation.history) ? installation.history.slice(-50) : [],
     installedAt: installation.installedAt ?? new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     updatedBy: actorId,

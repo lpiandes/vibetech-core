@@ -132,11 +132,21 @@ export async function writeCrmState({ platformStore, installation, crm, actorId 
     version: 1,
     updatedAt: new Date().toISOString(),
   };
+  const priorHistory = Array.isArray(installation.history) ? installation.history : [];
+  // Cap history — unbounded appends made CRM writes (prove seed) timeout on long-lived installs.
+  const history = [
+    ...priorHistory.slice(-49),
+    {
+      at: nextCrm.updatedAt,
+      action: "crm_update",
+      actorId,
+    },
+  ];
   await platformStore.upsertBusinessOSInstallation({
     id: installation.id ?? installation.installationId ?? `install_${installation.businessId}`,
     businessId: installation.businessId,
     specificationRowId: installation.specificationRowId ?? null,
-    specificationId: installation.specificationId,
+    specificationId: installation.specificationId ?? `spec_${installation.businessId}`,
     specificationVersion: installation.specificationVersion ?? 1,
     specificationContentHash: installation.specificationContentHash
       ?? installation.contentHash
@@ -144,19 +154,12 @@ export async function writeCrmState({ platformStore, installation, crm, actorId 
     planId: installation.planId ?? `plan_${installation.businessId}`,
     status: installation.status ?? "installed",
     plan: installation.plan ?? {},
-    actionCheckpoints: installation.actionCheckpoints ?? [],
+    actionCheckpoints: Array.isArray(installation.actionCheckpoints) ? installation.actionCheckpoints : [],
     configuration: {
       ...(installation.configuration ?? {}),
       crm: nextCrm,
     },
-    history: [
-      ...(Array.isArray(installation.history) ? installation.history : []),
-      {
-        at: nextCrm.updatedAt,
-        action: "crm_update",
-        actorId,
-      },
-    ],
+    history,
     actorUserId: installation.actorUserId ?? actorId,
     installedAt: installation.installedAt ?? null,
   });

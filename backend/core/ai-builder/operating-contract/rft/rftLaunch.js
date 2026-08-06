@@ -345,6 +345,10 @@ export function applyRftLaunchPatch(launch, patch = {}, { nowISO = null } = {}) 
   return { ok: true, launch: deepFreeze(next) };
 }
 
+function plainJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 export async function persistRftLaunch({
   platformStore,
   installation,
@@ -356,7 +360,7 @@ export async function persistRftLaunch({
     id: installation.id ?? installation.installationId ?? `install_${installation.businessId}`,
     businessId: installation.businessId,
     specificationRowId: installation.specificationRowId ?? null,
-    specificationId: installation.specificationId,
+    specificationId: installation.specificationId ?? `spec_${installation.businessId}`,
     specificationVersion: installation.specificationVersion ?? 1,
     specificationContentHash: installation.specificationContentHash
       ?? installation.contentHash
@@ -364,10 +368,12 @@ export async function persistRftLaunch({
     planId: installation.planId ?? `plan_${installation.businessId}`,
     status: installation.status ?? "installed",
     plan: installation.plan ?? {},
+    actionCheckpoints: Array.isArray(installation.actionCheckpoints) ? installation.actionCheckpoints : [],
     configuration: {
       ...(installation.configuration ?? {}),
-      rftLaunch: launch,
+      rftLaunch: plainJson(launch),
     },
+    history: Array.isArray(installation.history) ? installation.history.slice(-50) : [],
     installedAt: installation.installedAt ?? new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     updatedBy: actorId,

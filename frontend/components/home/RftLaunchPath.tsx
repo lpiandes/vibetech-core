@@ -141,14 +141,25 @@ export default function RftLaunchPath({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [proveFeedback, setProveFeedback] = useState<string | null>(null);
+  const [liveStatuses, setLiveStatuses] = useState<Record<string, unknown>>(connectionStatuses ?? {});
   const connectionStatusesRef = useRef(connectionStatuses);
-  connectionStatusesRef.current = connectionStatuses;
+  connectionStatusesRef.current = {
+    ...(connectionStatuses ?? {}),
+    ...liveStatuses,
+  };
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/rft/launch`);
-    const data = await res.json().catch(() => ({}));
+    const text = await res.text();
+    let data: any = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { error: text?.slice(0, 240) || `HTTP ${res.status}` };
+    }
     if (!res.ok) {
-      setError(data.error ?? "Could not load launch path");
+      setError(data.error ?? data.message ?? `Could not load launch path (${res.status})`);
       return;
     }
     setLaunch(applyLiveConnectionOverlay(data.launch ?? null, connectionStatusesRef.current));
@@ -156,6 +167,9 @@ export default function RftLaunchPath({
     setReplay(data.replay ?? null);
     setResponsibility(data.responsibility ?? {});
     setResponsibilityFields(Array.isArray(data.responsibilityFields) ? data.responsibilityFields : []);
+    if (data.connectionStatuses && typeof data.connectionStatuses === "object") {
+      setLiveStatuses(data.connectionStatuses);
+    }
     setError(null);
   }, [businessId]);
 
@@ -172,15 +186,24 @@ export default function RftLaunchPath({
     setBusy(action);
     setError(null);
     setMessage(null);
+    if (action === "prove") setProveFeedback(null);
     try {
       const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/rft/launch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, ...extra }),
       });
-      const data = await res.json().catch(() => ({}));
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { error: text?.slice(0, 240) || `HTTP ${res.status}` };
+      }
       if (!res.ok || data.ok === false) {
-        setError(data.message ?? data.error ?? "Action failed");
+        const msg = data.message ?? data.error ?? `Action failed (${res.status})`;
+        setError(msg);
+        if (action === "prove") setProveFeedback(msg);
       } else {
         const messages: Record<string, string> = {
           observe: "Baseline built from connected evidence.",
@@ -192,6 +215,12 @@ export default function RftLaunchPath({
           goLive: "Revenue Follow-Through is live (approval-gated).",
         };
         setMessage(messages[action] ?? "Updated.");
+        if (action === "prove") {
+          setProveFeedback(messages.prove ?? "Seeded.");
+        }
+        if (data.connectionStatuses && typeof data.connectionStatuses === "object") {
+          setLiveStatuses(data.connectionStatuses);
+        }
         if (data.replay) setReplay(data.replay);
         if (data.observation) setObservation(data.observation);
         if (data.launch) {
@@ -265,7 +294,10 @@ export default function RftLaunchPath({
     setBusy("proveChannels");
     setError(null);
     setMessage(null);
+    setProveFeedback(null);
     try {
+      // Prefer durable statuses from launch GET — Home SSR can lag OAuth.
+      await refresh();
       const statuses = connectionStatusesRef.current ?? {};
       const candidates = Object.keys(statuses)
         .filter((id) => isConnectedInStatuses(statuses, [id]))
@@ -273,11 +305,14 @@ export default function RftLaunchPath({
         .filter((row): row is { id: string; prove: { action: string; capabilityId: string } } => Boolean(row.prove));
 
       if (!candidates.length) {
-        setError("Connect email or calendar first, then run channel prove.");
+        const msg = "No connected channels with a prove action yet. Connect email/calendar on Connections, then try again.";
+        setError(msg);
+        setProveFeedback(msg);
         return;
       }
 
       const results: string[] = [];
+      let anyOk = false;
       for (const row of candidates) {
         const res = await fetch(
           `/api/businesses/${encodeURIComponent(businessId)}/integrations/prove`,
@@ -291,11 +326,18 @@ export default function RftLaunchPath({
             }),
           },
         );
-        const body = await res.json().catch(() => ({}));
+        const text = await res.text();
+        let body: any = {};
+        try {
+          body = text ? JSON.parse(text) : {};
+        } catch {
+          body = { error: text?.slice(0, 200) || `HTTP ${res.status}` };
+        }
         const status = String(body?.result?.status ?? "");
         const ok = Boolean(body?.result?.ok)
           || status === "awaiting_confirm"
           || Boolean(body?.result?.detail?.externalReference);
+        if (ok) anyOk = true;
         results.push(
           `${row.id}: ${ok ? (body?.result?.message ?? "Proven") : (body?.result?.message ?? body?.error ?? "Failed")}`,
         );
@@ -303,10 +345,14 @@ export default function RftLaunchPath({
           setError(body?.result?.message ?? body?.error ?? `Prove failed for ${row.id}`);
         }
       }
-      setMessage(results.join(" · "));
-      await refresh();
+      const summary = results.join(" · ");
+      setMessage(summary);
+      setProveFeedback(summary);
+      if (anyOk) await refresh();
     } catch (err: any) {
-      setError(String(err?.message ?? err));
+      const msg = String(err?.message ?? err);
+      setError(msg);
+      setProveFeedback(msg);
     } finally {
       setBusy(null);
     }
@@ -551,6 +597,19 @@ export default function RftLaunchPath({
                   </Button>
                 ) : null}
               </div>
+              {meta.id === "prove" && proveFeedback ? (
+                <p
+                  role="status"
+                  style={{
+                    margin: 0,
+                    fontSize: typography.meta.fontSize,
+                    color: error ? cockpitColors.warning : cockpitColors.handled,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {proveFeedback}
+                </p>
+              ) : null}
               {meta.id === "confirm" ? (
                 <ResponsibilityForm
                   fields={responsibilityFields}

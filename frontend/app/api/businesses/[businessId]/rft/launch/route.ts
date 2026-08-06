@@ -1,9 +1,21 @@
 import { NextResponse } from "next/server";
 
 import { getAuthorizedWorkspace, getAuthorizedBusinessScope, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
+import { AuthorizationError } from "@/lib/server/compose";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
 import { invalidateCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
+
+function jsonRouteError(error: unknown) {
+  if (error instanceof AuthorizationError) {
+    return authorizationErrorResponse(error);
+  }
+  console.error("[rft/launch]", error);
+  return NextResponse.json({
+    ok: false,
+    error: error instanceof Error ? error.message : String(error),
+  }, { status: 500 });
+}
 import { GmailInboundSyncService } from "../../../../../../../backend/core/integrations/gmail/GmailInboundSyncService.js";
 import {
   applyRftLaunchPatch,
@@ -132,6 +144,7 @@ export async function GET(
       observation: readRftObservation(installation),
       replay: readRftReplay(installation),
       responsibility: readRftResponsibility(installation),
+      connectionStatuses,
       responsibilityFields: REQUIRED_RESPONSIBILITY_FIELDS.map((field: string) => ({
         field,
         label: RESPONSIBILITY_FIELD_LABELS[field] ?? field,
@@ -146,7 +159,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    return authorizationErrorResponse(error);
+    return jsonRouteError(error);
   }
 }
 
@@ -380,27 +393,35 @@ export async function POST(
     }
 
     if (action === "prove") {
-      const seeded = await seedRftOpportunity({
-        platformStore,
-        installation,
-        contact: body.contact ?? {
-          name: "Launch prove contact",
-          email: (ctx.user as any)?.email ?? installation?.configuration?.businessProfile?.ownerEmail ?? "",
-        },
-        title: body.title ?? "Launch prove opportunity",
-        triggerEvent: "WEBSITE_INQUIRY",
-        actorId: "owner",
-      });
-      if (!seeded.ok) {
+      let seeded;
+      try {
+        seeded = await seedRftOpportunity({
+          platformStore,
+          installation,
+          contact: body.contact ?? {
+            name: "Launch prove contact",
+            email: (ctx.user as any)?.email ?? installation?.configuration?.businessProfile?.ownerEmail ?? "",
+          },
+          title: body.title ?? "Launch prove opportunity",
+          triggerEvent: "WEBSITE_INQUIRY",
+          actorId: "owner",
+        });
+      } catch (err) {
         return NextResponse.json({
           ok: false,
-          error: seeded.message ?? "Could not seed prove opportunity",
-          code: seeded.code ?? "seed_failed",
+          error: err instanceof Error ? err.message : String(err),
+          code: "seed_threw",
+        }, { status: 500 });
+      }
+      if (!seeded?.ok || !seeded?.cardId) {
+        return NextResponse.json({
+          ok: false,
+          error: seeded?.message ?? "Could not seed prove opportunity (no card id).",
+          code: seeded?.code ?? "seed_failed",
         }, { status: 400 });
       }
 
       // Seed only — channel prove attaches provider evidence and advances the card.
-      // Forced progress-without-evidence was slow, ignored failures, and left Today unchanged.
       let install = await reloadInstallation(businessId);
       if (!install) {
         return NextResponse.json({ ok: false, error: "Installation missing after seed" }, { status: 500 });
@@ -409,22 +430,33 @@ export async function POST(
       if (!patched.ok) {
         return NextResponse.json(patched, { status: 400 });
       }
-      await persistRftLaunch({
-        platformStore,
-        installation: install,
-        launch: patched.launch,
-        actorId: "owner",
-      });
+      try {
+        await persistRftLaunch({
+          platformStore,
+          installation: install,
+          launch: patched.launch,
+          actorId: "owner",
+        });
+      } catch (err) {
+        return NextResponse.json({
+          ok: false,
+          error: err instanceof Error ? `Persist failed: ${err.message}` : "Persist failed",
+          code: "persist_failed",
+          cardId: seeded.cardId,
+        }, { status: 500 });
+      }
       install = await reloadInstallation(businessId);
       const freshProofs = await proofRecordsFor(businessId);
+      const evaluated = evaluateRftLaunch({
+        installation: install,
+        connectionStatuses,
+        proofRecords: freshProofs,
+      });
       return NextResponse.json({
         ok: true,
         cardId: seeded.cardId,
-        launch: evaluateRftLaunch({
-          installation: install,
-          connectionStatuses,
-          proofRecords: freshProofs,
-        }),
+        launch: JSON.parse(JSON.stringify(evaluated)),
+        connectionStatuses,
         message: "Prove opportunity seeded. Run channel prove to attach live email/calendar evidence.",
         nextProveActions: ["send_test_email", "create_test_event"],
       });
@@ -483,6 +515,6 @@ export async function POST(
 
     return NextResponse.json({ ok: false, error: "Unknown action" }, { status: 400 });
   } catch (error) {
-    return authorizationErrorResponse(error);
+    return jsonRouteError(error);
   }
 }
