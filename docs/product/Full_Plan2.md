@@ -78,4 +78,4 @@ YC proof package from Full_Plan §12 remains the **measurement target** for desi
 1. Open this file before starting beachhead-depth work.  
 2. Open the plan sheet + [ENGINEERING_SHIP_BAR.md](./ENGINEERING_SHIP_BAR.md).  
 3. Keep [Full_Plan.md](./Full_Plan.md) as the strategic constitution of *what* we sell; this file is *what’s left to make it true in the product*.  
-4. Mark DONE only when the plan’s “Ships when” + ship bar pass.
+4. Mark DONE only when the plan’s “Ships when” + ship bar pass.\n\n---\n\n## Next\n\nScaffolding complete. Behavior close-out: **[Full_Plan3.md](./Full_Plan3.md)** (Batch E).\n

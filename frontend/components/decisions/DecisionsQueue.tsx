@@ -208,7 +208,7 @@ export default function DecisionsQueue({
             <div style={{ marginTop: spacing.sm, display: "flex", gap: spacing.sm, flexWrap: "wrap", alignItems: "center" }}>
               {approveAction ? (
                 <Button type="button" size="sm" disabled={busy} onClick={() => void handleApproval(approvalKey, "GRANT")}>
-                  {busy ? "Saving…" : "Approve and send"}
+                  {busy ? "Sending…" : "Approve and send"}
                 </Button>
               ) : null}
               {editAction?.href ? (

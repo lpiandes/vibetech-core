@@ -375,7 +375,7 @@ Update this section as plans ship.
 
 1. Before starting work, open this file and confirm which plan # you are executing.
 2. Open [ENGINEERING_SHIP_BAR.md](./ENGINEERING_SHIP_BAR.md) and treat it as the definition of DONE (reuse modules, design-system Button/Tailwind tokens, automated + manual tests, no fabricated success).
-3. Batch C (Plans 9–12) and Batch D (Plans 13–18) are complete. **Active mode:** design-partner delivery under [DEVELOPMENT_FREEZE.md](./DEVELOPMENT_FREEZE.md) + [DESIGN_PARTNER_SEQUENCE.md](./DESIGN_PARTNER_SEQUENCE.md). Non-pilot work → [POST_PILOT_BACKLOG.md](./POST_PILOT_BACKLOG.md).
+3. Batch C (Plans 9–12) and Batch D (Plans 13–18) are complete. **Active mode:** [Full_Plan3.md](./Full_Plan3.md) Batch E reality closeout, then design-partner delivery under [DEVELOPMENT_FREEZE.md](./DEVELOPMENT_FREEZE.md) + [DESIGN_PARTNER_SEQUENCE.md](./DESIGN_PARTNER_SEQUENCE.md). Non-pilot work → [POST_PILOT_BACKLOG.md](./POST_PILOT_BACKLOG.md).
 4. Do not expand verticals, CRM parity, or package catalog while this roadmap is active.
 5. When in doubt: does this help VIBETech **own and prove** Revenue Follow-Through for one B2B service customer? If no, freeze it.
 6. Never mark a plan DONE until the ship bar passes — fix bugs and regressions in-plan.

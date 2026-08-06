@@ -149,34 +149,48 @@ export default function OutcomesLedgerExperience({ view }: { view: OutcomesLedge
         <section aria-label="Proof metrics" style={{ ...panelStyle, display: "grid", gap: spacing.sm }}>
           <h2 style={{ margin: 0, fontSize: typography.cardTitle.fontSize, fontWeight: 700 }}>Proof metrics</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: spacing.sm }}>
-            <MetricChip
-              label="Baseline delta"
-              value={formatMetricStatus(view.metrics.baselineDelta)}
-            />
-            <MetricChip
-              label="SLA attainment"
-              value={formatSlaMetric(view.metrics.slaAttainment)}
-            />
-            <MetricChip
-              label="Auto vs human"
-              value={`${view.metrics.autoVsHuman?.auto ?? 0} auto / ${view.metrics.autoVsHuman?.human ?? 0} human`}
-              detail={view.metrics.autoVsHuman?.not_observable ?? undefined}
-            />
+            {isObservableMetric(view.metrics.baselineDelta) ? (
+              <MetricChip
+                label="Baseline delta"
+                value={formatMetricStatus(view.metrics.baselineDelta)}
+              />
+            ) : null}
+            {isObservableMetric(view.metrics.slaAttainment) ? (
+              <MetricChip
+                label="SLA attainment"
+                value={formatSlaMetric(view.metrics.slaAttainment)}
+              />
+            ) : null}
+            {(view.metrics.autoVsHuman?.auto || view.metrics.autoVsHuman?.human) ? (
+              <MetricChip
+                label="Auto vs human"
+                value={`${view.metrics.autoVsHuman?.auto ?? 0} auto / ${view.metrics.autoVsHuman?.human ?? 0} human`}
+              />
+            ) : null}
             <MetricChip
               label="Proof-backed"
               value={String(view.metrics.proofBackedCompleted ?? summary.proofBackedCompleted ?? 0)}
             />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: spacing.sm }}>
-            <MetricChip
-              label="Conversion movement"
-              value={formatConversionMovement(view.metrics.conversionMovement)}
-              detail={view.metrics.conversionMovement?.status === "observable"
-                ? undefined
-                : (view.metrics.conversionMovement?.reason ?? "Requires won/lost outcomes with CRM proof.")}
-            />
-            <MetricChip label="Human time avoided" value="Not observable yet" detail="Requires paired baseline + completed work minutes." />
-            <MetricChip label="Operating cost" value="Not observable yet" detail="VIBETech cost ledger not attached to this business yet." />
+            {view.metrics.conversionMovement?.status === "observable" ? (
+              <MetricChip
+                label="Conversion movement"
+                value={formatConversionMovement(view.metrics.conversionMovement)}
+              />
+            ) : null}
+            {typeof (view.metrics as any).humanTimeAvoidedMinutes === "number" ? (
+              <MetricChip
+                label="Human time avoided"
+                value={`${Math.round((view.metrics as any).humanTimeAvoidedMinutes)} min`}
+              />
+            ) : null}
+            {typeof (view.metrics as any).operatingCostUsd === "number" ? (
+              <MetricChip
+                label="Operating cost"
+                value={`$${(view.metrics as any).operatingCostUsd.toFixed(2)}`}
+              />
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -354,6 +368,16 @@ function formatBaselineMetric(metric: any, format?: string) {
   }
   if (metric.count != null) return String(metric.count);
   return "—";
+}
+
+/** Plan 20 — never show stub metric chips that look like real KPIs. */
+function isObservableMetric(metric?: { status?: string; baselineMedianMinutes?: number; withinSla?: boolean; medianMinutes?: number } | null) {
+  if (!metric || typeof metric !== "object") return false;
+  if (String(metric.status ?? "") === "not_observable") return false;
+  if (String(metric.status ?? "") === "observable") return true;
+  if (metric.baselineMedianMinutes != null) return true;
+  if (metric.withinSla != null || metric.medianMinutes != null) return true;
+  return false;
 }
 
 function StatusPill({ status }: { status?: string }) {

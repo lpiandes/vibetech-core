@@ -10,6 +10,9 @@ import {
   persistGovernedLearning,
   readGovernedLearning,
 } from "../../../../../../backend/core/company-rules/governedLearning.js";
+import { fulfillSpecialtyApprovalGrant } from "../../../../../../backend/core/ai-builder/specialty/fulfillSpecialtyApprovalGrant.js";
+import { progressRftOpportunity } from "../../../../../../backend/core/ai-builder/operating-contract/rft/rftOpportunityRuntime.js";
+import { invalidateCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 
 export async function POST(
   req: Request,
@@ -37,12 +40,13 @@ export async function POST(
     }
 
     const approvalId = resolvedParams.id;
-    const priorReq = (ctx.service as any)?.connected?.ctx?.approvalRuntime?.getRequestById?.(approvalId)
+    const approvalRuntime = (ctx.service as any)?.connected?.ctx?.approvalRuntime
+      ?? (ctx.service as any)?.approvalRuntime
       ?? null;
+    const priorReq = approvalRuntime?.getRequestById?.(approvalId) ?? null;
 
     const result = ctx.service.applyOwnerApprovalDecision(approvalId, decision);
 
-    // Plan 10 — capture original vs decision (reason optional; defaults are honest).
     const granted = decision === "GRANT" || decision === "APPROVE";
     const reasonCode = String(body?.reasonCode ?? body?.rootCause ?? "").trim()
       || (granted ? "approved_as_proposed" : "rejected_outright");
@@ -92,7 +96,73 @@ export async function POST(
       // Learning capture must not block the approval decision.
     }
 
-    return NextResponse.json({ ok: true, result });
+    const workRuntime = (ctx.service as any)?.workRuntime
+      ?? (ctx.service as any)?.connected?.ctx?.workRuntime
+      ?? null;
+    const integrationHub = (ctx.service as any)?.connected?.integrationPlatform?.hub
+      ?? (ctx.service as any)?.connected?.integrationHub
+      ?? null;
+
+    // Plan 19 — GRANT on specialty approvals must actually send + advance RFT.
+    let fulfillment: Record<string, unknown> | null = null;
+    if (granted && priorReq) {
+      try {
+        const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+        fulfillment = await fulfillSpecialtyApprovalGrant({
+          approvalRequest: priorReq,
+          businessId,
+          platformStore,
+          installation,
+          workRuntime,
+          integrationHub,
+          actorId,
+        }) as Record<string, unknown>;
+        invalidateCachedBusinessOsInstallation(businessId);
+
+        if (fulfillment && fulfillment.ok === false && fulfillment.skipped !== true) {
+          return NextResponse.json({
+            ok: false,
+            error: String(fulfillment.message ?? fulfillment.reason ?? "Outbound send failed after approval"),
+            result,
+            fulfillment,
+          }, { status: 502 });
+        }
+      } catch (err) {
+        return NextResponse.json({
+          ok: false,
+          error: err instanceof Error ? err.message : "Outbound fulfillment failed after approval",
+          result,
+        }, { status: 502 });
+      }
+    }
+
+    // REJECT → RFT Exception when linked specialty work has a card.
+    if (!granted && priorReq) {
+      try {
+        const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+        const workItemId = String(
+          priorReq?.sourceReference?.workItemId ?? priorReq?.context?.workItemId ?? "",
+        );
+        const workItem = workItemId ? workRuntime?.getWorkItem?.(workItemId) : null;
+        const cardId = String(workItem?.metadata?.rftCardId ?? workItem?.metadata?.cardId ?? "").trim();
+        if (cardId && installation) {
+          await progressRftOpportunity({
+            platformStore,
+            installation,
+            cardId,
+            eventType: "APPROVAL_REJECTED",
+            actorId,
+            note: "Owner rejected outbound",
+            outcomeType: "HumanInterventionRequired",
+          }).catch(() => null);
+          invalidateCachedBusinessOsInstallation(businessId);
+        }
+      } catch {
+        /* reject RFT progress is best-effort */
+      }
+    }
+
+    return NextResponse.json({ ok: true, result, fulfillment });
   } catch (error) {
     return authorizationErrorResponse(error);
   }
