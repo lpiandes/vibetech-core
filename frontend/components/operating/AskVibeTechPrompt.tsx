@@ -4,7 +4,7 @@ import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
-import { ASK_VIBETECH_SUGGESTIONS } from "@/lib/operating/businessLanguage";
+import { ASK_VIBETECH_SUGGESTIONS, buildAskSuggestions } from "@/lib/operating/businessLanguage";
 
 type Context = {
   intelligenceCandidateId?: string;
@@ -26,6 +26,11 @@ export default function AskVibeTechPrompt({
   helperText = "Ask about follow-through, change operating rules, or investigate an escalation. Confirm applies changes — nothing mutates until you approve.",
   large = false,
   showSuggestions = true,
+  suggestions,
+  waitingCount = 0,
+  approvalCount = 0,
+  workingCount = 0,
+  winCount = 0,
 }: {
   businessId: string;
   context?: Context;
@@ -33,9 +38,19 @@ export default function AskVibeTechPrompt({
   helperText?: string;
   large?: boolean;
   showSuggestions?: boolean;
+  suggestions?: string[];
+  waitingCount?: number;
+  approvalCount?: number;
+  workingCount?: number;
+  winCount?: number;
 }) {
   const router = useRouter();
   const [value, setValue] = useState("");
+  const chips = suggestions?.length
+    ? suggestions
+    : buildAskSuggestions({ waitingCount, approvalCount, workingCount, winCount });
+  // Keep static list as ultimate fallback if builder returns empty.
+  const suggestionList = chips.length ? chips : [...ASK_VIBETECH_SUGGESTIONS];
 
   function openArchitect(prompt: string) {
     const params = new URLSearchParams();
@@ -122,7 +137,7 @@ export default function AskVibeTechPrompt({
       </div>
       {showSuggestions ? (
         <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }} aria-label="Suggested questions">
-          {ASK_VIBETECH_SUGGESTIONS.map((suggestion) => (
+          {suggestionList.map((suggestion) => (
             <button
               key={suggestion}
               type="button"

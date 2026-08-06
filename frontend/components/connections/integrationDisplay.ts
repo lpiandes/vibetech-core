@@ -1,12 +1,12 @@
 import type { LucideIcon } from "lucide-react";
-import { Building2, Calendar, Calculator, FileText, Mail, MessageSquare, Phone, Search, Share2, Target, Video } from "lucide-react";
+import { Building2, Calendar, Calculator, FileText, Mail, MessageSquare, Phone, Search, Share2, Target, Video, ClipboardList, Database } from "lucide-react";
 
 import type { StatusBadgeTone } from "@/components/product/StatusBadge";
 
 /** Only `live` integrations are listed. Unavailable channels are omitted entirely. */
 export type IntegrationTier = "live";
 
-export type IntegrationSetupMode = "manual" | "dev_connect" | "oauth" | "api_key";
+export type IntegrationSetupMode = "manual" | "dev_connect" | "oauth" | "api_key" | "prove_only";
 
 export type IntegrationDisplay = {
   id: string;
@@ -101,6 +101,33 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
     listed: false,
     unlocks: "Lead → People → pipeline + META_LEAD automations",
   },
+  website_forms: {
+    title: "Website forms",
+    description: "Hosted intake form — prove with a test submission. Connected is not required; Proven needs a form_submission_id.",
+    tier: "live",
+    icon: ClipboardList,
+    setupMode: "prove_only",
+    listed: true,
+    unlocks: "Form lead → contact + Work",
+  },
+  hubspot: {
+    title: "HubSpot",
+    description: "Paste a private app token with contacts read/write. Prove creates a real HubSpot contact.",
+    tier: "live",
+    icon: Database,
+    setupMode: "api_key",
+    listed: true,
+    unlocks: "CRM updates with hubspot_record_id proof",
+  },
+  highlevel: {
+    title: "HighLevel",
+    description: "Paste API key + location ID. Prove creates a real HighLevel contact.",
+    tier: "live",
+    icon: Database,
+    setupMode: "api_key",
+    listed: true,
+    unlocks: "CRM updates with highlevel_record_id proof",
+  },
   google_search_console: {
     title: "Google Search Console",
     description: "Read verified website search performance and SEO opportunities",
@@ -156,6 +183,9 @@ export type LiveIntegrationFlags = {
   meta_ads?: boolean;
   property_management?: boolean;
   property_management_system?: boolean;
+  hubspot?: boolean;
+  highlevel?: boolean;
+  website_forms?: boolean;
   _googleOAuth?: boolean;
 };
 
@@ -179,7 +209,7 @@ export function isIntegrationListed(connectionId: string, liveFlags: LiveIntegra
     if (id === "meta_ads") return Boolean(liveFlags.meta_ads);
     return false;
   }
-  // business_email: always list (oauth when configured, else dev_connect when allowed)
+  // business_email / website_forms / hubspot / highlevel: always list when listed:true
   return true;
 }
 

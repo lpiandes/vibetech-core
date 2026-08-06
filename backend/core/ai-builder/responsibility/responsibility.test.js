@@ -121,3 +121,65 @@ test("go-live presentation uses short owner actions not constraint essays", asyn
     }
   }
 });
+
+test("connection constraints advance from connect to prove to resolved", async () => {
+  const { presentResponsibilityGoLive } = await import("./presentResponsibilityGoLive.js");
+  const { requests } = extractResponsibilityRequests({
+    text: "Remind people about appointments before they happen.",
+  });
+  const [assessed] = assessResponsibilityInventory(requests);
+
+  const disconnected = presentResponsibilityGoLive({
+    responsibilityRequests: [assessed.request],
+    connectionStatuses: {},
+  });
+  assert.equal(disconnected.needsYourAction[0].primaryAction, "Connect calendar");
+  assert.equal(disconnected.needsYourAction[0].primaryConnectionId, "calendar");
+
+  const connected = presentResponsibilityGoLive({
+    responsibilityRequests: [assessed.request],
+    connectionStatuses: { calendar: "CONNECTED" },
+  });
+  assert.equal(connected.needsYourAction[0].primaryAction, "Prove calendar");
+  assert.equal(
+    connected.needsYourAction[0].constraints.find((row) => row.channelId === "calendar")?.status,
+    "in_progress",
+  );
+
+  const provenRequest = {
+    ...assessed.request,
+    constraints: assessed.request.constraints.map((constraint) => (
+      constraint.type === "BUSINESS_RULE_REQUIRED"
+        ? { ...constraint, status: "resolved" }
+        : constraint
+    )),
+  };
+  const proven = presentResponsibilityGoLive({
+    responsibilityRequests: [provenRequest],
+    connectionStatuses: { calendar: "CONNECTED" },
+    proofRecords: {
+      calendar_scheduling: { ok: true, at: "2026-08-06T12:00:00.000Z" },
+    },
+  });
+  assert.equal(proven.needsYourAction.length, 0);
+  assert.equal(proven.readyForShadow.length, 1);
+  const calendarConstraint = proven.readyForShadow[0].constraints.find((row) => row.channelId === "calendar");
+  assert.equal(calendarConstraint.status, "resolved");
+  assert.equal(calendarConstraint.sourceStatus, "open");
+  assert.equal(calendarConstraint.proofReference, "calendar_scheduling");
+});
+
+test("a live responsibility stays live after every blocker is resolved", async () => {
+  const { presentResponsibilityGoLive } = await import("./presentResponsibilityGoLive.js");
+  const view = presentResponsibilityGoLive({
+    responsibilityRequests: [{
+      responsibilityId: "resp_live",
+      title: "Website lead intake",
+      status: "live",
+      implementationMode: "ready_existing_capabilities",
+      constraints: [],
+    }],
+  });
+  assert.equal(view.live.length, 1);
+  assert.equal(view.readyForShadow.length, 0);
+});

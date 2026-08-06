@@ -297,9 +297,12 @@ export default function OperatorExceptionsClient() {
                       cursor: "pointer",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
                       <strong style={{ fontSize: 14 }}>{item.title || item.summary}</strong>
-                      <StatusBadge label={String(item.urgency ?? item.kind ?? "open")} tone="warning" />
+                      <div style={{ display: "grid", gap: 4, justifyItems: "end" }}>
+                        <StatusBadge label={String(item.urgency ?? item.kind ?? "open")} tone="warning" />
+                        <SlaCountdown payload={item.payload} createdAt={item.createdAt} />
+                      </div>
                     </div>
                     <div style={{ marginTop: 4, fontSize: 12, color: cockpitColors.textSecondary }}>
                       {[item.businessName, item.kind?.replace(/_/g, " "), item.summary].filter(Boolean).join(" · ")}
@@ -323,15 +326,16 @@ export default function OperatorExceptionsClient() {
                 </p>
               </div>
 
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <SlaCountdown payload={selected.payload} createdAt={selected.createdAt} large />
+                {selected.supportHref ? (
+                  <Button asChild size="sm">
+                    <Link href={selected.supportHref}>Take over (support enter)</Link>
+                  </Button>
+                ) : null}
                 {selected.href ? (
                   <Button asChild size="sm" variant="outline">
                     <Link href={selected.href}>Open detail</Link>
-                  </Button>
-                ) : null}
-                {selected.supportHref ? (
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={selected.supportHref}>Support enter</Link>
                   </Button>
                 ) : null}
                 {selected.workspaceHref ? (
@@ -550,6 +554,71 @@ function parseNullableBoolean(value: string) {
   if (value === "yes") return true;
   if (value === "no") return false;
   return null;
+}
+
+function SlaCountdown({
+  payload,
+  createdAt,
+  large = false,
+}: {
+  payload?: Record<string, unknown> | null;
+  createdAt?: string | null;
+  large?: boolean;
+}) {
+  const slaMinutes = Number(payload?.slaMinutes ?? 0);
+  const ageMinutes = Number(payload?.ageMinutes ?? NaN);
+  const deadlineAt = payload?.slaDeadlineAt ? String(payload.slaDeadlineAt) : null;
+  const createdMs = createdAt ? Date.parse(String(createdAt)) : NaN;
+  const deadlineMs = deadlineAt
+    ? Date.parse(deadlineAt)
+    : (Number.isFinite(createdMs) && slaMinutes > 0 ? createdMs + slaMinutes * 60_000 : NaN);
+
+  let label = "";
+  let tone: "ok" | "warn" | "critical" = "ok";
+  if (Number.isFinite(deadlineMs)) {
+    const remainingMin = Math.round((deadlineMs - Date.now()) / 60_000);
+    if (remainingMin >= 0) {
+      label = `${remainingMin}m left`;
+      tone = remainingMin <= Math.max(1, Math.round(slaMinutes * 0.25)) ? "warn" : "ok";
+    } else {
+      label = `Overdue ${Math.abs(remainingMin)}m`;
+      tone = "critical";
+    }
+  } else if (Number.isFinite(ageMinutes) && slaMinutes > 0) {
+    const remaining = Math.round(slaMinutes - ageMinutes);
+    if (remaining >= 0) {
+      label = `${remaining}m left`;
+      tone = remaining <= Math.max(1, Math.round(slaMinutes * 0.25)) ? "warn" : "ok";
+    } else {
+      label = `Overdue ${Math.abs(remaining)}m`;
+      tone = "critical";
+    }
+  } else if (Number.isFinite(ageMinutes)) {
+    label = `${Math.round(ageMinutes)}m open`;
+    tone = "warn";
+  } else {
+    return null;
+  }
+
+  const color = tone === "critical"
+    ? cockpitColors.critical
+    : tone === "warn"
+      ? cockpitColors.warning
+      : cockpitColors.handled;
+
+  return (
+    <span
+      style={{
+        fontSize: large ? 13 : 11,
+        fontWeight: 700,
+        color,
+        whiteSpace: "nowrap",
+      }}
+      title={slaMinutes ? `Acknowledge SLA ${slaMinutes}m` : "Case age"}
+    >
+      SLA · {label}
+    </span>
+  );
 }
 
 function ScorecardChip({ label, metric }: { label: string; metric?: ScoreMetric }) {

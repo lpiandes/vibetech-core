@@ -32,6 +32,7 @@ type GoLiveView = {
   needsYourAction?: GoLiveItem[];
   vibetechWorking?: Array<{ responsibilityId: string; title?: string; readinessLabel?: string }>;
   readyForShadow?: Array<{ responsibilityId: string; title?: string }>;
+  live?: Array<{ responsibilityId: string; title?: string }>;
   cannotInstall?: Array<{ responsibilityId: string; title?: string; shortActions?: string[] }>;
 };
 
@@ -50,9 +51,10 @@ export default function ResponsibilityGoLivePanel({
   const needs = view.needsYourAction ?? [];
   const working = view.vibetechWorking ?? [];
   const ready = view.readyForShadow ?? [];
+  const live = view.live ?? [];
   const blocked = view.cannotInstall ?? [];
 
-  if (!needs.length && !working.length && !ready.length && !blocked.length) return null;
+  if (!needs.length && !working.length && !ready.length && !live.length && !blocked.length) return null;
 
   return (
     <section
@@ -68,12 +70,21 @@ export default function ResponsibilityGoLivePanel({
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
         <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: cockpitColors.textPrimary }}>
-          Next steps
+          {view.canOpenBusiness && needs.length
+            ? "Partially open — finish the rest"
+            : "Next steps"}
         </h2>
         <span style={{ fontSize: 12, fontWeight: 650, color: cockpitColors.textMuted }}>
           {view.summary}
         </span>
       </div>
+
+      {live.length ? (
+        <QuietList
+          label="Live now"
+          items={live.map((item) => shortTitle(item.title))}
+        />
+      ) : null}
 
       {needs.length ? (
         <div style={{ display: "grid", gap: 8 }}>

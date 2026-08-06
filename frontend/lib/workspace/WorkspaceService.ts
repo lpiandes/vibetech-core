@@ -2408,6 +2408,52 @@ export class WorkspaceService {
     return connection;
   }
 
+  async connectCrmPrivateApp({
+    connectionType,
+    displayName,
+    providerType,
+    credentialId,
+    locationId = null,
+    platformActiveKnowledgeCount,
+  }: {
+    connectionType: string;
+    displayName: string;
+    providerType: string;
+    credentialId: string;
+    locationId?: string | null;
+    platformActiveKnowledgeCount?: number;
+  }) {
+    if (!this.connected.integrationPlatform) {
+      throw new Error("Integrations are not available for this workspace.");
+    }
+    const type = String(connectionType);
+    const connection = await connectProviderConnection({
+      integrationPlatform: this.connected.integrationPlatform,
+      workspaceId: this.workspaceId,
+      connectionType: type,
+      displayName: String(displayName || type),
+      providerType: String(providerType),
+      credentialId,
+      credentialType: "api_key",
+      externalAccountReference: locationId
+        ? `${providerType}:${locationId}`
+        : `${providerType}:${credentialId}`,
+      metadata: { locationId: locationId ?? null },
+    });
+    const knowledgeCount =
+      platformActiveKnowledgeCount ??
+      this.connected.platformKnowledgeCoverage?.activeDocumentCount ??
+      0;
+    this.refreshOperationalState(knowledgeCount);
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
+    });
+    return connection;
+  }
+
   async connectTwilioSms({
     credentialId,
     fromNumber,

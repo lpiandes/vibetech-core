@@ -62,14 +62,9 @@ const CANONICAL_ORDER: NavDef[] = [
     permission: null,
     group: "primary",
   },
-  // Records — evidence / systems of record (secondary)
-  { id: "people", label: "People", path: "people", iconName: "users", permission: "people.view", group: "records" },
-  { id: "pipelines", label: "Pipelines", path: "pipelines", iconName: "kanban", permission: "people.view", group: "records" },
+  // Records — evidence only (Plan 28: no CRM-primary People/Pipelines/Inbox theater)
   { id: "calendar", label: "Calendar", path: "calendar", iconName: "calendar", permission: "people.view", group: "records" },
   { id: "work", label: "Work", path: "work", iconName: "inbox", permission: "work.view", group: "records" },
-  { id: "inbox", label: "Inbox", path: "inbox", iconName: "mail", permission: "work.view", group: "records" },
-  { id: "campaigns", label: "Campaigns", path: "campaigns", iconName: "mail", permission: "work.view", group: "records" },
-  { id: "ads", label: "Ads", path: "ads", iconName: "trending-up", permission: "performance.view", group: "records" },
   {
     id: "subjects",
     label: "Properties",

@@ -98,9 +98,20 @@ export default function DecisionsQueue({
           borderRadius: radius.large,
           border: `1px solid ${cockpitColors.panelBorder}`,
           backgroundColor: cockpitColors.panel,
+          display: "grid",
+          gap: spacing.sm,
         }}
       >
-        {emptyMessage}
+        <div>{emptyMessage}</div>
+        {businessId ? (
+          <p style={{ margin: 0, fontSize: 13, color: cockpitColors.textSecondary, lineHeight: 1.45 }}>
+            Need a judgment card to practice? Open{" "}
+            <Link href={`/b/${encodeURIComponent(businessId)}/home`} style={{ color: cockpitColors.accent, fontWeight: 650 }}>
+              Today
+            </Link>{" "}
+            and create a test decision — Approve and send runs the real outbound path.
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -135,6 +146,12 @@ export default function DecisionsQueue({
         const approvalKey = String(item.approvalId ?? item.sourceId ?? item.id ?? "");
         const busy = pendingId === approvalKey;
         const evidence = safeArray(item.evidence);
+        const workHref = item.availableActions?.find((a) => a.id === "edit" || a.id === "review_approval")?.href
+          ?? (item.sourceType === "work" && item.sourceId && businessId
+            ? `/b/${encodeURIComponent(businessId)}/work?workId=${encodeURIComponent(String(item.sourceId))}`
+            : null)
+          ?? null;
+        const editHref = workHref;
         const knows = [
           item.partyName ? `Contact: ${item.partyName}` : null,
           item.subjectName ? `Subject: ${item.subjectName}` : null,
@@ -211,9 +228,9 @@ export default function DecisionsQueue({
                   {busy ? "Sending…" : "Approve and send"}
                 </Button>
               ) : null}
-              {editAction?.href ? (
+              {editAction?.href || editHref ? (
                 <Button asChild variant="outline" size="sm">
-                  <Link href={editAction.href}>{editAction.label ?? "Edit"}</Link>
+                  <Link href={editAction?.href || editHref || "#"}>{editAction?.label ?? "Edit"}</Link>
                 </Button>
               ) : reviewAction?.href && /edit|draft|work/i.test(String(reviewAction.label ?? reviewAction.href)) ? (
                 <Button asChild variant="outline" size="sm">

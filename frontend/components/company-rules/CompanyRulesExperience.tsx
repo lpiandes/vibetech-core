@@ -68,6 +68,32 @@ export default function CompanyRulesExperience({
           description="Services, approval boundaries, response promises, and installed Operating Contracts. Knowledge documents remain the evidence layer."
         />
 
+        <section style={panelStyle} aria-label="Service standard">
+          <h2 style={{ margin: 0, fontSize: typography.cardTitle.fontSize, fontWeight: 700 }}>
+            Service standard
+          </h2>
+          <p style={{ margin: `${spacing.sm} 0 0`, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize, lineHeight: 1.5 }}>
+            Managed Revenue Follow-Through promises: acknowledge eligible opportunities within the contracted SLA,
+            assign an owner, record the next step after meetings, chase outstanding proposals on schedule,
+            hand won work to delivery, and surface every exception to a person.
+          </p>
+          {contracts.length ? (
+            <ul style={{ margin: `${spacing.md} 0 0`, paddingLeft: spacing.lg, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize, lineHeight: 1.55 }}>
+              {contracts.map((contract) => (
+                <li key={contract.employeeId}>
+                  <strong style={{ color: cockpitColors.textPrimary }}>{contract.label}</strong>
+                  {" — "}
+                  {contract.slaSummary || "SLA recorded on the operating contract."}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p style={{ margin: `${spacing.md} 0 0`, color: cockpitColors.textMuted, fontSize: typography.meta.fontSize }}>
+              Install Revenue Follow-Through to lock the written SLA on this business.
+            </p>
+          )}
+        </section>
+
         <section style={panelStyle} aria-label="Business memory">
           <h2 style={{ margin: 0, fontSize: typography.cardTitle.fontSize, fontWeight: 700 }}>
             Business Memory

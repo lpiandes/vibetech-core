@@ -43,7 +43,8 @@ async function maybeAttachRftEvidence({
     || detail.messageId
     || detail.eventId
     || detail.sid
-    || detail.formSubmissionId,
+    || detail.formSubmissionId
+    || detail.providerId,
   );
   const verified = result?.verified === true && result?.ok === true;
   // Need a provider id; attach on verified proves, or when a launch prove card already exists.
@@ -77,6 +78,7 @@ const ACTION_TO_CAPABILITY: Record<string, string> = {
   run_sports_golden_path: "sports_registration_golden_path",
   run_dental_golden_path: "dental_intake_golden_path",
   submit_test_form: "website_forms",
+  sync_test_crm_contact: "crm_hubspot",
 };
 
 export async function POST(

@@ -103,10 +103,21 @@ export default function GovernedLearningPanel({ businessId }: { businessId: stri
       ) : null}
 
       {!proposals.length ? (
-        <p style={{ margin: `${spacing.md} 0 0`, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize }}>
-          No open proposals yet. Resolve operator cases, correct shadow proposals, or decide approvals
-          with a reason — repeats will surface here.
-        </p>
+        <div style={{ marginTop: spacing.md, display: "grid", gap: spacing.sm }}>
+          <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize }}>
+            No open proposals yet. Corrections accumulate when you reject or edit decisions — repeats become suggested rules here.
+          </p>
+          <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
+            <Button asChild variant="outline" size="sm">
+              <a href={`/b/${encodeURIComponent(businessId)}/intelligence`}>Review Decisions</a>
+            </Button>
+            <Button asChild variant="ghost" size="sm">
+              <a href={`/b/${encodeURIComponent(businessId)}/architect?prompt=${encodeURIComponent("What Company Rules should we confirm from how we operate today?")}`}>
+                Ask to confirm rules
+              </a>
+            </Button>
+          </div>
+        </div>
       ) : (
         <div style={{ display: "grid", gap: spacing.md, marginTop: spacing.md }}>
           {proposals.map((p) => (

@@ -246,7 +246,7 @@ export default function SocialCheckerClient({
             <>
               <a href={SIGN_IN_URL} style={ghostBtnLink}>Log in</a>
               <a href={GET_A_QUOTE_URL} style={primaryBtnLink}>Get a quote</a>
-              <button type="button" style={{ ...ghostBtnLink, cursor: "pointer", border: "1px solid #cbd5e1", background: "#fff" }} onClick={() => setShowAuthPanel("register")}>
+              <button type="button" style={{ ...ghostBtnLink, cursor: "pointer", border: "1px solid #cbd5e1", background: "#fff", color: "#0f172a" }} onClick={() => setShowAuthPanel("register")}>
                 Create org
               </button>
             </>

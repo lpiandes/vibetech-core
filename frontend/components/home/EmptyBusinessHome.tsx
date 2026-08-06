@@ -18,7 +18,7 @@ const CHECKLIST_META: Record<string, { description: string; icon: ReactNode }> =
   team: { description: "Invite employees to collaborate in VIBETech", icon: <Users size={18} /> },
   email: { description: "Connect the mailbox used for approved customer email", icon: <Mail size={18} /> },
   software: { description: "Connect systems of record your business already pays for", icon: <Building2 size={18} /> },
-  knowledge: { description: "Add policies and documents your AI teammates can cite", icon: <BookOpen size={18} /> },
+  knowledge: { description: "Add policies and documents VIBETech can cite", icon: <BookOpen size={18} /> },
   prospect: { description: "Test intake with a real inquiry — outbound still needs your approval", icon: <Mail size={18} /> },
 };
 

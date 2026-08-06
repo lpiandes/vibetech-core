@@ -85,6 +85,26 @@ export default async function IntegrationsPage({
       }
     }
 
+    // Plan 26 — always surface RFT min-set prove channels (forms + CRM) when missing.
+    const rftMinSet = ["website_forms", "hubspot", "highlevel"];
+    {
+      const existing = new Set(
+        businessOsIntegrations.map((entry: any) =>
+          String(entry.integrationId ?? entry.id ?? "").toLowerCase(),
+        ),
+      );
+      for (const connectionId of rftMinSet) {
+        if (existing.has(connectionId)) continue;
+        existing.add(connectionId);
+        businessOsIntegrations.push({
+          integrationId: connectionId,
+          id: connectionId,
+          label: connectionId.replace(/_/g, " "),
+          status: "optional",
+        });
+      }
+    }
+
     const viewModel = service.loadConnectionCenterViewModel({
       businessOsIntegrations: businessOsIntegrations.length ? businessOsIntegrations : null,
       liveFlags: liveIntegrationAvailability(),

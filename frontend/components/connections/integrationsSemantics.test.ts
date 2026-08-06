@@ -97,6 +97,27 @@ test("connected email offers prove it works", () => {
   assert.equal(action?.proveAction, "send_test_email");
 });
 
+test("website forms offer prove without Connected", () => {
+  const display = getIntegrationDisplay("website_forms");
+  const action = primaryIntegrationAction(
+    { id: "website_forms", status: "NOT_CONNECTED", requirementLevel: "optional" },
+    display,
+  );
+  assert.equal(action?.kind, "prove");
+  assert.equal(action?.proveAction, "submit_test_form");
+  assert.equal(action?.capabilityId, "website_forms");
+});
+
+test("hubspot connected offers CRM prove", () => {
+  const display = getIntegrationDisplay("hubspot");
+  const action = primaryIntegrationAction(
+    { id: "hubspot", status: "CONNECTED", requirementLevel: "optional" },
+    display,
+  );
+  assert.equal(action?.kind, "prove");
+  assert.equal(action?.proveAction, "sync_test_crm_contact");
+});
+
 test("partition sections never build a roadmap of unavailable channels", () => {
   const sections = partitionIntegrationSections(
     connections,

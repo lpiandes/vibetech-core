@@ -6,7 +6,7 @@ import GlobalAskVibeTechEntry from "@/components/shell/GlobalAskVibeTechEntry";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
 
 /**
- * Empty / pre-operating home — guide into Architect, not blank modules.
+ * Empty / pre-operating home — operating brief path, not CRM module checklist (Plan 28).
  */
 export default function EmptyOperatingState({
   businessId,
@@ -37,8 +37,8 @@ export default function EmptyOperatingState({
 
   return (
     <EmptyState
-      title="Your business is installed"
-      description="Next, give VIBETech something to work with — then Needs Attention and Home will fill with live supervision."
+      title="Finish launch so VIBETech can operate"
+      description="Connect email and calendar, prove one real case, then go live. Decisions and Outcomes fill when there is real work — not module counts."
       action={
         <div style={{ display: "grid", gap: spacing.md, justifyItems: "center" }}>
           <ul
@@ -54,10 +54,9 @@ export default function EmptyOperatingState({
             }}
           >
             {[
-              { href: `${base}/integrations`, label: "Connect an integration or import data" },
-              { href: `${base}/team`, label: "Invite your team" },
-              { href: `${base}/knowledge`, label: "Add knowledge the business relies on" },
-              { href: `${base}/architect`, label: "Ask VIBETech what to set up next" },
+              { href: `${base}/integrations`, label: "1. Connect email & calendar" },
+              { href: `${base}/home`, label: "2. Finish Today launch steps (prove → go live)" },
+              { href: `${base}/intelligence`, label: "3. Review Decisions when something needs you" },
             ].map((item) => (
               <li key={item.href}>
                 <Link

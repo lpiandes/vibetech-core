@@ -107,3 +107,29 @@ test("proofRecordFromResult maps into capability registry shape", async () => {
   assert.equal(record.ok, true);
   assert.equal(record.capabilityId, "meta_lead_intake");
 });
+
+test("CRM prove rejects simulated or missing provider id", async () => {
+  const simulated = await runIntegrationProveTest({
+    action: PROVE_ACTIONS.sync_test_crm_contact,
+    connectionStatus: "CONNECTED",
+    execute: async () => ({ ok: true, simulated: true, providerId: "hs_1" }),
+  });
+  assert.equal(simulated.ok, false);
+  assert.equal(simulated.reason, "simulated_not_allowed");
+
+  const noId = await runIntegrationProveTest({
+    action: PROVE_ACTIONS.sync_test_crm_contact,
+    connectionStatus: "CONNECTED",
+    execute: async () => ({ ok: true, simulated: false }),
+  });
+  assert.equal(noId.ok, false);
+  assert.equal(noId.reason, "missing_provider_reference");
+
+  const live = await runIntegrationProveTest({
+    action: PROVE_ACTIONS.sync_test_crm_contact,
+    connectionStatus: "CONNECTED",
+    execute: async () => ({ ok: true, simulated: false, providerId: "hs_99", externalReference: "hs_99" }),
+  });
+  assert.equal(live.ok, true);
+  assert.equal(live.status, "proven");
+});

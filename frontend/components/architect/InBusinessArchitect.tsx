@@ -523,7 +523,7 @@ export default function InBusinessArchitect({ businessId }: { businessId: string
                 large
                 showSuggestions
                 placeholder="What do you need?"
-                helperText="Pick a suggestion or type your own."
+                helperText="Pick a suggestion or type your own. Nothing changes until you approve."
               />
               {history.length ? (
                 <div style={{ display: "grid", gap: 8 }}>

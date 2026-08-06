@@ -17,42 +17,47 @@ function idsOf(items: ReturnType<typeof getCanonicalBusinessNav>) {
   return items.map((item) => item.id);
 }
 
-test("with no role deny list, a fully-permissioned role sees every catalog module", () => {
+test("operating brief nav keeps Today / Decisions / Outcomes / Company Rules primary", () => {
   const items = getCanonicalBusinessNav(businessId, fullPermissions, { role: "MANAGER" });
-  assert.ok(idsOf(items).includes("pipelines"));
-  assert.ok(idsOf(items).includes("settings"));
-  assert.ok(idsOf(items).includes("outcomes"));
   assert.equal(items.find((i) => i.id === "home")?.label, "Today");
   assert.equal(items.find((i) => i.id === "needs_attention")?.label, "Decisions");
   assert.equal(items.find((i) => i.id === "knowledge")?.label, "Company Rules");
   assert.equal(items.find((i) => i.id === "home")?.group, "primary");
-  assert.equal(items.find((i) => i.id === "people")?.group, "records");
+  assert.ok(idsOf(items).includes("outcomes"));
+  assert.ok(idsOf(items).includes("settings"));
+  assert.ok(idsOf(items).includes("work"));
+  assert.ok(idsOf(items).includes("calendar"));
+  // Plan 28 — CRM modules are not primary Records theater
+  assert.ok(!idsOf(items).includes("people"));
+  assert.ok(!idsOf(items).includes("pipelines"));
+  assert.ok(!idsOf(items).includes("inbox"));
+  assert.ok(!idsOf(items).includes("campaigns"));
 });
 
 test("a role-denied module is filtered out of the primary nav even with the underlying permission", () => {
   const roleDefinitions = [
-    { membershipRole: "EMPLOYEE", deniedModules: ["pipelines", "settings"] },
+    { membershipRole: "EMPLOYEE", deniedModules: ["work", "settings"] },
   ];
   const items = getCanonicalBusinessNav(businessId, fullPermissions, {
     role: "EMPLOYEE",
     roleDefinitions,
   });
   const ids = idsOf(items);
-  assert.ok(!ids.includes("pipelines"), "pipelines is on the EMPLOYEE deny list");
+  assert.ok(!ids.includes("work"), "work is on the EMPLOYEE deny list");
   assert.ok(!ids.includes("settings"), "settings is on the EMPLOYEE deny list");
-  assert.ok(ids.includes("people"), "people is not denied and should remain");
+  assert.ok(ids.includes("calendar"), "calendar is not denied and should remain");
   assert.ok(ids.includes("home"), "home is not denied and should remain");
 });
 
 test("deny list only applies to the matching membershipRole", () => {
   const roleDefinitions = [
-    { membershipRole: "EMPLOYEE", deniedModules: ["pipelines"] },
+    { membershipRole: "EMPLOYEE", deniedModules: ["work"] },
   ];
   const managerItems = getCanonicalBusinessNav(businessId, fullPermissions, {
     role: "MANAGER",
     roleDefinitions,
   });
-  assert.ok(idsOf(managerItems).includes("pipelines"), "MANAGER has no deny row and keeps Pipelines");
+  assert.ok(idsOf(managerItems).includes("work"), "MANAGER has no deny row and keeps Work");
 });
 
 test("OWNER and PLATFORM_ADMIN are never locked out, even if a stray deny row exists for them", () => {

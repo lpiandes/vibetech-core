@@ -175,6 +175,14 @@ export function primaryIntegrationAction(conn: ConnectionViewRow, display: Integ
     || healthLevel === "DISCONNECTED"
     || Boolean(reconnectAction);
 
+  // Connectionless prove (website forms) — offer prove before Connected.
+  if (display.setupMode === "prove_only") {
+    const prove = proveActionForConnection(String(conn.id));
+    if (prove) {
+      return { kind: "prove" as const, label: "Prove it works", proveAction: prove.action, capabilityId: prove.capabilityId };
+    }
+  }
+
   if (isConnectionConnected(String(conn.status ?? ""))) {
     if (needsReconnect && (display.setupMode === "oauth" || display.setupMode === "api_key" || display.setupMode === "dev_connect")) {
       return { kind: "connect" as const, label: reconnectAction?.label ?? "Reconnect" };
@@ -215,6 +223,9 @@ export function proveActionForConnection(connectionId: string): { action: string
     calendar: { action: "create_test_event", capabilityId: "calendar_scheduling" },
     sms_channel: { action: "send_test_sms", capabilityId: "sms_send" },
     meta_lead_ads: { action: "ingest_test_lead", capabilityId: "meta_lead_intake" },
+    website_forms: { action: "submit_test_form", capabilityId: "website_forms" },
+    hubspot: { action: "sync_test_crm_contact", capabilityId: "crm_hubspot" },
+    highlevel: { action: "sync_test_crm_contact", capabilityId: "crm_highlevel" },
   };
   return map[String(connectionId)] ?? null;
 }

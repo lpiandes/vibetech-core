@@ -145,6 +145,48 @@ export async function executeLiveProveAction({
     });
   }
 
+  if (act === PROVE_ACTIONS.sync_test_crm_contact) {
+    const credentialVault = vault ?? getSharedCredentialVault();
+    await hydrateWorkspaceCredentials({ platformStore, vault: credentialVault, workspaceId: businessId });
+    const credentials = await platformStore.listIntegrationCredentialsForWorkspace(businessId);
+    const hubspot = credentials.find((c) => /hubspot/i.test(String(c.providerType ?? c.credentialId ?? "")));
+    const highlevel = credentials.find((c) => /highlevel/i.test(String(c.providerType ?? c.credentialId ?? "")));
+    const matching = hubspot || highlevel;
+    if (!matching) {
+      return deepFreeze({
+        ok: false,
+        reason: "not_connected",
+        message: "Connect HubSpot or HighLevel before running CRM prove.",
+      });
+    }
+    const record = typeof credentialVault?.get === "function"
+      ? credentialVault.get(matching.credentialId)
+      : null;
+    const secrets = record?.secrets ?? {};
+    const accessToken = String(secrets.accessToken ?? secrets.apiKey ?? "").trim();
+    const locationId = secrets.locationId
+      ? String(secrets.locationId)
+      : (matching.metadata?.locationId ? String(matching.metadata.locationId) : null);
+    const provider = hubspot ? "hubspot" : "highlevel";
+    const { createCrmProveContact } = await import("../crm/CrmPrivateAppConnect.js");
+    const created = await createCrmProveContact({
+      provider,
+      accessToken,
+      locationId,
+      email: proveEmail,
+    });
+    if (!created.ok) return deepFreeze(created);
+    return deepFreeze({
+      ...created,
+      detail: {
+        externalReference: created.providerId,
+        providerId: created.providerId,
+        providerKind: created.evidenceKind,
+        at: created.at,
+      },
+    });
+  }
+
   const credentialVault = vault ?? getSharedCredentialVault();
   await hydrateWorkspaceCredentials({ platformStore, vault: credentialVault, workspaceId: businessId });
   const credentialResolver = createVaultCredentialResolver({ vault: credentialVault });
@@ -588,6 +630,15 @@ export function resolveProveConnectionStatus({
     || act === PROVE_ACTIONS.prove_team_availability
   ) {
     return "CONNECTED";
+  }
+
+  if (act === PROVE_ACTIONS.sync_test_crm_contact) {
+    const crmSnap = connections.find((c) => ["hubspot", "highlevel"].includes(String(c.id)));
+    if (crmSnap && String(crmSnap.status).toUpperCase() === "CONNECTED") return "CONNECTED";
+    if (credentials.some((c) => /hubspot|highlevel/i.test(String(c.providerType ?? c.credentialId ?? "")))) {
+      return "CONNECTED";
+    }
+    return "NOT_CONNECTED";
   }
 
   const connectionId = ACTION_TO_CONNECTION[act] ?? null;

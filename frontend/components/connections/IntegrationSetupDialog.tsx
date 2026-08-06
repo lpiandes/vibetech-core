@@ -60,6 +60,7 @@ export default function IntegrationSetupDialog({
     operatorEmail?: string;
   } | null>(null);
   const [growthForm, setGrowthForm] = useState({ customerId: "", developerToken: "", adAccountId: "", accessToken: "", loginCustomerId: "" });
+  const [crmForm, setCrmForm] = useState({ accessToken: "", locationId: "" });
   const [smsAdvanced, setSmsAdvanced] = useState(false);
   const [smsBrand, setSmsBrand] = useState({
     legalBusinessName: "",
@@ -228,6 +229,8 @@ export default function IntegrationSetupDialog({
               ? `/api/businesses/${businessId}/integrations/social-screening`
               : integration.id === "prospecting_enrichment"
                 ? `/api/businesses/${businessId}/integrations/prospecting-enrichment`
+              : integration.id === "hubspot" || integration.id === "highlevel"
+                ? `/api/businesses/${businessId}/integrations/crm`
               : `/api/businesses/${businessId}/integrations/sms`;
       const res = await fetch(path, {
         method: "POST",
@@ -235,6 +238,12 @@ export default function IntegrationSetupDialog({
         body: JSON.stringify(
           integration.id === "google_ads" || integration.id === "meta_ads"
             ? growthForm
+            : integration.id === "hubspot" || integration.id === "highlevel"
+              ? {
+                provider: integration.id,
+                accessToken: crmForm.accessToken,
+                locationId: integration.id === "highlevel" ? crmForm.locationId : null,
+              }
             : integration.id === "social_screening"
               ? {
                 usePlatformKeys: apiKeyForm.usePlatformKeys,
@@ -422,6 +431,30 @@ export default function IntegrationSetupDialog({
               <input placeholder={integration.id === "google_ads" ? "Google Ads customer ID" : "Meta ad account ID"} value={integration.id === "google_ads" ? growthForm.customerId : growthForm.adAccountId} onChange={(e) => setGrowthForm((s) => integration.id === "google_ads" ? { ...s, customerId: e.target.value } : { ...s, adAccountId: e.target.value })} style={{ padding: 8, borderRadius: 6, border: `1px solid ${cockpitColors.panelBorder}` }} />
               {integration.id === "google_ads" ? <><input placeholder="Google Ads developer token" type="password" value={growthForm.developerToken} onChange={(e) => setGrowthForm((s) => ({ ...s, developerToken: e.target.value }))} style={{ padding: 8, borderRadius: 6, border: `1px solid ${cockpitColors.panelBorder}` }} /><input placeholder="Optional manager account ID" value={growthForm.loginCustomerId} onChange={(e) => setGrowthForm((s) => ({ ...s, loginCustomerId: e.target.value }))} style={{ padding: 8, borderRadius: 6, border: `1px solid ${cockpitColors.panelBorder}` }} /></> : null}
               <input placeholder="Access token" type="password" value={growthForm.accessToken} onChange={(e) => setGrowthForm((s) => ({ ...s, accessToken: e.target.value }))} style={{ padding: 8, borderRadius: 6, border: `1px solid ${cockpitColors.panelBorder}` }} />
+            </div>
+          ) : canConnect && setupMode === "api_key" && (integration.id === "hubspot" || integration.id === "highlevel") ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
+              <div style={{ fontWeight: 600, fontSize: typography.caption.fontSize, color: cockpitColors.textPrimary }}>
+                {integration.id === "hubspot" ? "HubSpot private app token" : "HighLevel API credentials"}
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
+                Connected is not Proven — after connect, run Prove it works to create a real CRM contact id.
+              </p>
+              <input
+                placeholder={integration.id === "hubspot" ? "Private app access token" : "API key"}
+                type="password"
+                value={crmForm.accessToken}
+                onChange={(e) => setCrmForm((s) => ({ ...s, accessToken: e.target.value }))}
+                style={{ padding: 8, borderRadius: 6, border: `1px solid ${cockpitColors.panelBorder}` }}
+              />
+              {integration.id === "highlevel" ? (
+                <input
+                  placeholder="Location ID"
+                  value={crmForm.locationId}
+                  onChange={(e) => setCrmForm((s) => ({ ...s, locationId: e.target.value }))}
+                  style={{ padding: 8, borderRadius: 6, border: `1px solid ${cockpitColors.panelBorder}` }}
+                />
+              ) : null}
             </div>
           ) : canConnect && setupMode === "api_key" && integration.id === "sms_channel" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>

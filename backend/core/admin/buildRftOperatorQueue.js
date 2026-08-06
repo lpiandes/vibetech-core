@@ -106,8 +106,45 @@ export function buildOperatorCasesForInstallation({
               "Support-enter if coaching the owner is needed",
               "Classify root cause when closing (often customer_delay)",
             ],
-            payload: { state, ageMinutes: Math.round(ageMs / 60_000) },
-          }));
+              payload: {
+                state,
+                ageMinutes: Math.round(ageMs / 60_000),
+                slaMinutes,
+                slaDeadlineAt: new Date((parseTime(cardRft.lastTransitionAt) ?? nowMs) + slaMinutes * 60_000).toISOString(),
+              },
+            }));
+          }
+        }
+      }
+    }
+
+    // SLA approaching: still inside promise window but past halfway
+    if (!["Verified", "OutcomeRecorded", "Closed", "Exception"].includes(state)) {
+      const createdMs = parseTime(cardRft.createdAt ?? cardRft.lastTransitionAt);
+      if (createdMs != null) {
+        const ageMin = (nowMs - createdMs) / 60_000;
+        if (ageMin > slaMinutes * 0.5 && ageMin <= slaMinutes) {
+          const caseId = `sla_approaching:${businessId}:${card.id}`;
+          if (!isCaseResolved(installation, caseId)) {
+            cases.push(deepFreeze({
+              ...caseBase,
+              id: caseId,
+              kind: "sla_risk",
+              urgency: "normal",
+              summary: `SLA approaching — ${Math.round(ageMin)}m of ${slaMinutes}m used`,
+              steps: [
+                "Confirm first response is in flight",
+                "Take over acknowledgement if owner is offline",
+                "Close after verified first response",
+              ],
+              payload: {
+                state,
+                ageMinutes: Math.round(ageMin),
+                slaMinutes,
+                slaDeadlineAt: new Date(createdMs + slaMinutes * 60_000).toISOString(),
+              },
+            }));
+          }
         }
       }
     }
@@ -135,6 +172,7 @@ export function buildOperatorCasesForInstallation({
                 state,
                 ageMinutes: Math.round(ageMin),
                 slaMinutes,
+                slaDeadlineAt: new Date(createdMs + slaMinutes * 60_000).toISOString(),
               },
             }));
           }

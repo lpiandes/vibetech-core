@@ -56,17 +56,17 @@ Parallel tracks: Ops · Commercial · Demo (real execution, not paper).
 - [x] Plan 21 — Fix + Connections
 
 ### Wave 2
-- [ ] Plan 22 — Earned autonomy live
-- [ ] Plan 23 — Observe / replay / shadow / prove
+- [x] Plan 22 — Earned autonomy live
+- [x] Plan 23 — Observe / replay / shadow / prove
 
 ### Wave 3
-- [ ] Plan 24 — Decisions + Ask finished UX
-- [ ] Plan 25 — Rules + Builder + partial open
-- [ ] Plan 26 — Min integrations prove bar
+- [x] Plan 24 — Decisions + Ask finished UX
+- [x] Plan 25 — Rules + Builder + partial open
+- [x] Plan 26 — Min integrations prove bar
 
 ### Wave 4
-- [ ] Plan 27 — Operator console depth
-- [ ] Plan 28 — CRM-identity residue removal
+- [x] Plan 27 — Operator console depth
+- [x] Plan 28 — CRM-identity residue removal
 
 ### Tracks
 - [ ] Ops track (daily delivery)

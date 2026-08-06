@@ -11,6 +11,8 @@ const LIVE_PROVIDER_TYPES = Object.freeze([
   "twilio_voice",
   "meta_lead_ads",
   "meta_ads",
+  "hubspot",
+  "highlevel",
   "provider_mock_email",
   "provider_mock_sms",
   "provider_mock_external",

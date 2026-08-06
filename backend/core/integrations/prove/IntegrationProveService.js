@@ -20,6 +20,7 @@ export const PROVE_ACTIONS = Object.freeze({
   run_sample_social_screen: "run_sample_social_screen",
   prove_appointment_setter_sms: "prove_appointment_setter_sms",
   prove_team_availability: "prove_team_availability",
+  sync_test_crm_contact: "sync_test_crm_contact",
 });
 
 const CONNECTIONLESS_ACTIONS = new Set([
@@ -108,9 +109,13 @@ export async function runIntegrationProveTest({
     });
   }
 
-  // Outbound proves must be live — simulated passes never count as Done.
-  if (act === PROVE_ACTIONS.send_test_sms || act === PROVE_ACTIONS.send_test_email) {
-    const ref = execution.externalReference ?? execution.messageId ?? null;
+  // Outbound / CRM proves must be live — simulated passes never count as Done.
+  if (
+    act === PROVE_ACTIONS.send_test_sms
+    || act === PROVE_ACTIONS.send_test_email
+    || act === PROVE_ACTIONS.sync_test_crm_contact
+  ) {
+    const ref = execution.externalReference ?? execution.messageId ?? execution.providerId ?? null;
     if (execution.simulated === true || !ref) {
       return deepFreeze({
         ok: false,
@@ -119,6 +124,8 @@ export async function runIntegrationProveTest({
         status: "failed",
         message: act === PROVE_ACTIONS.send_test_sms
           ? "SMS prove did not send a real Twilio message. Check credentials, A2P/trial limits, and the destination number."
+          : act === PROVE_ACTIONS.sync_test_crm_contact
+            ? "CRM prove did not create a real HubSpot/HighLevel record. Reconnect and retry."
           : "Email prove did not send a real message. Reconnect Gmail and try again.",
         detail: execution,
         at: nowISO,
@@ -177,6 +184,9 @@ function proveSuccessMessage(action) {
   }
   if (action === PROVE_ACTIONS.prove_team_availability) {
     return "At least one teammate has bookable weekly availability — the appointment setter can auto-book.";
+  }
+  if (action === PROVE_ACTIONS.sync_test_crm_contact) {
+    return "CRM prove contact created with a provider record id.";
   }
   return "Prove test passed.";
 }
