@@ -191,10 +191,45 @@ export default function RftLaunchPath({
           goLive: "Revenue Follow-Through is live (approval-gated).",
         };
         setMessage(messages[action] ?? "Updated.");
-        if (data.launch) setLaunch(data.launch);
-        if (data.observation) setObservation(data.observation);
         if (data.replay) setReplay(data.replay);
+        if (data.observation) setObservation(data.observation);
+        if (data.launch) {
+          setLaunch(applyLiveConnectionOverlay(data.launch, connectionStatusesRef.current));
+        }
+        // Bust-and-refetch so soft refresh matches what we just wrote.
         await refresh();
+        // Keep mutation result if a race still returned a stale install.
+        if (data.replay?.shadow?.enabled) {
+          setReplay((prev: any) => (
+            prev?.shadow?.enabled ? prev : data.replay
+          ));
+        }
+        if (data.launch) {
+          setLaunch((prev) => {
+            const next = applyLiveConnectionOverlay(data.launch, connectionStatusesRef.current);
+            if (!prev?.steps) return next;
+            // Never demote a step the mutation just completed.
+            const mergedSteps = { ...next?.steps };
+            for (const id of STEP_META.map((s) => s.id)) {
+              if (prev.steps?.[id]?.status === "complete") {
+                mergedSteps[id] = prev.steps[id];
+              }
+            }
+            if (action === "enableShadow" && data.replay?.shadow?.enabled && mergedSteps.shadow) {
+              mergedSteps.shadow = {
+                ...mergedSteps.shadow,
+                detail: data.launch?.steps?.shadow?.detail
+                  ?? "Shadow on — review proposals, then mark passed (or pass empty if none yet).",
+              };
+            }
+            const completeCount = STEP_META.filter((s) => mergedSteps[s.id]?.status === "complete").length;
+            return {
+              ...next,
+              steps: mergedSteps,
+              summary: { ...next?.summary, completeCount, totalSteps: next?.summary?.totalSteps ?? STEP_META.length },
+            };
+          });
+        }
       }
     } catch (err: any) {
       setError(String(err?.message ?? err));
@@ -308,7 +343,14 @@ export default function RftLaunchPath({
                 <strong style={{ fontSize: typography.body.fontSize }}>
                   {index + 1}. {meta.label}
                 </strong>
-                <StatusBadge status={status} />
+                <StatusBadge
+                  status={status}
+                  label={
+                    meta.id === "shadow" && replay?.shadow?.enabled && status !== "complete"
+                      ? "On"
+                      : undefined
+                  }
+                />
               </div>
               {shortDetail ? (
                 <p style={{ margin: 0, fontSize: typography.meta.fontSize, color: cockpitColors.textSecondary }}>
@@ -628,14 +670,15 @@ function ShadowProposalList({ proposals }: { proposals: ShadowProposal[] }) {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const label =
-    status === "complete" ? "Done"
+function StatusBadge({ status, label }: { status: string; label?: string }) {
+  const resolved =
+    label
+    ?? (status === "complete" ? "Done"
       : status === "ready" ? "Ready"
         : status === "blocked" ? "Later"
-          : "Pending";
+          : "Pending");
   const color =
-    status === "complete" ? cockpitColors.handled
+    status === "complete" || label === "On" ? cockpitColors.handled
       : status === "ready" ? cockpitColors.accent
         : status === "blocked" ? cockpitColors.textMuted
           : cockpitColors.warning;
@@ -651,7 +694,7 @@ function StatusBadge({ status }: { status: string }) {
         whiteSpace: "nowrap",
       }}
     >
-      {label}
+      {resolved}
     </span>
   );
 }

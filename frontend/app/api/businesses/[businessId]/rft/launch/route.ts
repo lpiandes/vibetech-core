@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getAuthorizedWorkspace, getAuthorizedBusinessScope, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
-import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
+import { getCachedBusinessOsInstallation, invalidateCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 import { GmailInboundSyncService } from "../../../../../../../backend/core/integrations/gmail/GmailInboundSyncService.js";
 import {
   applyRftLaunchPatch,
@@ -82,6 +82,16 @@ function rftEmployee(installation: any) {
   ) ?? buildDefaultRevenueFollowThroughEmployee();
 }
 
+/** Writes must bust the 60s process cache or the next GET undoes the mutation. */
+function afterInstallWrite(businessId: string) {
+  invalidateCachedBusinessOsInstallation(businessId);
+}
+
+async function reloadInstallation(businessId: string) {
+  afterInstallWrite(businessId);
+  return platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+}
+
 /**
  * GET — evaluated RFT launch path + observation/replay summaries
  * Light path: no WorkspaceService boot (Home already paid for that on SSR).
@@ -94,7 +104,9 @@ export async function GET(
   try {
     const { businessId } = await params;
     await getAuthorizedBusinessScope(businessId, PERMISSIONS.WORK_VIEW);
-    const installation = await getCachedBusinessOsInstallation(businessId).catch(() => null);
+    // Always fresh — soft refresh after Enable shadow / Confirm must not hit a stale 60s cache.
+    afterInstallWrite(businessId);
+    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
     if (!installation) {
       return NextResponse.json({ ok: false, error: "Installation not found" }, { status: 404 });
     }
@@ -146,7 +158,7 @@ export async function POST(
   try {
     const { businessId } = await params;
     const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.WORK_MANAGE);
-    let installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    let installation = await reloadInstallation(businessId);
     if (!installation) {
       return NextResponse.json({ ok: false, error: "Installation not found" }, { status: 404 });
     }
@@ -178,7 +190,7 @@ export async function POST(
             query: `newer_than:${windowDays}d`,
             actorId: "rft_observe",
           });
-          installation = await platformStore.getBusinessOSInstallation(businessId);
+          installation = await reloadInstallation(businessId);
         }
       } catch {
         /* sync failure still allows baseline from whatever is already stored */
@@ -191,7 +203,7 @@ export async function POST(
         windowDays,
         actorId: "owner",
       });
-      installation = await platformStore.getBusinessOSInstallation(businessId);
+      installation = await reloadInstallation(businessId);
       const patched = applyRftLaunchPatch(readRftLaunch(installation), {
         observeCompleted: true,
         observeDetail: `Baseline · ${observation.events.length} events · ${windowDays}d`,
@@ -204,7 +216,7 @@ export async function POST(
           actorId: "owner",
         });
       }
-      installation = await platformStore.getBusinessOSInstallation(businessId);
+      installation = await reloadInstallation(businessId);
       return NextResponse.json({
         ok: true,
         observation,
@@ -230,7 +242,7 @@ export async function POST(
         responsibility: responsibilityGate.responsibility,
         actorId: "owner",
       });
-      installation = await platformStore.getBusinessOSInstallation(businessId);
+      installation = await reloadInstallation(businessId);
       const employee = rftEmployee(installation);
       const rft = normalizeRftServiceStandard(employee?.operatingContract?.rft ?? null);
       const patched = applyRftLaunchPatch(readRftLaunch(installation), {
@@ -265,7 +277,7 @@ export async function POST(
         replayState,
         actorId: "owner",
       });
-      installation = await platformStore.getBusinessOSInstallation(businessId);
+      installation = await reloadInstallation(businessId);
       if (lastReplay.passed) {
         const patched = applyRftLaunchPatch(readRftLaunch(installation), {
           replayPassed: true,
@@ -280,7 +292,7 @@ export async function POST(
           });
         }
       }
-      installation = await platformStore.getBusinessOSInstallation(businessId);
+      installation = await reloadInstallation(businessId);
       return NextResponse.json({
         ok: true,
         replay: lastReplay,
@@ -296,7 +308,7 @@ export async function POST(
         replayState,
         actorId: "owner",
       });
-      installation = await platformStore.getBusinessOSInstallation(businessId);
+      installation = await reloadInstallation(businessId);
       return NextResponse.json({
         ok: true,
         replay: readRftReplay(installation),
@@ -318,7 +330,7 @@ export async function POST(
         replayState: result.state,
         actorId: "owner",
       });
-      installation = await platformStore.getBusinessOSInstallation(businessId);
+      installation = await reloadInstallation(businessId);
       const patched = applyRftLaunchPatch(readRftLaunch(installation), {
         shadowPassed: true,
         shadowDetail: "Shadow review passed.",
@@ -331,7 +343,7 @@ export async function POST(
           actorId: "owner",
         });
       }
-      installation = await platformStore.getBusinessOSInstallation(businessId);
+      installation = await reloadInstallation(businessId);
       return NextResponse.json({
         ok: true,
         replay: readRftReplay(installation),
@@ -354,7 +366,7 @@ export async function POST(
       });
       // Plan 10 — feed shadow corrections into governed learning.
       try {
-        const install2 = await platformStore.getBusinessOSInstallation(businessId);
+        const install2 = await reloadInstallation(businessId);
         const refreshed = refreshGovernedLearning(install2);
         await persistGovernedLearning({
           platformStore,
@@ -383,9 +395,9 @@ export async function POST(
       if (!seeded.ok) {
         return NextResponse.json({ ok: false, error: "Could not seed prove opportunity" }, { status: 400 });
       }
-      let install = await platformStore.getBusinessOSInstallation(businessId);
+      let install = await reloadInstallation(businessId);
       for (const toState of ["ContextReady", "ActionProposed", "ApprovalRequired", "Executing"]) {
-        install = await platformStore.getBusinessOSInstallation(businessId);
+        install = await reloadInstallation(businessId);
         await progressRftOpportunity({
           platformStore,
           installation: install,
@@ -395,7 +407,7 @@ export async function POST(
           note: "Launch prove path",
         });
       }
-      install = await platformStore.getBusinessOSInstallation(businessId);
+      install = await reloadInstallation(businessId);
       const patched = applyRftLaunchPatch(readRftLaunch(install), { proveCardId: seeded.cardId });
       if (patched.ok) {
         await persistRftLaunch({

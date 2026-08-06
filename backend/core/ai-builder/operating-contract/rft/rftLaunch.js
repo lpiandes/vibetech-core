@@ -176,13 +176,13 @@ export function evaluateRftLaunch({
   launch.steps.shadow = {
     status: shadowPassed
       ? "complete"
-      : (replayPassed ? (shadowEnabled ? "ready" : "ready") : "pending"),
+      : (replayPassed ? "ready" : "pending"),
     at: launch.shadowPassedAt ?? replayState.shadow?.passedAt ?? launch.steps.shadow.at,
     detail: shadowPassed
       ? `Shadow passed (${replayState.shadow?.proposals?.length ?? 0} reviewed).`
       : (replayPassed
         ? (shadowEnabled
-          ? "Review proposals, then mark passed."
+          ? "Shadow on — review proposals, then mark passed (or pass empty if none yet)."
           : "Propose only — nothing sends outside.")
         : "Pass replay first."),
   };
