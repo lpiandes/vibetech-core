@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { getPlatformStore, withClient } from "@/lib/server/compose";
+import { invalidateCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 import {
   proofRecordFromResult,
   runIntegrationProveTest,
@@ -295,6 +296,8 @@ export async function POST(
         result: storedResult,
       })
       : null;
+
+    invalidateCachedBusinessOsInstallation(businessId);
 
     return NextResponse.json({
       result: storedResult,

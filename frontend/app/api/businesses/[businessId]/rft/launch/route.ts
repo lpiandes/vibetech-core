@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getAuthorizedWorkspace, getAuthorizedBusinessScope, authorizationErrorResponse } from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
-import { getCachedBusinessOsInstallation, invalidateCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
+import { invalidateCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 import { GmailInboundSyncService } from "../../../../../../../backend/core/integrations/gmail/GmailInboundSyncService.js";
 import {
   applyRftLaunchPatch,
@@ -13,7 +13,6 @@ import {
   normalizeRftServiceStandard,
   buildDefaultRevenueFollowThroughEmployee,
   seedRftOpportunity,
-  progressRftOpportunity,
   runHistoricalObservation,
   readRftObservation,
   runHistoricalReplay,
@@ -393,35 +392,41 @@ export async function POST(
         actorId: "owner",
       });
       if (!seeded.ok) {
-        return NextResponse.json({ ok: false, error: "Could not seed prove opportunity" }, { status: 400 });
+        return NextResponse.json({
+          ok: false,
+          error: seeded.message ?? "Could not seed prove opportunity",
+          code: seeded.code ?? "seed_failed",
+        }, { status: 400 });
       }
+
+      // Seed only — channel prove attaches provider evidence and advances the card.
+      // Forced progress-without-evidence was slow, ignored failures, and left Today unchanged.
       let install = await reloadInstallation(businessId);
-      for (const toState of ["ContextReady", "ActionProposed", "ApprovalRequired", "Executing"]) {
-        install = await reloadInstallation(businessId);
-        await progressRftOpportunity({
-          platformStore,
-          installation: install,
-          cardId: seeded.cardId,
-          toState,
-          actorId: "owner",
-          note: "Launch prove path",
-        });
+      if (!install) {
+        return NextResponse.json({ ok: false, error: "Installation missing after seed" }, { status: 500 });
       }
-      install = await reloadInstallation(businessId);
       const patched = applyRftLaunchPatch(readRftLaunch(install), { proveCardId: seeded.cardId });
-      if (patched.ok) {
-        await persistRftLaunch({
-          platformStore,
-          installation: install,
-          launch: patched.launch,
-          actorId: "owner",
-        });
+      if (!patched.ok) {
+        return NextResponse.json(patched, { status: 400 });
       }
+      await persistRftLaunch({
+        platformStore,
+        installation: install,
+        launch: patched.launch,
+        actorId: "owner",
+      });
+      install = await reloadInstallation(businessId);
+      const freshProofs = await proofRecordsFor(businessId);
       return NextResponse.json({
         ok: true,
         cardId: seeded.cardId,
-        message: "Prove opportunity seeded. Run email/calendar/forms prove to attach provider evidence and reach Verified.",
-        nextProveActions: ["send_test_email", "create_test_event", "submit_test_form"],
+        launch: evaluateRftLaunch({
+          installation: install,
+          connectionStatuses,
+          proofRecords: freshProofs,
+        }),
+        message: "Prove opportunity seeded. Run channel prove to attach live email/calendar evidence.",
+        nextProveActions: ["send_test_email", "create_test_event"],
       });
     }
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
+import { proveActionForConnection } from "@/components/connections/integrationsSemantics";
 
 type LaunchStep = {
   status?: string;
@@ -195,6 +196,18 @@ export default function RftLaunchPath({
         if (data.observation) setObservation(data.observation);
         if (data.launch) {
           setLaunch(applyLiveConnectionOverlay(data.launch, connectionStatusesRef.current));
+        } else if (data.cardId) {
+          setLaunch((prev) => prev ? {
+            ...prev,
+            proveCardId: String(data.cardId),
+            steps: {
+              ...prev.steps,
+              prove: {
+                ...(prev.steps?.prove ?? {}),
+                detail: `Opportunity ${data.cardId}`,
+              },
+            },
+          } : prev);
         }
         // Bust-and-refetch so soft refresh matches what we just wrote.
         await refresh();
@@ -203,6 +216,11 @@ export default function RftLaunchPath({
           setReplay((prev: any) => (
             prev?.shadow?.enabled ? prev : data.replay
           ));
+        }
+        if (data.cardId) {
+          setLaunch((prev) => prev && !prev.proveCardId
+            ? { ...prev, proveCardId: String(data.cardId) }
+            : prev);
         }
         if (data.launch) {
           setLaunch((prev) => {
@@ -225,12 +243,68 @@ export default function RftLaunchPath({
             const completeCount = STEP_META.filter((s) => mergedSteps[s.id]?.status === "complete").length;
             return {
               ...next,
+              proveCardId: next?.proveCardId ?? prev.proveCardId ?? (data.cardId ? String(data.cardId) : null),
               steps: mergedSteps,
               summary: { ...next?.summary, completeCount, totalSteps: next?.summary?.totalSteps ?? STEP_META.length },
             };
           });
         }
       }
+    } catch (err: any) {
+      setError(String(err?.message ?? err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
+   * Prove every connected channel that has a live prove action.
+   * Same API Connections uses — derived from connection statuses, not a hard-coded business.
+   */
+  async function runChannelProve() {
+    setBusy("proveChannels");
+    setError(null);
+    setMessage(null);
+    try {
+      const statuses = connectionStatusesRef.current ?? {};
+      const candidates = Object.keys(statuses)
+        .filter((id) => isConnectedInStatuses(statuses, [id]))
+        .map((id) => ({ id, prove: proveActionForConnection(id) }))
+        .filter((row): row is { id: string; prove: { action: string; capabilityId: string } } => Boolean(row.prove));
+
+      if (!candidates.length) {
+        setError("Connect email or calendar first, then run channel prove.");
+        return;
+      }
+
+      const results: string[] = [];
+      for (const row of candidates) {
+        const res = await fetch(
+          `/api/businesses/${encodeURIComponent(businessId)}/integrations/prove`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: row.prove.action,
+              capabilityId: row.prove.capabilityId,
+              outboundApproved: true,
+            }),
+          },
+        );
+        const body = await res.json().catch(() => ({}));
+        const status = String(body?.result?.status ?? "");
+        const ok = Boolean(body?.result?.ok)
+          || status === "awaiting_confirm"
+          || Boolean(body?.result?.detail?.externalReference);
+        results.push(
+          `${row.id}: ${ok ? (body?.result?.message ?? "Proven") : (body?.result?.message ?? body?.error ?? "Failed")}`,
+        );
+        if (!ok) {
+          setError(body?.result?.message ?? body?.error ?? `Prove failed for ${row.id}`);
+        }
+      }
+      setMessage(results.join(" · "));
+      await refresh();
     } catch (err: any) {
       setError(String(err?.message ?? err));
     } finally {
@@ -443,8 +517,14 @@ export default function RftLaunchPath({
                     >
                       {busy === "prove" ? "Seeding…" : "Seed prove opportunity"}
                     </Button>
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={`${base}/integrations`}>Run channel prove</Link>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={busy != null}
+                      onClick={() => void runChannelProve()}
+                    >
+                      {busy === "proveChannels" ? "Proving…" : "Run channel prove"}
                     </Button>
                   </>
                 ) : null}
