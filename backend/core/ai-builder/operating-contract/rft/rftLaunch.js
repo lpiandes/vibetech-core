@@ -23,6 +23,34 @@ export const RFT_LAUNCH_STEP_STATUS = Object.freeze({
   blocked: "blocked",
 });
 
+/**
+ * Channels the connect step requires. Connection Center must list these whenever
+ * the Today launch path is active — otherwise owners cannot finish step 1.
+ */
+export const RFT_CONNECT_CONNECTION_IDS = Object.freeze(["business_email", "calendar"]);
+
+const RFT_CONNECT_LABELS = Object.freeze({
+  business_email: "Business email",
+  calendar: "Calendar",
+});
+
+/**
+ * Match OperatingHomeExperience: RFT launch until go-live.
+ * When active, Connections must surface every RFT_CONNECT_CONNECTION_IDS row.
+ */
+export function rftConnectRequirementsActive(installation = null) {
+  return !installation?.configuration?.rftLaunch?.goLiveAt;
+}
+
+export function connectionRequirementsFromRftConnect(installation = null) {
+  if (!rftConnectRequirementsActive(installation)) return [];
+  return RFT_CONNECT_CONNECTION_IDS.map((id) => ({
+    id,
+    displayName: RFT_CONNECT_LABELS[id] ?? id.replace(/_/g, " "),
+    requirementLevel: "required",
+  }));
+}
+
 function emptySteps() {
   return {
     connect: { status: "pending", at: null, detail: null },
@@ -88,6 +116,7 @@ export function evaluateRftLaunch({
   const smsProven = isProven(proofRecords, ["sms_send"]);
 
   const leadSourceReady = formsProven || smsProven || Boolean(launch.proveCardId);
+  // Connect gate uses RFT_CONNECT_CONNECTION_IDS (email + calendar).
   const connectComplete = emailConnected && calendarConnected;
   const connectProvenEnough = emailProven && (calendarProven || leadSourceReady);
 

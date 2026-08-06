@@ -1,6 +1,7 @@
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 import { CONNECTION_STATUSES } from "../../industries/connections/buildConnectedSystemsSnapshot.js";
 import { buildConnectionHealth } from "../../integrations/health/ConnectionHealthEngine.js";
+import { connectionRequirementsFromRftConnect } from "../../ai-builder/operating-contract/rft/rftLaunch.js";
 
 function safeArray(v) {
   return Array.isArray(v) ? v : [];
@@ -73,6 +74,7 @@ export function connectionRequirementsFromEmployees(employees = []) {
 /**
  * Prefer Business OS integration plan when present.
  * Merge employee connectionDependencies so runtime needs aren't orphaned.
+ * Merge RFT connect channels while Today launch is active (same gate as evaluateRftLaunch).
  * Fall back to industry-package connectedSystemRequirements.
  * Never invent rows from the frontend display catalog alone.
  */
@@ -80,6 +82,7 @@ export function resolveConnectionRequirements({
   installationResult = null,
   businessOsIntegrations = null,
   employees = null,
+  osConfiguration = null,
 } = {}) {
   const byId = new Map();
 
@@ -90,10 +93,20 @@ export function resolveConnectionRequirements({
 
   const employeeList = safeArray(
     employees
+    ?? osConfiguration?.employees
     ?? installationResult?.configuration?.employees
     ?? installationResult?.employees,
   );
   for (const req of connectionRequirementsFromEmployees(employeeList)) {
+    if (!byId.has(req.id)) byId.set(req.id, req);
+  }
+
+  const configuration = osConfiguration
+    ?? installationResult?.configuration
+    ?? null;
+  for (const req of connectionRequirementsFromRftConnect(
+    configuration ? { configuration } : installationResult,
+  )) {
     if (!byId.has(req.id)) byId.set(req.id, req);
   }
 
@@ -143,11 +156,13 @@ export function buildConnectionCenterViewModel({
   providerRegistry,
   businessOsIntegrations = null,
   employees = null,
+  osConfiguration = null,
 } = {}) {
   const requirements = resolveConnectionRequirements({
     installationResult,
     businessOsIntegrations,
     employees,
+    osConfiguration,
   });
   const guidance = safeArray(installationResult?.connectionGuidance);
   const snapshotConnections = safeArray(connectedSystemsSnapshot?.connections);

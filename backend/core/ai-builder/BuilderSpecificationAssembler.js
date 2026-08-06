@@ -723,7 +723,9 @@ function normalizeSelectedEmployees(selectedEmployees = [], { businessName, indu
           ? ["voice_channel"]
           : String(archetypeId) === "scheduler"
             ? ["calendar"]
-            : ["business_email"];
+            : String(archetypeId) === "follow_up_specialist"
+              ? ["business_email", "calendar"]
+              : ["business_email"];
     const automationPath = entry.payload?.employee?.automationPath ?? null;
     const trigger = entry.payload?.employee?.trigger ?? null;
     const base = {

@@ -315,7 +315,17 @@ export default function RftLaunchPath({
               <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
                 {meta.id === "connect" ? (
                   <Button asChild variant="outline" size="sm">
-                    <Link href={`${base}/integrations`}>Open Connections</Link>
+                    <Link
+                      href={
+                        /calendar next/i.test(detail)
+                          ? `${base}/integrations?focus=calendar`
+                          : /email next/i.test(detail)
+                            ? `${base}/integrations?focus=business_email`
+                            : `${base}/integrations`
+                      }
+                    >
+                      Open Connections
+                    </Link>
                   </Button>
                 ) : null}
                 {meta.id === "observe" && status !== "complete" ? (

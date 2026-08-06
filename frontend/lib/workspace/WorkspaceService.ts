@@ -1032,12 +1032,17 @@ export class WorkspaceService {
     businessOsIntegrations?: unknown[] | null;
     liveFlags?: Record<string, boolean>;
     employees?: unknown[] | null;
+    osConfiguration?: Record<string, unknown> | null;
   } = {}) {
     const adapter = new ConnectionCenterViewAdapter();
     const businessOsIntegrations = options.businessOsIntegrations
       ?? this.resolveBusinessOsIntegrations();
+    const osConfiguration = options.osConfiguration
+      ?? (this.connected as any)?.operatingStack?.configuration
+      ?? (this.connected as any)?.installationResult?.configuration
+      ?? null;
     const employees = options.employees
-      ?? (this.connected as any)?.operatingStack?.configuration?.employees
+      ?? (osConfiguration as { employees?: unknown[] } | null)?.employees
       ?? (this.connected as any)?.installationResult?.configuration?.employees
       ?? null;
     const viewModel = attachProductContext(
@@ -1049,6 +1054,7 @@ export class WorkspaceService {
         providerRegistry: this.connected.integrationPlatform?.providerRegistry,
         businessOsIntegrations,
         employees,
+        osConfiguration,
       }),
       this.connected,
     );

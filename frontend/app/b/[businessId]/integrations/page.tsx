@@ -91,6 +91,7 @@ export default async function IntegrationsPage({
       employees: Array.isArray(osInstallation?.configuration?.employees)
         ? osInstallation.configuration.employees
         : null,
+      osConfiguration: osInstallation?.configuration ?? null,
     });
     markRequestTiming("VIEW_MODEL");
 
