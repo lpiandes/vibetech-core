@@ -262,7 +262,7 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       responsibilityGoLive,
     };
     markRequestTiming("MISSION_CONTROL", {
-      bytes: JSON.stringify(enrichedViewModel).length,
+      ready: true,
     });
 
     return (

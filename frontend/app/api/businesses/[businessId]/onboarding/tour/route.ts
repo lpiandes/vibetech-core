@@ -5,7 +5,6 @@ import { NextResponse } from "next/server";
 
 import {
   getAuthorizedBusinessScope,
-  getAuthorizedWorkspace,
   authorizationErrorResponse,
 } from "@/lib/platform/AuthorizedWorkspaceService";
 import { PERMISSIONS } from "@/lib/platform/permissions";
@@ -47,13 +46,10 @@ export async function GET(
       });
     }
 
-    let service: any = null;
-    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.PEOPLE_VIEW);
-    service = ctx.service;
-
+    // Light path — packages + proofs only. Do not boot full WorkspaceService on tour GET.
     const adaptive = await assembleAdaptiveTourForBusiness({
       businessId,
-      service,
+      service: null,
       authzBusiness: business,
       permissions: scope.permissions ?? scope.authz?.permissions ?? [],
       role: scope.role ?? scope.authz?.role ?? null,

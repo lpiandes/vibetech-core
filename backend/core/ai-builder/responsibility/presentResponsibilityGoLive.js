@@ -4,7 +4,44 @@ import { readinessLabelFor } from "./resolveResponsibilityFeasibility.js";
 /**
  * Responsibility-scoped Go Live projection — partial open is honest.
  * Business can operate when ≥1 responsibility is safe; blocked ones stay visible.
+ *
+ * Home UI gets short owner verbs — never dump engine constraint essays.
  */
+
+const SHORT_ACTION_BY_TYPE = Object.freeze({
+  ACCOUNT_CONNECTION_REQUIRED: "Connect an account",
+  AUTHORIZED_DATA_SOURCE_REQUIRED: "Connect a data source",
+  BUSINESS_RULE_REQUIRED: "Confirm how this should work",
+  CONSENT_POLICY_REQUIRED: "Confirm who we may contact",
+  UNSUPPORTED_TRIGGER: "Change how this is triggered",
+});
+
+function shortActionForConstraint(constraint) {
+  const type = String(constraint?.type ?? "");
+  if (SHORT_ACTION_BY_TYPE[type]) return SHORT_ACTION_BY_TYPE[type];
+  const resolution = String(constraint?.resolutionAction ?? "").toLowerCase();
+  if (/email|gmail|outlook/.test(resolution)) return "Connect business email";
+  if (/calendar/.test(resolution)) return "Connect calendar";
+  if (/sms|twilio/.test(resolution)) return "Connect SMS";
+  if (/phone|number|forward/.test(resolution)) return "Connect business phone";
+  if (/clarif|question|rule/.test(resolution)) return "Answer a few questions";
+  return "Finish this step";
+}
+
+function uniqueShortActions(constraints = []) {
+  const seen = new Set();
+  const out = [];
+  for (const c of constraints) {
+    if (String(c.status ?? "open") !== "open") continue;
+    if (String(c.owner) !== "Customer") continue;
+    const label = shortActionForConstraint(c);
+    if (seen.has(label)) continue;
+    seen.add(label);
+    out.push(label);
+    if (out.length >= 2) break;
+  }
+  return out;
+}
 
 export function presentResponsibilityGoLive({
   responsibilityRequests = [],
@@ -34,6 +71,9 @@ export function presentResponsibilityGoLive({
 
       const emailOk = String(connectionStatuses.business_email ?? "").toUpperCase() === "CONNECTED";
       const calendarOk = String(connectionStatuses.calendar ?? "").toUpperCase() === "CONNECTED";
+      const shortActions = uniqueShortActions(openCustomer);
+      const primaryAction = shortActions[0]
+        ?? (bucket === "needs_your_action" ? "Open Connections" : null);
 
       return deepFreeze({
         responsibilityId: request.responsibilityId,
@@ -42,12 +82,15 @@ export function presentResponsibilityGoLive({
         readinessLabel: readinessLabelFor(mode),
         bucket,
         outcome: request.requestedOutcome || request.rawRequest,
+        shortActions,
+        primaryAction,
         constraints: constraints.map((c) => ({
           constraintId: c.constraintId,
           type: c.type,
           description: c.description,
           owner: c.owner,
           resolutionAction: c.resolutionAction,
+          shortAction: shortActionForConstraint(c),
           status: c.status ?? "open",
           fallback: c.fallback ?? null,
         })),
@@ -68,8 +111,8 @@ export function presentResponsibilityGoLive({
     readyCount,
     canOpenBusiness: readyCount >= 1 || vibetechWorking.length >= 1,
     summary: items.length
-      ? `${readyCount} of ${items.length} responsibilities ready`
-      : "No responsibilities confirmed yet",
+      ? `${readyCount} of ${items.length} ready`
+      : "No responsibilities yet",
     needsYourAction: actionable,
     vibetechWorking,
     readyForShadow: items.filter((i) => i.bucket === "ready_for_shadow"),

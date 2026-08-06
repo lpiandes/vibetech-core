@@ -195,8 +195,8 @@ export function buildAdaptiveProductTour({
     id: "welcome",
     title: `Welcome${businessName ? ` — ${businessName}` : ""}`,
     body: managedRevenueFollowThrough
-      ? "You’re on Managed Revenue Follow-Through. We’ll show the few screens that matter."
-      : `You’re set up for ${packageLabel}. We’ll show the screens that matter for you.`,
+      ? "Managed Revenue Follow-Through — a quick tour of what matters."
+      : `You’re set up for ${packageLabel}. A quick look at what matters.`,
     hrefSuffix: "/home",
     navTarget: "home",
     navHint: "Today",
@@ -209,8 +209,8 @@ export function buildAdaptiveProductTour({
     id: "home:launch",
     title: "Today",
     body: managedRevenueFollowThrough
-      ? "Start here. Finish the launch checklist, then run the day from this screen."
-      : "Start here. Finish open setup items, then come back for the day’s work.",
+      ? "Finish Connect → Prove → Live here, then run the day from Today."
+      : "Finish open setup items, then come back for the day’s work.",
     hrefSuffix: "/home",
     navTarget: "home",
     navHint: "Today",

@@ -118,6 +118,15 @@ export default function ProductTour({
         /* ignore */
       }
 
+      // Fast path: already finished — never hit the network.
+      if (!forceOpen && local?.completedAt) {
+        if (cancelled) return;
+        setStepIndex(Number(local.stepIndex) || 0);
+        setOpen(false);
+        setReady(true);
+        return;
+      }
+
       let server: TourState | null = null;
       let adaptiveSteps: ProductTourStep[] | null = null;
       try {
@@ -172,7 +181,7 @@ export default function ProductTour({
     if (step.hrefSuffix) {
       router.push(`/b/${encodeURIComponent(businessId)}${step.hrefSuffix}`);
     }
-    const t = window.setTimeout(() => measureSpotlight(step.navTarget), 320);
+    const t = window.setTimeout(() => measureSpotlight(step.navTarget), 50);
     const onResize = () => measureSpotlight(step.navTarget);
     window.addEventListener("resize", onResize);
     return () => {

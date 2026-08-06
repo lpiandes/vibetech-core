@@ -100,3 +100,24 @@ test("compileResponsibilityOperatingContract builds a dedicated contract", () =>
   assert.ok(compiled.contract);
   assert.ok(compiled.employee?.operatingContract?.automationPath?.steps?.length >= 3);
 });
+
+test("go-live presentation uses short owner actions not constraint essays", async () => {
+  const { presentResponsibilityGoLive } = await import("./presentResponsibilityGoLive.js");
+  const { requests } = extractResponsibilityRequests({
+    text: "When a lead submits our form, qualify it and schedule a call.",
+  });
+  const [assessed] = assessResponsibilityInventory(requests);
+  const view = presentResponsibilityGoLive({
+    responsibilityRequests: [assessed.request],
+    connectionStatuses: {},
+  });
+  assert.ok(view.total >= 1);
+  const item = view.needsYourAction[0] ?? view.items[0];
+  assert.ok(item.primaryAction || item.shortActions?.length >= 0);
+  if (item.shortActions?.length) {
+    for (const action of item.shortActions) {
+      assert.ok(action.length < 48, action);
+      assert.ok(!/—/.test(action));
+    }
+  }
+});

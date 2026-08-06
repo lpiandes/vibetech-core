@@ -137,7 +137,8 @@ export default function OperatingHomeExperience() {
         </section>
       ) : null}
 
-      {viewModel?.responsibilityGoLive?.total ? (
+      {/* Managed RFT: RftLaunchPath owns setup — don't stack a second dense checklist. */}
+      {!showRftLaunch && viewModel?.responsibilityGoLive?.total ? (
         <ResponsibilityGoLivePanel
           businessId={businessId}
           view={viewModel.responsibilityGoLive}

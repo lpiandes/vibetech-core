@@ -138,6 +138,7 @@ export default function RftLaunchPath({
   const completeCount = launch?.summary?.completeCount ?? 0;
   const totalSteps = launch?.summary?.totalSteps ?? 7;
   const baseline = observation?.baseline ?? null;
+  const loading = !launch && !error;
 
   return (
     <section
@@ -150,19 +151,22 @@ export default function RftLaunchPath({
         gap: spacing.md,
       }}
       aria-label="Revenue Follow-Through launch"
+      aria-busy={loading}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: spacing.md, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: spacing.md, flexWrap: "wrap", alignItems: "center" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: typography.cardTitle.fontSize, fontWeight: 700, color: cockpitColors.textPrimary }}>
             Go live
           </h2>
           <p style={{ margin: `${spacing.xs} 0 0`, color: cockpitColors.accent, fontSize: typography.meta.fontSize, fontWeight: 700 }}>
-            {completeCount}/{totalSteps} complete
+            {loading ? "Loading…" : `${completeCount}/${totalSteps} complete`}
           </p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => void refresh()} disabled={busy != null}>
-          Refresh
-        </Button>
+        {!loading ? (
+          <Button type="button" variant="outline" size="sm" onClick={() => void refresh()} disabled={busy != null}>
+            Refresh
+          </Button>
+        ) : null}
       </div>
 
       {error ? (
@@ -176,10 +180,49 @@ export default function RftLaunchPath({
         <BaselineStrip baseline={baseline} outcomesHref={`${base}/outcomes`} />
       ) : null}
 
+      {loading ? (
+        <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: spacing.sm }}>
+          {STEP_META.map((meta, index) => (
+            <li
+              key={meta.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "10px 12px",
+                borderRadius: radius.medium,
+                border: `1px solid ${cockpitColors.panelBorder}`,
+                opacity: 0.7,
+              }}
+            >
+              <span style={{
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 12,
+                fontWeight: 700,
+                background: "rgba(148,163,184,.15)",
+                color: cockpitColors.textMuted,
+              }}
+              >
+                {index + 1}
+              </span>
+              <span style={{ fontWeight: 650, fontSize: 14, color: cockpitColors.textPrimary }}>
+                {meta.label}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : (
       <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: spacing.sm }}>
         {STEP_META.map((meta, index) => {
           const step = steps[meta.id] ?? { status: "pending" };
           const status = String(step.status ?? "pending");
+          const detail = String(step.detail || step.reason || "").trim();
+          const shortDetail = detail.length > 90 ? `${detail.slice(0, 87).trim()}…` : detail;
           return (
             <li
               key={meta.id}
@@ -189,7 +232,7 @@ export default function RftLaunchPath({
                 padding: spacing.md,
                 borderRadius: radius.medium,
                 border: `1px solid ${cockpitColors.panelBorder}`,
-                background: status === "complete" ? "rgba(8,145,178,.08)" : "transparent",
+                background: status === "complete" ? "rgba(34,211,238,.08)" : "transparent",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: spacing.sm, flexWrap: "wrap" }}>
@@ -198,9 +241,11 @@ export default function RftLaunchPath({
                 </strong>
                 <StatusBadge status={status} />
               </div>
-              <p style={{ margin: 0, fontSize: typography.meta.fontSize, color: cockpitColors.textSecondary }}>
-                {step.detail || step.reason || ""}
-              </p>
+              {shortDetail ? (
+                <p style={{ margin: 0, fontSize: typography.meta.fontSize, color: cockpitColors.textSecondary }}>
+                  {shortDetail}
+                </p>
+              ) : null}
               <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
                 {meta.id === "connect" ? (
                   <Button asChild variant="outline" size="sm">
@@ -324,6 +369,7 @@ export default function RftLaunchPath({
           );
         })}
       </ol>
+      )}
     </section>
   );
 }

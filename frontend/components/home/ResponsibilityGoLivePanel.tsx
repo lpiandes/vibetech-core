@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
+import { cockpitColors, radius } from "@/design/tokens";
 
 type GoLiveView = {
   summary?: string;
@@ -12,17 +12,17 @@ type GoLiveView = {
     responsibilityId: string;
     title?: string;
     readinessLabel?: string;
-    constraints?: Array<{ description?: string; resolutionAction?: string; owner?: string }>;
+    primaryAction?: string | null;
+    shortActions?: string[];
     checklistHints?: { businessEmailConnected?: boolean; calendarConnected?: boolean };
   }>;
   vibetechWorking?: Array<{ responsibilityId: string; title?: string; readinessLabel?: string }>;
   readyForShadow?: Array<{ responsibilityId: string; title?: string }>;
-  cannotInstall?: Array<{ responsibilityId: string; title?: string; constraints?: Array<{ description?: string }> }>;
+  cannotInstall?: Array<{ responsibilityId: string; title?: string; shortActions?: string[] }>;
 };
 
 /**
- * Responsibility-scoped Go Live — preserves RFT path elsewhere; this surfaces
- * per-responsibility constraints with customer / VIBETech ownership.
+ * Compact responsibility readiness — one title, one action. No constraint essays.
  */
 export default function ResponsibilityGoLivePanel({
   businessId,
@@ -33,136 +33,154 @@ export default function ResponsibilityGoLivePanel({
 }) {
   if (!view || !view.total) return null;
   const base = `/b/${encodeURIComponent(businessId)}`;
+  const needs = view.needsYourAction ?? [];
+  const working = view.vibetechWorking ?? [];
+  const ready = view.readyForShadow ?? [];
+  const blocked = view.cannotInstall ?? [];
+
+  if (!needs.length && !working.length && !ready.length && !blocked.length) return null;
 
   return (
     <section
+      aria-label="Setup next steps"
       style={{
         border: `1px solid ${cockpitColors.panelBorder}`,
-        borderRadius: radius.lg,
+        borderRadius: radius.large,
         background: cockpitColors.panel,
-        padding: spacing.lg,
+        padding: "16px 18px",
         display: "grid",
-        gap: spacing.md,
+        gap: 12,
       }}
     >
-      <div>
-        <div style={{ ...typography.label, color: cockpitColors.textSecondary, marginBottom: 6 }}>
-          Finish setup to begin operating
-        </div>
-        <h2 style={{ margin: 0, ...typography.h3, color: cockpitColors.textPrimary }}>
-          {view.summary}
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: cockpitColors.textPrimary }}>
+          Next steps
         </h2>
-        <p style={{ margin: "8px 0 0", color: cockpitColors.textSecondary, fontSize: 13, lineHeight: 1.45 }}>
-          The business can open when at least one responsibility is safe. Blocked responsibilities stay honest — they do not halt everything else.
-          {view.canOpenBusiness ? " Partial readiness is OK." : ""}
-        </p>
+        <span style={{ fontSize: 12, fontWeight: 650, color: cockpitColors.textMuted }}>
+          {view.summary}
+        </span>
       </div>
 
-      {(view.needsYourAction ?? []).length > 0 ? (
-        <Bucket title="Needs your action">
-          {(view.needsYourAction ?? []).map((item) => (
-            <Card key={item.responsibilityId} title={item.title} label={item.readinessLabel}>
-              <ul style={{ margin: "8px 0 0", paddingLeft: 18, color: cockpitColors.textSecondary, fontSize: 13 }}>
-                {(item.constraints ?? []).slice(0, 4).map((c, i) => (
-                  <li key={`${item.responsibilityId}_${i}`}>
-                    {c.description}
-                    {c.resolutionAction ? ` — ${c.resolutionAction}` : ""}
-                  </li>
-                ))}
-              </ul>
-              <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
-                <Link href={`${base}/integrations`} style={linkStyle}>Open Integrations</Link>
-                {item.checklistHints?.businessEmailConnected === false ? (
-                  <span style={hintStyle}>Business email not connected</span>
-                ) : null}
-                {item.checklistHints?.calendarConnected === false ? (
-                  <span style={hintStyle}>Calendar not connected</span>
-                ) : null}
-              </div>
-            </Card>
-          ))}
-        </Bucket>
+      {needs.length ? (
+        <div style={{ display: "grid", gap: 8 }}>
+          {needs.map((item) => {
+            const action = item.primaryAction
+              || item.shortActions?.[0]
+              || (!item.checklistHints?.businessEmailConnected ? "Connect business email" : "Open Connections");
+            return (
+              <SetupRow
+                key={item.responsibilityId}
+                title={shortTitle(item.title)}
+                action={action}
+                href={`${base}/integrations`}
+              />
+            );
+          })}
+        </div>
       ) : null}
 
-      {(view.vibetechWorking ?? []).length > 0 ? (
-        <Bucket title="VIBETech is working">
-          {(view.vibetechWorking ?? []).map((item) => (
-            <Card key={item.responsibilityId} title={item.title} label={item.readinessLabel} />
-          ))}
-        </Bucket>
+      {working.length ? (
+        <QuietList
+          label="VIBETech handling"
+          items={working.map((item) => shortTitle(item.title))}
+        />
       ) : null}
 
-      {(view.readyForShadow ?? []).length > 0 ? (
-        <Bucket title="Ready for shadow">
-          {(view.readyForShadow ?? []).map((item) => (
-            <Card key={item.responsibilityId} title={item.title} label="All required access and rules present" />
-          ))}
-        </Bucket>
+      {ready.length ? (
+        <QuietList
+          label="Ready"
+          items={ready.map((item) => shortTitle(item.title))}
+        />
       ) : null}
 
-      {(view.cannotInstall ?? []).length > 0 ? (
-        <Bucket title="Cannot be installed as requested">
-          {(view.cannotInstall ?? []).map((item) => (
-            <Card key={item.responsibilityId} title={item.title} label="Unsupported or unsafe">
-              <ul style={{ margin: "8px 0 0", paddingLeft: 18, color: cockpitColors.textSecondary, fontSize: 13 }}>
-                {(item.constraints ?? []).slice(0, 3).map((c, i) => (
-                  <li key={`${item.responsibilityId}_x_${i}`}>{c.description}</li>
-                ))}
-              </ul>
-            </Card>
-          ))}
-        </Bucket>
+      {blocked.length ? (
+        <QuietList
+          label="Needs a different approach"
+          items={blocked.map((item) => shortTitle(item.title))}
+          tone="warn"
+        />
       ) : null}
     </section>
   );
 }
 
-function Bucket({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "grid", gap: 10 }}>
-      <div style={{ ...typography.label, color: cockpitColors.textMuted, letterSpacing: "0.06em" }}>
-        {title.toUpperCase()}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Card({
+function SetupRow({
   title,
-  label,
-  children,
+  action,
+  href,
 }: {
-  title?: string;
-  label?: string;
-  children?: React.ReactNode;
+  title: string;
+  action: string;
+  href: string;
 }) {
   return (
     <div
       style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        padding: "12px 14px",
+        borderRadius: radius.medium,
         border: `1px solid ${cockpitColors.panelBorder}`,
-        borderRadius: radius.md,
-        padding: spacing.md,
-        background: cockpitColors.panelElevated,
+        background: cockpitColors.panelElevated ?? "rgba(15,23,42,.35)",
       }}
     >
-      <div style={{ fontWeight: 700, color: cockpitColors.textPrimary }}>{title}</div>
-      {label ? (
-        <div style={{ marginTop: 4, fontSize: 12, color: cockpitColors.textSecondary }}>{label}</div>
-      ) : null}
-      {children}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 650, fontSize: 14, color: cockpitColors.textPrimary }}>
+          {title}
+        </div>
+        <div style={{ marginTop: 2, fontSize: 12, color: cockpitColors.textSecondary }}>
+          {action}
+        </div>
+      </div>
+      <Link
+        href={href}
+        style={{
+          flexShrink: 0,
+          fontSize: 13,
+          fontWeight: 700,
+          color: "#22d3ee",
+          textDecoration: "none",
+        }}
+      >
+        Fix →
+      </Link>
     </div>
   );
 }
 
-const linkStyle = {
-  fontSize: 13,
-  fontWeight: 700,
-  color: cockpitColors.accent ?? "#14B8A6",
-  textDecoration: "none" as const,
-};
+function QuietList({
+  label,
+  items,
+  tone = "default",
+}: {
+  label: string;
+  items: string[];
+  tone?: "default" | "warn";
+}) {
+  if (!items.length) return null;
+  return (
+    <div style={{ display: "grid", gap: 4 }}>
+      <div style={{
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+        color: tone === "warn" ? (cockpitColors.warning ?? "#FBBF24") : cockpitColors.textMuted,
+      }}
+      >
+        {label}
+      </div>
+      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.45, color: cockpitColors.textSecondary }}>
+        {items.join(" · ")}
+      </p>
+    </div>
+  );
+}
 
-const hintStyle = {
-  fontSize: 12,
-  color: cockpitColors.warning ?? "#FBBF24",
-};
+function shortTitle(title?: string) {
+  const raw = String(title ?? "Responsibility").trim();
+  if (raw.length <= 48) return raw;
+  return `${raw.slice(0, 45).trim()}…`;
+}

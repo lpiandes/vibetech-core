@@ -44,26 +44,32 @@ export default function BusinessShell({ children }: { children: ReactNode }) {
     setForceTour(params.get("tour") === "1");
   }, [pathname]);
 
-  // Defer tour until after Home/first paint so it does not compete with cold login.
+  // First-time tour: mount almost immediately. Completed tours never mount.
+  // (The old 3.5s+idle gate made "Step 1 of 7" feel broken after install.)
   useEffect(() => {
     if (forceTour) {
       setTourReady(true);
       return;
     }
-    let idleId: number | undefined;
-    const timeoutId = window.setTimeout(() => {
-      if (typeof (window as any).requestIdleCallback === "function") {
-        idleId = (window as any).requestIdleCallback(() => setTourReady(true), { timeout: 2000 });
-      } else {
-        setTourReady(true);
+    try {
+      const prefix = `vt.productTour.`;
+      const completed = Object.keys(window.localStorage).some((key) => {
+        if (!key.startsWith(prefix) || !key.includes(scope.businessId)) return false;
+        try {
+          return Boolean(JSON.parse(window.localStorage.getItem(key) || "{}")?.completedAt);
+        } catch {
+          return false;
+        }
+      });
+      if (completed) {
+        setTourReady(false);
+        return;
       }
-    }, 3500);
-    return () => {
-      window.clearTimeout(timeoutId);
-      if (idleId != null && typeof (window as any).cancelIdleCallback === "function") {
-        (window as any).cancelIdleCallback(idleId);
-      }
-    };
+    } catch {
+      /* ignore */
+    }
+    const timeoutId = window.setTimeout(() => setTourReady(true), 200);
+    return () => window.clearTimeout(timeoutId);
   }, [forceTour, scope.businessId]);
 
   // After client-side Architect install, Next can reuse a stale /b/[id] layout where
