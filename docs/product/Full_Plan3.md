@@ -69,9 +69,14 @@ Parallel tracks: Ops · Commercial · Demo (real execution, not paper).
 - [x] Plan 28 — CRM-identity residue removal
 
 ### Tracks
-- [ ] Ops track (daily delivery)
-- [ ] Commercial track (pricing + YC measurement)
-- [ ] Demo track (live event)
+- [ ] Ops track (daily delivery) — requires real client work, not code alone
+- [ ] Commercial track (pricing + YC measurement) — requires design partners + sales motion
+- [ ] Demo track (live event across real systems) — requires production volume
+
+### Explicitly NOT claimable as DONE from code
+- Paying design partners / YC proof package
+- Daily operator delivery practice with SLA ownership
+- Pricing sold as managed completed-work commercial motion
 
 ---
 

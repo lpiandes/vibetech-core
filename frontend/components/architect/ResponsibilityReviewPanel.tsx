@@ -76,6 +76,57 @@ export default function ResponsibilityReviewPanel({
     setItems((prev) => prev.map((r) => (r.responsibilityId === id ? { ...r, status: "removed" } : r)));
   }
 
+  function mergeIntoPrevious(id: string) {
+    setItems((prev) => {
+      const visibleIds = prev.filter((r) => String(r.status) !== "removed").map((r) => r.responsibilityId);
+      const idx = visibleIds.indexOf(id);
+      if (idx <= 0) return prev;
+      const targetId = visibleIds[idx - 1];
+      const current = prev.find((r) => r.responsibilityId === id);
+      if (!current) return prev;
+      return prev.map((r) => {
+        if (r.responsibilityId === id) return { ...r, status: "removed" };
+        if (r.responsibilityId !== targetId) return r;
+        const mergedOutcome = [r.requestedOutcome || r.rawRequest, current.requestedOutcome || current.rawRequest]
+          .map((v) => String(v ?? "").trim())
+          .filter(Boolean)
+          .join(" · ");
+        return {
+          ...r,
+          title: r.title || current.title,
+          requestedOutcome: mergedOutcome,
+          rawRequest: mergedOutcome,
+          constraints: [...(r.constraints ?? []), ...(current.constraints ?? [])],
+        };
+      });
+    });
+  }
+
+  function splitItem(id: string) {
+    const current = items.find((r) => r.responsibilityId === id);
+    if (!current) return;
+    const newId = `resp_split_${Date.now().toString(36)}`;
+    setItems((prev) => {
+      const next = [];
+      for (const r of prev) {
+        next.push(r);
+        if (r.responsibilityId === id) {
+          next.push({
+            responsibilityId: newId,
+            title: `${String(r.title ?? "Responsibility").trim()} (split)`,
+            rawRequest: "",
+            requestedOutcome: "",
+            status: "pending_review",
+            constraints: [],
+            implementationMode: r.implementationMode ?? null,
+          });
+        }
+      }
+      return next;
+    });
+    setEditingId(newId);
+  }
+
   function addBlank() {
     const id = `resp_manual_${Date.now().toString(36)}`;
     setItems((prev) => [
@@ -258,6 +309,24 @@ export default function ResponsibilityReviewPanel({
                       onClick={() => setEditingId(editing ? null : item.responsibilityId)}
                     >
                       {editing ? "Done" : "Edit"}
+                    </ArchitectButton>
+                    {index > 0 ? (
+                      <ArchitectButton
+                        type="button"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => mergeIntoPrevious(item.responsibilityId)}
+                      >
+                        Merge up
+                      </ArchitectButton>
+                    ) : null}
+                    <ArchitectButton
+                      type="button"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => splitItem(item.responsibilityId)}
+                    >
+                      Split
                     </ArchitectButton>
                     <ArchitectButton
                       type="button"

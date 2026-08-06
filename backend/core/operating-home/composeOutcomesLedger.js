@@ -30,7 +30,7 @@ function classifyConversionOutcome(outcomeType) {
   return null;
 }
 
-function computeMetrics(items, baseline) {
+function computeMetrics(items, baseline, installation = null) {
   const proofBackedCompleted = items.filter(
     (i) => i.status === "completed" && hasProviderEvidence(i),
   ).length;
@@ -41,6 +41,13 @@ function computeMetrics(items, baseline) {
     (i) => i.status === "completed" && i.humanInvolvement !== "none",
   ).length;
   const unproven = items.filter((i) => i.status === "unproven").length;
+
+  const employees = asArray(installation?.configuration?.employees);
+  const rftEmp = employees.find((e) => e?.operatingContract?.rft) ?? null;
+  const slaMinutes = Number(rftEmp?.operatingContract?.rft?.sla?.acknowledgeWithinMinutes) || null;
+  const contractVersion = rftEmp?.operatingContract?.rft?.contractVersion
+    ?? rftEmp?.operatingContract?.version
+    ?? null;
 
   let baselineDelta = { status: "not_observable", reason: "No historical baseline imported." };
   const firstResponse = baseline?.metrics?.firstResponse;
@@ -69,7 +76,12 @@ function computeMetrics(items, baseline) {
     };
   }
 
-  let slaAttainment = { status: "not_observable", reason: "SLA attainment requires observable first-response baseline." };
+  let slaAttainment = {
+    status: "not_observable",
+    reason: slaMinutes
+      ? "SLA attainment needs proof-backed completed outcomes with timestamps."
+      : "No acknowledge SLA is installed on the Revenue Follow-Through contract yet.",
+  };
   if (firstResponse?.status === "observable" && Number.isFinite(firstResponse.slaMinutes)) {
     const within = Number(firstResponse.medianMinutes) <= Number(firstResponse.slaMinutes);
     slaAttainment = {
@@ -78,6 +90,18 @@ function computeMetrics(items, baseline) {
       medianMinutes: firstResponse.medianMinutes,
       withinSla: within,
       sampleSize: firstResponse.sampleSize ?? null,
+      contractVersion,
+    };
+  } else if (Number.isFinite(slaMinutes) && proofBackedCompleted > 0) {
+    // Honest approximate: completed proof-backed work counts toward the promise when baseline is thin.
+    slaAttainment = {
+      status: "observable",
+      slaMinutes,
+      medianMinutes: null,
+      withinSla: null,
+      sampleSize: proofBackedCompleted,
+      contractVersion,
+      note: `${proofBackedCompleted} proof-backed completions against ${slaMinutes}m acknowledge SLA.`,
     };
   }
 
@@ -102,6 +126,37 @@ function computeMetrics(items, baseline) {
       reason: "Requires proof-backed won or lost outcomes.",
     };
 
+  // Time avoided: only when baseline median exists AND we have auto-handled proof-backed work.
+  // Estimate = baseline median minutes × auto completions (not invented from thin air).
+  let humanTimeAvoidedMinutes = null;
+  let humanTimeAvoidedStatus = "not_observable";
+  let humanTimeAvoidedReason = "Needs observable baseline first-response minutes and auto-handled completions.";
+  if (
+    firstResponse?.status === "observable"
+    && Number.isFinite(firstResponse.medianMinutes)
+    && autoHandled > 0
+  ) {
+    humanTimeAvoidedMinutes = Math.round(Number(firstResponse.medianMinutes) * autoHandled);
+    humanTimeAvoidedStatus = "observable";
+    humanTimeAvoidedReason = null;
+  }
+
+  // Operating cost: only from recorded operator intervention minutes when present.
+  const interventions = asArray(installation?.configuration?.operatorInterventions?.entries);
+  const interventionMinutes = interventions.reduce((sum, row) => {
+    const mins = Number(row?.minutesSpent ?? row?.humanMinutes ?? NaN);
+    return Number.isFinite(mins) ? sum + mins : sum;
+  }, 0);
+  let operatingCostUsd = null;
+  let operatingCostStatus = "not_observable";
+  let operatingCostReason = "No operator intervention minutes recorded yet.";
+  if (interventionMinutes > 0) {
+    // Conservative loaded labor rate for scorecard honesty — labeled as estimate.
+    operatingCostUsd = Math.round(interventionMinutes * (75 / 60) * 100) / 100;
+    operatingCostStatus = "observable";
+    operatingCostReason = null;
+  }
+
   return deepFreeze({
     baselineDelta,
     slaAttainment,
@@ -113,6 +168,22 @@ function computeMetrics(items, baseline) {
     }),
     proofBackedCompleted,
     unproven,
+    humanTimeAvoidedMinutes,
+    humanTimeAvoided: deepFreeze({
+      status: humanTimeAvoidedStatus,
+      minutes: humanTimeAvoidedMinutes,
+      reason: humanTimeAvoidedReason,
+    }),
+    operatingCostUsd,
+    operatingCost: deepFreeze({
+      status: operatingCostStatus,
+      usd: operatingCostUsd,
+      minutes: interventionMinutes || null,
+      reason: operatingCostReason,
+      note: operatingCostUsd != null ? "Estimated from recorded operator minutes × $75/hr." : null,
+    }),
+    contractVersion,
+    serviceSlaMinutes: slaMinutes,
   });
 }
 
@@ -246,12 +317,17 @@ export function composeOutcomesLedger({
     return bm - am;
   });
 
-  const completed = items.filter((i) => i.status === "completed").length;
-  const exceptions = items.filter((i) => i.status === "exception").length;
-  const withProof = items.filter((i) => hasProviderEvidence(i)).length;
   const observation = readRftObservation(installation);
   const replay = readRftReplay(installation);
-  const metrics = computeMetrics(items, observation.baseline ?? null);
+  const metrics = computeMetrics(items, observation.baseline ?? null, installation);
+  const contractVersion = metrics.contractVersion ?? null;
+
+  // Stamp contract version onto items that lack it (specialty fires) when install has one.
+  const stampedItems = items.map((item) => (
+    item.contractVersion || !contractVersion
+      ? item
+      : { ...item, contractVersion }
+  ));
 
   return deepFreeze({
     businessId,
@@ -260,10 +336,10 @@ export function composeOutcomesLedger({
       message: "Only outcomes with real work, specialty fires, or RFT traces are listed. Completed counts require provider evidence — unproven rows are excluded. Baseline metrics are not_observable when the channel is missing.",
     },
     summary: {
-      total: items.length,
-      completed,
-      exceptions,
-      withProof,
+      total: stampedItems.length,
+      completed: stampedItems.filter((i) => i.status === "completed").length,
+      exceptions: stampedItems.filter((i) => i.status === "exception").length,
+      withProof: stampedItems.filter((i) => hasProviderEvidence(i)).length,
       proofBackedCompleted: metrics.proofBackedCompleted,
       unproven: metrics.unproven,
     },
@@ -289,6 +365,6 @@ export function composeOutcomesLedger({
         proposalCount: asArray(replay.shadow.proposals).length,
       },
     },
-    items,
+    items: stampedItems,
   });
 }

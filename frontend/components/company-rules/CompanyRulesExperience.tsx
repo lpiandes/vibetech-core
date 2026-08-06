@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 import GovernedLearningPanel from "./GovernedLearningPanel";
 import EarnedAutonomyPanel from "./EarnedAutonomyPanel";
+import AskVibeTechPrompt from "@/components/operating/AskVibeTechPrompt";
 
 export type PresentedCompanyRuleContract = {
   employeeId: string;
@@ -66,6 +67,13 @@ export default function CompanyRulesExperience({
         <PageHeader
           title="Company Rules"
           description="Services, approval boundaries, response promises, and installed Operating Contracts. Knowledge documents remain the evidence layer."
+        />
+
+        <AskVibeTechPrompt
+          businessId={businessId}
+          showSuggestions
+          placeholder="Ask to confirm a rule, response promise, or approval policy"
+          helperText="Confirmed answers become Company Rules — nothing applies until you approve."
         />
 
         <section style={panelStyle} aria-label="Service standard">

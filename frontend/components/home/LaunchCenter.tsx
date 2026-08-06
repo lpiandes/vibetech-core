@@ -85,7 +85,7 @@ const SIMPLE_DETAIL: Record<string, string> = {
   social_screen_prove: "Connect Serper + ScrapingBee, then run a sample public-web screen. Filtered report lands in Needs Attention.",
   meta_lead_intake: "Tell us your Facebook Page — VIBETech connects Lead Ads for you. New leads land in People and fire intake automations (sends still need your approval).",
   website_forms: "Open your hosted intake form, share the link, and prove with a test submission. Leads land in People.",
-  knowledge_consult: "Upload playbooks and FAQs so AI teammates answer with your voice.",
+  knowledge_consult: "Upload playbooks and FAQs so VIBETech answers with your voice.",
   outbound_approvals: "Confirm nothing reaches a customer without your approval.",
   sports_registration_golden_path: "Walk a registration end-to-end to prove the operating loop.",
   dental_intake_golden_path: "Walk a patient intake end-to-end to prove the operating loop.",

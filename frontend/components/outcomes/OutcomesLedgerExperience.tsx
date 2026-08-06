@@ -13,11 +13,17 @@ export type OutcomesLedgerView = {
   summary?: { total?: number; completed?: number; exceptions?: number; withProof?: number; proofBackedCompleted?: number; unproven?: number };
   metrics?: {
     baselineDelta?: { status?: string; reason?: string; baselineMedianMinutes?: number; note?: string };
-    slaAttainment?: { status?: string; reason?: string; withinSla?: boolean; slaMinutes?: number; medianMinutes?: number };
+    slaAttainment?: { status?: string; reason?: string; withinSla?: boolean; slaMinutes?: number; medianMinutes?: number; note?: string; contractVersion?: string | null };
     conversionMovement?: { status?: string; won?: number; lost?: number; reason?: string | null };
     autoVsHuman?: { auto?: number; human?: number; not_observable?: string | null };
     proofBackedCompleted?: number;
     unproven?: number;
+    humanTimeAvoidedMinutes?: number | null;
+    humanTimeAvoided?: { status?: string; minutes?: number | null; reason?: string | null };
+    operatingCostUsd?: number | null;
+    operatingCost?: { status?: string; usd?: number | null; minutes?: number | null; reason?: string | null; note?: string | null };
+    contractVersion?: string | null;
+    serviceSlaMinutes?: number | null;
   };
   baseline?: any;
   observation?: { importedAt?: string | null; windowDays?: number; eventCount?: number };
@@ -179,16 +185,29 @@ export default function OutcomesLedgerExperience({ view }: { view: OutcomesLedge
                 value={formatConversionMovement(view.metrics.conversionMovement)}
               />
             ) : null}
-            {typeof (view.metrics as any).humanTimeAvoidedMinutes === "number" ? (
+            {view.metrics.humanTimeAvoided?.status === "observable"
+              || typeof view.metrics.humanTimeAvoidedMinutes === "number" ? (
               <MetricChip
                 label="Human time avoided"
-                value={`${Math.round((view.metrics as any).humanTimeAvoidedMinutes)} min`}
+                value={`${Math.round(
+                  Number(view.metrics.humanTimeAvoided?.minutes ?? view.metrics.humanTimeAvoidedMinutes ?? 0),
+                )} min`}
               />
             ) : null}
-            {typeof (view.metrics as any).operatingCostUsd === "number" ? (
+            {view.metrics.operatingCost?.status === "observable"
+              || typeof view.metrics.operatingCostUsd === "number" ? (
               <MetricChip
                 label="Operating cost"
-                value={`$${(view.metrics as any).operatingCostUsd.toFixed(2)}`}
+                value={`$${Number(view.metrics.operatingCost?.usd ?? view.metrics.operatingCostUsd ?? 0).toFixed(2)}`}
+              />
+            ) : null}
+            {view.metrics.contractVersion || view.metrics.serviceSlaMinutes ? (
+              <MetricChip
+                label="Service standard"
+                value={[
+                  view.metrics.contractVersion ? `v${view.metrics.contractVersion}` : null,
+                  view.metrics.serviceSlaMinutes ? `${view.metrics.serviceSlaMinutes}m SLA` : null,
+                ].filter(Boolean).join(" · ")}
               />
             ) : null}
           </div>

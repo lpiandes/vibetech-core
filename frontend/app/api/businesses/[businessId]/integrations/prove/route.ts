@@ -200,10 +200,32 @@ export async function POST(
         action,
         result: { ...result, detail: { ...detail, externalReference: ref } },
       });
+      let responsibilityProof = null;
+      try {
+        const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+        if (installation) {
+          const { persistResponsibilityProofResolution } = await import(
+            "../../../../../../../backend/core/ai-builder/responsibility/persistResponsibilityProofResolution.js"
+          );
+          responsibilityProof = await persistResponsibilityProofResolution({
+            platformStore,
+            installation,
+            capabilityId,
+            proveAction: action || capabilityId,
+            proofReference: `${capabilityId}:${ref}`,
+            actorId: ctx.user?.id ?? null,
+            nowISO: at,
+          });
+        }
+      } catch {
+        responsibilityProof = null;
+      }
+      invalidateCachedBusinessOsInstallation(businessId);
       return NextResponse.json({
         result,
         proofRecord,
         rftAttach,
+        responsibilityProof,
         rule: "Connected is not proven. Proven requires a successful proveAction plus owner receipt confirm for live tests.",
       });
     }
@@ -299,12 +321,37 @@ export async function POST(
       })
       : null;
 
+    let responsibilityProof = null;
+    if (storedResult.ok && !deferComplete) {
+      try {
+        const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+        if (installation) {
+          const { persistResponsibilityProofResolution } = await import(
+            "../../../../../../../backend/core/ai-builder/responsibility/persistResponsibilityProofResolution.js"
+          );
+          responsibilityProof = await persistResponsibilityProofResolution({
+            platformStore,
+            installation,
+            capabilityId,
+            proveAction: action || capabilityId,
+            proofReference: externalReference
+              ? `${capabilityId}:${externalReference}`
+              : String(capabilityId),
+            actorId: ctx.user?.id ?? null,
+          });
+        }
+      } catch {
+        responsibilityProof = null;
+      }
+    }
+
     invalidateCachedBusinessOsInstallation(businessId);
 
     return NextResponse.json({
       result: storedResult,
       proofRecord,
       rftAttach,
+      responsibilityProof,
       rule: "Connected is not proven. Proven requires a successful proveAction.",
     });
   } catch (err) {
