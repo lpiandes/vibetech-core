@@ -260,6 +260,10 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       responsibilityRequests: installation?.configuration?.responsibilityRequests ?? [],
       connectionStatuses,
     });
+    // Live install config — do not trust activation productContext.installationResult (often stale/partial).
+    const rftGoLiveAt = installation?.configuration?.rftLaunch?.goLiveAt
+      ? String(installation.configuration.rftLaunch.goLiveAt)
+      : null;
 
     const enrichedViewModel = {
       ...missionControlViewModel,
@@ -272,6 +276,7 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       liveFlags: liveIntegrationAvailability(),
       bosEmployees,
       responsibilityGoLive,
+      rftGoLiveAt,
     };
     markRequestTiming("MISSION_CONTROL", {
       ready: true,

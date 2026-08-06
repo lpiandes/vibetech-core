@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 import { proveActionForConnection } from "@/components/connections/integrationsSemantics";
@@ -136,6 +137,7 @@ export default function RftLaunchPath({
   connectionStatuses?: Record<string, unknown>;
   proofRecords?: Record<string, unknown>;
 }) {
+  const router = useRouter();
   const base = `/b/${encodeURIComponent(businessId)}`;
   const [launch, setLaunch] = useState<LaunchView | null>(null);
   const [observation, setObservation] = useState<any>(null);
@@ -281,6 +283,10 @@ export default function RftLaunchPath({
               summary: { ...next?.summary, completeCount, totalSteps: next?.summary?.totalSteps ?? STEP_META.length },
             };
           });
+        }
+        if (action === "goLive" && (data.launch?.goLiveAt || data.ok !== false)) {
+          // Collapse the setup checklist + banner on Home (reads rftGoLiveAt from SSR).
+          router.refresh();
         }
       }
     } catch (err: any) {

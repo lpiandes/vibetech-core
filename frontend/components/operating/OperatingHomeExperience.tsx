@@ -63,7 +63,8 @@ export default function OperatingHomeExperience() {
     .slice(0, 8);
   const summary = supervision.operatingSummary ?? null;
   const greeting = supervision.greeting?.headline ?? "Good day.";
-  const launchGoLiveAt = viewModel?.productContext?.installationResult?.configuration?.rftLaunch?.goLiveAt
+  const launchGoLiveAt = viewModel?.rftGoLiveAt
+    ?? viewModel?.productContext?.installationResult?.configuration?.rftLaunch?.goLiveAt
     ?? null;
   const showRftLaunch = Boolean(businessId) && !launchGoLiveAt;
 
@@ -187,7 +188,19 @@ export default function OperatingHomeExperience() {
         </div>
         {!topDecision ? (
           <div style={{ ...panelStyle, color: cockpitColors.textSecondary }}>
-            Nothing waiting.
+            {launchGoLiveAt ? (
+              <>
+                <p style={{ margin: 0, color: cockpitColors.textPrimary, fontWeight: 650 }}>
+                  Live — waiting for the next opportunity
+                </p>
+                <p style={{ margin: "6px 0 0", fontSize: 14, lineHeight: 1.45 }}>
+                  Revenue Follow-Through is watching connected email and calendar.
+                  When something eligible arrives, it will show up here for your approval.
+                </p>
+              </>
+            ) : (
+              "Nothing waiting."
+            )}
           </div>
         ) : (
           <DecisionCard

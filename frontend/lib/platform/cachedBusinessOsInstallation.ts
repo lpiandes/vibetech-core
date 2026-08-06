@@ -19,7 +19,18 @@ export const getCachedBusinessOsInstallation = cache(async (businessId: string) 
 export function invalidateCachedBusinessOsInstallation(businessId?: string) {
   if (!businessId) {
     installProcessCache.clear();
-    return;
+  } else {
+    installProcessCache.delete(String(businessId));
   }
-  installProcessCache.delete(String(businessId));
+  // Portal bundle embeds installation — must die with the same write or Home
+  // keeps showing "Finish setup" for up to 60s after go-live.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { invalidateCachedInstalledPortal } = require("./cachedInstalledPortal") as {
+      invalidateCachedInstalledPortal: (id?: string) => void;
+    };
+    invalidateCachedInstalledPortal(businessId);
+  } catch {
+    /* portal module may be unavailable in some test paths */
+  }
 }

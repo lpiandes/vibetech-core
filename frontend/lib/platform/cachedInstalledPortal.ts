@@ -13,6 +13,19 @@ type PortalBundle = {
 const PORTAL_TTL_MS = 60_000;
 const portalProcessCache = new Map<string, { at: number; value: PortalBundle }>();
 
+export function invalidateCachedInstalledPortal(businessId?: string) {
+  if (!businessId) {
+    portalProcessCache.clear();
+    return;
+  }
+  const prefix = `${String(businessId)}:`;
+  for (const key of portalProcessCache.keys()) {
+    if (key.startsWith(prefix) || key === String(businessId)) {
+      portalProcessCache.delete(key);
+    }
+  }
+}
+
 /**
  * Request-deduped installation + specification + portal compose.
  * Layout and Home both need this — without cache it runs twice per soft-nav.
