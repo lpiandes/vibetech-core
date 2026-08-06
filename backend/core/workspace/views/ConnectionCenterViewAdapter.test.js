@@ -53,3 +53,30 @@ test("after go-live RFT connect channels are not force-added", () => {
   });
   assert.deepEqual(reqs.map((r) => r.id), ["business_email"]);
 });
+
+test("open responsibility connection constraints keep calendar after go-live", () => {
+  const reqs = resolveConnectionRequirements({
+    businessOsIntegrations: [
+      { integrationId: "business_email", label: "Business email", status: "required" },
+    ],
+    employees: [{ connectionDependencies: ["business_email"] }],
+    osConfiguration: {
+      rftLaunch: { goLiveAt: "2026-08-01T00:00:00.000Z" },
+      responsibilityRequests: [
+        {
+          title: "Appointment Reminders",
+          status: "confirmed",
+          constraints: [
+            {
+              type: "ACCOUNT_CONNECTION_REQUIRED",
+              status: "open",
+              description: "Calendar required for appointment reminders.",
+              resolutionAction: "Connect calendar (OAuth).",
+            },
+          ],
+        },
+      ],
+    },
+  });
+  assert.deepEqual(reqs.map((r) => r.id).sort(), ["business_email", "calendar"]);
+});

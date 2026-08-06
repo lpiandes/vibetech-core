@@ -72,8 +72,9 @@ export function presentResponsibilityGoLive({
       const emailOk = String(connectionStatuses.business_email ?? "").toUpperCase() === "CONNECTED";
       const calendarOk = String(connectionStatuses.calendar ?? "").toUpperCase() === "CONNECTED";
       const shortActions = uniqueShortActions(openCustomer);
+      const primaryConstraint = openCustomer[0] ?? null;
       const primaryAction = shortActions[0]
-        ?? (bucket === "needs_your_action" ? "Open Connections" : null);
+        ?? (bucket === "needs_your_action" ? "Continue setup" : null);
 
       return deepFreeze({
         responsibilityId: request.responsibilityId,
@@ -84,6 +85,7 @@ export function presentResponsibilityGoLive({
         outcome: request.requestedOutcome || request.rawRequest,
         shortActions,
         primaryAction,
+        primaryConstraintType: primaryConstraint?.type ?? null,
         constraints: constraints.map((c) => ({
           constraintId: c.constraintId,
           type: c.type,
@@ -101,23 +103,32 @@ export function presentResponsibilityGoLive({
       });
     });
 
-  const readyCount = items.filter((i) => ["ready_for_shadow", "live"].includes(i.bucket)).length;
-  const actionable = items.filter((i) => i.bucket === "needs_your_action");
-  const vibetechWorking = items.filter((i) => i.bucket === "vibetech_working");
-  const blocked = items.filter((i) => i.bucket === "cannot_install");
+  // Collapse duplicate titles from messy Builder extracts (same outcome twice).
+  const seenTitles = new Set();
+  const deduped = [];
+  for (const item of items) {
+    const key = String(item.title ?? "").trim().toLowerCase();
+    if (key && seenTitles.has(key)) continue;
+    if (key) seenTitles.add(key);
+    deduped.push(item);
+  }
+  const readyCount = deduped.filter((i) => ["ready_for_shadow", "live"].includes(i.bucket)).length;
+  const actionable = deduped.filter((i) => i.bucket === "needs_your_action");
+  const vibetechWorking = deduped.filter((i) => i.bucket === "vibetech_working");
+  const blocked = deduped.filter((i) => i.bucket === "cannot_install");
 
   return deepFreeze({
-    total: items.length,
+    total: deduped.length,
     readyCount,
     canOpenBusiness: readyCount >= 1 || vibetechWorking.length >= 1,
-    summary: items.length
-      ? `${readyCount} of ${items.length} ready`
+    summary: deduped.length
+      ? `${readyCount} of ${deduped.length} ready`
       : "No responsibilities yet",
     needsYourAction: actionable,
     vibetechWorking,
-    readyForShadow: items.filter((i) => i.bucket === "ready_for_shadow"),
-    live: items.filter((i) => i.bucket === "live"),
+    readyForShadow: deduped.filter((i) => i.bucket === "ready_for_shadow"),
+    live: deduped.filter((i) => i.bucket === "live"),
     cannotInstall: blocked,
-    items,
+    items: deduped,
   });
 }

@@ -72,6 +72,34 @@ export function connectionRequirementsFromEmployees(employees = []) {
 }
 
 /**
+ * Open ACCOUNT_CONNECTION constraints on responsibility requests must keep
+ * Connections rows visible after RFT go-live (otherwise Fix → Connect is a dead end).
+ */
+export function connectionRequirementsFromResponsibilityRequests(requests = []) {
+  const byId = new Map();
+  for (const request of safeArray(requests)) {
+    if (String(request?.status ?? "") === "removed") continue;
+    for (const constraint of safeArray(request?.constraints)) {
+      if (String(constraint?.status ?? "open") !== "open") continue;
+      if (String(constraint?.type ?? "") !== "ACCOUNT_CONNECTION_REQUIRED") continue;
+      const blob = `${constraint.resolutionAction ?? ""} ${constraint.description ?? ""}`.toLowerCase();
+      let id = null;
+      if (/calendar/.test(blob)) id = "calendar";
+      else if (/email|gmail|outlook|newsletter/.test(blob)) id = "business_email";
+      else if (/sms|twilio|text/.test(blob)) id = "sms_channel";
+      else if (/voice|phone|call|number|forward/.test(blob)) id = "voice_channel";
+      if (!id || byId.has(id)) continue;
+      byId.set(id, {
+        id,
+        displayName: id.replace(/_/g, " "),
+        requirementLevel: "required",
+      });
+    }
+  }
+  return [...byId.values()];
+}
+
+/**
  * Prefer Business OS integration plan when present.
  * Merge employee connectionDependencies so runtime needs aren't orphaned.
  * Merge RFT connect channels while Today launch is active (same gate as evaluateRftLaunch).
@@ -106,6 +134,13 @@ export function resolveConnectionRequirements({
     ?? null;
   for (const req of connectionRequirementsFromRftConnect(
     configuration ? { configuration } : installationResult,
+  )) {
+    if (!byId.has(req.id)) byId.set(req.id, req);
+  }
+
+  for (const req of connectionRequirementsFromResponsibilityRequests(
+    configuration?.responsibilityRequests
+    ?? installationResult?.configuration?.responsibilityRequests,
   )) {
     if (!byId.has(req.id)) byId.set(req.id, req);
   }

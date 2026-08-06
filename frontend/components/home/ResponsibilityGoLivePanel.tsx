@@ -3,19 +3,30 @@
 import Link from "next/link";
 import { cockpitColors, radius } from "@/design/tokens";
 
+type ConstraintLite = {
+  type?: string;
+  status?: string;
+  owner?: string;
+  shortAction?: string | null;
+};
+
+type GoLiveItem = {
+  responsibilityId: string;
+  title?: string;
+  readinessLabel?: string;
+  primaryAction?: string | null;
+  shortActions?: string[];
+  primaryConstraintType?: string | null;
+  constraints?: ConstraintLite[];
+  checklistHints?: { businessEmailConnected?: boolean; calendarConnected?: boolean };
+};
+
 type GoLiveView = {
   summary?: string;
   readyCount?: number;
   total?: number;
   canOpenBusiness?: boolean;
-  needsYourAction?: Array<{
-    responsibilityId: string;
-    title?: string;
-    readinessLabel?: string;
-    primaryAction?: string | null;
-    shortActions?: string[];
-    checklistHints?: { businessEmailConnected?: boolean; calendarConnected?: boolean };
-  }>;
+  needsYourAction?: GoLiveItem[];
   vibetechWorking?: Array<{ responsibilityId: string; title?: string; readinessLabel?: string }>;
   readyForShadow?: Array<{ responsibilityId: string; title?: string }>;
   cannotInstall?: Array<{ responsibilityId: string; title?: string; shortActions?: string[] }>;
@@ -66,13 +77,13 @@ export default function ResponsibilityGoLivePanel({
           {needs.map((item) => {
             const action = item.primaryAction
               || item.shortActions?.[0]
-              || (!item.checklistHints?.businessEmailConnected ? "Connect business email" : "Open Connections");
+              || (!item.checklistHints?.businessEmailConnected ? "Connect business email" : "Continue setup");
             return (
               <SetupRow
                 key={item.responsibilityId}
                 title={shortTitle(item.title)}
                 action={action}
-                href={`${base}/integrations`}
+                href={hrefForFix(base, item, action)}
               />
             );
           })}
@@ -102,6 +113,35 @@ export default function ResponsibilityGoLivePanel({
       ) : null}
     </section>
   );
+}
+
+function hrefForFix(base: string, item: GoLiveItem, actionLabel: string) {
+  const action = String(actionLabel ?? "").toLowerCase();
+  const type = String(
+    item.primaryConstraintType
+    ?? item.constraints?.find((c) => String(c.status ?? "open") === "open" && String(c.owner) === "Customer")?.type
+    ?? "",
+  );
+  const blob = `${action} ${type}`.toLowerCase();
+
+  if (
+    type === "ACCOUNT_CONNECTION_REQUIRED"
+    || /connect|account|email|calendar|sms|phone|oauth/.test(blob)
+  ) {
+    if (/calendar/.test(blob)) return `${base}/integrations?focus=calendar`;
+    if (/email|gmail|outlook/.test(blob)) return `${base}/integrations?focus=business_email`;
+    if (/sms|twilio|text/.test(blob)) return `${base}/integrations?focus=sms_channel`;
+    if (/voice|phone|call/.test(blob)) return `${base}/integrations?focus=voice_channel`;
+    return `${base}/integrations`;
+  }
+
+  // Rules / clarification / consent / data-source policy → Ask with context, not Connections.
+  const prompt = [
+    `Finish setup for this responsibility: ${String(item.title ?? "Responsibility").trim()}.`,
+    actionLabel ? `Next needed: ${actionLabel}.` : "",
+    "Ask only the missing operating questions, then update the operating contract.",
+  ].filter(Boolean).join(" ");
+  return `${base}/architect?${new URLSearchParams({ prompt }).toString()}`;
 }
 
 function SetupRow({
