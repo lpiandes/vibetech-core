@@ -59,7 +59,7 @@ export const ARCHITECT_INSTALL_STAGES = [
   { id: "core", label: "Setting up workspaces" },
   { id: "blueprint", label: "Applying your industry plan" },
   { id: "capabilities", label: "Preparing what VIBETech can handle" },
-  { id: "employees", label: "Preparing AI teammates" },
+  { id: "employees", label: "Preparing operating responsibilities" },
   { id: "knowledge", label: "Organizing business knowledge" },
   { id: "integrations", label: "Preparing connections" },
   { id: "finalizing", label: "Opening your business" },
@@ -693,7 +693,7 @@ export function executiveBriefing(proposal: {
   const businessName = resolveBusinessDisplayName(proposal?.businessName);
   const highlights = [
     { id: "navigation", label: "Navigation areas", value: views.navigation?.items?.length ?? 0 },
-    { id: "workforce", label: "AI teammates", value: views.digitalWorkforce?.items?.length ?? 0 },
+    { id: "workforce", label: "Responsibilities", value: views.digitalWorkforce?.items?.length ?? 0 },
     { id: "roles", label: "Roles", value: views.rolesAccess?.items?.length ?? 0 },
     { id: "connections", label: "Connections to set up", value: views.integrations?.items?.length ?? 0 },
   ];

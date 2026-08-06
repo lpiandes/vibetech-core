@@ -141,8 +141,11 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
             </div>
 
             {(checklist.blocking ?? []).length ? (
-              <div style={{ ...rowCard, borderColor: "rgba(220,38,38,.35)", background: "rgba(220,38,38,.06)" }} role="alert">
-                <strong>Must resolve before going live</strong>
+              <div style={{ ...rowCard, borderColor: "rgba(251,191,36,.35)", background: "rgba(251,191,36,.08)" }} role="status">
+                <strong>Remaining after open</strong>
+                <p style={{ margin: "6px 0 0", fontSize: 13, color: architect.inkMuted, lineHeight: 1.45 }}>
+                  You can open the business now. Blocked responsibilities stay visible on Today until you finish them — they do not freeze the ones that are ready.
+                </p>
                 <ul style={{ marginBottom: 0 }}>
                   {(checklist.blocking as string[]).map((item) => <li key={item}>{item}</li>)}
                 </ul>
@@ -167,10 +170,11 @@ export function ArchitectDryRunClient({ sessionId }: { sessionId: string }) {
                 </ArchitectButton>
               ) : (
                 <ArchitectButton
-                  disabled={(checklist.blocking ?? []).length > 0}
                   onClick={() => router.push(`${routes.install}?launch=1`)}
                 >
-                  Open your business
+                  {(checklist.blocking ?? []).length > 0
+                    ? "Open business — finish remaining on Today"
+                    : "Open your business"}
                 </ArchitectButton>
               )}
               <ArchitectButton variant="secondary" onClick={() => router.push(routes.session)}>
@@ -379,7 +383,7 @@ export function ArchitectInstallClient({
         <h2 style={{ margin: 0 }}>{businessName}</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
           <SummaryTile label="Navigation areas" value={proposal?.views?.navigation?.items?.length ?? "—"} />
-          <SummaryTile label="AI teammates" value={proposal?.views?.digitalWorkforce?.items?.length ?? "—"} />
+          <SummaryTile label="Responsibilities" value={proposal?.views?.digitalWorkforce?.items?.length ?? "—"} />
           <SummaryTile label="Roles" value={proposal?.views?.rolesAccess?.items?.length ?? "—"} />
           <SummaryTile label="Connections to set up" value={proposal?.views?.integrations?.items?.length ?? "—"} />
         </div>

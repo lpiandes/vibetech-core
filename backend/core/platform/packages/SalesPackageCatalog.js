@@ -256,7 +256,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
   },
   {
     id: "crm_automation",
-    label: "CRM automation",
+    label: "CRM updates",
     description: "People, pipelines, and work automation (in-platform CRM).",
     moduleIds: ["home", "for_you", "people", "pipelines", "work", "settings", "knowledge", "integrations"],
     canonicalNavIds: [

@@ -137,6 +137,7 @@ export async function POST(
             operatingPackId: installation?.configuration?.operatingPackId,
             configuration: installation?.configuration,
           });
+          const contractBeforePatch = emp.operatingContract ?? null;
           const result = applyOperatingContractPatch({
             employee: emp,
             industry,
@@ -144,6 +145,19 @@ export async function POST(
             actorId,
             nowISO: new Date().toISOString(),
           });
+          // Stamp prior contract onto the active rule so rollback can restore it.
+          state = {
+            ...state,
+            ruleVersions: (state.ruleVersions ?? []).map((rule: any) => (
+              String(rule?.ruleId) === String(approved.rule?.ruleId)
+                ? {
+                  ...rule,
+                  contractBeforePatch,
+                  employeeId: emp.employeeId ?? emp.id ?? null,
+                }
+                : rule
+            )),
+          };
           const employees = [...(installation.configuration?.employees ?? [])];
           const idx = employees.findIndex(
             (e: any) => String(e.employeeId ?? e.id) === String(emp.employeeId ?? emp.id),
@@ -199,6 +213,65 @@ export async function POST(
       if (!rolled.ok) {
         return NextResponse.json(rolled, { status: 400 });
       }
+
+      // Prefer restoring the contract snapshot stored on the rule being rolled back.
+      const deactivatedId = rolled.deactivated ? String(rolled.deactivated) : null;
+      const rolledRule = (readGovernedLearning({ configuration: { governedLearning: rolled.state } }).ruleVersions ?? [])
+        .find((v: any) => String(v.ruleId) === deactivatedId)
+        ?? (readGovernedLearning(installation).ruleVersions ?? [])
+          .find((v: any) => String(v.ruleId) === deactivatedId)
+        ?? null;
+      // Snapshot lives on the rule that was active before rollback (now rolled_back).
+      const priorLearning = readGovernedLearning(installation);
+      const activeBefore = priorLearning.ruleVersions.find((v: any) =>
+        v.status === "active"
+        && (body.ruleId ? String(v.ruleId) === String(body.ruleId) : true)
+        && (body.reasonCode ? v.reasonCode === body.reasonCode : true),
+      );
+      const snapshot = activeBefore?.contractBeforePatch ?? rolledRule?.contractBeforePatch ?? null;
+      const employeeId = activeBefore?.employeeId ?? rolledRule?.employeeId ?? null;
+
+      if (snapshot && employeeId) {
+        const employees = [...(installation.configuration?.employees ?? [])];
+        const idx = employees.findIndex(
+          (e: any) => String(e.employeeId ?? e.id) === String(employeeId),
+        );
+        if (idx >= 0) {
+          employees[idx] = {
+            ...employees[idx],
+            operatingContract: snapshot,
+          };
+          await platformStore.upsertBusinessOSInstallation({
+            id: installation.id ?? installation.installationId ?? `install_${businessId}`,
+            businessId,
+            specificationRowId: installation.specificationRowId ?? null,
+            specificationId: installation.specificationId,
+            specificationVersion: installation.specificationVersion ?? 1,
+            specificationContentHash: installation.specificationContentHash
+              ?? installation.contentHash
+              ?? "governed_learning_rollback",
+            planId: installation.planId ?? `plan_${businessId}`,
+            status: installation.status ?? "installed",
+            plan: installation.plan ?? {},
+            configuration: {
+              ...(installation.configuration ?? {}),
+              employees,
+              governedLearning: rolled.state,
+            },
+            installedAt: installation.installedAt ?? new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            updatedBy: actorId,
+          });
+          return NextResponse.json({
+            ok: true,
+            learning: rolled.state,
+            restored: rolled.restored,
+            deactivated: rolled.deactivated,
+            contractRestored: true,
+          });
+        }
+      }
+
       await persistGovernedLearning({
         platformStore,
         installation,
@@ -210,6 +283,7 @@ export async function POST(
         learning: rolled.state,
         restored: rolled.restored,
         deactivated: rolled.deactivated,
+        contractRestored: false,
       });
     }
 

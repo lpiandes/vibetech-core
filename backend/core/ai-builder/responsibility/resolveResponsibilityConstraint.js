@@ -91,8 +91,22 @@ export async function resolveResponsibilityConstraintFromAsk({
       constraints,
       updatedAt: nowISO,
     };
+    const stillOpen = constraints.filter((c) =>
+      ["open", "in_progress"].includes(String(c?.status ?? "open"))
+      && String(c?.owner ?? "Customer") === "Customer",
+    );
+    if (!stillOpen.length && String(request.status) !== "live") {
+      patch.status = "live";
+      patch.wentLiveAt = request.wentLiveAt ?? nowISO;
+    }
     if (String(found.constraint.type) === "CONSENT_POLICY_REQUIRED") {
       patch.approvalExpectations = String(answer).trim();
+      patch.consentPolicy = {
+        text: String(answer).trim(),
+        confirmedAt: nowISO,
+        constraintId: String(constraintId),
+        proofReference,
+      };
     } else if (String(found.constraint.type) === "KNOWLEDGE_REQUIRED") {
       patch.requiredInformation = String(answer).trim();
     } else {

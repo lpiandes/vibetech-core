@@ -75,34 +75,46 @@ function readAssignmentNotes(employee = null) {
 
 function presentContracts(employees = []) {
   return employees.map((employee) => {
-    const presented = presentRftServiceStandard(employee?.operatingContract?.rft ?? null);
+    const rft = employee?.operatingContract?.rft ?? null;
+    const presented = rft ? presentRftServiceStandard(rft) : null;
+    const oc = employee?.operatingContract ?? {};
+    const responsibilityId = oc.responsibilityId ?? employee?.responsibilityId ?? null;
     return {
       employeeId: String(employee?.employeeId ?? employee?.id ?? ""),
-      label: String(employee?.label ?? employee?.displayName ?? "Revenue Follow-Through"),
-      contractVersion: presented.contractVersion,
-      slaSummary: presented.slaSummary,
-      approvalSummary: presented.approvalSummary,
-      proofSummary: presented.proofSummary,
-      contentHash: presented.contentHash,
+      responsibilityId: responsibilityId ? String(responsibilityId) : null,
+      label: String(employee?.label ?? employee?.displayName ?? "Operating contract"),
+      contractVersion: String(presented?.contractVersion ?? oc.version ?? oc.contractVersion ?? "1"),
+      slaSummary: presented?.slaSummary
+        ?? (oc.slaSummary ? String(oc.slaSummary) : "Service standard recorded on this responsibility."),
+      approvalSummary: presented?.approvalSummary
+        ?? (oc.approvalSummary ? String(oc.approvalSummary) : "Approvals follow installed policy."),
+      proofSummary: presented?.proofSummary
+        ?? (oc.proofSummary ? String(oc.proofSummary) : "Proof requires provider evidence."),
+      contentHash: presented?.contentHash ?? oc.contentHash ?? null,
+      kind: rft ? "revenue_follow_through" : (responsibilityId ? "responsibility" : "operating_contract"),
     };
   });
 }
 
-function collectRftEmployees(installation = null) {
+function collectContractEmployees(installation = null) {
   return asArray(installation?.configuration?.employees).filter((employee) => {
-    const schemaId = String(employee?.operatingContract?.schemaId ?? "");
+    const oc = employee?.operatingContract;
+    if (!oc || typeof oc !== "object") return false;
+    const schemaId = String(oc.schemaId ?? "");
     const label = String(employee?.label ?? employee?.displayName ?? "");
     return schemaId === RFT_SCHEMA_ID
-      || /revenue\s*follow/i.test(label)
-      || Boolean(employee?.operatingContract?.rft);
+      || Boolean(oc.rft)
+      || Boolean(oc.responsibilityId)
+      || schemaId === "responsibility_operator"
+      || /revenue\s*follow|responsibility/i.test(label);
   });
 }
 
 export function presentBusinessMemory(installation = null) {
   const cfg = installation?.configuration ?? {};
-  const employees = collectRftEmployees(installation);
+  const employees = collectContractEmployees(installation);
   const contracts = presentContracts(employees);
-  const primaryEmployee = employees[0] ?? null;
+  const primaryEmployee = employees.find((e) => e?.operatingContract?.rft) ?? employees[0] ?? null;
   const rft = primaryEmployee
     ? normalizeRftServiceStandard(primaryEmployee?.operatingContract?.rft ?? null)
     : null;

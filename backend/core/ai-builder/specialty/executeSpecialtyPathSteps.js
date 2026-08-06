@@ -18,16 +18,16 @@ import { createApprovalRequest } from "../../approvals/ApprovalRequest.js";
 import { APPROVAL_INTERNAL_EVENT_TYPES } from "../../approvals/ApprovalEventTypes.js";
 import { resolveMessagePersonalization } from "./resolveMessagePersonalization.js";
 import { sendSpecialtyOutbound } from "./specialtyOutbound.js";
-import { inferActionClass, isClassAutoEligible, readEarnedAutonomy } from "../../company-rules/earnedAutonomy.js";
+import { inferActionClass, evaluateClassEligibility } from "../../company-rules/earnedAutonomy.js";
 
 function classAllowsAutoSend(installation, classId) {
   if (!installation || !classId) return false;
-  // Trust last evaluated snapshot + owner delegation for live path (Plan 22).
-  const row = readEarnedAutonomy(installation).classes[String(classId)];
-  if (row?.lastStatus === "auto_eligible" && row.delegatedAt && !row.revokedAt) {
-    return true;
-  }
-  return isClassAutoEligible(installation, classId);
+  // Always re-evaluate against the active contract hash — never trust a stale snapshot.
+  const evaluation = evaluateClassEligibility({
+    classId,
+    installation,
+  });
+  return evaluation.autoEligible === true;
 }
 export async function executeSpecialtyPathSteps({
   employee = {},

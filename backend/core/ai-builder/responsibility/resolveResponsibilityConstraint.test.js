@@ -63,9 +63,39 @@ test("Ask answer resolves constraint and records it on the operating contract", 
   assert.equal(result.ok, true);
   const request = saved.configuration.responsibilityRequests[0];
   assert.equal(request.constraints[0].status, "resolved");
+  assert.equal(request.status, "live");
   assert.match(request.constraints[0].proofReference, /^ask:sess_1:/);
   assert.equal(saved.configuration.employees[0].operatingContract.confirmedRules.length, 1);
   assert.equal(saved.history.at(-1).event, "responsibility_constraint_resolved");
+});
+
+test("consent Ask answer stores structured consent policy", async () => {
+  let saved = null;
+  const installation = fixture();
+  installation.configuration.responsibilityRequests[0].constraints[0] = {
+    constraintId: "cstr_consent",
+    type: "CONSENT_POLICY_REQUIRED",
+    status: "open",
+    owner: "Customer",
+    description: "Who may be contacted is missing.",
+  };
+  const result = await resolveResponsibilityConstraintFromAsk({
+    platformStore: {
+      async upsertBusinessOSInstallation(row) { saved = row; return row; },
+      async recordAuditEvent() {},
+    },
+    installation,
+    responsibilityId: "resp_1",
+    constraintId: "cstr_consent",
+    answer: "Only opted-in customers and never cold purchased lists.",
+    actorId: "user_1",
+    sessionId: "sess_2",
+  });
+  assert.equal(result.ok, true);
+  const request = saved.configuration.responsibilityRequests[0];
+  assert.equal(request.constraints[0].status, "resolved");
+  assert.match(String(request.consentPolicy?.text ?? ""), /opted-in/);
+  assert.equal(request.status, "live");
 });
 
 test("vague Ask answer leaves constraint open", async () => {

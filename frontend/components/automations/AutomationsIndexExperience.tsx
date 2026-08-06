@@ -79,7 +79,7 @@ export default function AutomationsIndexExperience({
       </VtHero>
 
       <VtPanel title="Workflows">
-        {rows.length === 0 ? <VtEmpty label="No AI teammates yet — open Team" /> : null}
+        {rows.length === 0 ? <VtEmpty label="No operating paths yet — open Team" /> : null}
         <div style={{ display: "grid", gap: 10 }}>
           {rows.map((row) => (
             <VtCard

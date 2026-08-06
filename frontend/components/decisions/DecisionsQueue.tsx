@@ -61,7 +61,7 @@ export default function DecisionsQueue({
   const queue = safeArray(items).filter((item) => String(item?.sourceType ?? "") !== "intelligence_candidate");
 
   const handleApproval = useCallback(
-    async (approvalId: string, decision: string) => {
+    async (approvalId: string, decision: string, extra: Record<string, unknown> = {}) => {
       if (!businessId) {
         setActionError("Missing business context — refresh and try again.");
         return;
@@ -72,7 +72,7 @@ export default function DecisionsQueue({
         const res = await fetch(`/api/approvals/${approvalId}/decision`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ decision, businessId }),
+          body: JSON.stringify({ decision, businessId, ...extra }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.ok === false) {
@@ -224,7 +224,7 @@ export default function DecisionsQueue({
 
             <div style={{ marginTop: spacing.sm, display: "flex", gap: spacing.sm, flexWrap: "wrap", alignItems: "center" }}>
               {approveAction ? (
-                <Button type="button" size="sm" disabled={busy} onClick={() => void handleApproval(approvalKey, "GRANT")}>
+                <Button type="button" size="sm" disabled={busy} onClick={() => void handleApproval(approvalKey, "GRANT", { reasonCode: "approved_as_proposed" })}>
                   {busy ? "Sending…" : "Approve and send"}
                 </Button>
               ) : null}
@@ -247,7 +247,13 @@ export default function DecisionsQueue({
                 </Button>
               ) : null}
               {rejectAction ? (
-                <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void handleApproval(approvalKey, "REJECT")}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void handleApproval(approvalKey, "REJECT", { reasonCode: "rejected_outright" })}
+                >
                   Reject
                 </Button>
               ) : null}
