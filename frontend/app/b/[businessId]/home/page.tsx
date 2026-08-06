@@ -16,6 +16,10 @@ import PackageAskHomeBanner from "@/components/home/PackageAskHomeBanner";
 import { getCachedInstalledPortal } from "@/lib/platform/cachedInstalledPortal";
 import { getCachedKnowledgeDocumentCount, getCachedCapabilityProofRows } from "@/lib/platform/cachedBusinessMetrics";
 import { presentResponsibilityGoLive } from "../../../../../backend/core/ai-builder/responsibility/presentResponsibilityGoLive.js";
+import {
+  connectionStatusesFromCredentials,
+  mergeConnectionStatuses,
+} from "../../../../../backend/core/integrations/credentials/connectionStatusesFromDurableCredentials.js";
 
 /**
  * Home is one experience with two moments:
@@ -179,7 +183,10 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       setupChecklist: Array.isArray(home.checklist) ? home.checklist : [],
     });
 
-    const proofRows = await getCachedCapabilityProofRows(businessId);
+    const [proofRows, credentialRows] = await Promise.all([
+      getCachedCapabilityProofRows(businessId),
+      platformStore.listIntegrationCredentialsForWorkspace(businessId).catch(() => []),
+    ]);
     const proofRecords: Record<string, {
       ok: boolean;
       verified: boolean;
@@ -204,7 +211,7 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       (ctx.service as any)?.connected?.integrationPlatform?.connectionRuntime?.getConnections?.() ?? [];
     const snapshotConnections =
       (ctx.service as any)?.connected?.connectedSystemsSnapshot?.connections ?? [];
-    const connectionStatuses: Record<string, string> = {};
+    let connectionStatuses: Record<string, string> = {};
     for (const conn of snapshotConnections) {
       if (conn?.id) connectionStatuses[String(conn.id)] = String(conn.status ?? "NOT_CONNECTED");
     }
@@ -213,6 +220,11 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       if (!id) continue;
       connectionStatuses[id] = String(conn?.status ?? "NOT_CONNECTED");
     }
+    // Durable vault wins when runtime/snapshot lag after OAuth (same SoT as Connections / RFT launch).
+    connectionStatuses = mergeConnectionStatuses(
+      connectionStatuses,
+      connectionStatusesFromCredentials(credentialRows ?? []),
+    );
     const connections = (snapshotConnections.length
       ? snapshotConnections
       : runtimeConnections.map((conn: any) => ({

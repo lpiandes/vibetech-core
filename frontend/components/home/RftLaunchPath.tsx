@@ -73,20 +73,23 @@ function isConnectedInStatuses(connectionStatuses: Record<string, unknown> | und
 }
 
 /**
- * Home SSR already has live runtime statuses — overlay connect step so Today
- * cannot lag a stale launch GET that still reads a NOT_CONNECTED snapshot.
+ * Upgrade connect from live statuses — never demote a launch API "complete".
+ * Stale Home SSR used to overwrite a correct credential-backed complete step.
  */
 function applyLiveConnectionOverlay(
   launch: LaunchView | null,
   connectionStatuses?: Record<string, unknown>,
 ): LaunchView | null {
-  if (!launch?.steps?.connect || !connectionStatuses || !Object.keys(connectionStatuses).length) {
-    return launch;
-  }
+  if (!launch?.steps?.connect) return launch;
+  if (String(launch.steps.connect.status ?? "") === "complete") return launch;
+  if (!connectionStatuses || !Object.keys(connectionStatuses).length) return launch;
+
   const emailConnected = isConnectedInStatuses(connectionStatuses, ["business_email", "gmail"]);
   const calendarConnected = isConnectedInStatuses(connectionStatuses, ["calendar", "google_calendar"]);
   const connectComplete = emailConnected && calendarConnected;
-  let detail = "Connect business email and calendar.";
+  if (!emailConnected && !calendarConnected) return launch;
+
+  let detail = String(launch.steps.connect.detail ?? "Connect business email and calendar.");
   if (connectComplete) detail = "Email and calendar connected.";
   else if (emailConnected) detail = "Email connected — connect calendar next.";
   else if (calendarConnected) detail = "Calendar connected — connect business email next.";

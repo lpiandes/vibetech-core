@@ -32,6 +32,10 @@ import {
   refreshGovernedLearning,
   persistGovernedLearning,
 } from "../../../../../../../backend/core/company-rules/governedLearning.js";
+import {
+  connectionStatusesFromCredentials,
+  mergeConnectionStatuses,
+} from "../../../../../../../backend/core/integrations/credentials/connectionStatusesFromDurableCredentials.js";
 
 function connectionStatusesFrom(ctx: { service: unknown }) {
   const connected = (ctx.service as any)?.connected;
@@ -76,62 +80,6 @@ function rftEmployee(installation: any) {
   return (installation.configuration?.employees ?? []).find(
     (e: any) => e?.operatingContract?.rft || e?.roleId === "revenue_follow_through",
   ) ?? buildDefaultRevenueFollowThroughEmployee();
-}
-
-function isLiveConnectedStatus(value: unknown) {
-  const status = String(
-    typeof value === "object" && value != null
-      ? ((value as { status?: string }).status ?? "")
-      : (value ?? ""),
-  ).toUpperCase();
-  return status === "CONNECTED" || status === "VERIFIED" || status === "PROVEN" || status === "OK";
-}
-
-function connectionStatusesFromCredentials(rows: any[] = []) {
-  const statuses: Record<string, string> = {};
-  for (const row of rows) {
-    const provider = String(row?.providerType ?? "").toLowerCase();
-    const id = String(row?.credentialId ?? "").toLowerCase();
-    if (provider.includes("gmail") || id.includes("gmail") || id.startsWith("cred_gmail_")) {
-      statuses.business_email = "CONNECTED";
-    }
-    if (
-      provider.includes("calendar")
-      || provider.includes("google_calendar")
-      || id.includes("gcal")
-      || id.includes("calendar")
-      || id.startsWith("cred_gcal_")
-    ) {
-      statuses.calendar = "CONNECTED";
-    }
-    if (provider.includes("twilio_sms") || id.includes("twilio_sms") || provider.includes("sms")) {
-      statuses.sms_channel = "CONNECTED";
-    }
-    if (provider.includes("twilio_voice") || id.includes("voice") || provider.includes("voice")) {
-      statuses.voice_channel = "CONNECTED";
-    }
-    if (provider.includes("meta") || id.includes("meta")) {
-      statuses.meta_lead_ads = "CONNECTED";
-    }
-  }
-  return statuses;
-}
-
-/**
- * Snapshot is often stale after OAuth on cold serverless. Credentials + live
- * CONNECTED always win — never demote a durable connect back to NOT_CONNECTED.
- */
-function mergeConnectionStatuses(
-  snapshotStatuses: Record<string, string> = {},
-  credentialStatuses: Record<string, string> = {},
-) {
-  const statuses: Record<string, string> = { ...snapshotStatuses };
-  for (const [id, status] of Object.entries(credentialStatuses)) {
-    if (isLiveConnectedStatus(status) || !isLiveConnectedStatus(statuses[id])) {
-      statuses[id] = status;
-    }
-  }
-  return statuses;
 }
 
 /**
@@ -204,7 +152,13 @@ export async function POST(
     }
     const body = await request.json().catch(() => ({}));
     const action = String(body.action ?? "").trim();
-    const connectionStatuses = connectionStatusesFrom(ctx);
+    const credentialRows = await platformStore
+      .listIntegrationCredentialsForWorkspace(businessId)
+      .catch(() => []);
+    const connectionStatuses = mergeConnectionStatuses(
+      connectionStatusesFrom(ctx),
+      connectionStatusesFromCredentials(credentialRows),
+    );
     const proofRecords = await proofRecordsFor(businessId);
 
     if (action === "observe") {

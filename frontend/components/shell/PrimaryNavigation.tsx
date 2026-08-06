@@ -233,11 +233,11 @@ export default function PrimaryNavigation({
 
   return (
     <nav aria-label="Primary" style={{ display: "flex", flexDirection: "column", height: "100%", padding: spacing.md, gap: spacing.md }}>
-      <div style={{ padding: `0 ${spacing.xs}`, marginBottom: spacing.sm }}>
+      <div style={{ padding: `0 ${spacing.xs}`, marginBottom: spacing.md }}>
         <div style={{ fontWeight: 700, fontSize: typography.body.fontSize, color: cockpitColors.sidebarText }}>
           VIBETech
         </div>
-        <div style={{ marginTop: 2, fontSize: typography.meta.fontSize, color: cockpitColors.sidebarTextMuted }}>
+        <div style={{ marginTop: 2, fontSize: typography.meta.fontSize, color: cockpitColors.sidebarTextMuted, lineHeight: 1.35 }}>
           {scope.businessName || "Workspace"}
         </div>
         {supportAccess?.active ? (
