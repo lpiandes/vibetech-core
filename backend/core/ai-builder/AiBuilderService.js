@@ -1241,7 +1241,8 @@ export class AiBuilderService {
       }
     }
 
-    // Live LLM Ask/builder turns consume the daily Ask quota (5/user).    let askQuota = null;
+    // Live LLM Ask/builder turns consume the daily Ask quota (5/user).
+    let askQuota = null;
     const llmEnabled = Boolean(
       llmIsLiveAvailable()
       && (this.intelligence?.enabled === true || this.intelligence?.client?.isLive?.()),

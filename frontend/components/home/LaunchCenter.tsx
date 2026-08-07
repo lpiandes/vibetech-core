@@ -514,11 +514,13 @@ export default function LaunchCenter({
       {flash ? (
         <div
           role="status"
+          data-surface="light"
+          className="vt-light-surface"
           style={{
             borderRadius: 12,
             border: `1px solid ${flash.tone === "error" ? "#fecaca" : "#a7f3d0"}`,
             background: flash.tone === "error" ? "#fef2f2" : "#ecfdf5",
-            color: flash.tone === "error" ? cockpitColors.critical : cockpitColors.handled,
+            color: flash.tone === "error" ? "#991B1B" : "#065f46",
             padding: "14px 16px",
             fontSize: 14,
             fontWeight: 650,
