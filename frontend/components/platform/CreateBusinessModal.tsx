@@ -6,7 +6,7 @@ import SimpleModal from "@/components/product/SimpleModal";
 import PrimaryButton from "@/components/product/PrimaryButton";
 import SecondaryButton from "@/components/product/SecondaryButton";
 import { typography, cockpitColors } from "@/design/tokens";
-import { listSellableSalesPackagesForAdmin } from "../../../../backend/core/platform/packages/SalesPackageCatalog.js";
+import { listSellableSalesPackagesForAdmin } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
 const fieldStyle = {
   padding: "10px 12px",
