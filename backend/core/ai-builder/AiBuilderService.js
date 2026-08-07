@@ -1742,7 +1742,7 @@ export class AiBuilderService {
         progressSteps: [
           "Creating your workspaces",
           "Configuring roles",
-          "Preparing AI teammates",
+          "Preparing operating responsibilities",
           "Preparing home screens",
           "Checking connections",
         ],
@@ -1791,7 +1791,7 @@ export class AiBuilderService {
       progressSteps: [
         "Creating your workspaces",
         "Configuring roles",
-        "Preparing AI teammates",
+        "Preparing operating responsibilities",
         "Preparing home screens",
         "Checking connections",
       ],

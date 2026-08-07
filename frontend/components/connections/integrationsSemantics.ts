@@ -129,7 +129,7 @@ export function partitionIntegrationSections(
   liveFlags: LiveIntegrationFlags = {},
 ) {
   const rows = safeArray<ConnectionViewRow>(connections).filter((row) =>
-    isIntegrationListed(String(row.id), liveFlags),
+    isIntegrationListed(String(row.id), liveFlags, row.status),
   );
   const required: Array<{ conn: ConnectionViewRow; display: IntegrationDisplay }> = [];
   const connected: Array<{ conn: ConnectionViewRow; display: IntegrationDisplay }> = [];
@@ -137,8 +137,7 @@ export function partitionIntegrationSections(
   const roadmap: Array<{ conn: ConnectionViewRow; display: IntegrationDisplay }> = [];
 
   for (const conn of rows) {
-    const display = resolveDisplay(conn);
-    if (display.listed === false) continue;
+    const display = { ...resolveDisplay(conn), listed: true };
     const item = { conn, display };
     if (String(conn.requirementLevel ?? "").toLowerCase() === "required"
       && !isConnectionConnected(String(conn.status ?? ""))) {

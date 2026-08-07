@@ -240,7 +240,7 @@ export default function WorkflowAutomationsExperience({
     }
   }
 
-  /** Runs an AI teammate's automation path immediately — same action as the "Run now" button on its own page. */
+  /** Runs an operating responsibility's automation path immediately — same action as the "Run now" button on its own page. */
   async function runTeammateNow(employeeId: string) {
     if (runningTeammateId) return;
     setRunningTeammateId(employeeId);
@@ -388,9 +388,8 @@ export default function WorkflowAutomationsExperience({
         right={<VtStatusChip label={`${liveCount} LIVE`} tone={liveCount > 0 ? "live" : "off"} />}
       >
         <VtDock>
-          <VtDockLink href={`/b/${encodeURIComponent(businessId)}/people`}>People</VtDockLink>
-          <VtDockLink href={`/b/${encodeURIComponent(businessId)}/pipelines`}>Pipelines</VtDockLink>
           <VtDockLink href={`/b/${encodeURIComponent(businessId)}/work`}>Work</VtDockLink>
+          <VtDockLink href={`/b/${encodeURIComponent(businessId)}/intelligence`}>Decisions</VtDockLink>
           <button type="button" onClick={() => void createWorkflow()} style={dockBtn} disabled={busy}>
             + New automation
           </button>
@@ -573,7 +572,7 @@ export default function WorkflowAutomationsExperience({
                     {testLog}
                   </pre>
                   <div style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.45 }}>
-                    Check People, Needs Attention, and Inbox for drafts or pipeline changes from this Test Lead.
+                    Check Work, Needs you, and Decisions for drafts or pipeline changes from this Test Lead.
                   </div>
                 </div>
               ) : null}
@@ -644,7 +643,7 @@ export default function WorkflowAutomationsExperience({
       </div>
 
       {teammateRows.length > 0 ? (
-        <VtPanel title="AI teammate paths (still available)">
+        <VtPanel title="Operating paths (still available)">
           <div style={{ display: "grid", gap: 8 }}>
             {teammateRows.map((row) => (
               <VtCard key={row.employeeId} padding={12} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap" }}>

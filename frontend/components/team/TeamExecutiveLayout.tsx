@@ -20,6 +20,7 @@ import TeamAvailabilityPanel from "@/components/team/TeamAvailabilityPanel";
 import RoleAccessPanel from "@/components/team/RoleAccessPanel";
 import { copyInviteLink } from "@/lib/platform/inviteLinks";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
+import AskVibeTechPrompt from "@/components/operating/AskVibeTechPrompt";
 import {
   deriveTeamCounts,
   monitoringSummary,
@@ -159,8 +160,8 @@ export default function TeamExecutiveLayout({
 
   const metricItems = useMemo(
     () => [
-      { id: "human", label: "People", value: String(counts.humanTeam) },
-      { id: "digital", label: "Operating", value: String(counts.digitalEmployees) },
+      { id: "human", label: "Team members", value: String(counts.humanTeam) },
+      { id: "digital", label: "Responsibilities", value: String(counts.digitalEmployees) },
       { id: "ready", label: "Working", value: String(counts.ready) },
       { id: "setup", label: "Setup", value: String(counts.needsSetup) },
     ],
@@ -251,6 +252,15 @@ export default function TeamExecutiveLayout({
   return (
     <div style={simplePageStyle}>
       <PageHeader title="Staff & workforce" action={inviteAction} />
+
+      {businessId ? (
+        <AskVibeTechPrompt
+          businessId={businessId}
+          showSuggestions
+          placeholder="Ask about a responsibility, invite, or who owns follow-through"
+          helperText="Team questions route to Ask — nothing changes until you approve."
+        />
+      ) : null}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button

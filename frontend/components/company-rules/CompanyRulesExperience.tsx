@@ -72,6 +72,7 @@ export default function CompanyRulesExperience({
         <AskVibeTechPrompt
           businessId={businessId}
           showSuggestions
+          unconfirmedRuleCount={memoryDomains.filter((d) => d.value === EMPTY_MEMORY_COPY).length}
           placeholder="Ask to confirm a rule, response promise, or approval policy"
           helperText="Confirmed answers become Company Rules — nothing applies until you approve."
         />
@@ -145,6 +146,22 @@ export default function CompanyRulesExperience({
                 >
                   {domain.value}
                 </p>
+                {domain.value === EMPTY_MEMORY_COPY ? (
+                  <Link
+                    href={`${base}/architect?${new URLSearchParams({
+                      prompt: `Confirm the company rule for ${domain.title}. Be specific enough to apply as an operating rule.`,
+                    }).toString()}`}
+                    style={{
+                      marginTop: 4,
+                      fontSize: 12,
+                      fontWeight: 650,
+                      color: cockpitColors.accent,
+                      textDecoration: "none",
+                    }}
+                  >
+                    Confirm via Ask →
+                  </Link>
+                ) : null}
               </article>
             ))}
           </div>

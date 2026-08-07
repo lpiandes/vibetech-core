@@ -331,6 +331,16 @@ export function composeBaselineReport({
     },
     honesty: {
       message: "Baseline numbers only appear when backed by synced evidence. Missing channels show as not observable — medians are never invented.",
+      volume: {
+        emailMessages: sources.email?.messageCount ?? 0,
+        calendarEvents: sources.calendar?.eventCount ?? 0,
+        formLeads: sources.forms?.eventCount ?? sources.forms?.leadCount ?? 0,
+        rftCards: sources.rftCards?.cardCount ?? 0,
+        totalEvents: events.length,
+        note: events.length === 0
+          ? "Zero events in window — connect channels or import history before treating baseline as a value report."
+          : null,
+      },
     },
   });
 }

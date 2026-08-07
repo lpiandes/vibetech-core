@@ -23,6 +23,7 @@ import {
   type ConnectionViewRow,
   type IntegrationsPresentation,
 } from "./integrationsSemantics";
+import AskVibeTechPrompt from "@/components/operating/AskVibeTechPrompt";
 import type { IntegrationDisplay } from "./integrationDisplay";
 
 function safeArray<T>(value: unknown): T[] {
@@ -187,7 +188,16 @@ export default function ConnectionsExecutiveLayout() {
         });
         const body = await res.json().catch(() => ({}));
         const ok = Boolean(body?.result?.ok);
-        setProveMessage(ok ? (body?.result?.message ?? "Proven.") : (body?.result?.message ?? "Prove failed."));
+        const responsibility = body?.responsibilityProof ?? body?.result?.responsibilityProof ?? null;
+        const baseMessage = ok ? (body?.result?.message ?? "Proven.") : (body?.result?.message ?? "Prove failed.");
+        const followThrough = responsibility?.promoted
+          ? ` Responsibility promoted to live (${responsibility.promoted}).`
+          : responsibility?.resolvedConstraints?.length
+            ? ` Closed ${responsibility.resolvedConstraints.length} connection constraint(s).`
+            : ok
+              ? " If a responsibility still waits on this channel, refresh Today."
+              : "";
+        setProveMessage(`${baseMessage}${followThrough}`);
         if (ok) {
           router.refresh();
         }
@@ -291,6 +301,20 @@ export default function ConnectionsExecutiveLayout() {
   return (
     <div style={simplePageStyle}>
       <PageHeader title="Integrations" />
+
+      {businessId ? (
+        <AskVibeTechPrompt
+          businessId={businessId}
+          showSuggestions
+          missingConnectionCount={sections.required.length}
+          unprovenConnectionCount={sections.connected.filter(({ conn }) => {
+            const s = String(conn.status ?? "").toUpperCase();
+            return s === "CONNECTED" || s === "VERIFIED";
+          }).length}
+          placeholder="Ask which connection is blocking a responsibility"
+          helperText="Connect and Prove close open constraints — Ask explains what’s still missing."
+        />
+      ) : null}
 
       {connectError === "access_denied" ? (
         <div

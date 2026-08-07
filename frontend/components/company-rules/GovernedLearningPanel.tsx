@@ -105,7 +105,7 @@ export default function GovernedLearningPanel({ businessId }: { businessId: stri
       {!proposals.length ? (
         <div style={{ marginTop: spacing.md, display: "grid", gap: spacing.sm }}>
           <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize }}>
-            No open proposals yet. Corrections accumulate when you reject or edit decisions — repeats become suggested rules here.
+            No repeating corrections yet — reject or edit decisions a few times and matching patterns become rule proposals here. Or confirm a rule via Ask above.
           </p>
           <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
             <Button asChild variant="outline" size="sm">

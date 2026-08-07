@@ -129,12 +129,17 @@ export default function OutcomesLedgerExperience({ view }: { view: OutcomesLedge
           </div>
           {view.replay?.lastReplay ? (
             <p style={{ margin: 0, fontSize: typography.meta.fontSize, color: cockpitColors.textSecondary }}>
-              Last replay: {view.replay.lastReplay.passed ? "passed" : "reviewed"}
+              Last replay: {view.replay.lastReplay.emptyWindow
+                ? "empty-window pass"
+                : view.replay.lastReplay.passed ? "passed" : "reviewed"}
               {view.replay.lastReplay.summary
                 ? ` · auto ${view.replay.lastReplay.summary.wouldAutoComplete ?? 0} / approval ${view.replay.lastReplay.summary.wouldNeedApproval ?? 0} / escalate ${view.replay.lastReplay.summary.wouldEscalate ?? 0}`
                 : ""}
               {view.replay.shadow?.enabled
                 ? ` · Shadow ${view.replay.shadow.passed ? "passed" : "on"} (${view.replay.shadow.proposalCount ?? 0} proposals)`
+                : ""}
+              {view.replay.lastReplay.emptyWindow
+                ? " · Not proof — no opportunities in window"
                 : ""}
             </p>
           ) : null}
@@ -155,61 +160,47 @@ export default function OutcomesLedgerExperience({ view }: { view: OutcomesLedge
         <section aria-label="Proof metrics" style={{ ...panelStyle, display: "grid", gap: spacing.sm }}>
           <h2 style={{ margin: 0, fontSize: typography.cardTitle.fontSize, fontWeight: 700 }}>Proof metrics</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: spacing.sm }}>
-            {isObservableMetric(view.metrics.baselineDelta) ? (
-              <MetricChip
-                label="Baseline delta"
-                value={formatMetricStatus(view.metrics.baselineDelta)}
-              />
-            ) : null}
-            {isObservableMetric(view.metrics.slaAttainment) ? (
-              <MetricChip
-                label="SLA attainment"
-                value={formatSlaMetric(view.metrics.slaAttainment)}
-              />
-            ) : null}
-            {(view.metrics.autoVsHuman?.auto || view.metrics.autoVsHuman?.human) ? (
-              <MetricChip
-                label="Auto vs human"
-                value={`${view.metrics.autoVsHuman?.auto ?? 0} auto / ${view.metrics.autoVsHuman?.human ?? 0} human`}
-              />
-            ) : null}
+            <MetricChip
+              label="Baseline delta"
+              value={formatMetricStatus(view.metrics.baselineDelta)}
+            />
+            <MetricChip
+              label="SLA attainment"
+              value={formatSlaMetric(view.metrics.slaAttainment)}
+            />
+            <MetricChip
+              label="Auto vs human"
+              value={
+                view.metrics.autoVsHuman?.not_observable
+                  ? String(view.metrics.autoVsHuman.not_observable)
+                  : `${view.metrics.autoVsHuman?.auto ?? 0} auto / ${view.metrics.autoVsHuman?.human ?? 0} human`
+              }
+            />
             <MetricChip
               label="Proof-backed"
               value={String(view.metrics.proofBackedCompleted ?? summary.proofBackedCompleted ?? 0)}
             />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: spacing.sm }}>
-            {view.metrics.conversionMovement?.status === "observable" ? (
-              <MetricChip
-                label="Conversion movement"
-                value={formatConversionMovement(view.metrics.conversionMovement)}
-              />
-            ) : null}
-            {view.metrics.humanTimeAvoided?.status === "observable"
-              || typeof view.metrics.humanTimeAvoidedMinutes === "number" ? (
-              <MetricChip
-                label="Human time avoided"
-                value={`${Math.round(
-                  Number(view.metrics.humanTimeAvoided?.minutes ?? view.metrics.humanTimeAvoidedMinutes ?? 0),
-                )} min`}
-              />
-            ) : null}
-            {view.metrics.operatingCost?.status === "observable"
-              || typeof view.metrics.operatingCostUsd === "number" ? (
-              <MetricChip
-                label="Operating cost"
-                value={`$${Number(view.metrics.operatingCost?.usd ?? view.metrics.operatingCostUsd ?? 0).toFixed(2)}`}
-              />
-            ) : null}
-            {view.metrics.contractVersion || view.metrics.serviceSlaMinutes ? (
-              <MetricChip
-                label="Service standard"
-                value={[
-                  view.metrics.contractVersion ? `v${view.metrics.contractVersion}` : null,
-                  view.metrics.serviceSlaMinutes ? `${view.metrics.serviceSlaMinutes}m SLA` : null,
-                ].filter(Boolean).join(" · ")}
-              />
-            ) : null}
+            <MetricChip
+              label="Conversion movement"
+              value={formatConversionMovement(view.metrics.conversionMovement)}
+            />
+            <MetricChip
+              label="Human time avoided"
+              value={formatTimeAvoided(view.metrics.humanTimeAvoided, view.metrics.humanTimeAvoidedMinutes)}
+            />
+            <MetricChip
+              label="Operating cost"
+              value={formatOperatingCost(view.metrics.operatingCost, view.metrics.operatingCostUsd)}
+            />
+            <MetricChip
+              label="Service standard"
+              value={[
+                view.metrics.contractVersion ? `v${view.metrics.contractVersion}` : "Contract version pending",
+                view.metrics.serviceSlaMinutes ? `${view.metrics.serviceSlaMinutes}m SLA` : "SLA not installed",
+              ].filter(Boolean).join(" · ")}
+            />
           </div>
         </section>
       ) : null}
@@ -443,21 +434,54 @@ function formatMetricStatus(metric?: { status?: string; reason?: string; note?: 
   return metric.note ?? "Observable";
 }
 
-function formatSlaMetric(metric?: { status?: string; reason?: string; withinSla?: boolean; slaMinutes?: number; medianMinutes?: number }) {
+function formatSlaMetric(metric?: {
+  status?: string;
+  reason?: string;
+  note?: string;
+  withinSla?: boolean | null;
+  slaMinutes?: number;
+  medianMinutes?: number | null;
+  sampleSize?: number | null;
+}) {
   if (!metric || metric.status === "not_observable") {
     return metric?.reason ?? "Not observable";
   }
   if (metric.medianMinutes != null && metric.slaMinutes != null) {
     return `${Math.round(metric.medianMinutes)} min vs ${metric.slaMinutes} min SLA (${metric.withinSla ? "within" : "over"})`;
   }
+  if (metric.note) return metric.note;
+  if (metric.slaMinutes != null && metric.sampleSize != null) {
+    return `${metric.sampleSize} proof-backed vs ${metric.slaMinutes}m SLA`;
+  }
   return "Observable";
 }
 
-function formatConversionMovement(metric?: { status?: string; won?: number; lost?: number }) {
+function formatConversionMovement(metric?: { status?: string; won?: number; lost?: number; reason?: string | null }) {
   if (!metric || metric.status === "not_observable") {
-    return "Not observable yet";
+    return metric?.reason ?? "Not observable yet";
   }
   return `${metric.won ?? 0} won / ${metric.lost ?? 0} lost`;
+}
+
+function formatTimeAvoided(
+  metric?: { status?: string; minutes?: number | null; reason?: string | null } | null,
+  legacyMinutes?: number | null,
+) {
+  if (metric?.status === "observable" || typeof legacyMinutes === "number") {
+    return `${Math.round(Number(metric?.minutes ?? legacyMinutes ?? 0))} min`;
+  }
+  return metric?.reason ?? "Not observable yet";
+}
+
+function formatOperatingCost(
+  metric?: { status?: string; usd?: number | null; reason?: string | null; note?: string | null } | null,
+  legacyUsd?: number | null,
+) {
+  if (metric?.status === "observable" || typeof legacyUsd === "number") {
+    const usd = Number(metric?.usd ?? legacyUsd ?? 0);
+    return `$${usd.toFixed(2)}${metric?.note ? ` · ${metric.note}` : ""}`;
+  }
+  return metric?.reason ?? "Not observable yet";
 }
 
 function formatWhen(value?: string | null) {

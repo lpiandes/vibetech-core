@@ -26,6 +26,8 @@ const ACTION_TO_CONNECTION = Object.freeze({
   [PROVE_ACTIONS.run_sports_golden_path]: "business_email",
   [PROVE_ACTIONS.run_dental_golden_path]: "business_email",
   [PROVE_ACTIONS.prove_appointment_setter_sms]: "sms_channel",
+  [PROVE_ACTIONS.submit_test_form]: "website_forms",
+  [PROVE_ACTIONS.sync_test_crm_contact]: "hubspot",
 });
 
 /**

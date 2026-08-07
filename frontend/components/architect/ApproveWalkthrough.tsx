@@ -142,7 +142,7 @@ export default function ApproveWalkthrough({
 
 function stepKindLabel(kind: string): string {
   if (kind === "nav") return "Workspaces";
-  if (kind === "teammate") return "AI teammate";
+  if (kind === "teammate") return "Responsibility";
   if (kind === "approvals") return "Your judgment";
   return "Confirm";
 }

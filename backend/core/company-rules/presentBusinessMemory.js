@@ -122,16 +122,60 @@ export function presentBusinessMemory(installation = null) {
   const learning = readGovernedLearning(installation);
   const activeRules = asArray(learning.ruleVersions).filter((rule) => rule?.status === "active");
 
-  const services = uniqueStrings(
-    asArray(cfg.services).map((service) => String(service?.name ?? service?.label ?? service)),
-  );
-  const customerTypes = uniqueStrings(
-    asArray(cfg.customerTypes).map((customerType) => String(customerType?.name ?? customerType?.label ?? customerType)),
-  );
+  const services = uniqueStrings([
+    ...asArray(cfg.services).map((service) => String(service?.name ?? service?.label ?? service)),
+    ...asArray(cfg.discovery?.services).map((service) => String(service?.name ?? service?.label ?? service)),
+    ...asArray(cfg.businessProfile?.services).map((service) => String(service?.name ?? service?.label ?? service)),
+  ]);
+  const customerTypes = uniqueStrings([
+    ...asArray(cfg.customerTypes).map((customerType) => String(customerType?.name ?? customerType?.label ?? customerType)),
+    ...asArray(cfg.discovery?.customerTypes).map((customerType) => String(customerType?.name ?? customerType?.label ?? customerType)),
+    cleanText(cfg.discoveryAnswers?.customerTypes),
+    cleanText(cfg.discoveryAnswers?.whoYouServe),
+  ]);
+
+  // Ask-confirmed responsibility facts (consent, rules, knowledge) feed Business Memory.
+  const askConfirmed = [];
+  for (const request of asArray(cfg.responsibilityRequests)) {
+    const consent = cleanText(request?.consentPolicy?.text) ?? cleanText(request?.consentPolicy);
+    if (consent) askConfirmed.push(consent);
+    for (const rule of asArray(request?.confirmedRules ?? request?.operatingContract?.confirmedRules)) {
+      const text = cleanText(rule?.text ?? rule?.body ?? rule);
+      if (text) askConfirmed.push(text);
+    }
+    for (const constraint of asArray(request?.constraints)) {
+      if (String(constraint?.status ?? "") !== "resolved") continue;
+      const answer = cleanText(constraint?.answer ?? constraint?.resolvedAnswer ?? constraint?.proofReference);
+      if (answer && !/^ask:|^prove:/i.test(answer)) askConfirmed.push(answer);
+    }
+  }
+  for (const employee of asArray(cfg.employees)) {
+    for (const rule of asArray(employee?.operatingContract?.confirmedRules)) {
+      const text = cleanText(rule?.text ?? rule?.body ?? rule);
+      if (text) askConfirmed.push(text);
+    }
+  }
 
   const memoryValues = {};
   if (services.length) memoryValues.Services = services.join(", ");
   if (customerTypes.length) memoryValues["Customer types"] = customerTypes.join(", ");
+  if (askConfirmed.length) {
+    const exceptionBits = askConfirmed.filter((text) => /exception|never|do not|don't|avoid/i.test(text));
+    if (exceptionBits.length) {
+      memoryValues["Known exceptions"] = uniqueStrings(exceptionBits).join(" · ");
+    }
+    const consentBits = askConfirmed.filter((text) => /consent|opt[- ]?in|contact/i.test(text));
+    if (consentBits.length) {
+      memoryValues["Customer types"] = joinSentences([
+        memoryValues["Customer types"] ?? null,
+        ...consentBits,
+      ]);
+    }
+    const ruleBits = askConfirmed.filter((text) => /rule|remind|approv|before|within/i.test(text));
+    if (ruleBits.length && !memoryValues["Assignment rules"]) {
+      memoryValues["Assignment rules"] = joinSentences(ruleBits.slice(0, 3));
+    }
+  }
 
   const brandVoice = cleanText(cfg.brandVoice) ?? cleanText(cfg.tone);
   if (brandVoice) {
@@ -192,7 +236,10 @@ export function presentBusinessMemory(installation = null) {
     ]);
 
     if (rft.failureConditions.length) {
-      memoryValues["Known exceptions"] = rft.failureConditions.map(humanizeToken).join(", ");
+      memoryValues["Known exceptions"] = uniqueStrings([
+        memoryValues["Known exceptions"],
+        ...rft.failureConditions.map(humanizeToken),
+      ]).join(", ");
     }
 
     if (rft.approvalRules.pricingOutsidePolicyRequiresApproval) {

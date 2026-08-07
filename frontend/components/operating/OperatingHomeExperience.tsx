@@ -154,6 +154,16 @@ export default function OperatingHomeExperience() {
             helperText="Suggestions follow what’s waiting. Nothing changes until you approve."
           />
         </section>
+      ) : showRftLaunch && businessId ? (
+        <section aria-label="Ask VIBETech" style={{ display: "grid", gap: spacing.sm }}>
+          <AskVibeTechPrompt
+            businessId={businessId}
+            showSuggestions
+            missingConnectionCount={1}
+            placeholder="Ask why setup is blocked or what to connect next"
+            helperText="Ask during launch — confirm still applies before anything changes."
+          />
+        </section>
       ) : null}
 
       {/* Managed RFT: RftLaunchPath owns setup — don't stack a second dense checklist. */}
@@ -172,7 +182,7 @@ export default function OperatingHomeExperience() {
         />
       ) : null}
 
-      {!showRftLaunch && (completedToday > 0 || needsCount > 0 || waitingExternally > 0 || exceptionCount > 0 || workingNow.length > 0) ? (
+      {!showRftLaunch ? (
         <section aria-label="Work handled today" style={{ display: "grid", gap: spacing.sm }}>
           <h2 style={{ margin: 0, fontSize: typography.meta.fontSize, fontWeight: 700, color: cockpitColors.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
             Today
@@ -183,6 +193,11 @@ export default function OperatingHomeExperience() {
             <BriefStat label="Waiting on prospect" value={waitingExternally} href={base ? `${base}/work` : null} />
             <BriefStat label="Exceptions" value={exceptionCount} tone={exceptionCount ? "attention" : "default"} href={decisionsHref} />
           </div>
+          {completedToday === 0 && needsCount === 0 && waitingExternally === 0 && exceptionCount === 0 ? (
+            <p style={{ margin: 0, fontSize: 13, color: cockpitColors.textSecondary, lineHeight: 1.45 }}>
+              Live brief is ready — zeros mean nothing needed you yet today.
+            </p>
+          ) : null}
         </section>
       ) : null}
 
@@ -354,29 +369,46 @@ function PerformanceBrief({
   const first = baseline?.metrics?.firstResponse ?? null;
   const sla = metrics?.slaAttainment ?? null;
   const autoVsHuman = metrics?.autoVsHuman ?? null;
-  const hasObservable =
-    (first?.status === "observable" && Number.isFinite(first.medianMinutes))
-    || sla?.status === "observable"
-    || (autoVsHuman && (autoVsHuman.auto > 0 || autoVsHuman.human > 0));
-  if (!hasObservable) return null;
+  const opportunities = baseline?.metrics?.opportunitiesDetected ?? null;
+  const eventCount = Number(baseline?.eventCount ?? 0);
 
   const rows: Array<{ label: string; value: string }> = [];
   if (first?.status === "observable" && Number.isFinite(first.medianMinutes)) {
     rows.push({ label: "First response", value: formatMinutes(first.medianMinutes) });
+  } else {
+    rows.push({
+      label: "First response",
+      value: first?.note || first?.reason || "Not observable yet",
+    });
   }
   if (sla?.status === "observable") {
     rows.push({
       label: "SLA",
-      value: sla.withinSla
-        ? `Within ${sla.slaMinutes} min`
-        : `Above ${sla.slaMinutes} min`,
+      value: sla.withinSla == null
+        ? (sla.note || `${sla.sampleSize ?? 0} proof-backed vs ${sla.slaMinutes}m`)
+        : sla.withinSla
+          ? `Within ${sla.slaMinutes} min`
+          : `Above ${sla.slaMinutes} min`,
+    });
+  } else {
+    rows.push({
+      label: "SLA",
+      value: sla?.reason || "Not observable yet",
     });
   }
-  if (autoVsHuman && (autoVsHuman.auto > 0 || autoVsHuman.human > 0)) {
+  rows.push({
+    label: "Auto vs human",
+    value: autoVsHuman
+      ? `${autoVsHuman.auto ?? 0} auto · ${autoVsHuman.human ?? 0} human`
+      : "0 auto · 0 human",
+  });
+  if (opportunities?.status === "observable" || Number.isFinite(opportunities?.count)) {
     rows.push({
-      label: "Auto vs human",
-      value: `${autoVsHuman.auto} auto · ${autoVsHuman.human} human`,
+      label: "Opportunities in window",
+      value: String(opportunities?.count ?? 0),
     });
+  } else if (eventCount > 0) {
+    rows.push({ label: "Observed events", value: String(eventCount) });
   }
 
   return (

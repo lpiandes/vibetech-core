@@ -257,7 +257,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
   {
     id: "crm_automation",
     label: "CRM updates",
-    description: "People, pipelines, and work automation (in-platform CRM).",
+    description: "Contacts, follow-through work, and in-platform updates (not a CRM shell).",
     moduleIds: ["home", "for_you", "people", "pipelines", "work", "settings", "knowledge", "integrations"],
     canonicalNavIds: [
       "home",
@@ -282,7 +282,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     launchMissionIds: ["outbound_approvals", "customer_email_send", "website_forms", "knowledge_consult"],
     packageAskQuestionIds: ["q_customers", "q_desired_workflows", "q_approvals", "q_integrations"],
     packageAskConnectionOptions: ["gmail"],
-    honestyNote: "In-platform People/pipelines — not HubSpot/Salesforce sync.",
+    honestyNote: "In-platform contacts and work — not HubSpot/Salesforce sync.",
     commercialStatus: "product",
     sellable: true,
   },

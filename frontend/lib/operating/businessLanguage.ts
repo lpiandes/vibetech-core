@@ -17,9 +17,10 @@ const INTERNAL_PHRASES: Array<[RegExp, string]> = [
   [/workflow/gi, "task"],
   [/review[_ ]?required/gi, "needs your approval"],
   [/qualification captured/gi, "qualified"],
-  [/digital workforce/gi, "AI team"],
-  [/digital employee/gi, "AI teammate"],
-  [/business memory/gi, "recent wins"],
+  [/digital workforce/gi, "operating team"],
+  [/digital employee/gi, "operating responsibility"],
+  [/AI teammates?/gi, "operating responsibilities"],
+  [/business memory/gi, "company rules"],
   [/needs attention/gi, "waiting for you"],
   [/business_email/gi, "business email"],
   [/required connection missing:\s*/gi, "Needs connection: "],
@@ -80,11 +81,17 @@ export function buildAskSuggestions({
   workingCount = 0,
   winCount = 0,
   approvalCount = 0,
+  missingConnectionCount = 0,
+  unprovenConnectionCount = 0,
+  unconfirmedRuleCount = 0,
 }: {
   waitingCount?: number;
   workingCount?: number;
   winCount?: number;
   approvalCount?: number;
+  missingConnectionCount?: number;
+  unprovenConnectionCount?: number;
+  unconfirmedRuleCount?: number;
 } = {}): string[] {
   // Prefer operating commands; layer situational nudges first when work is waiting.
   if (waitingCount > 0) {
@@ -99,6 +106,27 @@ export function buildAskSuggestions({
       ASK_SUGGESTION.approvalsNeeded,
       ASK_SUGGESTION.changedToday,
       ASK_SUGGESTION.escalationHotspots,
+    ];
+  }
+  if (missingConnectionCount > 0) {
+    return [
+      "Which connection is blocking go-live?",
+      "Why isn’t calendar proven yet?",
+      ASK_SUGGESTION.missingEvidence,
+    ];
+  }
+  if (unprovenConnectionCount > 0) {
+    return [
+      "What still needs Prove before it can run live?",
+      "Why isn’t SMS proven yet?",
+      ASK_SUGGESTION.missingEvidence,
+    ];
+  }
+  if (unconfirmedRuleCount > 0) {
+    return [
+      ASK_SUGGESTION.responsePromise,
+      "Confirm who may be contacted and under what consent.",
+      "What approval policy should apply to customer email?",
     ];
   }
   if (workingCount > 0) {

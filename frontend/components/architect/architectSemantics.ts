@@ -87,7 +87,7 @@ export const ARCHITECT_COMPLETION_ACTIONS = [
 export const ARCHITECT_DNA_RINGS = [
   { id: "company", label: "Company", keys: ["businessName", "description", "industry", "locations"] },
   { id: "work", label: "Work", keys: ["services", "repetitiveWork", "salesProcess", "scheduling"] },
-  { id: "people", label: "People", keys: ["roles", "teamSize", "customerTypes", "ownerOversight"] },
+  { id: "people", label: "Customers & roles", keys: ["roles", "teamSize", "customerTypes", "ownerOversight"] },
   { id: "systems", label: "Systems", keys: ["currentSystems", "channels", "integrationNeeds", "software"] },
   { id: "outcomes", label: "Outcomes", keys: ["goals", "painPoints", "reportingNeeds", "complianceConcerns"] },
 ] as const;
@@ -592,7 +592,7 @@ export function buildApproveWalkthroughSteps({
       : `These are the workspaces ${businessName} will open with.`,
     items: workspaceItems.length
       ? workspaceItems
-      : ["Home", "Work", "People", "Ask VIBETech"],
+      : ["Today", "Decisions", "Work", "Ask VIBETech"],
   });
 
   const personas = aiEmployeePersonas({

@@ -72,7 +72,7 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
     icon: Phone,
     setupMode: "api_key",
     listed: false,
-    unlocks: "Missed call → People + SMS · optional AI receptionist if forward is off",
+    unlocks: "Missed call → contact + SMS · optional AI receptionist if forward is off",
   },
   social_screening: {
     title: "Social screening",
@@ -94,12 +94,12 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
   },
   meta_lead_ads: {
     title: "Meta Lead Forms",
-    description: "Most clients just put their Facebook Page name. No Page yet? Say so — VIBETech builds Lead Ads with you. New leads land in People and fire intake automations.",
+    description: "Most clients just put their Facebook Page name. No Page yet? Say so — VIBETech builds Lead Ads with you. New leads become contacts and fire intake automations.",
     tier: "live",
     icon: Share2,
     setupMode: "api_key",
     listed: false,
-    unlocks: "Lead → People → pipeline + META_LEAD automations",
+    unlocks: "Lead → contact → Work + META_LEAD automations",
   },
   website_forms: {
     title: "Website forms",
@@ -189,16 +189,26 @@ export type LiveIntegrationFlags = {
   _googleOAuth?: boolean;
 };
 
-export function isIntegrationListed(connectionId: string, liveFlags: LiveIntegrationFlags = {}) {
+export function isIntegrationListed(
+  connectionId: string,
+  liveFlags: LiveIntegrationFlags = {},
+  connectionStatus: string | null | undefined = null,
+) {
   const id = String(connectionId);
   const config = INTEGRATION_CONFIG[id];
   if (!config) return true; // unknown required connections still surface
+  const status = String(connectionStatus ?? "").toUpperCase();
+  const alreadyPresent = ["CONNECTED", "VERIFIED", "PROVEN", "CONFIGURING", "NEEDS_ATTENTION", "ERROR", "DEGRADED"].includes(status);
+  // Once a channel is on the install or required, never hide it after go-live.
+  if (alreadyPresent) return true;
   if (id === "property_management_system") {
     return Boolean(liveFlags.property_management || liveFlags.property_management_system);
   }
   if (config.listed === false) {
     // Promote when the matching live provider app is configured.
-    if (id === "calendar" || id === "business_email") return Boolean(liveFlags.business_email || liveFlags.calendar);
+    if (id === "calendar" || id === "business_email") {
+      return Boolean(liveFlags.business_email || liveFlags.calendar || liveFlags._googleOAuth);
+    }
     if (id === "sms_channel") return Boolean(liveFlags.sms_channel);
     if (id === "voice_channel") return Boolean(liveFlags.voice_channel);
     if (id === "social_screening") return Boolean(liveFlags.social_screening);
@@ -263,8 +273,8 @@ export function partitionConnections(connections: any[], liveFlags: LiveIntegrat
   const primary: Array<{ conn: any; display: IntegrationDisplay }> = [];
 
   for (const conn of connections) {
-    const display = getIntegrationDisplay(String(conn.id), conn.displayName, liveFlags);
-    if (!display.listed) continue;
+    if (!isIntegrationListed(String(conn.id), liveFlags, conn.status)) continue;
+    const display = { ...getIntegrationDisplay(String(conn.id), conn.displayName, liveFlags), listed: true };
     primary.push({ conn, display });
   }
 

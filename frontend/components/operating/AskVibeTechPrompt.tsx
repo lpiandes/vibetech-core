@@ -31,6 +31,9 @@ export default function AskVibeTechPrompt({
   approvalCount = 0,
   workingCount = 0,
   winCount = 0,
+  missingConnectionCount = 0,
+  unprovenConnectionCount = 0,
+  unconfirmedRuleCount = 0,
 }: {
   businessId: string;
   context?: Context;
@@ -43,12 +46,23 @@ export default function AskVibeTechPrompt({
   approvalCount?: number;
   workingCount?: number;
   winCount?: number;
+  missingConnectionCount?: number;
+  unprovenConnectionCount?: number;
+  unconfirmedRuleCount?: number;
 }) {
   const router = useRouter();
   const [value, setValue] = useState("");
   const chips = suggestions?.length
     ? suggestions
-    : buildAskSuggestions({ waitingCount, approvalCount, workingCount, winCount });
+    : buildAskSuggestions({
+      waitingCount,
+      approvalCount,
+      workingCount,
+      winCount,
+      missingConnectionCount,
+      unprovenConnectionCount,
+      unconfirmedRuleCount,
+    });
   // Keep static list as ultimate fallback if builder returns empty.
   const suggestionList = chips.length ? chips : [...ASK_VIBETECH_SUGGESTIONS];
 

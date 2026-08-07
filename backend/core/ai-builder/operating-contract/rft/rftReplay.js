@@ -195,13 +195,16 @@ export function runHistoricalReplay({
     classifications,
     potentialProblems: potentialProblems.slice(0, 50),
     passed,
+    emptyWindow: classifications.length === 0,
     passDetail: passed
       ? (classifications.length
         ? `Replay classified ${classifications.length} opportunit${classifications.length === 1 ? "y" : "ies"}.`
-        : "Replay ran — no historical opportunities in observation window yet.")
+        : "Empty-window pass — no historical opportunities in the observation window yet (not a success theater).")
       : `${pathFailures} illegal path(s) in replay.`,
     honesty: {
-      message: "Replay proposes only. No email, SMS, or external CRM writes were performed.",
+      message: classifications.length === 0
+        ? "Empty observation window. Replay passed only because there was nothing to classify — connect channels and import history before treating this as proof."
+        : "Replay proposes only. No email, SMS, or external CRM writes were performed.",
     },
   });
 }

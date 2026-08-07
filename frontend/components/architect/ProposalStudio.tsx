@@ -123,7 +123,7 @@ export default function ProposalStudio({
 
         {workforce.length ? (
           <div style={panel}>
-            <h3 style={{ margin: 0, fontSize: 16 }}>Remove AI teammates</h3>
+            <h3 style={{ margin: 0, fontSize: 16 }}>Remove responsibilities</h3>
             <p style={{ margin: "6px 0 12px", color: architect.inkMuted, fontSize: 13, lineHeight: 1.45 }}>
               Check teammates you don’t want in the first version.
             </p>
@@ -158,7 +158,7 @@ export default function ProposalStudio({
         <div style={panel}>
           <h3 style={{ margin: 0, fontSize: 16 }}>Add something</h3>
           <p style={{ margin: "6px 0 12px", color: architect.inkMuted, fontSize: 13, lineHeight: 1.45 }}>
-            Describe a workspace, AI teammate, or capability you want included.
+            Describe a workspace, responsibility, or capability you want included.
           </p>
           <textarea
             value={addRequest}
@@ -215,7 +215,7 @@ export default function ProposalStudio({
               ))}
               {ownerTeammates.map((item: any) => (
                 <li key={`emp_${item.id}`}>
-                  AI teammate: {String(item.label)}
+                  Responsibility: {String(item.label)}
                   {item.purpose ? (
                     <span style={{ display: "block", color: architect.inkMuted, fontSize: 13 }}>
                       {String(item.purpose)}
@@ -244,7 +244,7 @@ export default function ProposalStudio({
 
       {workforce.length ? (
         <div style={panel}>
-          <h3 style={{ margin: 0 }}>AI teammates</h3>
+          <h3 style={{ margin: 0 }}>Responsibilities</h3>
           <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
             {workforce.map((item: any) => (
               <div key={String(item.id)}>
