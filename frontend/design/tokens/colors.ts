@@ -33,7 +33,8 @@ export const cockpitColors = {
   sidebar: brand.bgDeep,
   sidebarBorder: brand.border,
   sidebarText: brand.text,
-  sidebarTextMuted: brand.textMuted,
+  /** Section labels / secondary nav copy — keep brighter than generic muted so small caps stay readable. */
+  sidebarTextMuted: "#cbd5e1",
   sidebarActive: "rgba(34, 211, 238, 0.10)",
   textPrimary: brand.text,
   textSecondary: brand.textMuted,

@@ -140,3 +140,41 @@ test("Ask history keeps only the newest chat per identical title", () => {
   assert.equal(history[0].sessionId, "abs_2");
   assert.equal(history[1].sessionId, "abs_3");
 });
+
+test("Ask history keeps only the newest setup plan per identical title", () => {
+  const older = {
+    sessionId: "abs_setup_1",
+    mode: "new_business",
+    stageKey: "proposal_ready",
+    businessName: "Builder Responsibility Test",
+    preview: "old plan",
+    updatedAt: "2026-07-12T10:00:00.000Z",
+    canContinue: true,
+    hasUserMessage: true,
+  };
+  const newer = {
+    sessionId: "abs_setup_2",
+    mode: "new_business",
+    stageKey: "proposal_ready",
+    businessName: "Builder Responsibility Test",
+    preview: "new plan",
+    updatedAt: "2026-07-12T12:00:00.000Z",
+    canContinue: true,
+    hasUserMessage: true,
+  };
+  const third = {
+    sessionId: "abs_setup_3",
+    mode: "new_business",
+    stageKey: "interviewing",
+    businessName: "Builder Responsibility Test",
+    preview: "also old",
+    updatedAt: "2026-07-12T11:00:00.000Z",
+    canContinue: true,
+    hasUserMessage: true,
+  };
+  const history = presentAskHistory([older, newer, third]);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].sessionId, "abs_setup_2");
+  assert.equal(history[0].kind, "setup");
+  assert.equal(history[0].title, "Builder Responsibility Test setup");
+});

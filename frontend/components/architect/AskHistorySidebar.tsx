@@ -94,12 +94,12 @@ export default function AskHistorySidebar({
                     </div>
                   ) : null}
                   {item.preview ? (
-                    <div style={{ fontSize: 12, color: architect.inkMuted, lineHeight: 1.35 }}>
+                    <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.35 }}>
                       {truncate(item.preview, 64)}
                     </div>
                   ) : null}
                   {when ? (
-                    <div style={{ fontSize: 11, color: architect.inkMuted }}>{when}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8" }}>{when}</div>
                   ) : null}
                 </button>
                 {onRemove ? (

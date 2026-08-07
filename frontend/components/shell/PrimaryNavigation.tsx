@@ -102,7 +102,6 @@ function NavSection({
             letterSpacing: "0.04em",
             textTransform: "uppercase",
             color: cockpitColors.sidebarTextMuted,
-            opacity: 0.85,
           }}
         >
           {title}

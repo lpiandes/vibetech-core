@@ -128,14 +128,14 @@ export function presentAskHistory(
     })
     .sort((left, right) => String(right.updatedAt ?? "").localeCompare(String(left.updatedAt ?? "")));
 
-  // Same prompt (e.g. teammate Ask) used to mint many identical chats — keep newest per title.
-  // Setup plans always stay (one per business name is fine).
+  // Same prompt / same setup title used to mint many identical rows — keep newest per title.
+  // Active session always stays visible even if it shares a title.
   const seenTitles = new Set<string>();
   const deduped: AskHistoryItem[] = [];
   for (const item of rows) {
     const key = `${item.kind}:${normalizeAskHistoryTitle(item.title)}`;
     const isActive = activeSessionId != null && item.sessionId === String(activeSessionId);
-    if (item.kind === "chat" && !isActive && seenTitles.has(key)) continue;
+    if (!isActive && seenTitles.has(key)) continue;
     seenTitles.add(key);
     deduped.push(item);
   }
