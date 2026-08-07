@@ -13,6 +13,7 @@ import { settingsHubLinks, type SetupChecklistItem } from "./settingsSemantics";
 import AccessRequestsPanel from "./AccessRequestsPanel";
 import BillingUsagePanel from "./BillingUsagePanel";
 import SalesAnalyticsPanel from "./SalesAnalyticsPanel";
+import ExecutiveDashboardPanel from "./ExecutiveDashboardPanel";
 import { businessGrantsSocialCheckerAccess } from "../../../backend/core/platform/packages/socialCheckerEntitlement.js";
 
 /**
@@ -47,6 +48,7 @@ export default function SettingsScreen({
   const hubLinks = settingsHubLinks({ businessId, canManageTeam, canManageIntegrations, canManageKnowledge });
   const hasSocial = businessGrantsSocialCheckerAccess(purchasedPackages);
   const hasSalesAnalytics = purchasedPackages.some((id) => ["sales_analytics", "reporting_automation"].includes(String(id)));
+  const hasExecutiveDashboard = purchasedPackages.some((id) => String(id) === "addon_executive_dashboard");
   const canResetLaunch = canManageIntegrations
     || /owner|admin/i.test(String(roleLabel ?? ""));
 
@@ -193,7 +195,18 @@ export default function SettingsScreen({
         <BillingUsagePanel businessId={businessId} purchasedPackages={purchasedPackages} />
       </div>
 
-      {hasSalesAnalytics ? (
+      {hasExecutiveDashboard ? (
+        <div
+          style={{
+            padding: 16,
+            borderRadius: 16,
+            background: cockpitColors.panel,
+            border: `1px solid ${cockpitColors.panelBorder}`,
+          }}
+        >
+          <ExecutiveDashboardPanel businessId={businessId} />
+        </div>
+      ) : hasSalesAnalytics ? (
         <div
           style={{
             padding: 16,

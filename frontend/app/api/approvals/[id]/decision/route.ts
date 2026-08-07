@@ -11,6 +11,7 @@ import {
   readGovernedLearning,
 } from "../../../../../../backend/core/company-rules/governedLearning.js";
 import { fulfillSpecialtyApprovalGrant } from "../../../../../../backend/core/ai-builder/specialty/fulfillSpecialtyApprovalGrant.js";
+import { markPendingDecisionDraftDecided } from "../../../../../../backend/core/approvals/syncPendingDecisionDraftsToApprovals.js";
 import { progressRftOpportunity } from "../../../../../../backend/core/ai-builder/operating-contract/rft/rftOpportunityRuntime.js";
 import { invalidateCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 
@@ -133,6 +134,31 @@ export async function POST(
           error: err instanceof Error ? err.message : "Outbound fulfillment failed after approval",
           result,
         }, { status: 502 });
+      }
+    }
+
+    // Decision drafts (forms / Meta / marketing) — mark durable draft decided.
+    if (priorReq && String(priorReq.source ?? "") === "pending_decision_draft") {
+      try {
+        const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+        const draftId = String(
+          priorReq?.sourceReference?.draftId
+          ?? priorReq?.context?.draftId
+          ?? priorReq?.metadata?.draftId
+          ?? "",
+        ).trim();
+        if (installation && draftId) {
+          await markPendingDecisionDraftDecided({
+            platformStore,
+            installation,
+            draftId,
+            decision: granted ? "GRANT" : "REJECT",
+            actorId,
+          });
+          invalidateCachedBusinessOsInstallation(businessId);
+        }
+      } catch {
+        /* draft mark is best-effort after approval already applied */
       }
     }
 

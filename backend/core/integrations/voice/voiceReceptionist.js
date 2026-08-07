@@ -96,7 +96,7 @@ export async function runVoiceReceptionistTurn({
     if (intent === "goodbye") {
       reply = `Thanks for calling ${businessName}. Goodbye.`;
     } else if (intent === "book") {
-      reply = `I can help request an appointment. I will open Work for the team at ${businessName} to confirm a time, and place a calendar hold when Calendar is connected.`;
+      reply = `I can help with an appointment for ${businessName}. I will check open times and book the next available slot when Calendar and team availability are set up.`;
     } else if (intent === "message") {
       reply = `Got it. I will leave a message for the team at ${businessName} to call you back.`;
     } else if (snippets[0]) {

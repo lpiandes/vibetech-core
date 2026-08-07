@@ -45,9 +45,9 @@ test("scorecard: Wave B/C product lines are Done / sellable", () => {
   }
 });
 
-test("scorecard: executive dashboard stays Not done until BI surface ships", () => {
+test("scorecard: executive dashboard is sellable once BI surface ships", () => {
   const gate = canSellOffer({ sheetLine: "Executive Dashboard" });
-  assert.equal(gate.allowed, false);
+  assert.equal(gate.allowed, true);
 });
 
 test("scorecard: Create & invite includes Wave B products", () => {

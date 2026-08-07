@@ -24,11 +24,14 @@ Every pricing-sheet line is classified and gated by code:
 
 `canSellOffer` allows a line only when `implementationStatus === complete` and its playbook is complete. Incomplete paths cannot be sold.
 
-## Honesty status (2026-08-07)
+## Honesty status (2026-07-27)
 
-- **58 complete / 1 building** of 59 sheet lines (Executive Dashboard remains building)
-- Wave B/C productized: sales assistant, CRM automation, scheduling, native chat, outbound voice campaigns, HubSpot/HighLevel sync, social/marketing content, document extract, sales analytics/reporting, Professional/Enterprise, add-on soft-cap metering, Outlook Graph adapters
+- **59 complete / 0 building** of 59 sheet lines
+- Wave B/C productized: sales assistant, CRM automation, scheduling, native chat, outbound voice campaigns, HubSpot/HighLevel sync, social/marketing content, document extract, sales analytics/reporting, Professional/Enterprise, add-on soft-cap metering, Outlook Graph adapters, Executive Dashboard
 - **Create & invite** includes Wave A/B/C sellable products + managed packages (RFT first)
 - **Custom Build Factory:** prove step reads `capability_proof_records`; go-live blocked without mission evidence
+- **Decisions:** `pendingDecisionDrafts` sync into ApprovalRuntime on Mission Control / shell compose
+- **Voice scheduling:** live slot book when team availability + calendar confirm; else Work + HOLD
 - **Usage:** Settings meters hydrate from `installation.configuration.usageMeters`
+- **CRM external:** HubSpot/HighLevel only as Ready; Salesforce via Custom Build when required
 - Scorecard tests: `commercialScorecard.test.js`

@@ -67,7 +67,9 @@ const ROWS = [
 
   // —— 5. Systems Integration and Custom Development ——
   offer("integration", "Basic System Integration", "basic_integration", "ready", "sku_basic_integration", ["customer_email_send", "calendar_scheduling", "sms_send"], 3500, 397),
-  offer("integration", "CRM Integration", "crm_external_integration", "custom_build", "sku_crm_external", ["knowledge_consult"], 7500, 697),
+  offer("integration", "CRM Integration", "crm_external_integration", "custom_build", "sku_crm_external", ["knowledge_consult"], 7500, 697, {
+    notes: "HubSpot / HighLevel push-pull. Salesforce = Custom Build Factory when client requires it.",
+  }),
   offer("integration", "Multi-System Integration", "multi_system_integration", "custom_build", "sku_multi_system", ["customer_email_send", "calendar_scheduling", "sms_send"], 15000, 1497),
   offer("integration", "Custom AI Application", "ai_business_os", "custom_build", "custom_build_factory", ["knowledge_consult", "outbound_approvals"], 25000, 2500),
   offer("integration", "Custom Business Automation", "ai_business_os", "custom_build", "custom_build_factory", ["outbound_approvals"], 10000, 1497),
@@ -93,7 +95,9 @@ const ROWS = [
   offer("addon", "Additional Integration", "addon_additional_integration", "managed_ops", "addon_integration", ["customer_email_send"], null, 397),
   offer("addon", "AI Employee Training", null, "consulting", "addon_training", [], null, 797),
   offer("addon", "Prompt Engineering and Optimization", null, "consulting", "addon_prompt_opt", [], null, 797),
-  offer("addon", "Executive Dashboard", "addon_executive_dashboard", "custom_build", "addon_dashboard", ["knowledge_consult"], null, 797),
+  offer("addon", "Executive Dashboard", "addon_executive_dashboard", "custom_build", "addon_dashboard", ["knowledge_consult"], null, 797, {
+    notes: "Settings Executive view — sales analytics + usage + open Decisions.",
+  }),
   offer("addon", "Sales Coaching and Analytics", "addon_sales_coaching", "consulting", "addon_sales_coaching", [], null, 1297),
   offer("addon", "Quarterly Business Review", null, "consulting", "addon_qbr", [], null, null, { notes: "$1000/quarter" }),
   offer("addon", "Dedicated AI Advisor", null, "consulting", "addon_advisor", [], null, 2500),
@@ -169,12 +173,11 @@ export function sheetLineSlug(section, line) {
  * Keep consulting/usage/Wave A Ready/custom-on-engine paths complete; hide unfinished adapters.
  */
 const BUILDING_PACKAGE_IDS = new Set([
-  // Executive dashboard remains consulting/custom until dedicated BI surface ships.
-  "addon_executive_dashboard",
+  // Reserved for future hard blocks (empty = all gated lines complete or consulting/usage).
 ]);
 
 const BUILDING_SHEET_LINES = new Set([
-  "Executive Dashboard",
+  // Reserved for future hard blocks.
 ]);
 
 const COMPLETE_READY_PACKAGE_IDS = new Set([
@@ -211,6 +214,7 @@ const COMPLETE_MANAGED_PACKAGE_IDS = new Set([
   "addon_additional_workflow",
   "addon_additional_integration",
   "addon_additional_agent",
+  "addon_executive_dashboard",
 ]);
 
 export const COMMERCIAL_OFFER_MATRIX = deepFreeze(

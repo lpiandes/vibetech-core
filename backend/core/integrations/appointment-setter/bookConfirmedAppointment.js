@@ -81,7 +81,11 @@ export async function bookConfirmedAppointment({
   if (!parsed) return deepFreeze({ ok: false, reason: "slot_required" });
   if (typeof getWorkspace !== "function") return deepFreeze({ ok: false, reason: "workspace_loader_missing" });
 
-  const sourceLabel = source === "book_page" ? "public booking page" : "SMS";
+  const sourceLabel = source === "book_page"
+    ? "public booking page"
+    : source === "voice"
+      ? "voice call"
+      : "SMS";
   const who = name || "New appointment";
 
   let workspace = null;

@@ -9,6 +9,7 @@ import {
 } from "../../../../../../../../backend/core/integrations/voice/voiceReceptionist.js";
 import { enqueueVoiceAppointmentWork } from "../../../../../../../../backend/core/integrations/voice/enqueueVoiceAppointmentWork.js";
 import { enqueueVoiceCalendarHold } from "../../../../../../../../backend/core/integrations/voice/enqueueVoiceCalendarHold.js";
+import { tryBookVoiceAppointmentSlot } from "../../../../../../../../backend/core/integrations/voice/tryBookVoiceAppointmentSlot.js";
 import {
   buildMissedCallDialTwiml,
   resolveMissedCallFollowUpConfig,
@@ -135,30 +136,48 @@ export async function POST(
 
   if (turn.intent === "book") {
     try {
-      const [workResult, calendarHold] = await Promise.all([
-        enqueueVoiceAppointmentWork({
-          businessId,
-          speech,
-          from,
-          callSid,
-          reply: turn.reply,
-          getWorkspace: loadWorkspaceService,
-        }),
-        enqueueVoiceCalendarHold({
-          businessId,
-          speech,
-          from,
-          callSid,
-          getWorkspace: loadWorkspaceService,
-        }),
-      ]);
-      if (calendarHold?.ok) {
+      const liveBook = await tryBookVoiceAppointmentSlot({
+        businessId,
+        speech,
+        from,
+        callSid,
+        installation,
+        getWorkspace: loadWorkspaceService,
+      });
+      if (liveBook?.replySuffix) {
         turn = {
           ...turn,
-          reply: `${String(turn.reply ?? "").trim()} I also placed a calendar hold for the team to confirm with you.`,
+          reply: `${String(turn.reply ?? "").trim()} ${liveBook.replySuffix}`.trim(),
         };
       }
-      void workResult;
+      if (!liveBook?.confirmed) {
+        const [workResult, calendarHold] = await Promise.all([
+          liveBook?.bookResult?.work?.ok
+            ? Promise.resolve(liveBook.bookResult.work)
+            : enqueueVoiceAppointmentWork({
+              businessId,
+              speech,
+              from,
+              callSid,
+              reply: turn.reply,
+              getWorkspace: loadWorkspaceService,
+            }),
+          enqueueVoiceCalendarHold({
+            businessId,
+            speech,
+            from,
+            callSid,
+            getWorkspace: loadWorkspaceService,
+          }),
+        ]);
+        if (calendarHold?.ok && !liveBook?.booked) {
+          turn = {
+            ...turn,
+            reply: `${String(turn.reply ?? "").trim()} I also placed a calendar hold for the team to confirm with you.`,
+          };
+        }
+        void workResult;
+      }
     } catch {
       /* best effort */
     }

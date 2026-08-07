@@ -298,7 +298,7 @@ const PLAYBOOKS = deepFreeze({
     "External CRM Integration",
     "custom_build",
     customFactorySteps,
-    ["HubSpot or Salesforce sync proven both directions for scoped objects"],
+    ["HubSpot or HighLevel sync proven both directions for scoped objects"],
   ),
   sku_multi_system: playbook(
     "sku_multi_system",

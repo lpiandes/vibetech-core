@@ -18,6 +18,7 @@ import { MissionControlViewAdapter } from "../../../backend/core/mission-control
 import { composeMissionControlExperience } from "../../../backend/core/mission-control/composeMissionControlExperience.js";
 import { composeOutcomesLedger } from "../../../backend/core/operating-home/composeOutcomesLedger.js";
 import { composeBusinessCommandCenter } from "../../../backend/core/command-center/BusinessCommandCenterComposer.js";
+import { syncPendingDecisionDraftsToApprovals } from "../../../backend/core/approvals/syncPendingDecisionDraftsToApprovals.js";
 import { adaptBusinessCommandCenterView } from "../../../backend/core/command-center/views/BusinessCommandCenterViewAdapter.js";
 import { buildPackageNavigation } from "../../../backend/core/workspace/navigation/PackageNavigationBuilder.js";
 import { getDefaultIndustryPackageRegistry } from "../../../backend/core/industries/IndustryPackageRegistry.js";
@@ -478,6 +479,18 @@ export class WorkspaceService {
       ? packageRegistry.getPackage(this.connected.activation.industryPackageId)
       : null;
 
+    try {
+      const drafts = (this.connected.installationResult as any)?.configuration?.pendingDecisionDrafts;
+      syncPendingDecisionDraftsToApprovals({
+        approvalRuntime: this.connected.ctx?.approvalRuntime,
+        pendingDecisionDrafts: Array.isArray(drafts) ? drafts : [],
+        businessId: this.workspaceId,
+        nowISO: NOW_ISO,
+      });
+    } catch {
+      /* draft sync must not block shell */
+    }
+
     const commandCenterRaw = composeBusinessCommandCenter({
       identityViewModel: this.connected.identityViewModel,
       readinessReport: this.connected.readinessReport,
@@ -544,6 +557,19 @@ export class WorkspaceService {
     const industryPackage = this.connected.activation?.industryPackageId
       ? packageRegistry.getPackage(this.connected.activation.industryPackageId)
       : null;
+
+    // Durable drafts live on installation; ApprovalRuntime is in-memory — sync each compose.
+    try {
+      const drafts = (this.connected.installationResult as any)?.configuration?.pendingDecisionDrafts;
+      syncPendingDecisionDraftsToApprovals({
+        approvalRuntime: this.connected.ctx?.approvalRuntime,
+        pendingDecisionDrafts: Array.isArray(drafts) ? drafts : [],
+        businessId: this.workspaceId,
+        nowISO: NOW_ISO,
+      });
+    } catch {
+      /* draft sync must not block Mission Control */
+    }
 
     const commandCenterRaw = composeBusinessCommandCenter({
       identityViewModel: this.connected.identityViewModel,
