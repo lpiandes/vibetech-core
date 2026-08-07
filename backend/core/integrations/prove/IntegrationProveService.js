@@ -21,6 +21,9 @@ export const PROVE_ACTIONS = Object.freeze({
   prove_appointment_setter_sms: "prove_appointment_setter_sms",
   prove_team_availability: "prove_team_availability",
   sync_test_crm_contact: "sync_test_crm_contact",
+  // Alternate, deeper prove for calendar_scheduling: books a real CONFIRMED slot
+  // (not just a create-event smoke test) via the same path the appointment setter uses.
+  book_test_slot: "book_test_slot",
 });
 
 const CONNECTIONLESS_ACTIONS = new Set([
@@ -187,6 +190,9 @@ function proveSuccessMessage(action) {
   }
   if (action === PROVE_ACTIONS.sync_test_crm_contact) {
     return "CRM prove contact created with a provider record id.";
+  }
+  if (action === PROVE_ACTIONS.book_test_slot) {
+    return "Live test slot booked and confirmed on the connected calendar.";
   }
   return "Prove test passed.";
 }

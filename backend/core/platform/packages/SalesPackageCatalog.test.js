@@ -365,7 +365,7 @@ test("package Ask focuses on catalog question IDs for scheduling", async () => {
 
 test("sellable admin list is Wave A and RFT-first", () => {
   const sellable = listSellableSalesPackagesForAdmin();
-  assert.ok(sellable.length >= 6);
+  assert.equal(sellable.length, 6);
   assert.equal(sellable[0]?.id, "managed_revenue_follow_through");
   const ids = new Set(sellable.map((row) => row.id));
   for (const id of [
@@ -378,11 +378,13 @@ test("sellable admin list is Wave A and RFT-first", () => {
   ]) {
     assert.ok(ids.has(id), `missing ${id}`);
   }
+  const chatbot = sellable.find((row) => row.id === "website_chatbot");
+  assert.equal(chatbot?.sellable, true);
   assert.ok(!sellable.some((row) => row.id === "addon_priority_support"));
   assert.ok(!sellable.some((row) => row.id === "voice_outbound_agent"));
   assert.ok(!sellable.some((row) => row.id === "ai_business_os"));
-  assert.ok(sellable.some((row) => row.id === "essential_managed"));
-  assert.ok(sellable.some((row) => row.id === "growth_managed"));
+  assert.ok(!sellable.some((row) => row.id === "essential_managed"));
+  assert.ok(!sellable.some((row) => row.id === "growth_managed"));
 });
 
 test("thin SKU default employees use registered archetypes", () => {

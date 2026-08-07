@@ -11,7 +11,7 @@ import {
   presentOfferMatrixSummary,
 } from "./CommercialOfferMatrix.js";
 import { listMissingPlaybooksForMatrix, assertPlaybookComplete } from "./DeliveryPlaybookRegistry.js";
-import { canSellOffer } from "./CanSellOffer.js";
+import { canSellOffer, requiresA2pApproval } from "./CanSellOffer.js";
 import {
   advanceCustomBuild,
   createCustomBuildRecord,
@@ -64,6 +64,45 @@ test("canSellOffer allows complete Wave A ready lines", () => {
   const gate = canSellOffer({ sheetLine: "Automated Lead Follow-Up" });
   assert.equal(gate.allowed, true);
   assert.equal(gate.offerClass, "ready");
+});
+
+test("A2P gate is a soft, informational check by default", () => {
+  const offer = getCommercialOffer("Automated Lead Follow-Up");
+  assert.equal(requiresA2pApproval(offer), true);
+  const previous = process.env.TWILIO_A2P_ENFORCE;
+  delete process.env.TWILIO_A2P_ENFORCE;
+  try {
+    const gate = canSellOffer({ sheetLine: "Automated Lead Follow-Up" });
+    assert.equal(gate.allowed, true);
+    assert.equal(gate.requiresA2p, true);
+  } finally {
+    if (previous === undefined) delete process.env.TWILIO_A2P_ENFORCE;
+    else process.env.TWILIO_A2P_ENFORCE = previous;
+  }
+});
+
+test("A2P gate hard-blocks SMS offers when TWILIO_A2P_ENFORCE=1 and unapproved", () => {
+  const previous = process.env.TWILIO_A2P_ENFORCE;
+  process.env.TWILIO_A2P_ENFORCE = "1";
+  try {
+    const blocked = canSellOffer({ sheetLine: "Automated Lead Follow-Up" });
+    assert.equal(blocked.allowed, false);
+    assert.ok(blocked.blockers.some((b) => /A2P/i.test(b)));
+
+    const approved = canSellOffer({
+      sheetLine: "Automated Lead Follow-Up",
+      a2pRegistrationStatus: "approved",
+    });
+    assert.equal(approved.allowed, true);
+  } finally {
+    if (previous === undefined) delete process.env.TWILIO_A2P_ENFORCE;
+    else process.env.TWILIO_A2P_ENFORCE = previous;
+  }
+});
+
+test("non-SMS offers never require A2P approval", () => {
+  const offer = getCommercialOffer("Managed Revenue Follow-Through");
+  assert.equal(requiresA2pApproval(offer), false);
 });
 
 test("Custom Build Factory advances in order and blocks go_live without acceptance", () => {

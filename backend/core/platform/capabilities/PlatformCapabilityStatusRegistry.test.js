@@ -71,6 +71,12 @@ test("knowledge is not proven without documents even if proof record exists", ()
   assert.equal(status, "needs_setup");
 });
 
+test("calendar scheduling registers book_test_slot as an alternate deeper prove", () => {
+  const cap = PLATFORM_CAPABILITIES.find((c) => c.id === "calendar_scheduling");
+  assert.equal(cap.proveAction, "create_test_event");
+  assert.equal(cap.alternateProveAction, "book_test_slot");
+});
+
 test("knowledge is proven only with docs + successful prove", () => {
   const cap = PLATFORM_CAPABILITIES.find((c) => c.id === "knowledge_consult");
   const status = resolveCapabilityStatus({

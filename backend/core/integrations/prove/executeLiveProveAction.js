@@ -17,6 +17,17 @@ function safeString(v) {
   return v === null || v === undefined ? "" : String(v).trim();
 }
 
+/**
+ * place_test_call only proves Twilio dial-out succeeded — not that the AI
+ * conversation happened. Flag it as conversational evidence pending owner
+ * confirm, and note whether Knowledge exists for the call to cite from.
+ */
+function buildPlaceTestCallMetadata(knowledgeCount) {
+  const metadata = { conversationalProve: true, requiresOwnerConfirm: true };
+  if (Number(knowledgeCount) > 0) metadata.knowledgeCitedAttempted = true;
+  return metadata;
+}
+
 const ACTION_TO_CONNECTION = Object.freeze({
   [PROVE_ACTIONS.send_test_email]: "business_email",
   [PROVE_ACTIONS.create_test_event]: "calendar",
@@ -28,6 +39,7 @@ const ACTION_TO_CONNECTION = Object.freeze({
   [PROVE_ACTIONS.prove_appointment_setter_sms]: "sms_channel",
   [PROVE_ACTIONS.submit_test_form]: "website_forms",
   [PROVE_ACTIONS.sync_test_crm_contact]: "hubspot",
+  [PROVE_ACTIONS.book_test_slot]: "calendar",
 });
 
 /**
@@ -38,6 +50,7 @@ const ACTION_TO_CONNECTION = Object.freeze({
  *   proveEmail?: string|null,
  *   provePhone?: string|null,
  *   allowSimulated?: boolean,
+ *   knowledgeCount?: number|null,
  * }} input
  */
 export async function executeLiveProveAction({
@@ -48,6 +61,7 @@ export async function executeLiveProveAction({
   provePhone = process.env.PROVE_TEST_PHONE ?? null,
   allowSimulated = process.env.PROVE_ALLOW_SIMULATED === "1",
   vault = null,
+  knowledgeCount = null,
 } = {}) {
   const act = String(action ?? "");
 
@@ -457,6 +471,7 @@ export async function executeLiveProveAction({
           provider: "twilio_voice",
           externalReference: matching.credentialId ?? "twilio_voice_verified",
           message: "Twilio Voice credentials verified. Set APP/NEXTAUTH URL so prove can place a live call.",
+          metadata: buildPlaceTestCallMetadata(knowledgeCount),
         });
       }
       const result = await adapter.executeAction({
@@ -476,13 +491,16 @@ export async function executeLiveProveAction({
           detail: result,
         });
       }
+      // The call connecting proves dial-out, not that the AI conversation happened —
+      // require an owner listen-and-confirm before this counts as fully proven.
       return deepFreeze({
         ok: true,
         simulated: false,
         provider: "twilio_voice",
         to,
         externalReference: result.externalReference,
-        message: "Prove call placed. Answer to hear the AI receptionist greeting. Outbound customer calls stay approval-gated.",
+        message: "Prove call placed. Answer to hear the AI receptionist greeting, then confirm you heard it. Outbound customer calls stay approval-gated.",
+        metadata: buildPlaceTestCallMetadata(knowledgeCount),
       });
     }
 
@@ -556,7 +574,7 @@ function matchesConnection(credential, connectionId, action) {
     // Must be Gmail — never match google_calendar / other Google tokens.
     return provider === "gmail" || provider.startsWith("gmail_");
   }
-  if (action === PROVE_ACTIONS.create_test_event) {
+  if (action === PROVE_ACTIONS.create_test_event || action === PROVE_ACTIONS.book_test_slot) {
     return provider === "google_calendar" || provider.includes("calendar");
   }
   if (action === PROVE_ACTIONS.send_test_sms || action === PROVE_ACTIONS.prove_appointment_setter_sms) {

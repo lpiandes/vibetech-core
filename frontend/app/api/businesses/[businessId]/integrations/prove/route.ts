@@ -79,6 +79,8 @@ const ACTION_TO_CAPABILITY: Record<string, string> = {
   run_dental_golden_path: "dental_intake_golden_path",
   submit_test_form: "website_forms",
   sync_test_crm_contact: "crm_hubspot",
+  // Alternate, deeper calendar prove — maps to the same capability as create_test_event.
+  book_test_slot: "calendar_scheduling",
 };
 
 export async function POST(
@@ -445,11 +447,25 @@ async function executeProveForAction(input: {
         message: "Outbound gate failed — send was allowed without GRANT.",
       };
     }
+    // Prove the gate opens correctly too — a gate that only ever blocks isn't proven either.
+    const granted = evaluateOutboundSendPermission({
+      capability: INTEGRATION_CAPABILITIES.SEND_EMAIL,
+      channel: "email",
+      outboundApproved: true,
+    });
+    if (!granted.allowed) {
+      return {
+        ok: false,
+        reason: "outbound_gate_stuck_closed",
+        message: "Outbound gate failed — send was blocked even after owner GRANT.",
+      };
+    }
     return {
       ok: true,
       simulated: false,
       gate: blocked,
-      message: "Outbound correctly blocked without owner GRANT.",
+      grantedGate: granted,
+      message: "Outbound correctly blocked without owner GRANT, and correctly allowed after GRANT.",
     };
   }
 
@@ -489,6 +505,52 @@ async function executeProveForAction(input: {
         at: new Date().toISOString(),
         note: "Controlled prove submission — not a live website visitor.",
       },
+    };
+  }
+
+  if (action === PROVE_ACTIONS.book_test_slot) {
+    const { bookConfirmedAppointment } = await import(
+      "../../../../../../../backend/core/integrations/appointment-setter/bookConfirmedAppointment.js"
+    );
+    const { getSystemWorkspaceForBusiness } = await import("@/lib/platform/getSystemWorkspaceForBusiness");
+    const getWorkspace = async (id: string) => (await getSystemWorkspaceForBusiness(id)).service;
+    const testPhone = normalizeBookTestSlotPhone(input.provePhone) || "+15555550100";
+    const start = new Date(Date.now() + 60 * 60 * 1000);
+    let booking: any = null;
+    try {
+      booking = await bookConfirmedAppointment({
+        businessId: input.businessId,
+        name: "VIBETech Prove Test",
+        phone: testPhone,
+        slot: { startISO: start.toISOString() },
+        source: "prove",
+        speech: "Live slot prove — safe to cancel from the calendar.",
+        getWorkspace,
+      });
+    } catch (err) {
+      return {
+        ok: false,
+        reason: "book_test_slot_error",
+        message: err instanceof Error ? err.message : "Could not book a live test slot.",
+      };
+    }
+    if (!booking?.ok || !booking?.confirmed) {
+      return {
+        ok: false,
+        reason: booking?.reason ?? "book_test_slot_not_confirmed",
+        message: "Connect Google Calendar so the appointment setter can confirm a live slot booking.",
+        detail: booking,
+      };
+    }
+    return {
+      ok: true,
+      simulated: false,
+      liveSlotBook: true,
+      confirmed: true,
+      externalReference: booking?.event?.externalReference ?? null,
+      workId: booking?.work?.workId ?? null,
+      message: "Live test slot booked and confirmed on the connected Google Calendar.",
+      detail: booking,
     };
   }
 
@@ -540,5 +602,16 @@ async function executeProveForAction(input: {
     provePhone: input.provePhone,
     allowSimulated: input.allowSimulated,
     vault: input.vault ?? null,
+    knowledgeCount: input.knowledgeCount ?? null,
   });
+}
+
+function normalizeBookTestSlotPhone(raw: string | null | undefined): string {
+  const text = String(raw ?? "").trim();
+  if (!text) return "";
+  const digits = text.replace(/\D/g, "");
+  if (text.startsWith("+")) return `+${digits}`;
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return text.replace(/[\s()-]/g, "");
 }

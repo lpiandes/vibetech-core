@@ -760,8 +760,7 @@ export const WAVE_A_SELLABLE_PACKAGE_IDS = Object.freeze([
 export function listSellableSalesPackagesForAdmin() {
   const waveA = new Set(WAVE_A_SELLABLE_PACKAGE_IDS);
   const rows = listSalesPackagesForAdmin({ includeRoadmap: true }).filter((row) => (
-    (waveA.has(row.id) && row.sellable !== false)
-    || (row.commercialStatus === "managed_product" && row.sellable !== false)
+    waveA.has(row.id) && row.sellable !== false
   ));
   const rft = rows.filter((row) => row.id === "managed_revenue_follow_through");
   const rest = rows.filter((row) => row.id !== "managed_revenue_follow_through");

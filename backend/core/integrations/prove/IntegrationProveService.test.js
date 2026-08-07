@@ -97,6 +97,24 @@ test("voice prove verifies credentials when execute succeeds", async () => {
   assert.equal(result.status, "proven");
 });
 
+test("book_test_slot requires calendar connection and proves a confirmed live booking", async () => {
+  const notConnected = await runIntegrationProveTest({
+    action: PROVE_ACTIONS.book_test_slot,
+    connectionStatus: "NOT_CONNECTED",
+  });
+  assert.equal(notConnected.ok, false);
+  assert.equal(notConnected.status, "needs_setup");
+
+  const confirmed = await runIntegrationProveTest({
+    action: PROVE_ACTIONS.book_test_slot,
+    connectionStatus: "CONNECTED",
+    execute: async () => ({ ok: true, liveSlotBook: true, confirmed: true, externalReference: "evt_slot_1" }),
+  });
+  assert.equal(confirmed.ok, true);
+  assert.equal(confirmed.status, "proven");
+  assert.match(confirmed.message, /confirmed/i);
+});
+
 test("proofRecordFromResult maps into capability registry shape", async () => {
   const proven = await runIntegrationProveTest({
     action: PROVE_ACTIONS.ingest_test_lead,

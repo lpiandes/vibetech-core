@@ -49,6 +49,9 @@ export const PLATFORM_CAPABILITIES = deepFreeze([
     requiredIntegrations: ["calendar"],
     requiredPermissions: ["integrations.manage"],
     proveAction: "create_test_event",
+    // Deeper, optional prove: books and confirms a real slot via the appointment-setter
+    // path (bookConfirmedAppointment) instead of just creating a smoke-test event.
+    alternateProveAction: "book_test_slot",
   },
   {
     id: "sms_send",
