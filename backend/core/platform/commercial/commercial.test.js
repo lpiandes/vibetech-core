@@ -66,6 +66,24 @@ test("canSellOffer allows complete Wave A ready lines", () => {
   assert.equal(gate.offerClass, "ready");
 });
 
+test("unfinished adapters stay building and cannot be sold", () => {
+  for (const line of [
+    "AI Outbound Call Agent",
+    "Social Media Content Automation",
+    "CRM Integration",
+    "Multi-System Integration",
+    "Enterprise AI Deployment",
+  ]) {
+    const offer = getCommercialOffer(line);
+    assert.equal(offer.implementationStatus, "building", line);
+    const gate = canSellOffer({ sheetLine: line });
+    assert.equal(gate.allowed, false, line);
+  }
+  const summary = presentOfferMatrixSummary();
+  assert.ok(summary.building >= 10);
+  assert.ok(summary.complete < summary.total);
+});
+
 test("A2P gate is a soft, informational check by default", () => {
   const offer = getCommercialOffer("Automated Lead Follow-Up");
   assert.equal(requiresA2pApproval(offer), true);
@@ -105,16 +123,38 @@ test("non-SMS offers never require A2P approval", () => {
   assert.equal(requiresA2pApproval(offer), false);
 });
 
-test("Custom Build Factory advances in order and blocks go_live without acceptance", () => {
+test("Custom Build Factory requires prove mission evidence before go_live", () => {
   let record = createCustomBuildRecord({
     businessId: "biz_test",
     sheetLine: "Custom AI Application",
-    brief: { industry: "services" },
   });
   assert.equal(isCustomBuildComplete(record), false);
-  for (const step of ["intake", "scope", "architect", "install", "prove", "acceptance"]) {
+
+  assert.throws(
+    () => advanceCustomBuild(record, "intake", { evidence: { brief: { industry: "services" } } }),
+    /intake brief incomplete/,
+  );
+
+  record = advanceCustomBuild(record, "intake", {
+    evidence: { brief: { industry: "services", outcome: "ack leads", channels: ["email"] } },
+  });
+  for (const step of ["scope", "architect", "install"]) {
     record = advanceCustomBuild(record, step, { evidence: { ok: true } });
   }
+
+  assert.throws(
+    () => advanceCustomBuild(record, "prove", { evidence: { markedBy: "operator" } }),
+    /prove incomplete/,
+  );
+
+  const proveEvidence = {
+    provenMissionIds: [...record.requiredProveMissionIds],
+    source: "capability_proof_records",
+  };
+  record = advanceCustomBuild(record, "prove", { evidence: proveEvidence });
+  record = advanceCustomBuild(record, "acceptance", {
+    evidence: { accepted: true, checklistIds: ["channels", "sample_case", "approvals", "escalation"] },
+  });
   assert.throws(() => advanceCustomBuild(
     createCustomBuildRecord({ businessId: "biz_test", sheetLine: "Custom AI Application" }),
     "go_live",
@@ -125,4 +165,5 @@ test("Custom Build Factory advances in order and blocks go_live without acceptan
   const view = presentCustomBuild(record);
   assert.equal(view.summary.complete, true);
   assert.equal(view.summary.completeCount, 8);
+  assert.equal(view.summary.canGoLive, true);
 });

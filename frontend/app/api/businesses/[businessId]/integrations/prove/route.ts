@@ -491,23 +491,6 @@ async function executeProveForAction(input: {
     };
   }
 
-  if (action === PROVE_ACTIONS.submit_test_form) {
-    const formSubmissionId = `form_prove_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-    return {
-      ok: true,
-      verified: true,
-      simulated: input.allowSimulated,
-      message: "Website form intake recorded for prove.",
-      detail: {
-        formSubmissionId,
-        externalReference: formSubmissionId,
-        providerKind: "form_submission_id",
-        at: new Date().toISOString(),
-        note: "Controlled prove submission — not a live website visitor.",
-      },
-    };
-  }
-
   if (action === PROVE_ACTIONS.book_test_slot) {
     const { bookConfirmedAppointment } = await import(
       "../../../../../../../backend/core/integrations/appointment-setter/bookConfirmedAppointment.js"

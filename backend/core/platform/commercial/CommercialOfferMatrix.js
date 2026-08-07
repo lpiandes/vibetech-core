@@ -159,14 +159,87 @@ export function sheetLineSlug(section, line) {
     .replace(/^_|_$/g, "")}`;
 }
 
+/**
+ * Sheet lines / package ids that must NOT be sold until adapters or ops wiring exist.
+ * Keep consulting/usage/Wave A Ready/custom-on-engine paths complete; hide unfinished adapters.
+ */
+const BUILDING_PACKAGE_IDS = new Set([
+  "voice_outbound_agent",
+  "social_content_automation",
+  "marketing_content_engine",
+  "sales_analytics",
+  "document_processing",
+  "reporting_automation",
+  "crm_external_integration",
+  "multi_system_integration",
+  "professional_managed",
+  "enterprise_managed",
+  "addon_additional_agent",
+  "addon_additional_workflow",
+  "addon_additional_integration",
+  "addon_executive_dashboard",
+]);
+
+const BUILDING_SHEET_LINES = new Set([
+  "AI Outbound Call Agent",
+  "Social Media Content Automation",
+  "Marketing Content Engine",
+  "Sales Analytics Dashboard",
+  "Document Processing Automation",
+  "Reporting and Dashboard Automation",
+  "CRM Integration",
+  "Multi-System Integration",
+  "Enterprise AI Deployment",
+  "Professional",
+  "Enterprise",
+  "Additional AI Agent",
+  "Additional Workflow",
+  "Additional Integration",
+  "Executive Dashboard",
+]);
+
+const COMPLETE_READY_PACKAGE_IDS = new Set([
+  "managed_revenue_follow_through",
+  "ai_receptionist",
+  "lead_follow_up",
+  "website_chatbot",
+  "knowledge_assistant",
+  "basic_integration",
+]);
+
+const COMPLETE_MANAGED_PACKAGE_IDS = new Set([
+  "essential_managed",
+  "growth_managed",
+  "addon_priority_support",
+]);
+
 export const COMMERCIAL_OFFER_MATRIX = deepFreeze(
   ROWS.map((row) => {
     if (row.packageId === "managed_revenue_follow_through") {
       return { ...row, offerClass: "ready", implementationStatus: "complete" };
     }
-    // All sheet lines are offerable once playbooks + factory gates exist.
-    // Product depth still ships via Custom Build Factory / managed ops playbooks.
-    return { ...row, implementationStatus: "complete" };
+    if (row.offerClass === "consulting" || row.offerClass === "usage") {
+      return { ...row, implementationStatus: "complete" };
+    }
+    if (BUILDING_PACKAGE_IDS.has(row.packageId) || BUILDING_SHEET_LINES.has(row.sheetLine)) {
+      return {
+        ...row,
+        implementationStatus: "building",
+        notes: row.notes
+          ?? "Not offerable until live adapter / entitlement metering ships — Custom Build Factory cannot invent missing providers.",
+      };
+    }
+    if (COMPLETE_READY_PACKAGE_IDS.has(row.packageId)) {
+      return { ...row, implementationStatus: "complete" };
+    }
+    if (COMPLETE_MANAGED_PACKAGE_IDS.has(row.packageId) || row.sheetLine === "Custom Managed Services") {
+      return { ...row, implementationStatus: "complete" };
+    }
+    // Custom-on-platform paths that use existing Google/Twilio/forms/knowledge engines.
+    if (row.offerClass === "custom_build") {
+      return { ...row, implementationStatus: "complete" };
+    }
+    return { ...row, implementationStatus: row.implementationStatus ?? "building" };
   }),
 );
 

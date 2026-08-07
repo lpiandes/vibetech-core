@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 
@@ -22,6 +22,8 @@ type CustomBuildView = {
     complete?: boolean;
     nextStepId?: string | null;
     canGoLive?: boolean;
+    proveComplete?: boolean;
+    missingProveMissionIds?: string[];
   };
 };
 
@@ -39,6 +41,9 @@ export default function CustomBuildPath({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sheetLine, setSheetLine] = useState(defaultSheetLine);
+  const [industry, setIndustry] = useState("services");
+  const [outcome, setOutcome] = useState("Acknowledge and follow up inbound opportunities");
+  const [channels, setChannels] = useState("email, forms");
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/custom-build`);
@@ -57,7 +62,15 @@ export default function CustomBuildPath({
       const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/custom-build`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "start", sheetLine }),
+        body: JSON.stringify({
+          action: "start",
+          sheetLine,
+          brief: {
+            industry,
+            outcome,
+            channels: channels.split(",").map((c) => c.trim()).filter(Boolean),
+          },
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Could not start custom build");
@@ -73,10 +86,25 @@ export default function CustomBuildPath({
     setBusy(true);
     setError(null);
     try {
+      const payload: Record<string, unknown> = { action: "advance", stepId };
+      if (stepId === "intake") {
+        payload.brief = {
+          industry,
+          outcome,
+          channels: channels.split(",").map((c) => c.trim()).filter(Boolean),
+        };
+      }
+      if (stepId === "acceptance") {
+        payload.checklistIds = ["channels", "sample_case", "approvals", "escalation"];
+        payload.evidence = { accepted: true, checklistIds: payload.checklistIds };
+      }
+      if (stepId === "prove") {
+        payload.evidence = { source: "capability_proof_records" };
+      }
       const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/custom-build`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "advance", stepId, evidence: { markedBy: "operator" } }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Could not advance step");
@@ -86,6 +114,14 @@ export default function CustomBuildPath({
     } finally {
       setBusy(false);
     }
+  }
+
+  function advanceLabel(stepId: string) {
+    if (stepId === "prove") return "Verify prove records";
+    if (stepId === "acceptance") return "Accept checklist";
+    if (stepId === "go_live") return "Go live";
+    if (stepId === "intake") return "Save intake";
+    return "Mark done";
   }
 
   return (
@@ -105,7 +141,7 @@ export default function CustomBuildPath({
           Custom Build Factory
         </h2>
         <p style={{ margin: `${spacing.xs} 0 0`, color: cockpitColors.textSecondary, fontSize: 14, lineHeight: 1.45 }}>
-          Deliver any custom AI build end-to-end: intake → prove → acceptance → go-live. Nothing goes live without evidence.
+          Deliver any custom AI build end-to-end: intake → prove → acceptance → go-live. Prove steps read live capability proof records — operator clicks alone cannot go live.
         </p>
       </div>
 
@@ -116,18 +152,20 @@ export default function CustomBuildPath({
             <input
               value={sheetLine}
               onChange={(e) => setSheetLine(e.target.value)}
-              style={{
-                display: "block",
-                width: "100%",
-                marginTop: 6,
-                height: 36,
-                borderRadius: radius.medium,
-                border: `1px solid ${cockpitColors.panelBorder}`,
-                background: cockpitColors.panelElevated,
-                color: cockpitColors.textPrimary,
-                padding: `0 ${spacing.sm}`,
-              }}
+              style={inputStyle()}
             />
+          </label>
+          <label style={{ fontSize: 12, fontWeight: 650, color: cockpitColors.textMuted }}>
+            Industry
+            <input value={industry} onChange={(e) => setIndustry(e.target.value)} style={inputStyle()} />
+          </label>
+          <label style={{ fontSize: 12, fontWeight: 650, color: cockpitColors.textMuted }}>
+            Outcome
+            <input value={outcome} onChange={(e) => setOutcome(e.target.value)} style={inputStyle()} />
+          </label>
+          <label style={{ fontSize: 12, fontWeight: 650, color: cockpitColors.textMuted }}>
+            Channels (comma-separated)
+            <input value={channels} onChange={(e) => setChannels(e.target.value)} style={inputStyle()} />
           </label>
           <Button type="button" disabled={busy} onClick={() => void start()}>
             Start custom build
@@ -143,6 +181,11 @@ export default function CustomBuildPath({
             {view.summary?.completeCount ?? 0}/{view.summary?.totalSteps ?? 8} steps
             {view.summary?.complete ? " · Complete" : ""}
           </div>
+          {(view.summary?.missingProveMissionIds?.length ?? 0) > 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: "#991B1B" }}>
+              Missing prove: {view.summary?.missingProveMissionIds?.join(", ")}
+            </p>
+          ) : null}
           <ol style={{ margin: 0, paddingLeft: spacing.lg, display: "grid", gap: 8 }}>
             {(view.steps ?? []).map((step) => (
               <li key={step.id} style={{ color: step.done ? cockpitColors.handled : cockpitColors.textSecondary }}>
@@ -152,7 +195,7 @@ export default function CustomBuildPath({
                   </span>
                   {!step.done && view.summary?.nextStepId === step.id ? (
                     <Button type="button" disabled={busy} onClick={() => void advance(step.id)}>
-                      Mark done
+                      {advanceLabel(step.id)}
                     </Button>
                   ) : null}
                 </div>
@@ -180,4 +223,18 @@ export default function CustomBuildPath({
       ) : null}
     </section>
   );
+}
+
+function inputStyle(): CSSProperties {
+  return {
+    display: "block",
+    width: "100%",
+    marginTop: 6,
+    height: 36,
+    borderRadius: radius.medium,
+    border: `1px solid ${cockpitColors.panelBorder}`,
+    background: cockpitColors.panelElevated,
+    color: cockpitColors.textPrimary,
+    padding: `0 ${spacing.sm}`,
+  };
 }

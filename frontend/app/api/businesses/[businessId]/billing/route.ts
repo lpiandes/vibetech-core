@@ -12,6 +12,10 @@ import {
   peekUsage,
   recordUsage,
 } from "../../../../../../backend/core/platform/billing/UsageMetering.js";
+import {
+  createInstallationUsageStore,
+  recordUsageOnInstallation,
+} from "../../../../../../backend/core/platform/billing/InstallationUsageLedger.js";
 import { readPurchasedPackagesFromConfig } from "../../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 import { platformStore } from "@/lib/server/compose";
 
@@ -30,9 +34,10 @@ export async function GET(
     const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
     const purchasedPackages = readPurchasedPackagesFromConfig(installation?.configuration ?? {});
     const billing = presentBillingStatus({ businessId, purchasedPackages });
+    const usageStore = installation ? createInstallationUsageStore(installation) : null;
     const meters = listUsageMeters().map((meter) => ({
       ...meter,
-      usage: peekUsage({ businessId, meterId: meter.id }),
+      usage: peekUsage({ businessId, meterId: meter.id, platformStore: usageStore }),
     }));
 
     const { buildChannelGoLiveChecklist } = await import(
@@ -68,15 +73,33 @@ export async function POST(
     const action = String(body?.action ?? "").trim();
 
     if (action === "record_usage") {
+      const meterId = String(body?.meterId ?? "");
+      const quantity = Number(body?.quantity ?? 1);
+      const durable = await recordUsageOnInstallation({
+        platformStore,
+        businessId,
+        meterId,
+        quantity,
+        actorId: "billing_api",
+      });
+      const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+      const usageStore = installation ? createInstallationUsageStore(installation) : null;
       const result = recordUsage({
         businessId,
-        meterId: String(body?.meterId ?? ""),
-        quantity: Number(body?.quantity ?? 1),
+        meterId,
+        quantity: durable?.ok ? 0 : quantity,
+        platformStore: usageStore,
       });
-      if (!result.ok) {
+      // Re-peek so response reflects durable used count when available.
+      const usage = peekUsage({ businessId, meterId, platformStore: usageStore });
+      if (!usage.ok && !result.ok) {
         return NextResponse.json({ ok: false, ...result }, { status: 400 });
       }
-      return NextResponse.json({ ok: true, usage: result });
+      return NextResponse.json({
+        ok: true,
+        usage,
+        durable: Boolean(durable?.ok),
+      });
     }
 
     if (action === "checkout_intent") {

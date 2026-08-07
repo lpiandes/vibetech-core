@@ -18,14 +18,23 @@ function safeString(v) {
 }
 
 /**
- * place_test_call only proves Twilio dial-out succeeded — not that the AI
- * conversation happened. Flag it as conversational evidence pending owner
- * confirm, and note whether Knowledge exists for the call to cite from.
+ * place_test_call proves Twilio dial-out. Conversational claim requires:
+ * - owner listen-and-confirm
+ * - Knowledge present so the greeting path can cite (knowledgeCitedAttempted)
+ * Without Knowledge, dial-out still succeeds but conversationalComplete stays false.
  */
-function buildPlaceTestCallMetadata(knowledgeCount) {
-  const metadata = { conversationalProve: true, requiresOwnerConfirm: true };
-  if (Number(knowledgeCount) > 0) metadata.knowledgeCitedAttempted = true;
-  return metadata;
+function buildPlaceTestCallMetadata(knowledgeCount, extras = {}) {
+  const hasKnowledge = Number(knowledgeCount) > 0;
+  return {
+    conversationalProve: true,
+    requiresOwnerConfirm: true,
+    conversationalComplete: false,
+    knowledgeCitedAttempted: hasKnowledge,
+    knowledgeRequiredForConversationalClaim: true,
+    knowledgeAvailable: hasKnowledge,
+    ...(hasKnowledge ? {} : { conversationalBlocker: "knowledge_empty" }),
+    ...extras,
+  };
 }
 
 const ACTION_TO_CONNECTION = Object.freeze({
@@ -78,13 +87,15 @@ export async function executeLiveProveAction({
       });
     }
     const contactId = `contact_form_prove_${Date.now().toString(36)}`;
+    const leadEmail = String(proveEmail || "prove-form@example.com");
+    const leadPhone = String(provePhone || "");
     let crm = readCrmState(installation);
     crm = upsertContact(crm, {
       id: contactId,
       partyId: contactId,
       name: "Prove Form Lead",
-      email: String(proveEmail || "prove-form@example.com"),
-      phone: String(provePhone || ""),
+      email: leadEmail,
+      phone: leadPhone,
       kind: "lead",
       tags: ["website_form", "prove"],
       notes: "VIBETech website form prove submission",
@@ -111,6 +122,52 @@ export async function executeLiveProveAction({
       crm,
       actorId: "website_form_prove",
     });
+
+    const formSubmissionId = `form_prove_${contactId}`;
+    const followUpDraft = {
+      id: `draft_form_prove_${contactId}`,
+      channel: "email",
+      status: "pending_approval",
+      subject: "Thanks — we received your inquiry",
+      bodyPreview: "Thanks for reaching out. We received your website inquiry and will follow up with next steps shortly.",
+      contactId,
+      cardId,
+      recipientEmail: leadEmail,
+      audience: "prove_form_lead",
+      createdAt: new Date().toISOString(),
+      source: "website_form_prove",
+    };
+
+    try {
+      const fresh = await platformStore.getBusinessOSInstallation(businessId).catch(() => installation);
+      const drafts = Array.isArray(fresh?.configuration?.pendingDecisionDrafts)
+        ? fresh.configuration.pendingDecisionDrafts.filter((d) => d?.id !== followUpDraft.id)
+        : [];
+      drafts.push(followUpDraft);
+      await platformStore.upsertBusinessOSInstallation({
+        id: fresh.id ?? fresh.installationId ?? `install_${businessId}`,
+        businessId,
+        specificationRowId: fresh.specificationRowId ?? null,
+        specificationId: fresh.specificationId ?? `spec_${businessId}`,
+        specificationVersion: fresh.specificationVersion ?? 1,
+        specificationContentHash: fresh.specificationContentHash ?? fresh.contentHash ?? "form_prove",
+        planId: fresh.planId ?? `plan_${businessId}`,
+        status: fresh.status ?? "installed",
+        plan: fresh.plan ?? {},
+        actionCheckpoints: Array.isArray(fresh.actionCheckpoints) ? fresh.actionCheckpoints : [],
+        configuration: {
+          ...(fresh.configuration ?? {}),
+          pendingDecisionDrafts: drafts.slice(-25),
+        },
+        history: Array.isArray(fresh.history) ? fresh.history.slice(-50) : [],
+        installedAt: fresh.installedAt ?? new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        updatedBy: "website_form_prove",
+      });
+    } catch {
+      /* draft persist best-effort — still return draft on prove result */
+    }
+
     return deepFreeze({
       ok: true,
       simulated: false,
@@ -118,14 +175,17 @@ export async function executeLiveProveAction({
       provider: "website_forms",
       contactId,
       cardId,
+      followUpDraft,
       detail: {
-        formSubmissionId: `form_prove_${contactId}`,
-        externalReference: `form_prove_${contactId}`,
+        formSubmissionId,
+        externalReference: formSubmissionId,
         providerKind: "form_submission_id",
         at: new Date().toISOString(),
-        note: "Controlled website-form prove submission.",
+        note: "Controlled website-form prove — contact + pending follow-up draft for Decisions.",
+        followUpDraft,
+        pendingApproval: true,
       },
-      message: "Test form submission recorded with form_submission_id. Share /intake for real visitor submissions.",
+      message: "Form intake recorded with People contact and a pending follow-up draft for Decisions.",
     });
   }
 
@@ -275,7 +335,21 @@ export async function executeLiveProveAction({
         connection,
         credentialResolver,
       });
-      return mapAdapterResult(result, { provider: "gmail", to });
+      const mapped = mapAdapterResult(result, { provider: "gmail", to });
+      if (mapped?.ok !== false && businessId) {
+        try {
+          const { recordUsageSafe } = await import("../../platform/billing/UsageMetering.js");
+          recordUsageSafe({
+            businessId,
+            meterId: "emails",
+            quantity: 1,
+            platformStore,
+          });
+        } catch {
+          /* non-blocking */
+        }
+      }
+      return mapped;
     }
 
     if (act === PROVE_ACTIONS.create_test_event) {
@@ -465,13 +539,15 @@ export async function executeLiveProveAction({
             provider: "twilio_voice",
           });
         }
+        const verifyMeta = buildPlaceTestCallMetadata(knowledgeCount, { dialOut: false, credentialVerifyOnly: true });
         return deepFreeze({
           ok: true,
           simulated: false,
           provider: "twilio_voice",
           externalReference: matching.credentialId ?? "twilio_voice_verified",
           message: "Twilio Voice credentials verified. Set APP/NEXTAUTH URL so prove can place a live call.",
-          metadata: buildPlaceTestCallMetadata(knowledgeCount),
+          metadata: verifyMeta,
+          detail: { ...verifyMeta, awaitingOwnerConfirm: true },
         });
       }
       const result = await adapter.executeAction({
@@ -491,16 +567,34 @@ export async function executeLiveProveAction({
           detail: result,
         });
       }
-      // The call connecting proves dial-out, not that the AI conversation happened —
-      // require an owner listen-and-confirm before this counts as fully proven.
+      try {
+        const { recordUsageSafe } = await import("../../platform/billing/UsageMetering.js");
+        recordUsageSafe({
+          businessId,
+          meterId: "voice_minutes_outbound",
+          quantity: 1,
+          platformStore,
+        });
+      } catch {
+        /* non-blocking */
+      }
+      // Dial-out proved; conversational claim stays incomplete until owner confirm (+ knowledge when claiming cite).
+      const callMeta = buildPlaceTestCallMetadata(knowledgeCount, {
+        dialOut: true,
+        callSid: result.externalReference,
+        twimlUrl,
+      });
       return deepFreeze({
         ok: true,
         simulated: false,
         provider: "twilio_voice",
         to,
         externalReference: result.externalReference,
-        message: "Prove call placed. Answer to hear the AI receptionist greeting, then confirm you heard it. Outbound customer calls stay approval-gated.",
-        metadata: buildPlaceTestCallMetadata(knowledgeCount),
+        message: Number(knowledgeCount) > 0
+          ? "Prove call placed. Answer to hear the AI receptionist (knowledge-backed greeting), then confirm you heard it. Outbound customer calls stay approval-gated."
+          : "Prove call placed (dial-out only). Upload Knowledge before claiming a conversational/cite prove, then confirm you heard the greeting.",
+        metadata: callMeta,
+        detail: { ...callMeta, awaitingOwnerConfirm: true, externalReference: result.externalReference },
       });
     }
 
@@ -539,6 +633,50 @@ export async function executeLiveProveAction({
           provider: "meta_lead_ads",
         });
       }
+      const followUpDraft = {
+        id: `draft_meta_prove_${leadgenId}`,
+        channel: "email",
+        status: "pending_approval",
+        subject: "Thanks — we received your inquiry",
+        bodyPreview: "Thanks for reaching out via Facebook. We received your inquiry and will follow up shortly.",
+        contactId: ingested.contactId ?? null,
+        cardId: ingested.cardId ?? null,
+        recipientEmail: String(proveEmail || "prove-lead@example.com"),
+        audience: "prove_meta_lead",
+        createdAt: new Date().toISOString(),
+        source: "meta_lead_prove",
+      };
+      try {
+        const fresh = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+        if (fresh) {
+          const drafts = Array.isArray(fresh?.configuration?.pendingDecisionDrafts)
+            ? fresh.configuration.pendingDecisionDrafts.filter((d) => d?.id !== followUpDraft.id)
+            : [];
+          drafts.push(followUpDraft);
+          await platformStore.upsertBusinessOSInstallation({
+            id: fresh.id ?? fresh.installationId ?? `install_${businessId}`,
+            businessId,
+            specificationRowId: fresh.specificationRowId ?? null,
+            specificationId: fresh.specificationId ?? `spec_${businessId}`,
+            specificationVersion: fresh.specificationVersion ?? 1,
+            specificationContentHash: fresh.specificationContentHash ?? fresh.contentHash ?? "meta_prove",
+            planId: fresh.planId ?? `plan_${businessId}`,
+            status: fresh.status ?? "installed",
+            plan: fresh.plan ?? {},
+            actionCheckpoints: Array.isArray(fresh.actionCheckpoints) ? fresh.actionCheckpoints : [],
+            configuration: {
+              ...(fresh.configuration ?? {}),
+              pendingDecisionDrafts: drafts.slice(-25),
+            },
+            history: Array.isArray(fresh.history) ? fresh.history.slice(-50) : [],
+            installedAt: fresh.installedAt ?? new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            updatedBy: "meta_prove",
+          });
+        }
+      } catch {
+        /* best-effort */
+      }
       return deepFreeze({
         ok: true,
         simulated: false,
@@ -550,7 +688,14 @@ export async function executeLiveProveAction({
           contactId: ingested.contactId,
           cardId: ingested.cardId,
         },
-        message: "Test Facebook lead saved to People (and Pipelines when available). Live form leads use the same path via webhook.",
+        followUpDraft,
+        detail: {
+          followUpDraft,
+          pendingApproval: true,
+          contactId: ingested.contactId,
+          cardId: ingested.cardId,
+        },
+        message: "Test Facebook lead saved to People with a pending follow-up draft for Decisions. Live form leads use the same path via webhook.",
       });
     }
 

@@ -151,7 +151,22 @@ export function recordUsage({
 /** Fire-and-forget usage record — never throws into product paths. */
 export function recordUsageSafe(input = {}) {
   try {
-    return recordUsage(input);
+    const result = recordUsage(input);
+    // Best-effort durable write when a platformStore with installation APIs is provided.
+    const store = input.platformStore;
+    if (store?.getBusinessOSInstallation && store?.upsertBusinessOSInstallation && result?.ok) {
+      void import("./InstallationUsageLedger.js")
+        .then(({ recordUsageOnInstallation }) => recordUsageOnInstallation({
+          platformStore: store,
+          businessId: input.businessId,
+          meterId: input.meterId,
+          quantity: input.quantity ?? 1,
+          nowISO: input.nowISO,
+          actorId: "usage_meter_safe",
+        }))
+        .catch(() => null);
+    }
+    return result;
   } catch {
     return deepFreeze({ ok: false, reason: "usage_record_failed" });
   }

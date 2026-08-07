@@ -23,3 +23,12 @@ Every pricing-sheet line is classified and gated by code:
 ## Rule
 
 `canSellOffer` allows a line only when `implementationStatus === complete` and its playbook is complete. Incomplete paths cannot be sold.
+
+## Honesty status (2026-08-07)
+
+- **43 complete / 15 building** of 58 sheet lines
+- **Building (not sellable):** outbound voice, social/content engines, sales analytics, document processing, reporting automation, external CRM sync, multi-system, Professional/Enterprise managed, additional-agent/workflow/integration add-ons, executive dashboard
+- **Create & invite sellable:** Managed RFT + Wave A SKUs + Essential/Growth managed
+- **Custom Build Factory:** prove step reads `capability_proof_records`; go-live blocked without mission evidence
+- **Usage:** Settings meters hydrate from `installation.configuration.usageMeters` (durable across restarts)
+- Scorecard tests: `commercialScorecard.test.js`

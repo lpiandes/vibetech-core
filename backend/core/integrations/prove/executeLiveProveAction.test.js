@@ -163,6 +163,7 @@ test("place_test_call marks conversational evidence as owner-confirm-pending, wi
     assert.equal(result.metadata?.conversationalProve, true);
     assert.equal(result.metadata?.requiresOwnerConfirm, true);
     assert.equal(result.metadata?.knowledgeCitedAttempted, true);
+    assert.equal(result.metadata?.conversationalComplete, false);
   } finally {
     globalThis.fetch = previousFetch;
     if (previousOrigin === undefined) delete process.env.NEXTAUTH_URL;
@@ -203,7 +204,9 @@ test("place_test_call omits knowledgeCitedAttempted when Knowledge is empty", as
     });
     assert.equal(result.ok, true);
     assert.equal(result.metadata?.conversationalProve, true);
-    assert.equal(result.metadata?.knowledgeCitedAttempted, undefined);
+    assert.equal(result.metadata?.knowledgeCitedAttempted, false);
+    assert.equal(result.metadata?.conversationalComplete, false);
+    assert.equal(result.metadata?.conversationalBlocker, "knowledge_empty");
   } finally {
     globalThis.fetch = previousFetch;
     if (previousOrigin === undefined) delete process.env.NEXTAUTH_URL;

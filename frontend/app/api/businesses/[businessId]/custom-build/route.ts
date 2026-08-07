@@ -13,8 +13,10 @@ import {
   persistCustomBuild,
   presentCustomBuildFromInstallation,
   startCustomBuildOnInstallation,
+  readCustomBuild,
 } from "../../../../../../backend/core/platform/commercial/persistCustomBuild.js";
 import { canSellOffer } from "../../../../../../backend/core/platform/commercial/CanSellOffer.js";
+import { provenMissionsFromProofRecords } from "../../../../../../backend/core/platform/commercial/CustomBuildFactory.js";
 
 function jsonRouteError(error: unknown) {
   if (error instanceof AuthorizationError) {
@@ -91,9 +93,46 @@ export async function POST(
 
     if (action === "advance") {
       const stepId = String(body.stepId ?? "");
-      const advanced = advanceCustomBuildOnInstallation(installation, stepId, {
-        evidence: body.evidence ?? null,
-      });
+      let evidence = body.evidence && typeof body.evidence === "object" ? { ...body.evidence } : {};
+
+      if (stepId === "prove") {
+        const current = readCustomBuild(installation);
+        const required = current?.requiredProveMissionIds ?? [];
+        const proofRows = await platformStore.listCapabilityProofRecords(businessId).catch(() => []);
+        const fromProofs = provenMissionsFromProofRecords(proofRows, required);
+        const fromBody = Array.isArray(evidence.provenMissionIds)
+          ? evidence.provenMissionIds.map(String)
+          : [];
+        evidence = {
+          ...evidence,
+          provenMissionIds: [...new Set([...fromProofs, ...fromBody])],
+          source: fromProofs.length ? "capability_proof_records" : (evidence.source ?? "operator"),
+          proofCount: Array.isArray(proofRows) ? proofRows.length : 0,
+        };
+      }
+
+      if (stepId === "intake" && !evidence.brief) {
+        evidence = {
+          ...evidence,
+          brief: body.brief && typeof body.brief === "object" ? body.brief : {
+            industry: body.industry,
+            outcome: body.outcome,
+            channels: body.channels,
+          },
+        };
+      }
+
+      if (stepId === "acceptance" && evidence.accepted == null) {
+        evidence = {
+          accepted: true,
+          checklistIds: Array.isArray(body.checklistIds)
+            ? body.checklistIds
+            : ["channels", "sample_case", "approvals", "escalation"],
+          ...evidence,
+        };
+      }
+
+      const advanced = advanceCustomBuildOnInstallation(installation, stepId, { evidence });
       await persistCustomBuild({
         platformStore,
         installation: advanced.installation,
