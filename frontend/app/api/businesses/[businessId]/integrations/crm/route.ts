@@ -88,3 +88,87 @@ export async function POST(
     return authorizationErrorResponse(err);
   }
 }
+
+/**
+ * Ongoing People ↔ HubSpot/HighLevel sync.
+ */
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ businessId: string }> },
+) {
+  try {
+    const { businessId } = await params;
+    const ctx = await getAuthorizedWorkspace(businessId, PERMISSIONS.INTEGRATIONS_MANAGE);
+    const body = await request.json().catch(() => ({}));
+    const action = String(body.action ?? "sync_now");
+    if (action !== "sync_now" && action !== "pull" && action !== "push") {
+      return NextResponse.json({ error: "unknown_action" }, { status: 400 });
+    }
+
+    const {
+      syncContactsFromExternal,
+      syncContactsToExternal,
+    } = await import("../../../../../../../backend/core/integrations/crm/CrmExternalSync.js");
+    const { readCrmState, writeCrmState, upsertContact } = await import(
+      "../../../../../../../backend/core/crm/CrmStore.js"
+    );
+
+    const vault =
+      (ctx.service as any)?.connected?.integrationPlatform?.credentialVault
+      ?? getSharedCredentialVault();
+    const credentials = await platformStore.listIntegrationCredentialsForWorkspace(businessId);
+    const matching = credentials.find((c: any) => /hubspot|highlevel/i.test(String(c.providerType ?? "")));
+    if (!matching) {
+      return NextResponse.json({ error: "Connect HubSpot or HighLevel first", code: "NOT_CONNECTED" }, { status: 400 });
+    }
+    const record = typeof vault?.get === "function" ? vault.get(matching.credentialId) : null;
+    const accessToken = String(record?.secrets?.accessToken ?? record?.secrets?.apiKey ?? "").trim();
+    const locationId = record?.secrets?.locationId ?? matching.metadata?.locationId ?? null;
+    const provider = /highlevel/i.test(String(matching.providerType ?? "")) ? "highlevel" : "hubspot";
+    const installation = await platformStore.getBusinessOSInstallation(businessId);
+    if (!installation) return NextResponse.json({ error: "Installation not found" }, { status: 404 });
+
+    const direction = action === "pull" ? "pull" : action === "push" ? "push" : "both";
+    let pulled = null;
+    let pushed = null;
+    if (direction === "pull" || direction === "both") {
+      pulled = await syncContactsFromExternal({ provider, accessToken, locationId });
+      if (pulled.ok && Array.isArray(pulled.contacts)) {
+        let crm = readCrmState(installation);
+        for (const contact of pulled.contacts) {
+          crm = upsertContact(crm, {
+            id: contact.id,
+            partyId: contact.id,
+            name: contact.name,
+            email: contact.email,
+            phone: contact.phone,
+            kind: "lead",
+            tags: [contact.source || "crm_sync"],
+          });
+        }
+        await writeCrmState({
+          platformStore,
+          installation,
+          crm,
+          actorId: "crm_external_sync",
+        });
+      }
+    }
+    if (direction === "push" || direction === "both") {
+      const fresh = await platformStore.getBusinessOSInstallation(businessId);
+      const crm = readCrmState(fresh);
+      pushed = await syncContactsToExternal({
+        provider,
+        accessToken,
+        locationId,
+        contacts: crm.contacts ?? [],
+        limit: Number(body.limit ?? 25),
+      });
+    }
+
+    return NextResponse.json({ ok: true, provider, pulled, pushed });
+  } catch (err) {
+    return authorizationErrorResponse(err);
+  }
+}
+

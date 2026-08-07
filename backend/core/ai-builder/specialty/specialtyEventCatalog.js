@@ -14,6 +14,7 @@ export const SPECIALTY_EVENT_CATALOG = Object.freeze([
   { id: "INBOUND_VOICE_CALL", label: "Inbound phone call" },
   { id: "SOCIAL_SCREEN_REQUESTED", label: "Social background screen requested" },
   { id: "FORM_SUBMIT", label: "Form submitted" },
+  { id: "WEBSITE_CHAT_LEAD", label: "Website chat lead captured" },
   { id: "META_LEAD", label: "Meta / Facebook lead" },
   { id: "INBOUND_SALES_EMAIL", label: "Inbound sales email" },
   { id: "MISSED_SALES_CALL", label: "Missed sales call" },

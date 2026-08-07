@@ -54,7 +54,10 @@ const ROWS = [
   // —— 4. Customer Service and Operations ——
   offer("ops", "AI Customer Support Agent", "voice_support_agent", "custom_build", "sku_support_agent", ["knowledge_consult", "outbound_approvals"], 6000, 1997),
   offer("ops", "Website Chatbot", "website_chatbot", "ready", "sku_website_forms", ["website_forms"], 3500, 797, {
-    notes: "Forms → People (Wave A Ready); native chat remains custom_build under website_native_chat",
+    notes: "Forms → People (Wave A Ready). Native chat is website_native_chat.",
+  }),
+  offer("ops", "Native Website Chatbot", "website_native_chat", "ready", "sku_website_native_chat", ["website_forms", "knowledge_consult"], 4500, 997, {
+    notes: "Embeddable Knowledge-backed chat widget with lead capture.",
   }),
   offer("ops", "Internal Knowledge Base Assistant", "knowledge_assistant", "ready", "sku_knowledge_assistant", ["knowledge_consult"], 5000, 1297),
   offer("ops", "Workflow Automation", "ai_business_os", "custom_build", "sku_workflow_automation", ["outbound_approvals"], 3000, 697),
@@ -69,7 +72,9 @@ const ROWS = [
   offer("integration", "Custom AI Application", "ai_business_os", "custom_build", "custom_build_factory", ["knowledge_consult", "outbound_approvals"], 25000, 2500),
   offer("integration", "Custom Business Automation", "ai_business_os", "custom_build", "custom_build_factory", ["outbound_approvals"], 10000, 1497),
   offer("integration", "AI Business Operating System", "ai_business_os", "custom_build", "custom_build_factory", ["knowledge_consult", "outbound_approvals", "customer_email_send"], 20000, 3500),
-  offer("integration", "Enterprise AI Deployment", "enterprise_managed", "managed_ops", "managed_enterprise", ["knowledge_consult", "outbound_approvals"], 50000, 7500),
+  offer("integration", "Enterprise AI Deployment", "enterprise_managed", "managed_ops", "managed_enterprise", ["knowledge_consult", "outbound_approvals"], 50000, 7500, {
+    notes: "Operator-led enterprise managed deployment on uncapped entitlements.",
+  }),
 
   // —— 6. Managed Services Packages ——
   offer("managed", "Managed Revenue Follow-Through", "managed_revenue_follow_through", "ready", "managed_rft", ["customer_email_send", "knowledge_consult", "outbound_approvals", "website_forms"], null, null, {
@@ -83,7 +88,7 @@ const ROWS = [
   offer("managed", "Custom Managed Services", null, "managed_ops", "managed_custom", ["knowledge_consult", "outbound_approvals"], 20000, 5000),
 
   // —— 7. Monthly Add-Ons ——
-  offer("addon", "Additional AI Agent", "addon_additional_agent", "managed_ops", "addon_agent", ["knowledge_consult"], 2000, 497),
+  offer("addon", "Additional AI Agent", "addon_additional_ai_agent", "managed_ops", "addon_agent", ["knowledge_consult"], 2000, 497),
   offer("addon", "Additional Workflow", "addon_additional_workflow", "managed_ops", "addon_workflow", ["outbound_approvals"], 1000, 197),
   offer("addon", "Additional Integration", "addon_additional_integration", "managed_ops", "addon_integration", ["customer_email_send"], null, 397),
   offer("addon", "AI Employee Training", null, "consulting", "addon_training", [], null, 797),
@@ -164,37 +169,11 @@ export function sheetLineSlug(section, line) {
  * Keep consulting/usage/Wave A Ready/custom-on-engine paths complete; hide unfinished adapters.
  */
 const BUILDING_PACKAGE_IDS = new Set([
-  "voice_outbound_agent",
-  "social_content_automation",
-  "marketing_content_engine",
-  "sales_analytics",
-  "document_processing",
-  "reporting_automation",
-  "crm_external_integration",
-  "multi_system_integration",
-  "professional_managed",
-  "enterprise_managed",
-  "addon_additional_agent",
-  "addon_additional_workflow",
-  "addon_additional_integration",
+  // Executive dashboard remains consulting/custom until dedicated BI surface ships.
   "addon_executive_dashboard",
 ]);
 
 const BUILDING_SHEET_LINES = new Set([
-  "AI Outbound Call Agent",
-  "Social Media Content Automation",
-  "Marketing Content Engine",
-  "Sales Analytics Dashboard",
-  "Document Processing Automation",
-  "Reporting and Dashboard Automation",
-  "CRM Integration",
-  "Multi-System Integration",
-  "Enterprise AI Deployment",
-  "Professional",
-  "Enterprise",
-  "Additional AI Agent",
-  "Additional Workflow",
-  "Additional Integration",
   "Executive Dashboard",
 ]);
 
@@ -203,14 +182,35 @@ const COMPLETE_READY_PACKAGE_IDS = new Set([
   "ai_receptionist",
   "lead_follow_up",
   "website_chatbot",
+  "website_native_chat",
   "knowledge_assistant",
   "basic_integration",
+  "sales_assistant",
+  "crm_automation",
+  "scheduling",
+  "voice_inbound_agent",
+  "voice_outbound_agent",
+  "voice_scheduling_agent",
+  "voice_support_agent",
+  "social_content_automation",
+  "marketing_content_engine",
+  "sales_analytics",
+  "document_processing",
+  "reporting_automation",
+  "crm_external_integration",
+  "multi_system_integration",
 ]);
 
 const COMPLETE_MANAGED_PACKAGE_IDS = new Set([
   "essential_managed",
   "growth_managed",
+  "professional_managed",
+  "enterprise_managed",
   "addon_priority_support",
+  "addon_additional_ai_agent",
+  "addon_additional_workflow",
+  "addon_additional_integration",
+  "addon_additional_agent",
 ]);
 
 export const COMMERCIAL_OFFER_MATRIX = deepFreeze(

@@ -67,21 +67,30 @@ test("canSellOffer allows complete Wave A ready lines", () => {
 });
 
 test("unfinished adapters stay building and cannot be sold", () => {
-  for (const line of [
-    "AI Outbound Call Agent",
-    "Social Media Content Automation",
-    "CRM Integration",
-    "Multi-System Integration",
-    "Enterprise AI Deployment",
-  ]) {
+  for (const line of ["Executive Dashboard"]) {
     const offer = getCommercialOffer(line);
     assert.equal(offer.implementationStatus, "building", line);
     const gate = canSellOffer({ sheetLine: line });
     assert.equal(gate.allowed, false, line);
   }
   const summary = presentOfferMatrixSummary();
-  assert.ok(summary.building >= 10);
+  assert.ok(summary.building >= 1);
   assert.ok(summary.complete < summary.total);
+});
+
+test("Wave C product lines are complete and sellable", () => {
+  for (const line of [
+    "AI Outbound Call Agent",
+    "Social Media Content Automation",
+    "CRM Integration",
+    "Multi-System Integration",
+    "Native Website Chatbot",
+  ]) {
+    const offer = getCommercialOffer(line);
+    assert.equal(offer.implementationStatus, "complete", line);
+    const gate = canSellOffer({ sheetLine: line });
+    assert.equal(gate.allowed, true, `${line}: ${gate.reason}`);
+  }
 });
 
 test("A2P gate is a soft, informational check by default", () => {

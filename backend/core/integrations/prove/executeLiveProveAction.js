@@ -42,6 +42,7 @@ const ACTION_TO_CONNECTION = Object.freeze({
   [PROVE_ACTIONS.create_test_event]: "calendar",
   [PROVE_ACTIONS.send_test_sms]: "sms_channel",
   [PROVE_ACTIONS.place_test_call]: "voice_channel",
+  [PROVE_ACTIONS.place_test_outbound_call]: "voice_channel",
   [PROVE_ACTIONS.ingest_test_lead]: "meta_lead_ads",
   [PROVE_ACTIONS.run_sports_golden_path]: "business_email",
   [PROVE_ACTIONS.run_dental_golden_path]: "business_email",
@@ -71,6 +72,9 @@ export async function executeLiveProveAction({
   allowSimulated = process.env.PROVE_ALLOW_SIMULATED === "1",
   vault = null,
   knowledgeCount = null,
+  // The GRANT gate already ran in runIntegrationProveTest before execute() is called —
+  // this stays fail-closed (false) only when a caller invokes executeLiveProveAction directly.
+  outboundApproved = false,
 } = {}) {
   const act = String(action ?? "");
 
@@ -260,6 +264,230 @@ export async function executeLiveProveAction({
         providerKind: created.evidenceKind,
         at: created.at,
       },
+    });
+  }
+
+  if (act === PROVE_ACTIONS.sync_pull_crm_contacts) {
+    const credentialVault = vault ?? getSharedCredentialVault();
+    await hydrateWorkspaceCredentials({ platformStore, vault: credentialVault, workspaceId: businessId });
+    const credentials = await platformStore.listIntegrationCredentialsForWorkspace(businessId);
+    const hubspot = credentials.find((c) => /hubspot/i.test(String(c.providerType ?? c.credentialId ?? "")));
+    const highlevel = credentials.find((c) => /highlevel/i.test(String(c.providerType ?? c.credentialId ?? "")));
+    const matchingCrm = hubspot || highlevel;
+    if (!matchingCrm) {
+      return deepFreeze({
+        ok: false,
+        reason: "not_connected",
+        message: "Connect HubSpot or HighLevel before running the CRM pull prove.",
+      });
+    }
+    const record = typeof credentialVault?.get === "function"
+      ? credentialVault.get(matchingCrm.credentialId)
+      : null;
+    const secrets = record?.secrets ?? {};
+    const accessToken = String(secrets.accessToken ?? secrets.apiKey ?? "").trim();
+    const locationId = secrets.locationId
+      ? String(secrets.locationId)
+      : (matchingCrm.metadata?.locationId ? String(matchingCrm.metadata.locationId) : null);
+    const provider = hubspot ? "hubspot" : "highlevel";
+    const { syncContactsFromExternal } = await import("../crm/CrmExternalSync.js");
+    const pulled = await syncContactsFromExternal({ provider, accessToken, locationId, limit: 10 });
+    if (!pulled.ok) {
+      return deepFreeze({
+        ok: false,
+        reason: pulled.reason ?? "pull_failed",
+        message: pulled.message ?? "Could not pull contacts from the connected CRM.",
+        provider,
+      });
+    }
+    const pulledContacts = Array.isArray(pulled.contacts) ? pulled.contacts : [];
+    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    if (installation && pulledContacts.length) {
+      const { readCrmState, writeCrmState, upsertContact } = await import("../../crm/CrmStore.js");
+      let crm = readCrmState(installation);
+      for (const contact of pulledContacts) {
+        crm = upsertContact(crm, {
+          id: contact.id,
+          partyId: contact.id,
+          name: contact.name,
+          email: contact.email,
+          phone: contact.phone,
+          kind: "lead",
+          tags: [provider, "crm_sync"],
+          notes: `Synced from ${provider === "hubspot" ? "HubSpot" : "HighLevel"} (external ref ${contact.externalReference}).`,
+        });
+      }
+      await writeCrmState({ platformStore, installation, crm, actorId: "crm_pull_prove" });
+    }
+    return deepFreeze({
+      ok: true,
+      simulated: false,
+      provider,
+      pulled: pulledContacts.length,
+      contacts: pulledContacts,
+      detail: {
+        externalReference: pulledContacts[0]?.externalReference ?? null,
+        providerKind: provider === "hubspot" ? "hubspot_record_id" : "highlevel_record_id",
+        pulled: pulledContacts.length,
+        provider,
+        at: new Date().toISOString(),
+      },
+      message: `Pulled ${pulledContacts.length} live contact${pulledContacts.length === 1 ? "" : "s"} from ${provider === "hubspot" ? "HubSpot" : "HighLevel"} into People.`,
+    });
+  }
+
+  if (act === PROVE_ACTIONS.place_test_outbound_call) {
+    if (!outboundApproved) {
+      return deepFreeze({
+        ok: false,
+        reason: "outbound_not_approved",
+        message: "Outbound campaign calls require owner GRANT before dial.",
+      });
+    }
+    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    if (!installation) {
+      return deepFreeze({
+        ok: false,
+        reason: "business_missing",
+        message: "Business installation not found.",
+      });
+    }
+    const credentialVault = vault ?? getSharedCredentialVault();
+    await hydrateWorkspaceCredentials({ platformStore, vault: credentialVault, workspaceId: businessId });
+    const credentialResolverForCall = createVaultCredentialResolver({ vault: credentialVault });
+    const credentials = await platformStore.listIntegrationCredentialsForWorkspace(businessId);
+    const matchingVoice = credentials.find((c) => matchesConnection(c, "voice_channel", PROVE_ACTIONS.place_test_call));
+    if (!matchingVoice) {
+      return deepFreeze({
+        ok: false,
+        reason: "credentials_missing",
+        message: "Connect Twilio Voice before proving an outbound campaign call.",
+      });
+    }
+    const to = normalizeProvePhone(provePhone);
+    if (!to) {
+      return deepFreeze({
+        ok: false,
+        reason: "prove_phone_required",
+        message: "Enter a phone number (with country code) to receive the prove outbound call.",
+      });
+    }
+    const origin = safeString(process.env.NEXTAUTH_URL || process.env.APP_ORIGIN || "").replace(/\/$/, "");
+    const defaultTwiml = origin
+      ? `${origin}/api/businesses/${encodeURIComponent(businessId)}/integrations/voice/inbound`
+      : "";
+    const twimlUrl = String(
+      matchingVoice.secrets?.twimlUrl
+      || matchingVoice.metadata?.twimlUrl
+      || process.env.TWILIO_VOICE_TWIML_URL
+      || defaultTwiml
+      || "",
+    ).trim();
+    if (!twimlUrl) {
+      return deepFreeze({
+        ok: false,
+        reason: "voice_twiml_missing",
+        message: "Set APP/NEXTAUTH URL so the outbound campaign prove can place a live call.",
+      });
+    }
+    const connectionForCall = {
+      id: "voice_channel",
+      status: "CONNECTED",
+      credentialReference: {
+        credentialId: matchingVoice.credentialId,
+        providerType: matchingVoice.providerType,
+        metadata: matchingVoice.metadata ?? {},
+      },
+    };
+    const { TwilioVoiceIntegrationAdapter } = await import("../adapters/TwilioVoiceIntegrationAdapter.js");
+    const { createOutboundCampaign, dialNextOutboundCampaignContact } = await import(
+      "../voice/OutboundVoiceCampaign.js"
+    );
+    const adapter = new TwilioVoiceIntegrationAdapter({ nowISO: new Date().toISOString() });
+    const created = createOutboundCampaign({
+      installation,
+      name: "Prove outbound campaign",
+      contacts: [{ contactId: "prove_contact", name: "Prove Test Contact", phone: to }],
+    });
+    if (!created.ok) return deepFreeze(created);
+    const dialed = await dialNextOutboundCampaignContact({
+      installation: created.installation,
+      campaignId: created.campaign.id,
+      outboundApproved: true,
+      placeCall: async ({ to: dialTo }) => {
+        const result = await adapter.executeAction({
+          actionRequest: {
+            capability: INTEGRATION_CAPABILITIES.PLACE_VOICE_CALL,
+            parameters: { to: dialTo, twimlUrl },
+          },
+          connection: connectionForCall,
+          credentialResolver: credentialResolverForCall,
+        });
+        if (result?.status === "completed" && result?.externalReference) {
+          return { ok: true, externalReference: result.externalReference };
+        }
+        return { ok: false, reason: result?.error ?? "dial_failed", message: result?.error };
+      },
+    });
+    if (!dialed.ok) {
+      return deepFreeze({
+        ok: false,
+        reason: dialed.contact?.error ?? dialed.reason ?? "outbound_call_failed",
+        message: dialed.dialResult?.message ?? "Twilio did not place the outbound campaign call.",
+        provider: "twilio_voice",
+        detail: dialed,
+      });
+    }
+    try {
+      await platformStore.upsertBusinessOSInstallation({
+        id: dialed.installation.id ?? dialed.installation.installationId ?? `install_${businessId}`,
+        businessId,
+        specificationRowId: dialed.installation.specificationRowId ?? null,
+        specificationId: dialed.installation.specificationId ?? `spec_${businessId}`,
+        specificationVersion: dialed.installation.specificationVersion ?? 1,
+        specificationContentHash: dialed.installation.specificationContentHash
+          ?? dialed.installation.contentHash
+          ?? "outbound_campaign_prove",
+        planId: dialed.installation.planId ?? `plan_${businessId}`,
+        status: dialed.installation.status ?? "installed",
+        plan: dialed.installation.plan ?? {},
+        actionCheckpoints: Array.isArray(dialed.installation.actionCheckpoints) ? dialed.installation.actionCheckpoints : [],
+        configuration: dialed.installation.configuration,
+        history: Array.isArray(dialed.installation.history) ? dialed.installation.history.slice(-50) : [],
+        installedAt: dialed.installation.installedAt ?? new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        updatedBy: "outbound_campaign_prove",
+      });
+    } catch {
+      /* best-effort persist — prove result still reflects the live dial */
+    }
+    try {
+      const { recordUsageSafe } = await import("../../platform/billing/UsageMetering.js");
+      recordUsageSafe({
+        businessId,
+        meterId: "voice_minutes_outbound",
+        quantity: 1,
+        platformStore,
+      });
+    } catch {
+      /* non-blocking */
+    }
+    return deepFreeze({
+      ok: true,
+      simulated: false,
+      provider: "twilio_voice",
+      to,
+      externalReference: dialed.contact.callSid,
+      campaignId: created.campaign.id,
+      contactId: dialed.contact.contactId,
+      detail: {
+        externalReference: dialed.contact.callSid,
+        campaignId: created.campaign.id,
+        contactId: dialed.contact.contactId,
+        outboundApproved: true,
+        at: new Date().toISOString(),
+      },
+      message: "Approved outbound campaign call placed with campaign metadata attached; usage recorded.",
     });
   }
 
@@ -716,11 +944,22 @@ export async function executeLiveProveAction({
 function matchesConnection(credential, connectionId, action) {
   const provider = String(credential?.providerType ?? "").toLowerCase();
   if (action === PROVE_ACTIONS.send_test_email) {
-    // Must be Gmail — never match google_calendar / other Google tokens.
-    return provider === "gmail" || provider.startsWith("gmail_");
+    // Gmail or Outlook mail — never match calendar-only tokens.
+    return (
+      provider === "gmail"
+      || provider.startsWith("gmail_")
+      || provider === "outlook_mail"
+      || provider.includes("outlook_mail")
+      || provider === "microsoft_mail"
+    );
   }
   if (action === PROVE_ACTIONS.create_test_event || action === PROVE_ACTIONS.book_test_slot) {
-    return provider === "google_calendar" || provider.includes("calendar");
+    return (
+      provider === "google_calendar"
+      || provider.includes("calendar")
+      || provider === "outlook_calendar"
+      || provider.includes("outlook_calendar")
+    );
   }
   if (action === PROVE_ACTIONS.send_test_sms || action === PROVE_ACTIONS.prove_appointment_setter_sms) {
     return provider === "twilio_sms" || provider.includes("twilio_sms") || (provider.includes("twilio") && provider.includes("sms"));
@@ -728,7 +967,7 @@ function matchesConnection(credential, connectionId, action) {
   if (action === PROVE_ACTIONS.ingest_test_lead) {
     return provider === "meta_lead_ads" || provider.includes("meta_lead");
   }
-  if (action === PROVE_ACTIONS.place_test_call) {
+  if (action === PROVE_ACTIONS.place_test_call || action === PROVE_ACTIONS.place_test_outbound_call) {
     return provider === "twilio_voice" || provider.includes("twilio_voice") || (provider.includes("twilio") && provider.includes("voice"));
   }
   return false;
@@ -797,7 +1036,7 @@ export function resolveProveConnectionStatus({
     return "CONNECTED";
   }
 
-  if (act === PROVE_ACTIONS.sync_test_crm_contact) {
+  if (act === PROVE_ACTIONS.sync_test_crm_contact || act === PROVE_ACTIONS.sync_pull_crm_contacts) {
     const crmSnap = connections.find((c) => ["hubspot", "highlevel"].includes(String(c.id)));
     if (crmSnap && String(crmSnap.status).toUpperCase() === "CONNECTED") return "CONNECTED";
     if (credentials.some((c) => /hubspot|highlevel/i.test(String(c.providerType ?? c.credentialId ?? "")))) {

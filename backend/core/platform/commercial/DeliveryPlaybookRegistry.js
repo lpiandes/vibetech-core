@@ -244,6 +244,13 @@ const PLAYBOOKS = deepFreeze({
     customFactorySteps,
     ["Form embed live", "Lead appears in People", "Prove mission green"],
   ),
+  sku_website_native_chat: playbook(
+    "sku_website_native_chat",
+    "Native Website Chatbot",
+    "ready",
+    customFactorySteps,
+    ["Widget embed live", "Knowledge-backed reply", "Lead capture to People", "Chat prove green"],
+  ),
   sku_knowledge_assistant: playbook(
     "sku_knowledge_assistant",
     "Internal Knowledge Base Assistant",

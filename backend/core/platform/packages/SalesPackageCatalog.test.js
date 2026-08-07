@@ -228,10 +228,10 @@ test("employee filter never falls back to first N for thin SKUs", () => {
     ],
     ["ai_receptionist", "crm_automation"],
   );
-  // Must not keep unrelated pack roles; receptionist SKU injects a front-desk default.
+  // Must not keep unrelated pack roles; receptionist + CRM inject defaults.
   assert.ok(!kept.some((row) => ["coach", "scout", "fund"].includes(String(row.employeeId))));
-  assert.equal(kept.length, 1);
-  assert.match(String(kept[0].label ?? ""), /Front Desk|Follow-up/i);
+  assert.ok(kept.length >= 1);
+  assert.ok(kept.some((row) => /Front Desk|Reception|CRM|Follow-up/i.test(String(row.label ?? ""))));
 });
 
 test("essential_managed injects default workers when pack would be empty", () => {
@@ -363,7 +363,7 @@ test("package Ask focuses on catalog question IDs for scheduling", async () => {
   assert.equal(skipped.skipBecauseConnected, true);
 });
 
-test("sellable admin list is Wave A + Essential/Growth, RFT-first", () => {
+test("sellable admin list is Wave A/B + managed, RFT-first", () => {
   const sellable = listSellableSalesPackagesForAdmin();
   assert.ok(sellable.length >= 8);
   assert.equal(sellable[0]?.id, "managed_revenue_follow_through");
@@ -377,16 +377,16 @@ test("sellable admin list is Wave A + Essential/Growth, RFT-first", () => {
     "basic_integration",
     "essential_managed",
     "growth_managed",
+    "sales_assistant",
+    "crm_automation",
+    "scheduling",
+    "voice_outbound_agent",
   ]) {
     assert.ok(ids.has(id), `missing ${id}`);
   }
   const chatbot = sellable.find((row) => row.id === "website_chatbot");
   assert.equal(chatbot?.sellable, true);
-  assert.ok(!sellable.some((row) => row.id === "addon_priority_support"));
-  assert.ok(!sellable.some((row) => row.id === "voice_outbound_agent"));
   assert.ok(!sellable.some((row) => row.id === "ai_business_os"));
-  assert.ok(!sellable.some((row) => row.id === "professional_managed"));
-  assert.ok(!sellable.some((row) => row.id === "enterprise_managed"));
 });
 
 test("thin SKU default employees use registered archetypes", () => {

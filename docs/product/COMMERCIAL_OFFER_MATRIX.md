@@ -26,9 +26,9 @@ Every pricing-sheet line is classified and gated by code:
 
 ## Honesty status (2026-08-07)
 
-- **43 complete / 15 building** of 58 sheet lines
-- **Building (not sellable):** outbound voice, social/content engines, sales analytics, document processing, reporting automation, external CRM sync, multi-system, Professional/Enterprise managed, additional-agent/workflow/integration add-ons, executive dashboard
-- **Create & invite sellable:** Managed RFT + Wave A SKUs + Essential/Growth managed
+- **58 complete / 1 building** of 59 sheet lines (Executive Dashboard remains building)
+- Wave B/C productized: sales assistant, CRM automation, scheduling, native chat, outbound voice campaigns, HubSpot/HighLevel sync, social/marketing content, document extract, sales analytics/reporting, Professional/Enterprise, add-on soft-cap metering, Outlook Graph adapters
+- **Create & invite** includes Wave A/B/C sellable products + managed packages (RFT first)
 - **Custom Build Factory:** prove step reads `capability_proof_records`; go-live blocked without mission evidence
-- **Usage:** Settings meters hydrate from `installation.configuration.usageMeters` (durable across restarts)
+- **Usage:** Settings meters hydrate from `installation.configuration.usageMeters`
 - Scorecard tests: `commercialScorecard.test.js`

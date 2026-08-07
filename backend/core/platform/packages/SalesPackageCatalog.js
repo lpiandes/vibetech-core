@@ -3,7 +3,10 @@ import {
   buildDefaultLeadFollowUpEmployee,
   buildDefaultAppointmentSetterEmployee,
   buildDefaultSalesAssistantEmployee,
+  buildDefaultCrmAutomationEmployee,
   buildDefaultReceptionistEmployee,
+  buildDefaultSupportVoiceEmployee,
+  buildDefaultSchedulingVoiceEmployee,
   buildDefaultSocialScreenerEmployee,
 } from "./thinSkuDefaultEmployees.js";
 
@@ -144,9 +147,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     discoveryTopics: ["identity", "industry", "communications", "integrations", "outcomes"],
     packageAskConnectionOptions: ["twilio_voice"],
     launchMissionIds: ["voice_calls", "knowledge_consult", "outbound_approvals"],
-    honestyNote: "Roadmap product family — sells as receptionist specialization until dedicated agent contracts ship.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Inbound voice specialization of receptionist with Knowledge + approvals.",
+    commercialStatus: "product",
+    sellable: true,
   },
   {
     id: "voice_outbound_agent",
@@ -157,9 +160,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     discoveryTopics: ["identity", "industry", "communications", "approvals", "integrations", "outcomes"],
     packageAskConnectionOptions: ["twilio_voice"],
     launchMissionIds: ["voice_calls", "outbound_approvals", "knowledge_consult"],
-    honestyNote: "Roadmap — outbound place-call exists; campaign agent product not shipped.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Campaign dialer with owner GRANT before each customer dial; usage meters outbound minutes.",
+    commercialStatus: "product",
+    sellable: true,
   },
   {
     id: "voice_scheduling_agent",
@@ -170,9 +173,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     discoveryTopics: ["identity", "industry", "operations", "integrations", "outcomes"],
     packageAskConnectionOptions: ["twilio_voice", "google_calendar"],
     launchMissionIds: ["voice_calls", "calendar_scheduling", "outbound_approvals"],
-    honestyNote: "Roadmap — receptionist creates appointment Work today; live slot book is Phase 3.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Live Google Calendar slot book prove + voice scheduling worker. Not a public self-serve booking page.",
+    commercialStatus: "product",
+    sellable: true,
   },
   {
     id: "voice_support_agent",
@@ -183,9 +186,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     discoveryTopics: ["identity", "industry", "communications", "integrations", "outcomes"],
     packageAskConnectionOptions: ["twilio_voice"],
     launchMissionIds: ["voice_calls", "knowledge_consult", "outbound_approvals"],
-    honestyNote: "Roadmap — use receptionist + Knowledge until support-agent contracts ship.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Support-scoped inbound voice worker with Knowledge + support Work routing.",
+    commercialStatus: "product",
+    sellable: true,
   },
   {
     id: "voice_custom_agent",
@@ -282,9 +285,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     launchMissionIds: ["outbound_approvals", "customer_email_send", "website_forms", "knowledge_consult"],
     packageAskQuestionIds: ["q_customers", "q_desired_workflows", "q_approvals", "q_integrations"],
     packageAskConnectionOptions: ["gmail"],
-    honestyNote: "In-platform contacts and work — not HubSpot/Salesforce sync.",
+    honestyNote: "In-platform contacts and work — not HubSpot/Salesforce sync. External CRM sync is crm_external_integration.",
     commercialStatus: "product",
-    sellable: false,
+    sellable: true,
   },
   {
     id: "sales_assistant",
@@ -308,13 +311,13 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: ["gmail"],
     honestyNote: "Draft + approve outreach — not a full sales CRM suite.",
     commercialStatus: "product",
-    sellable: false,
+    sellable: true,
     maxWorkers: 2,
   },
   {
     id: "website_chatbot",
     label: "Website lead capture (forms)",
-    description: "Website form embed → People. Native chat widget is a separate roadmap SKU.",
+    description: "Website form embed → People. Native chat widget is a separate SKU (website_native_chat).",
     moduleIds: ["home", "people", "integrations", "knowledge", "settings"],
     canonicalNavIds: ["home", "people", "knowledge", "integrations", "settings"],
     discoveryTopics: ["identity", "industry", "customers", "communications", "integrations", "outcomes"],
@@ -349,9 +352,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "people", "inbox", "knowledge", "integrations", "settings"],
     discoveryTopics: ["identity", "industry", "customers", "communications", "integrations", "outcomes"],
     launchMissionIds: ["website_forms", "knowledge_consult"],
-    honestyNote: "Roadmap — not available for install until native widget ships.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Native website chat widget with Knowledge answers and lead capture.",
+    commercialStatus: "product",
+    sellable: true,
   },
   {
     id: "scheduling",
@@ -371,9 +374,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     launchMissionIds: ["calendar_scheduling", "knowledge_consult", "outbound_approvals"],
     packageAskQuestionIds: ["q_scheduling", "q_integrations"],
     packageAskConnectionOptions: ["google_calendar"],
-    honestyNote: "Org calendar + reminder drafts. Website/intake can request appointment (Work + calendar HOLD). Not a public self-serve booking page.",
+    honestyNote: "Org calendar + live slot book prove (Google Calendar). Website/intake can request appointment. Not a public self-serve booking page.",
     commercialStatus: "product",
-    sellable: false,
+    sellable: true,
   },
   {
     id: "knowledge_assistant",
@@ -436,9 +439,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "needs_attention", "work", "knowledge", "integrations", "settings"],
     discoveryTopics: ["identity", "industry", "communications", "integrations", "outcomes"],
     launchMissionIds: ["knowledge_consult", "outbound_approvals"],
-    honestyNote: "Roadmap — ads adapters exist; social publish product not shipped.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Draft → approve → Meta publish when connected, else honest manual queue.",
+    commercialStatus: "product",
+    sellable: true,
   },
   {
     id: "marketing_content_engine",
@@ -448,9 +451,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "needs_attention", "work", "knowledge", "integrations", "settings"],
     discoveryTopics: ["identity", "industry", "communications", "outcomes"],
     launchMissionIds: ["knowledge_consult", "outbound_approvals"],
-    honestyNote: "Roadmap.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Brief → email + SMS + social drafts for owner approval.",
+    commercialStatus: "product",
+    sellable: true,
   },
   {
     id: "sales_analytics",
@@ -460,9 +463,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "people", "pipelines", "settings"],
     discoveryTopics: ["identity", "industry", "customers", "outcomes"],
     launchMissionIds: ["knowledge_consult"],
-    honestyNote: "Roadmap — Growth includes performance module; dedicated sales BI not shipped.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Pipeline/contact/proof dashboard composed from live CRM + capability proofs.",
+    commercialStatus: "product",
+    sellable: true,
   },
   {
     id: "document_processing",
@@ -472,9 +475,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "people", "work", "knowledge", "settings"],
     discoveryTopics: ["identity", "industry", "services", "outcomes"],
     launchMissionIds: ["knowledge_consult"],
-    honestyNote: "Roadmap beyond PDF→Knowledge ingest.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Extract name/email/phone/company from documents into People.",
+    commercialStatus: "product",
+    sellable: true,
   },
   {
     id: "reporting_automation",
@@ -484,9 +487,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "settings"],
     discoveryTopics: ["identity", "industry", "outcomes"],
     launchMissionIds: ["knowledge_consult"],
-    honestyNote: "Roadmap.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Owner digest from sales analytics (weekly cadence config).",
+    commercialStatus: "product",
+    sellable: true,
   },
   {
     id: "basic_integration",
@@ -510,9 +513,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "people", "pipelines", "integrations", "settings"],
     discoveryTopics: ["identity", "industry", "integrations", "outcomes"],
     launchMissionIds: ["knowledge_consult"],
-    honestyNote: "Roadmap — live CRM today is in-platform only.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "HubSpot/HighLevel connect, prove contact, and push/pull People sync.",
+    commercialStatus: "product",
+    sellable: true,
   },
   {
     id: "multi_system_integration",
@@ -522,9 +525,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "integrations", "settings"],
     discoveryTopics: ["identity", "industry", "integrations", "outcomes"],
     launchMissionIds: ["customer_email_send", "calendar_scheduling", "sms_send"],
-    honestyNote: "Roadmap for Outlook/Slack/Drive/etc. live adapters.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Google + Twilio + Meta (+ Microsoft when configured) multi-adapter path.",
+    commercialStatus: "product",
+    sellable: true,
   },
   {
     id: "essential_managed",
@@ -625,14 +628,57 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     id: "professional_managed",
     label: "Professional (managed)",
     description: "Higher caps, priority support flag, broader Launch surface.",
-    moduleIds: null,
-    canonicalNavIds: null,
-    discoveryTopics: null,
-    launchMissionIds: null,
-    fullOs: true,
-    honestyNote: "Entitlements + billing required before sellable. Catalog stub for Phase 5.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    moduleIds: [
+      "home",
+      "for_you",
+      "people",
+      "work",
+      "inbox",
+      "digital_workforce",
+      "knowledge",
+      "integrations",
+      "settings",
+      "performance",
+      "pipelines",
+      "schedule",
+    ],
+    canonicalNavIds: [
+      "home",
+      "needs_attention",
+      "people",
+      "pipelines",
+      "work",
+      "inbox",
+      "knowledge",
+      "team",
+      "automations",
+      "calendar",
+      "integrations",
+      "settings",
+    ],
+    discoveryTopics: [
+      "identity",
+      "industry",
+      "services",
+      "customers",
+      "communications",
+      "integrations",
+      "approvals",
+      "outcomes",
+    ],
+    launchMissionIds: [
+      "customer_email_send",
+      "sms_send",
+      "website_forms",
+      "outbound_approvals",
+      "knowledge_consult",
+      "voice_calls",
+      "calendar_scheduling",
+    ],
+    fullOs: false,
+    honestyNote: "Managed Professional retainer — higher soft caps (25 workers / 50 workflows) on full OS modules.",
+    commercialStatus: "managed_product",
+    sellable: true,
     maxWorkers: 25,
     maxWorkflows: 50,
   },
@@ -642,12 +688,29 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     description: "Enterprise entitlements, dedicated advisor metadata, highest caps.",
     moduleIds: null,
     canonicalNavIds: null,
-    discoveryTopics: null,
-    launchMissionIds: null,
+    discoveryTopics: [
+      "identity",
+      "industry",
+      "services",
+      "customers",
+      "communications",
+      "integrations",
+      "approvals",
+      "outcomes",
+    ],
+    launchMissionIds: [
+      "customer_email_send",
+      "sms_send",
+      "website_forms",
+      "outbound_approvals",
+      "knowledge_consult",
+      "voice_calls",
+      "calendar_scheduling",
+    ],
     fullOs: true,
-    honestyNote: "Operator-led enterprise deployment — billing + SSO later.",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Managed Enterprise retainer — uncapped workers/workflows; operator-led deployment.",
+    commercialStatus: "managed_product",
+    sellable: true,
     maxWorkers: null,
     maxWorkflows: null,
   },
@@ -659,9 +722,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "team", "knowledge", "settings"],
     discoveryTopics: ["identity", "outcomes"],
     launchMissionIds: ["knowledge_consult"],
-    honestyNote: "Billable add-on — requires commercial metering (Phase 5).",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Adds +1 to maxWorkers soft cap when purchased with a managed package.",
+    commercialStatus: "managed_product",
+    sellable: true,
     maxWorkers: 1,
   },
   {
@@ -672,9 +735,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "automations", "settings"],
     discoveryTopics: ["identity", "outcomes"],
     launchMissionIds: ["outbound_approvals"],
-    honestyNote: "Billable add-on — requires commercial metering (Phase 5).",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Adds +1 to maxWorkflows soft cap when purchased with a managed package.",
+    commercialStatus: "managed_product",
+    sellable: true,
     maxWorkflows: 1,
   },
   {
@@ -685,9 +748,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "integrations", "settings"],
     discoveryTopics: ["identity", "integrations", "outcomes"],
     launchMissionIds: ["customer_email_send"],
-    honestyNote: "Billable add-on — requires commercial metering (Phase 5).",
-    commercialStatus: "roadmap",
-    sellable: false,
+    honestyNote: "Extra connection entitlement flag for managed packages.",
+    commercialStatus: "managed_product",
+    sellable: true,
   },
   {
     id: "addon_priority_support",
@@ -757,11 +820,21 @@ export const WAVE_A_SELLABLE_PACKAGE_IDS = Object.freeze([
   "basic_integration",
 ]);
 
+/** Wave B Ready product SKUs (installable once sellable + prove paths exist). */
+export const WAVE_B_SELLABLE_PACKAGE_IDS = Object.freeze([
+  "sales_assistant",
+  "crm_automation",
+  "scheduling",
+]);
+
 export function listSellableSalesPackagesForAdmin() {
   const waveA = new Set(WAVE_A_SELLABLE_PACKAGE_IDS);
+  const waveB = new Set(WAVE_B_SELLABLE_PACKAGE_IDS);
   const rows = listSalesPackagesForAdmin({ includeRoadmap: true }).filter((row) => (
     (waveA.has(row.id) && row.sellable !== false)
+    || (waveB.has(row.id) && row.sellable !== false)
     || (row.commercialStatus === "managed_product" && row.sellable !== false)
+    || (row.commercialStatus === "product" && row.sellable === true && !waveA.has(row.id) && !waveB.has(row.id))
   ));
   const rft = rows.filter((row) => row.id === "managed_revenue_follow_through");
   const rest = rows.filter((row) => row.id !== "managed_revenue_follow_through");
@@ -770,6 +843,7 @@ export function listSellableSalesPackagesForAdmin() {
 
 /**
  * Soft caps from purchased managed packages (union of maxWorkers / maxWorkflows).
+ * Billable add-ons ADD to base caps (not max-only) so purchasing +1 agent raises the ceiling.
  */
 export function resolvePackageSoftCaps(purchasedPackages = []) {
   const packages = normalizePurchasedPackages(purchasedPackages);
@@ -785,9 +859,19 @@ export function resolvePackageSoftCaps(purchasedPackages = []) {
   let maxWorkflows = null;
   let maxProspectingRunsPerDay = null;
   let maxProspectingLeadsPerRun = null;
+  let addonWorkers = 0;
+  let addonWorkflows = 0;
   for (const id of packages) {
     const pkg = BY_ID.get(id);
     if (!pkg) continue;
+    if (id === "addon_additional_ai_agent" || id === "addon_additional_agent") {
+      addonWorkers += Number.isFinite(pkg.maxWorkers) ? pkg.maxWorkers : 1;
+      continue;
+    }
+    if (id === "addon_additional_workflow") {
+      addonWorkflows += Number.isFinite(pkg.maxWorkflows) ? pkg.maxWorkflows : 1;
+      continue;
+    }
     if (Number.isFinite(pkg.maxWorkers)) {
       maxWorkers = maxWorkers == null ? pkg.maxWorkers : Math.max(maxWorkers, pkg.maxWorkers);
     }
@@ -804,6 +888,12 @@ export function resolvePackageSoftCaps(purchasedPackages = []) {
         ? pkg.maxProspectingLeadsPerRun
         : Math.max(maxProspectingLeadsPerRun, pkg.maxProspectingLeadsPerRun);
     }
+  }
+  if (addonWorkers > 0) {
+    maxWorkers = (maxWorkers == null ? 0 : maxWorkers) + addonWorkers;
+  }
+  if (addonWorkflows > 0) {
+    maxWorkflows = (maxWorkflows == null ? 0 : maxWorkflows) + addonWorkflows;
   }
   return deepFreeze({
     maxWorkers,
@@ -1432,6 +1522,38 @@ export function filterEmployeesForPurchasedPackages(employees = [], purchasedPac
       if (!seen.has(key)) {
         seen.add(key);
         kept.push(def);
+      }
+    }
+    if (packages.includes("crm_automation") && !kept.some((emp) => /crm.?automation/i.test(String(emp?.label ?? emp?.employeeId ?? "")))) {
+      const def = buildDefaultCrmAutomationEmployee();
+      const key = String(def.employeeId);
+      if (!seen.has(key)) {
+        seen.add(key);
+        kept.push(def);
+      }
+    }
+  }
+  if (packages.includes("voice_support_agent")) {
+    const added = pushMatching(/support.?voice|support/, 1);
+    if (added === 0) {
+      const def = buildDefaultSupportVoiceEmployee();
+      const key = String(def.employeeId);
+      if (!seen.has(key)) {
+        seen.add(key);
+        kept.push(def);
+      }
+    }
+  }
+  if (packages.includes("voice_scheduling_agent") || packages.includes("scheduling")) {
+    if (packages.includes("voice_scheduling_agent")) {
+      const added = pushMatching(/scheduling.?voice|scheduling|appointment/, 1);
+      if (added === 0) {
+        const def = buildDefaultSchedulingVoiceEmployee();
+        const key = String(def.employeeId);
+        if (!seen.has(key)) {
+          seen.add(key);
+          kept.push(def);
+        }
       }
     }
   }

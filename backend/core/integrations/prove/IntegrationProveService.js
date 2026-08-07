@@ -11,6 +11,8 @@ export const PROVE_ACTIONS = Object.freeze({
   create_test_event: "create_test_event",
   send_test_sms: "send_test_sms",
   place_test_call: "place_test_call",
+  // Outbound campaign dial — requires owner GRANT (unlike the inbound-answer place_test_call).
+  place_test_outbound_call: "place_test_outbound_call",
   ingest_test_lead: "ingest_test_lead",
   upload_and_cite: "upload_and_cite",
   approve_and_send: "approve_and_send",
@@ -24,6 +26,9 @@ export const PROVE_ACTIONS = Object.freeze({
   // Alternate, deeper prove for calendar_scheduling: books a real CONFIRMED slot
   // (not just a create-event smoke test) via the same path the appointment setter uses.
   book_test_slot: "book_test_slot",
+  // Alternate, deeper prove for crm_hubspot/crm_highlevel: pulls real contacts back
+  // from the connected CRM into People (ongoing sync, not just a one-way push).
+  sync_pull_crm_contacts: "sync_pull_crm_contacts",
 });
 
 const CONNECTIONLESS_ACTIONS = new Set([
@@ -66,12 +71,22 @@ export async function runIntegrationProveTest({
     });
   }
 
-  if (act === PROVE_ACTIONS.send_test_email || act === PROVE_ACTIONS.send_test_sms) {
+  if (
+    act === PROVE_ACTIONS.send_test_email
+    || act === PROVE_ACTIONS.send_test_sms
+    || act === PROVE_ACTIONS.place_test_outbound_call
+  ) {
     const capability =
       act === PROVE_ACTIONS.send_test_sms
         ? INTEGRATION_CAPABILITIES.SEND_SMS
-        : INTEGRATION_CAPABILITIES.SEND_EMAIL;
-    const channel = act === PROVE_ACTIONS.send_test_sms ? "sms" : "email";
+        : act === PROVE_ACTIONS.place_test_outbound_call
+          ? INTEGRATION_CAPABILITIES.PLACE_VOICE_CALL
+          : INTEGRATION_CAPABILITIES.SEND_EMAIL;
+    const channel = act === PROVE_ACTIONS.send_test_sms
+      ? "sms"
+      : act === PROVE_ACTIONS.place_test_outbound_call
+        ? "voice"
+        : "email";
     const gate = evaluateOutboundSendPermission({
       capability,
       channel,
@@ -89,7 +104,9 @@ export async function runIntegrationProveTest({
         honestLabel:
           act === PROVE_ACTIONS.send_test_email
             ? "Send approved email (not full inbox)"
-            : "Send approved SMS",
+            : act === PROVE_ACTIONS.place_test_outbound_call
+              ? "Place approved outbound call (campaign dial, not full autodialer)"
+              : "Send approved SMS",
       });
     }
   }
@@ -117,9 +134,14 @@ export async function runIntegrationProveTest({
     act === PROVE_ACTIONS.send_test_sms
     || act === PROVE_ACTIONS.send_test_email
     || act === PROVE_ACTIONS.sync_test_crm_contact
+    || act === PROVE_ACTIONS.place_test_outbound_call
+    || act === PROVE_ACTIONS.sync_pull_crm_contacts
   ) {
     const ref = execution.externalReference ?? execution.messageId ?? execution.providerId ?? null;
-    if (execution.simulated === true || !ref) {
+    const hasEvidence = act === PROVE_ACTIONS.sync_pull_crm_contacts
+      ? Number(execution.pulled ?? 0) > 0
+      : Boolean(ref);
+    if (execution.simulated === true || !hasEvidence) {
       return deepFreeze({
         ok: false,
         verified: true,
@@ -129,6 +151,10 @@ export async function runIntegrationProveTest({
           ? "SMS prove did not send a real Twilio message. Check credentials, A2P/trial limits, and the destination number."
           : act === PROVE_ACTIONS.sync_test_crm_contact
             ? "CRM prove did not create a real HubSpot/HighLevel record. Reconnect and retry."
+          : act === PROVE_ACTIONS.place_test_outbound_call
+            ? "Outbound campaign prove did not place a real Twilio call. Check credentials and the campaign contact."
+          : act === PROVE_ACTIONS.sync_pull_crm_contacts
+            ? "CRM pull prove did not return any real contacts from HubSpot/HighLevel."
           : "Email prove did not send a real message. Reconnect Gmail and try again.",
         detail: execution,
         at: nowISO,
@@ -193,6 +219,12 @@ function proveSuccessMessage(action) {
   }
   if (action === PROVE_ACTIONS.book_test_slot) {
     return "Live test slot booked and confirmed on the connected calendar.";
+  }
+  if (action === PROVE_ACTIONS.place_test_outbound_call) {
+    return "Approved outbound campaign call placed — GRANT gate held, campaign metadata attached, usage recorded.";
+  }
+  if (action === PROVE_ACTIONS.sync_pull_crm_contacts) {
+    return "Live contacts pulled from the connected CRM into People.";
   }
   return "Prove test passed.";
 }

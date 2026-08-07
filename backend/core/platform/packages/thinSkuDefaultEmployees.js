@@ -194,6 +194,78 @@ export function buildDefaultSalesAssistantEmployee() {
   );
 }
 
+export function buildDefaultCrmAutomationEmployee() {
+  return withRunnableContract(
+    {
+      employeeId: "emp_crm_automation_default",
+      id: "emp_crm_automation_default",
+      archetypeId: "intake_specialist",
+      label: "CRM Automation",
+      displayName: "CRM Automation",
+      purpose: "Keep People contacts and pipeline cards updated from inbound leads; draft follow-ups for approval.",
+      communicationPermissions: { customerFacingRequiresApproval: true },
+      connectionDependencies: ["business_email"],
+    },
+    {
+      automationPath: leadFollowUpPath(),
+      trigger: {
+        mode: "manual_or_events",
+        summary: "When a form, Meta lead, or inquiry arrives",
+        eventTypes: ["FORM_SUBMIT", "META_LEAD", "NEW_INQUIRY", "SPECIALTY_JOB_REQUESTED"],
+      },
+    },
+  );
+}
+
+export function buildDefaultSupportVoiceEmployee() {
+  return withRunnableContract(
+    {
+      employeeId: "emp_support_voice_default",
+      id: "emp_support_voice_default",
+      archetypeId: "intake_specialist",
+      label: "Support Voice Agent",
+      displayName: "Support Voice Agent",
+      purpose: "Answer inbound support calls from Knowledge and open support Work tickets for escalation.",
+      communicationPermissions: { customerFacingRequiresApproval: true },
+      connectionDependencies: ["twilio_voice"],
+      supportScoped: true,
+      workType: "support_ticket",
+    },
+    {
+      automationPath: receptionistPath(),
+      trigger: {
+        mode: "manual_or_events",
+        summary: "When an inbound support voice call arrives",
+        eventTypes: ["INBOUND_VOICE_CALL", "SPECIALTY_JOB_REQUESTED"],
+      },
+    },
+  );
+}
+
+export function buildDefaultSchedulingVoiceEmployee() {
+  return withRunnableContract(
+    {
+      employeeId: "emp_scheduling_voice_default",
+      id: "emp_scheduling_voice_default",
+      archetypeId: "appointment_setter",
+      label: "Scheduling Voice Agent",
+      displayName: "Scheduling Voice Agent",
+      purpose: "Find live calendar slots and book confirmed appointments from inbound calls.",
+      communicationPermissions: { customerFacingRequiresApproval: false },
+      connectionDependencies: ["twilio_voice", "calendar"],
+      liveSlotBook: true,
+    },
+    {
+      automationPath: appointmentSetterPath(),
+      trigger: {
+        mode: "manual_or_events",
+        summary: "When a caller asks to book",
+        eventTypes: ["INBOUND_VOICE_CALL", "SPECIALTY_JOB_REQUESTED"],
+      },
+    },
+  );
+}
+
 export function buildDefaultLeadFollowUpEmployee() {
   return withRunnableContract(
     {

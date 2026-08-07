@@ -7,12 +7,15 @@ import { TwilioVoiceIntegrationAdapter, isTwilioVoiceConfigured } from "./Twilio
 import { MetaLeadAdsIntegrationAdapter, isMetaLeadAdsConfigured } from "./MetaLeadAdsIntegrationAdapter.js";
 import { MetaAdsIntegrationAdapter } from "./MetaAdsIntegrationAdapter.js";
 import { TikTokLeadAdsIntegrationAdapter, isTikTokLeadAdsConfigured } from "./TikTokLeadAdsIntegrationAdapter.js";
+import { OutlookMailIntegrationAdapter } from "./OutlookMailIntegrationAdapter.js";
+import { OutlookCalendarIntegrationAdapter } from "./OutlookCalendarIntegrationAdapter.js";
 import { isGoogleOAuthAppConfigured } from "../oauth/GoogleOAuthClient.js";
+import { isMicrosoftOAuthConfigured } from "../oauth/MicrosoftOAuthClient.js";
 
 /**
  * Live providers for the composition root / workspace activation.
- * Gmail/Calendar require Google OAuth app env. Twilio/Meta adapters are always
- * registered (fetch-based) so owners can connect with their own credentials.
+ * Gmail/Calendar require Google OAuth app env. Outlook requires Microsoft OAuth.
+ * Twilio/Meta adapters are always registered (fetch-based) so owners can connect with their own credentials.
  */
 export function createLiveIntegrationProviders({
   nowISO = "2026-07-01T00:00:00.000Z",
@@ -24,6 +27,10 @@ export function createLiveIntegrationProviders({
     providers.push(new GmailIntegrationAdapter({ nowISO }));
     providers.push(new GoogleCalendarIntegrationAdapter({ nowISO }));
     providers.push(new GoogleSearchConsoleIntegrationAdapter({ nowISO }));
+  }
+  if (force || isMicrosoftOAuthConfigured()) {
+    providers.push(new OutlookMailIntegrationAdapter({ nowISO }));
+    providers.push(new OutlookCalendarIntegrationAdapter({ nowISO }));
   }
   // Always register Twilio / Meta — credentials come from vault on connect.
   providers.push(new TwilioSmsIntegrationAdapter({ nowISO }));
@@ -41,14 +48,17 @@ export function createLiveIntegrationProviders({
 
 export function liveIntegrationAvailability() {
   const googleOAuth = isGoogleOAuthAppConfigured();
+  const microsoftOAuth = isMicrosoftOAuthConfigured();
   const metaConfigured = isMetaLeadAdsConfigured();
   const tiktokConfigured = isTikTokLeadAdsConfigured();
   const serperConfigured = Boolean(String(process.env.SERPER_API_KEY ?? "").trim());
   return {
-    // Email always listed (oauth when Google app configured, else dev_connect when allowed).
+    // Email always listed (oauth when Google/Microsoft app configured, else dev_connect when allowed).
     business_email: true,
-    business_email_oauth: googleOAuth,
-    calendar: googleOAuth,
+    business_email_oauth: googleOAuth || microsoftOAuth,
+    calendar: googleOAuth || microsoftOAuth,
+    outlook_mail: microsoftOAuth,
+    outlook_calendar: microsoftOAuth,
     google_search_console: googleOAuth,
     // Ads / Drive / accounting stay hidden until connect+prove is finished product.
     google_ads: false,
@@ -63,6 +73,7 @@ export function liveIntegrationAvailability() {
     document_storage: false,
     accounting: false,
     _googleOAuth: googleOAuth,
+    _microsoftOAuth: microsoftOAuth,
     _twilioSmsEnv: isTwilioSmsConfigured(),
     _twilioVoiceEnv: isTwilioVoiceConfigured(),
     _metaEnv: metaConfigured,

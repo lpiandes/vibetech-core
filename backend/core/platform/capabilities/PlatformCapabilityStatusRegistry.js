@@ -102,20 +102,24 @@ export const PLATFORM_CAPABILITIES = deepFreeze([
   {
     id: "crm_hubspot",
     label: "HubSpot CRM updates",
-    description: "Private app token — Connected → prove with a real HubSpot contact id.",
+    description: "Private app token — Connected → prove with a real HubSpot contact id. Ongoing sync pushes People contacts out and pulls recent HubSpot contacts back in.",
     verticals: ["*"],
     requiredIntegrations: ["hubspot"],
     requiredPermissions: ["integrations.manage"],
     proveAction: "sync_test_crm_contact",
+    // Alternate, deeper prove: pulls real contacts back from HubSpot into People
+    // (ongoing sync), not just a one-way push of a disposable prove contact.
+    alternateProveAction: "sync_pull_crm_contacts",
   },
   {
     id: "crm_highlevel",
     label: "HighLevel CRM updates",
-    description: "API key + location — Connected → prove with a real HighLevel contact id.",
+    description: "API key + location — Connected → prove with a real HighLevel contact id. Ongoing sync pushes People contacts out and pulls recent HighLevel contacts back in.",
     verticals: ["*"],
     requiredIntegrations: ["highlevel"],
     requiredPermissions: ["integrations.manage"],
     proveAction: "sync_test_crm_contact",
+    alternateProveAction: "sync_pull_crm_contacts",
   },
   {
     id: "knowledge_consult",

@@ -71,6 +71,7 @@ const ACTION_TO_CAPABILITY: Record<string, string> = {
   create_test_event: "calendar_scheduling",
   send_test_sms: "sms_send",
   place_test_call: "voice_calls",
+  place_test_outbound_call: "voice_calls",
   run_sample_social_screen: "social_screen_prove",
   ingest_test_lead: "meta_lead_intake",
   upload_and_cite: "knowledge_consult",
@@ -79,6 +80,8 @@ const ACTION_TO_CAPABILITY: Record<string, string> = {
   run_dental_golden_path: "dental_intake_golden_path",
   submit_test_form: "website_forms",
   sync_test_crm_contact: "crm_hubspot",
+  // Alternate, deeper CRM prove — pulls real contacts back into People, same capability.
+  sync_pull_crm_contacts: "crm_hubspot",
   // Alternate, deeper calendar prove — maps to the same capability as create_test_event.
   book_test_slot: "calendar_scheduling",
 };
@@ -586,6 +589,7 @@ async function executeProveForAction(input: {
     allowSimulated: input.allowSimulated,
     vault: input.vault ?? null,
     knowledgeCount: input.knowledgeCount ?? null,
+    outboundApproved: input.outboundApproved,
   });
 }
 
