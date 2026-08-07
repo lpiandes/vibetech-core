@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 
 import {
-  getAuthorizedWorkspace,
+  getAuthorizedBusinessScope,
   authorizationErrorResponse,
 } from "@/lib/platform/AuthorizedWorkspaceService";
 import { AuthorizationError } from "@/lib/server/compose";
+import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
 import { invalidateCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 import {
@@ -26,13 +27,22 @@ function jsonRouteError(error: unknown) {
   }, { status: 500 });
 }
 
+async function loadInstallation(businessId: string) {
+  invalidateCachedBusinessOsInstallation(businessId);
+  return platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ businessId: string }> },
 ) {
   try {
     const { businessId } = await context.params;
-    const { installation } = await getAuthorizedWorkspace(businessId);
+    await getAuthorizedBusinessScope(businessId, PERMISSIONS.WORK_VIEW);
+    const installation = await loadInstallation(businessId);
+    if (!installation) {
+      return NextResponse.json({ ok: false, error: "Installation not found" }, { status: 404 });
+    }
     const view = presentCustomBuildFromInstallation(installation);
     return NextResponse.json({ ok: true, customBuild: view });
   } catch (error) {
@@ -48,7 +58,12 @@ export async function POST(
     const { businessId } = await context.params;
     const body = await request.json().catch(() => ({}));
     const action = String(body.action ?? "start");
-    const { installation, user } = await getAuthorizedWorkspace(businessId);
+    const scope = await getAuthorizedBusinessScope(businessId, PERMISSIONS.WORK_EDIT);
+    let installation = await loadInstallation(businessId);
+    if (!installation) {
+      return NextResponse.json({ ok: false, error: "Installation not found" }, { status: 404 });
+    }
+    const actorId = scope?.user?.id ?? "custom_build";
 
     if (action === "start") {
       const sheetLine = body.sheetLine ? String(body.sheetLine) : "Custom AI Application";
@@ -68,7 +83,7 @@ export async function POST(
         platformStore,
         installation: started.installation,
         record: started.record,
-        actorId: user?.id ?? "custom_build",
+        actorId,
       });
       invalidateCachedBusinessOsInstallation(businessId);
       return NextResponse.json({ ok: true, customBuild: started.view, created: started.created });
@@ -83,7 +98,7 @@ export async function POST(
         platformStore,
         installation: advanced.installation,
         record: advanced.record,
-        actorId: user?.id ?? "custom_build",
+        actorId,
       });
       invalidateCachedBusinessOsInstallation(businessId);
       return NextResponse.json({ ok: true, customBuild: advanced.view });
