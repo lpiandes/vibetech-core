@@ -100,6 +100,16 @@ export const PLATFORM_CAPABILITIES = deepFreeze([
     defaultStatus: "available",
   },
   {
+    id: "website_chat",
+    label: "Native website chat widget",
+    description: "Embeddable chat widget answers from Knowledge and creates a People contact when a visitor shares contact info.",
+    verticals: ["*"],
+    requiredIntegrations: [],
+    requiredPermissions: ["integrations.manage"],
+    proveAction: "submit_test_chat",
+    defaultStatus: "available",
+  },
+  {
     id: "crm_hubspot",
     label: "HubSpot CRM updates",
     description: "Private app token — Connected → prove with a real HubSpot contact id. Ongoing sync pushes People contacts out and pulls recent HubSpot contacts back in.",
@@ -346,6 +356,9 @@ function missionHrefForCapability(item, base) {
   const first = item.requiredIntegrations?.[0];
   if (item.id === "website_forms" && base) {
     return `${base}/intake`;
+  }
+  if (item.id === "website_chat" && base) {
+    return `${base}/integrations?focus=website_chat&returnTo=${encodeURIComponent(`${base}/home`)}`;
   }
   if (first && base) {
     const home = `${base}/home`;

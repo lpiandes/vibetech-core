@@ -19,6 +19,7 @@ export const PROVE_ACTIONS = Object.freeze({
   run_sports_golden_path: "run_sports_golden_path",
   run_dental_golden_path: "run_dental_golden_path",
   submit_test_form: "submit_test_form",
+  submit_test_chat: "submit_test_chat",
   run_sample_social_screen: "run_sample_social_screen",
   prove_appointment_setter_sms: "prove_appointment_setter_sms",
   prove_team_availability: "prove_team_availability",
@@ -35,6 +36,7 @@ const CONNECTIONLESS_ACTIONS = new Set([
   PROVE_ACTIONS.upload_and_cite,
   PROVE_ACTIONS.approve_and_send,
   PROVE_ACTIONS.submit_test_form,
+  PROVE_ACTIONS.submit_test_chat,
   // Reads installation state directly — no external provider connection to check.
   PROVE_ACTIONS.prove_team_availability,
 ]);
@@ -204,6 +206,9 @@ function proveSuccessMessage(action) {
   }
   if (action === PROVE_ACTIONS.submit_test_form) {
     return "Test website form submission saved to People.";
+  }
+  if (action === PROVE_ACTIONS.submit_test_chat) {
+    return "Test website chat message answered and saved to People.";
   }
   if (action === PROVE_ACTIONS.place_test_call) {
     return "Prove call placed — AI receptionist answers. Customer outbound calls stay approval-gated.";

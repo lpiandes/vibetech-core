@@ -351,7 +351,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     moduleIds: ["home", "people", "integrations", "knowledge", "settings", "inbox"],
     canonicalNavIds: ["home", "people", "inbox", "knowledge", "integrations", "settings"],
     discoveryTopics: ["identity", "industry", "customers", "communications", "integrations", "outcomes"],
-    launchMissionIds: ["website_forms", "knowledge_consult"],
+    launchMissionIds: ["knowledge_consult", "website_forms", "website_chat"],
     honestyNote: "Native website chat widget with Knowledge answers and lead capture.",
     commercialStatus: "product",
     sellable: true,

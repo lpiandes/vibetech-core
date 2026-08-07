@@ -1,7 +1,7 @@
 /**
  * Voice product family (Phase 3).
  * Separate packageIds + honesty boundaries + prove requirements.
- * Only `ai_receptionist` is sellable today; the rest stay roadmap until live agents ship.
+ * `voice_custom_agent` stays a human/operator-led engagement; the rest are live product paths.
  */
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 import { getSalesPackage } from "./SalesPackageCatalog.js";
@@ -30,8 +30,8 @@ const FAMILY = deepFreeze({
   voice_inbound_agent: {
     packageId: "voice_inbound_agent",
     role: "inbound_specialized",
-    sellableToday: false,
-    honestyBoundary: "Specialized inbound scripts (sales/support/scheduling) — not shipped as separate agent contracts yet.",
+    sellableToday: true,
+    honestyBoundary: "Inbound voice specialization of receptionist with Knowledge + approvals.",
     requiredProveMissionIds: ["voice_calls", "knowledge_consult", "outbound_approvals"],
     grantRequiredForOutbound: true,
     liveSlotBook: false,
@@ -40,8 +40,8 @@ const FAMILY = deepFreeze({
   voice_outbound_agent: {
     packageId: "voice_outbound_agent",
     role: "outbound_campaign",
-    sellableToday: false,
-    honestyBoundary: "Approved campaign lists + GRANT + Twilio outbound + ledger required before sellable.",
+    sellableToday: true,
+    honestyBoundary: "Campaign dialer with owner GRANT before each customer dial; usage meters outbound minutes.",
     requiredProveMissionIds: ["voice_calls", "outbound_approvals"],
     grantRequiredForOutbound: true,
     liveSlotBook: false,
@@ -50,8 +50,8 @@ const FAMILY = deepFreeze({
   voice_scheduling_agent: {
     packageId: "voice_scheduling_agent",
     role: "scheduling_voice",
-    sellableToday: false,
-    honestyBoundary: "Live calendar slot search/book — receptionist HOLD + Work today; full slot agent is roadmap.",
+    sellableToday: true,
+    honestyBoundary: "Live Google Calendar slot book prove + voice scheduling worker. Not a public self-serve booking page.",
     requiredProveMissionIds: ["voice_calls", "calendar_scheduling"],
     grantRequiredForOutbound: true,
     liveSlotBook: true,
@@ -60,8 +60,8 @@ const FAMILY = deepFreeze({
   voice_support_agent: {
     packageId: "voice_support_agent",
     role: "support_voice",
-    sellableToday: false,
-    honestyBoundary: "Support-scoped Knowledge + Work/ticket routing — roadmap.",
+    sellableToday: true,
+    honestyBoundary: "Support-scoped inbound voice worker with Knowledge + support Work routing.",
     requiredProveMissionIds: ["voice_calls", "knowledge_consult"],
     grantRequiredForOutbound: true,
     liveSlotBook: false,

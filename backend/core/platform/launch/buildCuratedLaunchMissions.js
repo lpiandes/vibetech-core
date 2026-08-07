@@ -29,6 +29,7 @@ const LAUNCH_PRIORITY = Object.freeze({
     "sms_send",
     "meta_lead_intake",
     "website_forms",
+    "website_chat",
     "voice_calls",
   ],
   dental: [
@@ -40,6 +41,7 @@ const LAUNCH_PRIORITY = Object.freeze({
     "sms_send",
     "meta_lead_intake",
     "website_forms",
+    "website_chat",
     "voice_calls",
   ],
   "*": [
@@ -51,6 +53,7 @@ const LAUNCH_PRIORITY = Object.freeze({
     "voice_calls",
     "meta_lead_intake",
     "website_forms",
+    "website_chat",
   ],
 });
 

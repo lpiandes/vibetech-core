@@ -1,5 +1,13 @@
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 import { INTEGRATION_CAPABILITIES } from "../capabilities/IntegrationCapability.js";
+import { isMicrosoftOAuthAppConfigured } from "../oauth/MicrosoftOAuthClient.js";
+
+// Evaluated once at module load (server process env is stable) — mirrors how gmail/
+// google_calendar are unconditionally "available" and real availability is gated by
+// connect + prove, not this catalog. Only the capabilities we actually implement
+// (Mail.Send / Calendars.ReadWrite) are promoted; microsoft_365/microsoft_calendar stay
+// "planned" since their broader capability lists (files, contacts) are not implemented.
+const MICROSOFT_OAUTH_CONFIGURED = isMicrosoftOAuthAppConfigured();
 
 /**
  * Universal hub capabilities — Architect resolves needs by capability, not provider.
@@ -70,11 +78,15 @@ export const PROVIDER_CATALOG = deepFreeze({
     category: "communication",
     authMethod: "oauth2",
     connectionType: "business_email",
-    capabilities: ["send_email", "read_email"],
-    scopes: ["Mail.Send", "Mail.Read"],
-    status: "planned",
-    honestyNote: "Roadmap — Outlook is not connectable yet. Use Gmail until Microsoft OAuth ships.",
-    setupGuide: "Outlook connection is on the roadmap and not connectable yet.",
+    capabilities: ["send_email"],
+    scopes: ["Mail.Send"],
+    status: MICROSOFT_OAUTH_CONFIGURED ? "available" : "planned",
+    honestyNote: MICROSOFT_OAUTH_CONFIGURED
+      ? null
+      : "Roadmap — Outlook is not connectable yet (MICROSOFT_CLIENT_ID/SECRET not configured). Use Gmail until Microsoft OAuth ships.",
+    setupGuide: MICROSOFT_OAUTH_CONFIGURED
+      ? "Connect Microsoft OAuth for Outlook send via Microsoft Graph. Secrets stay in credential vault."
+      : "Outlook connection is on the roadmap and not connectable yet.",
   }),
   microsoft_365: provider({
     providerId: "microsoft_365",
@@ -146,9 +158,13 @@ export const PROVIDER_CATALOG = deepFreeze({
     authMethod: "oauth2",
     connectionType: "calendar",
     capabilities: ["calendar_read", "calendar_write", "scheduling"],
-    status: "planned",
-    honestyNote: "Roadmap — Outlook Calendar is not connectable yet. Use Google Calendar until Microsoft OAuth ships.",
-    setupGuide: "Outlook Calendar connection is on the roadmap and not connectable yet.",
+    status: MICROSOFT_OAUTH_CONFIGURED ? "available" : "planned",
+    honestyNote: MICROSOFT_OAUTH_CONFIGURED
+      ? null
+      : "Roadmap — Outlook Calendar is not connectable yet (MICROSOFT_CLIENT_ID/SECRET not configured). Use Google Calendar until Microsoft OAuth ships.",
+    setupGuide: MICROSOFT_OAUTH_CONFIGURED
+      ? "Connect Microsoft OAuth for Outlook Calendar via Microsoft Graph. Secrets stay in credential vault."
+      : "Outlook Calendar connection is on the roadmap and not connectable yet.",
   }),
   microsoft_calendar: provider({
     providerId: "microsoft_calendar",

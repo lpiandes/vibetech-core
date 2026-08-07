@@ -10,7 +10,7 @@ import { TikTokLeadAdsIntegrationAdapter, isTikTokLeadAdsConfigured } from "./Ti
 import { OutlookMailIntegrationAdapter } from "./OutlookMailIntegrationAdapter.js";
 import { OutlookCalendarIntegrationAdapter } from "./OutlookCalendarIntegrationAdapter.js";
 import { isGoogleOAuthAppConfigured } from "../oauth/GoogleOAuthClient.js";
-import { isMicrosoftOAuthConfigured } from "../oauth/MicrosoftOAuthClient.js";
+import { isMicrosoftOAuthAppConfigured } from "../oauth/MicrosoftOAuthClient.js";
 
 /**
  * Live providers for the composition root / workspace activation.
@@ -28,7 +28,7 @@ export function createLiveIntegrationProviders({
     providers.push(new GoogleCalendarIntegrationAdapter({ nowISO }));
     providers.push(new GoogleSearchConsoleIntegrationAdapter({ nowISO }));
   }
-  if (force || isMicrosoftOAuthConfigured()) {
+  if (force || isMicrosoftOAuthAppConfigured()) {
     providers.push(new OutlookMailIntegrationAdapter({ nowISO }));
     providers.push(new OutlookCalendarIntegrationAdapter({ nowISO }));
   }
@@ -48,7 +48,7 @@ export function createLiveIntegrationProviders({
 
 export function liveIntegrationAvailability() {
   const googleOAuth = isGoogleOAuthAppConfigured();
-  const microsoftOAuth = isMicrosoftOAuthConfigured();
+  const microsoftOAuth = isMicrosoftOAuthAppConfigured();
   const metaConfigured = isMetaLeadAdsConfigured();
   const tiktokConfigured = isTikTokLeadAdsConfigured();
   const serperConfigured = Boolean(String(process.env.SERPER_API_KEY ?? "").trim());

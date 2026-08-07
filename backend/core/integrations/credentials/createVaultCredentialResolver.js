@@ -7,6 +7,8 @@ const LIVE_PROVIDER_TYPES = Object.freeze([
   "google_calendar",
   "google_search_console",
   "google_ads",
+  "outlook",
+  "outlook_calendar",
   "twilio_sms",
   "twilio_voice",
   "meta_lead_ads",

@@ -9,6 +9,8 @@ import { hydrateWorkspaceCredentials } from "../credentials/durableCredentialVau
 import { createVaultCredentialResolver } from "../credentials/createVaultCredentialResolver.js";
 import { GmailIntegrationAdapter } from "../adapters/GmailIntegrationAdapter.js";
 import { GoogleCalendarIntegrationAdapter } from "../adapters/GoogleCalendarIntegrationAdapter.js";
+import { OutlookMailIntegrationAdapter } from "../adapters/OutlookMailIntegrationAdapter.js";
+import { OutlookCalendarIntegrationAdapter } from "../adapters/OutlookCalendarIntegrationAdapter.js";
 import { TwilioSmsIntegrationAdapter } from "../adapters/TwilioSmsIntegrationAdapter.js";
 import { INTEGRATION_CAPABILITIES } from "../capabilities/IntegrationCapability.js";
 import { PROVE_ACTIONS } from "./IntegrationProveService.js";
@@ -48,6 +50,7 @@ const ACTION_TO_CONNECTION = Object.freeze({
   [PROVE_ACTIONS.run_dental_golden_path]: "business_email",
   [PROVE_ACTIONS.prove_appointment_setter_sms]: "sms_channel",
   [PROVE_ACTIONS.submit_test_form]: "website_forms",
+  [PROVE_ACTIONS.submit_test_chat]: "website_chat",
   [PROVE_ACTIONS.sync_test_crm_contact]: "hubspot",
   [PROVE_ACTIONS.book_test_slot]: "calendar",
 });
@@ -190,6 +193,129 @@ export async function executeLiveProveAction({
         pendingApproval: true,
       },
       message: "Form intake recorded with People contact and a pending follow-up draft for Decisions.",
+    });
+  }
+
+  if (act === PROVE_ACTIONS.submit_test_chat) {
+    const { readCrmState, writeCrmState, upsertContact, upsertPipelineCard } = await import(
+      "../../crm/CrmStore.js"
+    );
+    const { buildChatReply, appendChatTurns, persistWebsiteChatThreads } = await import(
+      "../chat/WebsiteChatService.js"
+    );
+    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    if (!installation) {
+      return deepFreeze({
+        ok: false,
+        reason: "business_missing",
+        message: "Business installation not found.",
+      });
+    }
+
+    const knowledgeDocs = typeof platformStore.listKnowledgeDocumentsForBusiness === "function"
+      ? await platformStore.listKnowledgeDocumentsForBusiness(businessId).catch(() => [])
+      : [];
+    const testMessage = "What are your hours and how do I get started?";
+    const reply = buildChatReply({
+      message: testMessage,
+      documents: Array.isArray(knowledgeDocs) ? knowledgeDocs : [],
+      businessId,
+    });
+
+    const contactId = `contact_chat_prove_${Date.now().toString(36)}`;
+    const leadEmail = String(proveEmail || "prove-chat@example.com");
+    const leadPhone = String(provePhone || "");
+    let crm = readCrmState(installation);
+    crm = upsertContact(crm, {
+      id: contactId,
+      partyId: contactId,
+      name: "Prove Chat Lead",
+      email: leadEmail,
+      phone: leadPhone,
+      kind: "lead",
+      tags: ["website_chat", "prove"],
+      notes: "VIBETech website chat prove submission",
+    });
+    const pipe = (crm.pipelines ?? [])[0] ?? null;
+    let cardId = null;
+    if (pipe?.stages?.[0]?.id) {
+      const upserted = upsertPipelineCard(crm, {
+        pipelineId: pipe.id,
+        card: {
+          id: `card_chat_${contactId}`.slice(0, 64),
+          title: "Prove Chat Lead",
+          stageId: pipe.stages[0].id,
+          contactId,
+          value: 0,
+        },
+      });
+      crm = upserted.crm;
+      cardId = upserted.cardId;
+    }
+    await writeCrmState({
+      platformStore,
+      installation,
+      crm,
+      actorId: "website_chat_prove",
+    });
+
+    const threadId = `thread_prove_${contactId}`;
+    const at = new Date().toISOString();
+    const threads = appendChatTurns({
+      threads: [],
+      threadId,
+      contactId,
+      nowISO: at,
+      turns: [
+        { at, role: "visitor", text: testMessage },
+        {
+          at,
+          role: "assistant",
+          text: reply.text,
+          groundedInKnowledge: reply.groundedInKnowledge,
+          citedDocumentIds: reply.citedDocumentIds,
+        },
+      ],
+    });
+
+    try {
+      const fresh = await platformStore.getBusinessOSInstallation(businessId).catch(() => installation);
+      const existing = Array.isArray(fresh?.configuration?.websiteChatThreads)
+        ? fresh.configuration.websiteChatThreads.filter((t) => t?.id !== threadId)
+        : [];
+      await persistWebsiteChatThreads({
+        platformStore,
+        installation: fresh ?? installation,
+        threads: [...existing, ...threads].slice(-50),
+        actorId: "website_chat_prove",
+        nowISO: at,
+      });
+    } catch {
+      /* transcript persist is best-effort — prove still returns the live result */
+    }
+
+    const chatSubmissionId = `chat_prove_${contactId}`;
+    return deepFreeze({
+      ok: true,
+      simulated: false,
+      verified: true,
+      provider: "website_chat",
+      contactId,
+      cardId,
+      threadId,
+      reply: reply.text,
+      groundedInKnowledge: reply.groundedInKnowledge,
+      citedDocumentIds: reply.citedDocumentIds,
+      detail: {
+        chatSubmissionId,
+        externalReference: chatSubmissionId,
+        providerKind: "chat_submission_id",
+        at,
+        note: "Controlled website-chat prove — sent a test message, got a reply, and created a People contact.",
+        groundedInKnowledge: reply.groundedInKnowledge,
+        citedDocumentIds: reply.citedDocumentIds,
+      },
+      message: "Website chat prove passed — test message answered and contact saved to People.",
     });
   }
 
@@ -540,7 +666,10 @@ export async function executeLiveProveAction({
         ?? matching.senderEmail
         ?? "",
       ).trim();
-      const adapter = new GmailIntegrationAdapter({ nowISO: new Date().toISOString() });
+      const isOutlookMail = /outlook|microsoft/i.test(String(matching.providerType ?? ""));
+      const adapter = isOutlookMail
+        ? new OutlookMailIntegrationAdapter({ nowISO: new Date().toISOString() })
+        : new GmailIntegrationAdapter({ nowISO: new Date().toISOString() });
       const result = await adapter.executeAction({
         actionRequest: {
           capability: INTEGRATION_CAPABILITIES.SEND_EMAIL,
@@ -563,7 +692,7 @@ export async function executeLiveProveAction({
         connection,
         credentialResolver,
       });
-      const mapped = mapAdapterResult(result, { provider: "gmail", to });
+      const mapped = mapAdapterResult(result, { provider: isOutlookMail ? "outlook" : "gmail", to });
       if (mapped?.ok !== false && businessId) {
         try {
           const { recordUsageSafe } = await import("../../platform/billing/UsageMetering.js");
@@ -583,7 +712,10 @@ export async function executeLiveProveAction({
     if (act === PROVE_ACTIONS.create_test_event) {
       const start = new Date(Date.now() + 60 * 60 * 1000);
       const end = new Date(start.getTime() + 30 * 60 * 1000);
-      const adapter = new GoogleCalendarIntegrationAdapter({ nowISO: new Date().toISOString() });
+      const isOutlookCalendar = /outlook|microsoft/i.test(String(matching.providerType ?? ""));
+      const adapter = isOutlookCalendar
+        ? new OutlookCalendarIntegrationAdapter({ nowISO: new Date().toISOString() })
+        : new GoogleCalendarIntegrationAdapter({ nowISO: new Date().toISOString() });
       const result = await adapter.executeAction({
         actionRequest: {
           capability: INTEGRATION_CAPABILITIES.CREATE_CALENDAR_EVENT,
@@ -597,7 +729,7 @@ export async function executeLiveProveAction({
         connection,
         credentialResolver,
       });
-      const mapped = mapAdapterResult(result, { provider: "google_calendar" });
+      const mapped = mapAdapterResult(result, { provider: isOutlookCalendar ? "outlook_calendar" : "google_calendar" });
       if (mapped?.ok !== false && businessId) {
         try {
           const { publishSpecialtyPlatformEvent } = await import(
@@ -607,7 +739,10 @@ export async function executeLiveProveAction({
             businessId,
             employeeId: "calendar",
             eventType: "SCHEDULE_CHANGE",
-            payload: { source: "google_calendar_prove", eventId: result?.externalReference ?? null },
+            payload: {
+              source: isOutlookCalendar ? "outlook_calendar_prove" : "google_calendar_prove",
+              eventId: result?.externalReference ?? null,
+            },
             nowISO: new Date().toISOString(),
           });
         } catch {
@@ -948,9 +1083,11 @@ function matchesConnection(credential, connectionId, action) {
     return (
       provider === "gmail"
       || provider.startsWith("gmail_")
+      || provider === "outlook"
       || provider === "outlook_mail"
       || provider.includes("outlook_mail")
       || provider === "microsoft_mail"
+      || provider === "microsoft_365"
     );
   }
   if (action === PROVE_ACTIONS.create_test_event || action === PROVE_ACTIONS.book_test_slot) {
@@ -1001,6 +1138,11 @@ function humanizeProveProviderError(raw, provider) {
     }
     return "Google permission is missing a required scope. Reconnect this integration and approve all requested access.";
   }
+  if (/(errorcode|error_description).*(consent|scope)|AADSTS\d+/i.test(text)) {
+    if (provider === "outlook" || provider === "outlook_calendar") {
+      return "Microsoft didn’t grant the required permission. Reconnect Outlook and approve all requested access (tenant admin consent may be required).";
+    }
+  }
   if (/message\.body required|message_body required/i.test(text)) {
     return "Email prove payload was invalid. Refresh the page and try Run test again.";
   }
@@ -1031,6 +1173,7 @@ export function resolveProveConnectionStatus({
     act === PROVE_ACTIONS.upload_and_cite
     || act === PROVE_ACTIONS.approve_and_send
     || act === PROVE_ACTIONS.submit_test_form
+    || act === PROVE_ACTIONS.submit_test_chat
     || act === PROVE_ACTIONS.prove_team_availability
   ) {
     return "CONNECTED";

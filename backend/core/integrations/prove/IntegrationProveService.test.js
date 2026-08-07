@@ -151,3 +151,66 @@ test("CRM prove rejects simulated or missing provider id", async () => {
   assert.equal(live.ok, true);
   assert.equal(live.status, "proven");
 });
+
+test("outbound campaign call prove requires owner GRANT before dialing", async () => {
+  const blocked = await runIntegrationProveTest({
+    action: PROVE_ACTIONS.place_test_outbound_call,
+    connectionStatus: "CONNECTED",
+    outboundApproved: false,
+  });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.reason, "outbound_approval_required");
+  assert.match(blocked.honestLabel, /campaign dial/i);
+
+  const granted = await runIntegrationProveTest({
+    action: PROVE_ACTIONS.place_test_outbound_call,
+    connectionStatus: "CONNECTED",
+    outboundApproved: true,
+    execute: async () => ({
+      ok: true,
+      simulated: false,
+      externalReference: "CAxxxx",
+      campaignId: "ovc_1",
+    }),
+  });
+  assert.equal(granted.ok, true);
+  assert.equal(granted.status, "proven");
+});
+
+test("outbound campaign call prove rejects simulated or missing call sid", async () => {
+  const simulated = await runIntegrationProveTest({
+    action: PROVE_ACTIONS.place_test_outbound_call,
+    connectionStatus: "CONNECTED",
+    outboundApproved: true,
+    execute: async () => ({ ok: true, simulated: true, externalReference: "CAxxxx" }),
+  });
+  assert.equal(simulated.ok, false);
+  assert.equal(simulated.reason, "simulated_not_allowed");
+
+  const missingRef = await runIntegrationProveTest({
+    action: PROVE_ACTIONS.place_test_outbound_call,
+    connectionStatus: "CONNECTED",
+    outboundApproved: true,
+    execute: async () => ({ ok: true, simulated: false }),
+  });
+  assert.equal(missingRef.ok, false);
+  assert.equal(missingRef.reason, "missing_provider_reference");
+});
+
+test("CRM pull sync prove requires at least one live contact", async () => {
+  const empty = await runIntegrationProveTest({
+    action: PROVE_ACTIONS.sync_pull_crm_contacts,
+    connectionStatus: "CONNECTED",
+    execute: async () => ({ ok: true, simulated: false, pulled: 0, contacts: [] }),
+  });
+  assert.equal(empty.ok, false);
+  assert.equal(empty.reason, "missing_provider_reference");
+
+  const live = await runIntegrationProveTest({
+    action: PROVE_ACTIONS.sync_pull_crm_contacts,
+    connectionStatus: "CONNECTED",
+    execute: async () => ({ ok: true, simulated: false, pulled: 2, contacts: [{ id: "hs_1" }, { id: "hs_2" }] }),
+  });
+  assert.equal(live.ok, true);
+  assert.equal(live.status, "proven");
+});

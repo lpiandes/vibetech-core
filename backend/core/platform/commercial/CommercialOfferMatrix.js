@@ -56,7 +56,7 @@ const ROWS = [
   offer("ops", "Website Chatbot", "website_chatbot", "ready", "sku_website_forms", ["website_forms"], 3500, 797, {
     notes: "Forms → People (Wave A Ready). Native chat is website_native_chat.",
   }),
-  offer("ops", "Native Website Chatbot", "website_native_chat", "ready", "sku_website_native_chat", ["website_forms", "knowledge_consult"], 4500, 997, {
+  offer("ops", "Native Website Chatbot", "website_native_chat", "ready", "sku_website_native_chat", ["website_forms", "website_chat", "knowledge_consult"], 4500, 997, {
     notes: "Embeddable Knowledge-backed chat widget with lead capture.",
   }),
   offer("ops", "Internal Knowledge Base Assistant", "knowledge_assistant", "ready", "sku_knowledge_assistant", ["knowledge_consult"], 5000, 1297),

@@ -79,6 +79,7 @@ const ACTION_TO_CAPABILITY: Record<string, string> = {
   run_sports_golden_path: "sports_registration_golden_path",
   run_dental_golden_path: "dental_intake_golden_path",
   submit_test_form: "website_forms",
+  submit_test_chat: "website_chat",
   sync_test_crm_contact: "crm_hubspot",
   // Alternate, deeper CRM prove — pulls real contacts back into People, same capability.
   sync_pull_crm_contacts: "crm_hubspot",

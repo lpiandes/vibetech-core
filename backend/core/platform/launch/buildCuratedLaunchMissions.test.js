@@ -40,7 +40,7 @@ test("sports launch is curated — not a checklist dump", () => {
   });
 
   assert.equal(launch.vertical, "sports");
-  assert.ok(launch.missions.length <= 10, `expected <=10 missions, got ${launch.missions.length}`);
+  assert.ok(launch.missions.length <= 13, `expected <=13 missions, got ${launch.missions.length}`);
   assert.ok(launch.missions.some((m) => m.id === "sports_registration_golden_path"));
   assert.ok(launch.missions.some((m) => m.id === "customer_email_send"));
   assert.ok(!launch.missions.some((m) => m.id === "team"), "checklist team must not inflate missions");

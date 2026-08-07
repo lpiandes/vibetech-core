@@ -12,9 +12,10 @@ test("voice family has six sheet SKUs", () => {
   assert.equal(listVoiceProductFamily().length, 6);
 });
 
-test("only receptionist is sellable today", () => {
+test("receptionist and outbound campaign agent are sellable today", () => {
   assert.equal(isVoiceFamilySellableToday("ai_receptionist"), true);
-  assert.equal(isVoiceFamilySellableToday("voice_outbound_agent"), false);
+  assert.equal(isVoiceFamilySellableToday("voice_outbound_agent"), true);
+  assert.equal(isVoiceFamilySellableToday("voice_custom_agent"), false);
   const outbound = getVoiceProduct("voice_outbound_agent");
   assert.ok(outbound.requiredProveMissionIds.includes("voice_calls"));
   assert.equal(outbound.grantRequiredForOutbound, true);
