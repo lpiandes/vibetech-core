@@ -1,29 +1,23 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ChevronDown, Plus, Search } from "lucide-react";
-import Link from "next/link";
+import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import BusinessSwitcher from "@/components/shell/BusinessSwitcher";
 import GlobalAskVibeTechEntry from "@/components/shell/GlobalAskVibeTechEntry";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
-import { businessHasManagedRevenueFollowThrough } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
 type SearchResult = { id: string; label: string; sublabel?: string; href: string };
 
 export default function ShellTopBar() {
   const scope = useBusinessScope();
-  const base = `/b/${scope.businessId}`;
-
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
-  const [newMenuOpen, setNewMenuOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const newMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -48,34 +42,6 @@ export default function ShellTopBar() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [query, scope.businessId]);
-
-  useEffect(() => {
-    function onDocClick(event: MouseEvent) {
-      if (newMenuRef.current && !newMenuRef.current.contains(event.target as Node)) {
-        setNewMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
-  const newActions = (() => {
-    const fromOs = scope.installedBusinessOS?.primaryActions ?? [];
-    if (fromOs.length) {
-      return fromOs.slice(0, 4).map((action) => ({ label: action.label, href: action.href }));
-    }
-    const subjects = scope.installedBusinessOS?.subjectTypes ?? [];
-    const isManagedRft = businessHasManagedRevenueFollowThrough(scope.purchasedPackages ?? []);
-    const actions = [];
-    if (subjects.includes("property")) {
-      actions.push({ label: `Add ${String(subjects[0]).replace(/_/g, " ")}`, href: `${base}/properties?add=1` });
-    } else if (!isManagedRft) {
-      actions.push({ label: "Add contact", href: `${base}/people` });
-    }
-    actions.push({ label: "Add knowledge", href: `${base}/knowledge?add=1` });
-    actions.push({ label: "Invite team", href: `${base}/team` });
-    return actions;
-  })();
 
   const searchPlaceholder = "Search work, knowledge, decisions…";
 
@@ -148,22 +114,12 @@ export default function ShellTopBar() {
         zIndex: 20,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: spacing.sm, minWidth: 0 }}>
-        <Link
-          href="/businesses"
-          style={{ textDecoration: "none", color: cockpitColors.textMuted, fontSize: 12, flexShrink: 0 }}
-        >
-          Businesses
-        </Link>
-        <span style={{ color: cockpitColors.textMuted, flexShrink: 0 }} aria-hidden>
-          /
-        </span>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", minWidth: 0 }}>
         <BusinessSwitcher />
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: spacing.md, flex: 1, justifyContent: "flex-end" }}>
-        <GlobalAskVibeTechEntry />
-        <div style={{ position: "relative", maxWidth: 220, width: "100%" }}>
+      <div style={{ flex: 1, display: "flex", justifyContent: "center", minWidth: 0 }}>
+        <div style={{ position: "relative", width: "100%", maxWidth: 420 }}>
           <Search
             aria-hidden
             style={{
@@ -251,70 +207,10 @@ export default function ShellTopBar() {
             </div>
           ) : null}
         </div>
+      </div>
 
-        <div ref={newMenuRef} style={{ position: "relative" }}>
-          <button
-            type="button"
-            aria-haspopup="menu"
-            aria-expanded={newMenuOpen}
-            onClick={() => setNewMenuOpen((prev) => !prev)}
-            style={{
-              height: 34,
-              padding: `0 ${spacing.md}`,
-              borderRadius: radius.medium,
-              border: `1px solid ${cockpitColors.panelBorder}`,
-              backgroundColor: cockpitColors.panelElevated,
-              color: cockpitColors.textPrimary,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: typography.caption.fontSize,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            <Plus size={14} aria-hidden />
-            New
-            <ChevronDown size={12} aria-hidden />
-          </button>
-          {newMenuOpen ? (
-            <div
-              role="menu"
-              style={{
-                position: "absolute",
-                top: "100%",
-                right: 0,
-                marginTop: 4,
-                minWidth: 180,
-                borderRadius: radius.medium,
-                border: `1px solid ${cockpitColors.panelBorder}`,
-                backgroundColor: cockpitColors.panel,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                zIndex: 30,
-                overflow: "hidden",
-              }}
-            >
-              {newActions.map((action) => (
-                <Link
-                  key={action.href}
-                  role="menuitem"
-                  href={action.href}
-                  onClick={() => setNewMenuOpen(false)}
-                  style={{
-                    display: "block",
-                    padding: `${spacing.sm} ${spacing.md}`,
-                    color: cockpitColors.textPrimary,
-                    textDecoration: "none",
-                    fontSize: typography.caption.fontSize,
-                    borderBottom: `1px solid ${cockpitColors.panelBorder}`,
-                  }}
-                >
-                  {action.label}
-                </Link>
-              ))}
-            </div>
-          ) : null}
-        </div>
+      <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", minWidth: 0 }}>
+        <GlobalAskVibeTechEntry />
       </div>
     </header>
     </>

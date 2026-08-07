@@ -2,9 +2,7 @@ import { getAuthorizedBusinessScope } from "@/lib/platform/AuthorizedWorkspaceSe
 import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 import OutcomesLedgerExperience from "@/components/outcomes/OutcomesLedgerExperience";
-import AskVibeTechPrompt from "@/components/operating/AskVibeTechPrompt";
 import { composeOutcomesLedger } from "../../../../../backend/core/operating-home/composeOutcomesLedger.js";
-import { spacing } from "@/design/tokens";
 
 export default async function OutcomesPage({
   params,
@@ -21,20 +19,6 @@ export default async function OutcomesPage({
       recentOutcomes: [],
       businessId,
     });
-    const winCount = Number(view?.summary?.proofBackedCompleted ?? view?.summary?.completed ?? 0);
-    return (
-      <div style={{ display: "grid", gap: spacing.lg }}>
-        <div style={{ maxWidth: 960, margin: "0 auto", width: "100%", padding: `0 ${spacing.md}` }}>
-          <AskVibeTechPrompt
-            businessId={businessId}
-            showSuggestions
-            winCount={winCount}
-            placeholder="Ask what changed, what is unproven, or where SLA risk is"
-            helperText="Grounded questions only — VIBETech will not invent outcomes."
-          />
-        </div>
-        <OutcomesLedgerExperience view={view as never} />
-      </div>
-    );
+    return <OutcomesLedgerExperience view={view as never} />;
   });
 }

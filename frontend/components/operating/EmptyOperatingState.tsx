@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { EmptyState, ActionButton } from "@/components/operating/Surface";
-import GlobalAskVibeTechEntry from "@/components/shell/GlobalAskVibeTechEntry";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
 
 /**
@@ -77,7 +76,6 @@ export default function EmptyOperatingState({
               </li>
             ))}
           </ul>
-          <GlobalAskVibeTechEntry />
         </div>
       }
     />

@@ -20,7 +20,6 @@ import TeamAvailabilityPanel from "@/components/team/TeamAvailabilityPanel";
 import RoleAccessPanel from "@/components/team/RoleAccessPanel";
 import { copyInviteLink } from "@/lib/platform/inviteLinks";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
-import AskVibeTechPrompt from "@/components/operating/AskVibeTechPrompt";
 import {
   deriveTeamCounts,
   monitoringSummary,
@@ -250,15 +249,6 @@ export default function TeamExecutiveLayout({
   return (
     <div style={simplePageStyle}>
       <PageHeader title="Staff & workforce" action={inviteAction} />
-
-      {businessId ? (
-        <AskVibeTechPrompt
-          businessId={businessId}
-          showSuggestions
-          placeholder="Ask about a responsibility, invite, or who owns follow-through"
-          helperText="Team questions route to Ask — nothing changes until you approve."
-        />
-      ) : null}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button

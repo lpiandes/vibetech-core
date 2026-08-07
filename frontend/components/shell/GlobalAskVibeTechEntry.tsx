@@ -134,7 +134,7 @@ export default function GlobalAskVibeTechEntry({
   }
 
   return (
-    <div style={{ flex: 1, maxWidth: 520, minWidth: 220, position: "relative" }}>
+    <div style={{ width: "100%", maxWidth: 420, minWidth: 200, position: "relative" }}>
       <form
         onSubmit={onSubmit}
         aria-label="Ask VIBETech command bar"
@@ -159,7 +159,7 @@ export default function GlobalAskVibeTechEntry({
           onBlur={() => setTimeout(() => setShowChips(false), 150)}
           onKeyDown={onKeyDown}
           disabled={busy}
-          placeholder="Ask VIBETech — escalate, change a rule, investigate…"
+          placeholder="Ask VIBETech…"
           aria-label="Ask VIBETech"
           style={{
             flex: 1,

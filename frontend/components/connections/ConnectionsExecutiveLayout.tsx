@@ -23,7 +23,6 @@ import {
   type ConnectionViewRow,
   type IntegrationsPresentation,
 } from "./integrationsSemantics";
-import AskVibeTechPrompt from "@/components/operating/AskVibeTechPrompt";
 import type { IntegrationDisplay } from "./integrationDisplay";
 
 function safeArray<T>(value: unknown): T[] {
@@ -325,20 +324,6 @@ export default function ConnectionsExecutiveLayout() {
   return (
     <div style={simplePageStyle}>
       <PageHeader title="Integrations" />
-
-      {businessId ? (
-        <AskVibeTechPrompt
-          businessId={businessId}
-          showSuggestions
-          missingConnectionCount={sections.required.length}
-          unprovenConnectionCount={sections.connected.filter(({ conn }) => {
-            const s = String(conn.status ?? "").toUpperCase();
-            return s === "CONNECTED" || s === "VERIFIED";
-          }).length}
-          placeholder="Ask which connection is blocking a responsibility"
-          helperText="Connect and Prove close open constraints — Ask explains what’s still missing."
-        />
-      ) : null}
 
       {connectError === "access_denied" ? (
         <div

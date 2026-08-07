@@ -21,7 +21,6 @@ import {
 } from "@/components/product/SimpleUI";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 import DecisionCard from "@/components/operating/DecisionCard";
-import AskVibeTechPrompt from "@/components/operating/AskVibeTechPrompt";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -117,31 +116,6 @@ export default function OperatingHomeExperience() {
               {healthLine.detail}
             </p>
           ) : null}
-        </section>
-      ) : null}
-
-      {!showRftLaunch && businessId ? (
-        <section aria-label="Ask VIBETech" style={{ display: "grid", gap: spacing.sm }}>
-          <AskVibeTechPrompt
-            businessId={businessId}
-            showSuggestions
-            waitingCount={waitingItems.length}
-            approvalCount={approvalItems.length}
-            workingCount={workingNow.length}
-            winCount={completedToday}
-            placeholder="What do you need VIBETech to handle?"
-            helperText="Suggestions follow what’s waiting. Nothing changes until you approve."
-          />
-        </section>
-      ) : showRftLaunch && businessId ? (
-        <section aria-label="Ask VIBETech" style={{ display: "grid", gap: spacing.sm }}>
-          <AskVibeTechPrompt
-            businessId={businessId}
-            showSuggestions
-            missingConnectionCount={1}
-            placeholder="Ask why setup is blocked or what to connect next"
-            helperText="Ask during launch — confirm still applies before anything changes."
-          />
         </section>
       ) : null}
 
