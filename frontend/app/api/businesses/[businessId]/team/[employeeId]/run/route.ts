@@ -36,7 +36,7 @@ export async function POST(
       found ?? {
         employeeId,
         label: String(body?.label ?? employeeId),
-        purpose: String(body?.purpose ?? "Custom AI teammate"),
+        purpose: String(body?.purpose ?? "Custom operating responsibility"),
         ownerAdded: true,
       },
       { ownerAdded: true },

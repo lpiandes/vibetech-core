@@ -45,6 +45,7 @@ export {
 export {
   RFT_LAUNCH_STEPS,
   RFT_CONNECT_CONNECTION_IDS,
+  RFT_LISTED_CONNECTION_IDS,
   rftConnectRequirementsActive,
   connectionRequirementsFromRftConnect,
   readRftLaunch,

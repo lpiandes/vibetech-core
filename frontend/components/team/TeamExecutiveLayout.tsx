@@ -161,9 +161,7 @@ export default function TeamExecutiveLayout({
   const metricItems = useMemo(
     () => [
       { id: "human", label: "Team members", value: String(counts.humanTeam) },
-      { id: "digital", label: "Responsibilities", value: String(counts.digitalEmployees) },
-      { id: "ready", label: "Working", value: String(counts.ready) },
-      { id: "setup", label: "Setup", value: String(counts.needsSetup) },
+      { id: "digital", label: "Owned responsibilities", value: String(counts.digitalEmployees) },
     ],
     [counts],
   );

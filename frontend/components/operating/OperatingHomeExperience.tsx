@@ -100,28 +100,7 @@ export default function OperatingHomeExperience() {
     <HomeCanvas>
       <HomeHero greeting={greeting} />
 
-      {showRftLaunch ? (
-        <section
-          aria-label="Launch status"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: spacing.md,
-            padding: "14px 18px",
-            borderRadius: radius.large,
-            background: "rgba(34, 211, 238, 0.08)",
-            border: "1px solid rgba(34, 211, 238, 0.28)",
-          }}
-        >
-          <p style={{ margin: 0, fontSize: 15, fontWeight: 650, color: cockpitColors.textPrimary }}>
-            Finish setup to go live
-          </p>
-          <span style={{ fontSize: 13, color: cockpitColors.accent, fontWeight: 700, whiteSpace: "nowrap" }}>
-            Connect → Prove → Live
-          </span>
-        </section>
-      ) : healthLine.headline ? (
+      {showRftLaunch ? null : healthLine.headline ? (
         <section
           aria-label="Operation health"
           style={{
@@ -166,19 +145,19 @@ export default function OperatingHomeExperience() {
         </section>
       ) : null}
 
-      {/* Managed RFT: RftLaunchPath owns setup — don't stack a second dense checklist. */}
-      {!showRftLaunch && viewModel?.responsibilityGoLive?.total ? (
-        <ResponsibilityGoLivePanel
-          businessId={businessId}
-          view={viewModel.responsibilityGoLive}
-        />
-      ) : null}
-
       {showRftLaunch ? (
         <RftLaunchPath
           businessId={businessId}
           connectionStatuses={viewModel?.connectionStatuses ?? {}}
           proofRecords={viewModel?.proofRecords ?? {}}
+        />
+      ) : null}
+
+      {/* Managed RFT: RftLaunchPath owns setup — don't stack a second dense checklist. */}
+      {!showRftLaunch && viewModel?.responsibilityGoLive?.total ? (
+        <ResponsibilityGoLivePanel
+          businessId={businessId}
+          view={viewModel.responsibilityGoLive}
         />
       ) : null}
 

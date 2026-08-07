@@ -39,16 +39,46 @@ export function readGovernedLearning(installation = null) {
       corrections: [],
       proposals: [],
       ruleVersions: [],
+      correctionProgress: [],
       updatedAt: null,
     };
   }
-  return {
+  const state = {
     version: Number(raw.version) || GOVERNED_LEARNING_VERSION,
     corrections: asArray(raw.corrections),
     proposals: asArray(raw.proposals),
     ruleVersions: asArray(raw.ruleVersions),
     updatedAt: raw.updatedAt ?? null,
   };
+  return {
+    ...state,
+    correctionProgress: correctionProgressTowardProposals(state),
+  };
+}
+
+/**
+ * Progress of open corrections toward a proposal, grouped by reasonCode.
+ * @returns {{ reasonCode: string, count: number, threshold: number, remaining: number }[]}
+ */
+export function correctionProgressTowardProposals(state, { threshold = REPEAT_THRESHOLD } = {}) {
+  const prior = state && typeof state === "object" && Array.isArray(state.corrections)
+    ? state
+    : readGovernedLearning({ configuration: { governedLearning: state } });
+  const counts = {};
+  for (const c of asArray(prior.corrections)) {
+    const code = String(c.reasonCode ?? "").trim();
+    if (!code) continue;
+    counts[code] = (counts[code] ?? 0) + 1;
+  }
+  return Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .map(([reasonCode, count]) => ({
+      reasonCode,
+      count,
+      threshold,
+      remaining: Math.max(0, threshold - count),
+    }))
+    .sort((a, b) => b.count - a.count || a.reasonCode.localeCompare(b.reasonCode));
 }
 
 export function normalizeEditReason(value) {

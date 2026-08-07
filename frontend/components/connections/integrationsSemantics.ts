@@ -74,7 +74,7 @@ export function requirementLevelLabel(level: string, presentation: IntegrationsP
 export function deriveIntegrationMetrics(connections: unknown, presentation: IntegrationsPresentation = {}) {
   const liveFlags = presentation.liveFlags ?? {};
   const rows = safeArray<ConnectionViewRow>(connections).filter((row) =>
-    isIntegrationListed(String(row.id), liveFlags),
+    isIntegrationListed(String(row.id), liveFlags, row.status),
   );
   const connected = rows.filter((row) => isConnectionConnected(String(row.status ?? ""))).length;
   const required = rows.filter((row) => String(row.requirementLevel ?? "").toLowerCase() === "required").length;

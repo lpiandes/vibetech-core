@@ -14,17 +14,29 @@ export const PROVE_ACTION_TO_EVIDENCE_KIND = Object.freeze({
   send_test_sms: "twilio_message_sid",
   place_test_call: "twilio_call_sid",
   submit_test_form: "form_submission_id",
+  // HubSpot / HighLevel share this prove action; prefer detail.providerKind at attach time.
+  sync_test_crm_contact: "hubspot_record_id",
   ingest_test_lead: "webhook_delivery_id",
   sync_gmail_inbox: "gmail_message_id",
 });
 
-export function mapProveActionToEvidenceKind(action) {
+const CRM_EVIDENCE_KINDS = Object.freeze(new Set([
+  "hubspot_record_id",
+  "highlevel_record_id",
+]));
+
+export function mapProveActionToEvidenceKind(action, proveResult = null) {
+  const detail = proveResult?.detail && typeof proveResult.detail === "object"
+    ? proveResult.detail
+    : {};
+  const fromResult = String(detail.providerKind ?? proveResult?.evidenceKind ?? "").trim();
+  if (CRM_EVIDENCE_KINDS.has(fromResult)) return fromResult;
   return PROVE_ACTION_TO_EVIDENCE_KIND[String(action ?? "")] ?? null;
 }
 
 export function extractProveProviderId(result = {}) {
   const detail = result.detail && typeof result.detail === "object" ? result.detail : {};
-  // Never accept internal CRM ids as provider proof — that forges Verified.
+  // Never accept internal Work/card ids as provider proof — that forges Verified.
   return String(
     detail.externalReference
     ?? detail.messageId
@@ -32,6 +44,7 @@ export function extractProveProviderId(result = {}) {
     ?? detail.sid
     ?? detail.formSubmissionId
     ?? detail.webhookDeliveryId
+    ?? detail.providerId
     ?? "",
   ).trim() || null;
 }
@@ -49,7 +62,7 @@ export async function attachProveEvidenceToRftOpportunity({
   actorId = "prove",
   contact = null,
 } = {}) {
-  const kind = mapProveActionToEvidenceKind(action);
+  const kind = mapProveActionToEvidenceKind(action, proveResult);
   const providerId = extractProveProviderId(proveResult);
   if (!kind || !providerId) {
     return deepFreeze({

@@ -30,7 +30,8 @@ test("admin catalog lists sales packages", () => {
   assert.ok(rows.some((row) => row.id === "ai_business_os" && row.fullOs));
   const chatbot = rows.find((row) => row.id === "website_chatbot");
   assert.match(String(chatbot?.honestyNote ?? ""), /forms/i);
-  assert.ok(rows.some((row) => row.id === "appointment_setter" && row.sellable));
+  assert.ok(rows.some((row) => row.id === "appointment_setter" && row.sellable === false));
+  assert.ok(rows.some((row) => row.id === "managed_revenue_follow_through" && row.sellable));
 });
 
 test("normalize drops unknowns and dedupes", () => {
@@ -51,8 +52,8 @@ test("purchased package presentation comes from catalog", () => {
       },
       {
         id: "crm_automation",
-        label: "CRM automation",
-        description: "People, pipelines, and work automation (in-platform CRM).",
+        label: "CRM updates",
+        description: "Follow-through work and contact evidence updates — not a People/pipelines CRM product.",
       },
     ],
   );
@@ -362,14 +363,20 @@ test("package Ask focuses on catalog question IDs for scheduling", async () => {
   assert.equal(skipped.skipBecauseConnected, true);
 });
 
-test("sellable admin list hides roadmap voice family and leads with managed RFT", () => {
+test("sellable admin list is RFT only and RFT-first", () => {
   const sellable = listSellableSalesPackagesForAdmin();
-  assert.ok(sellable.every((row) => row.sellable !== false));
+  assert.ok(sellable.length >= 1);
+  assert.equal(sellable[0]?.id, "managed_revenue_follow_through");
+  assert.ok(sellable.every((row) => (
+    row.id === "managed_revenue_follow_through"
+    || (row.commercialStatus === "managed_product" && row.sellable !== false)
+  )));
+  assert.ok(!sellable.some((row) => row.id === "ai_receptionist"));
+  assert.ok(!sellable.some((row) => row.id === "essential_managed"));
+  assert.ok(!sellable.some((row) => row.id === "growth_managed"));
+  assert.ok(!sellable.some((row) => row.id === "addon_priority_support"));
   assert.ok(!sellable.some((row) => row.id === "voice_outbound_agent"));
   assert.ok(!sellable.some((row) => row.id === "ai_business_os"));
-  assert.equal(sellable[0]?.id, "managed_revenue_follow_through");
-  assert.ok(sellable.some((row) => row.id === "ai_receptionist"));
-  assert.ok(sellable.some((row) => row.id === "addon_priority_support"));
 });
 
 test("thin SKU default employees use registered archetypes", () => {
@@ -445,8 +452,9 @@ test("essential managed soft-caps workflows", () => {
 });
 
 test("website lead capture honesty stays forms until native chat", () => {
-  const pkg = listSellableSalesPackagesForAdmin().find((row) => row.id === "website_chatbot");
+  const pkg = listSalesPackagesForAdmin().find((row) => row.id === "website_chatbot");
   assert.ok(pkg);
+  assert.equal(pkg.sellable, false);
   assert.match(pkg.label, /form/i);
   assert.match(String(pkg.honestyNote ?? ""), /Forms|form/i);
 });

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
 import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
 import ModuleRenderer from "@/components/workspace/ModuleRenderer";
@@ -6,6 +7,7 @@ import RelationshipFollowUpQueue from "@/components/people/RelationshipFollowUpQ
 import { platformStore } from "@/lib/server/compose";
 import {
   businessHasAiProspecting,
+  businessHasManagedRevenueFollowThrough,
   readPurchasedPackagesFromConfig,
 } from "../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 import { businessGrantsSocialCheckerAccess } from "../../../../../backend/core/platform/packages/socialCheckerEntitlement.js";
@@ -16,6 +18,13 @@ import { businessGrantsSocialCheckerAccess } from "../../../../../backend/core/p
 export default async function PeoplePage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   const ctx = await getAuthorizedWorkspace(businessId);
+
+  const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+  const purchasedPackages = readPurchasedPackagesFromConfig(installation?.configuration ?? {});
+  if (businessHasManagedRevenueFollowThrough(purchasedPackages)) {
+    redirect(`/b/${businessId}/work`);
+  }
+
   await redirectIfModuleDenied({ businessId, role: ctx.role, moduleId: "people" });
 
   let followUpCandidates: any[] = [];
@@ -26,8 +35,6 @@ export default async function PeoplePage({ params }: { params: Promise<{ busines
     followUpCandidates = [];
   }
 
-  const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
-  const purchasedPackages = readPurchasedPackagesFromConfig(installation?.configuration ?? {});
   const aiProspectingEnabled = businessHasAiProspecting(purchasedPackages);
   const socialCheckerEnabled = businessGrantsSocialCheckerAccess(purchasedPackages);
 

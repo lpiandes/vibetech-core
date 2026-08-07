@@ -81,7 +81,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     id: "managed_revenue_follow_through",
     label: "Managed Revenue Follow-Through",
     description: "Primary beachhead offer — VIBETech owns follow-through ops with evidence-backed outcomes. Includes Today, Decisions, Outcomes, Company Rules, and minimum integrations.",
-    moduleIds: ["home", "for_you", "people", "work", "knowledge", "integrations", "settings", "inbox", "pipelines"],
+    moduleIds: ["home", "for_you", "work", "knowledge", "integrations", "settings", "schedule"],
     canonicalNavIds: [
       "home",
       "needs_attention",
@@ -133,7 +133,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     launchMissionIds: ["knowledge_consult", "voice_calls", "outbound_approvals"],
     honestyNote: "Knowledge-backed inbound. Booking → appointment Work + calendar HOLD when Google Calendar is connected (team confirms).",
     commercialStatus: "product",
-    sellable: true,
+    sellable: false,
   },
   {
     id: "voice_inbound_agent",
@@ -238,7 +238,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: ["meta_platform", "gmail", "twilio_sms", "twilio_voice"],
     honestyNote: "Intake + approved drafts — not a scored lead engine.",
     commercialStatus: "product",
-    sellable: true,
+    sellable: false,
   },
   {
     id: "appointment_setter",
@@ -252,12 +252,12 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     launchMissionIds: ["meta_lead_intake", "website_forms", "sms_send", "voice_calls", "calendar_scheduling", "outbound_approvals", "knowledge_consult"],
     honestyNote: "Live today: first-touch SMS sends automatically when Twilio SMS is connected (TCPA: include opt-out), durable across restarts; confirmed appointments auto-book onto teammate availability (real Google Calendar event when connected) with no manual HOLD step; Twilio white-glove provisioning (VIBETech buys the number + auto-configures the inbound webhook); Meta lead-form ingest. Rolling out: VIBETech-managed Meta paused-campaign scaffolding (ad set + creative) and TikTok lead ads (platform credentials required, honest not_configured until then). Meta Lead Ads + Calendar are required for the full loop. Not a self-serve ad creative builder.",
     commercialStatus: "product",
-    sellable: true,
+    sellable: false,
   },
   {
     id: "crm_automation",
     label: "CRM updates",
-    description: "Contacts, follow-through work, and in-platform updates (not a CRM shell).",
+    description: "Follow-through work and contact evidence updates — not a People/pipelines CRM product.",
     moduleIds: ["home", "for_you", "people", "pipelines", "work", "settings", "knowledge", "integrations"],
     canonicalNavIds: [
       "home",
@@ -284,7 +284,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: ["gmail"],
     honestyNote: "In-platform contacts and work — not HubSpot/Salesforce sync.",
     commercialStatus: "product",
-    sellable: true,
+    sellable: false,
   },
   {
     id: "sales_assistant",
@@ -308,7 +308,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: ["gmail"],
     honestyNote: "Draft + approve outreach — not a full sales CRM suite.",
     commercialStatus: "product",
-    sellable: true,
+    sellable: false,
     maxWorkers: 2,
   },
   {
@@ -323,7 +323,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: ["none_yet"],
     honestyNote: "Forms embed → People until native website chat ships.",
     commercialStatus: "product",
-    sellable: true,
+    sellable: false,
   },
   {
     id: "ai_prospecting",
@@ -337,7 +337,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: ["prospecting_enrichment", "none_yet"],
     honestyNote: "Public web research only. Every lead must include a phone + name + short brief; email only when found free in search snippets. No paid enrichment. Candidates without a public phone are dropped.",
     commercialStatus: "product",
-    sellable: true,
+    sellable: false,
     maxProspectingRunsPerDay: 5,
     maxProspectingLeadsPerRun: 25,
   },
@@ -373,7 +373,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: ["google_calendar"],
     honestyNote: "Org calendar + reminder drafts. Website/intake can request appointment (Work + calendar HOLD). Not a public self-serve booking page.",
     commercialStatus: "product",
-    sellable: true,
+    sellable: false,
   },
   {
     id: "knowledge_assistant",
@@ -387,7 +387,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: null,
     honestyNote: null,
     commercialStatus: "product",
-    sellable: true,
+    sellable: false,
   },
   {
     id: "email_sms_marketing",
@@ -412,7 +412,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: ["gmail", "twilio_sms"],
     honestyNote: "Approve-first campaign-lite on Campaigns: save template → Prepare & review → Work approve → send.",
     commercialStatus: "product",
-    sellable: true,
+    sellable: false,
   },
   {
     id: "social_background_screening",
@@ -426,7 +426,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     launchMissionIds: ["knowledge_consult", "social_screen_prove", "outbound_approvals"],
     honestyNote: "Public-web social search (Serper + ScrapingBee) + AI filter for protected characteristics. Employer remains responsible for FCRA adverse-action process. No private/authenticated scraping.",
     commercialStatus: "product",
-    sellable: true,
+    sellable: false,
   },
   {
     id: "social_content_automation",
@@ -500,7 +500,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: ["gmail", "google_calendar", "twilio_sms"],
     honestyNote: "Prove whichever connection they buy — email, calendar, or SMS.",
     commercialStatus: "product",
-    sellable: true,
+    sellable: false,
   },
   {
     id: "crm_external_integration",
@@ -559,7 +559,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     ],
     honestyNote: "Includes product scope plus VIBETech managed ops retainer. Soft caps enforced at install.",
     commercialStatus: "managed_product",
-    sellable: true,
+    sellable: false,
     maxWorkers: 3,
     maxWorkflows: 5,
   },
@@ -617,7 +617,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     ],
     honestyNote: "Includes product scope plus VIBETech managed ops retainer. Soft caps enforced at install.",
     commercialStatus: "managed_product",
-    sellable: true,
+    sellable: false,
     maxWorkers: 8,
     maxWorkflows: 15,
   },
@@ -699,7 +699,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     launchMissionIds: null,
     honestyNote: "Commercial flag — Settings shows priority support instructions + contact path. Human SLA, not an in-app ticket queue.",
     commercialStatus: "managed_product",
-    sellable: true,
+    sellable: false,
   },
 ]);
 
@@ -729,12 +729,19 @@ export function listSalesPackagesForAdmin({ includeRoadmap = true } = {}) {
   );
 }
 
-/** Packages offered on Create & invite (live sales sheet). Managed RFT leads. */
+/**
+ * Packages offered on Create & invite (live sales sheet).
+ * Only Managed Revenue Follow-Through and other sellable managed products.
+ * RFT always leads.
+ */
 export function listSellableSalesPackagesForAdmin() {
-  const rows = listSalesPackagesForAdmin({ includeRoadmap: false });
-  const managed = rows.filter((row) => row.commercialStatus === "managed_product");
-  const rest = rows.filter((row) => row.commercialStatus !== "managed_product");
-  return [...managed, ...rest];
+  const rows = listSalesPackagesForAdmin({ includeRoadmap: true }).filter((row) => (
+    row.id === "managed_revenue_follow_through"
+    || (row.commercialStatus === "managed_product" && row.sellable !== false)
+  ));
+  const rft = rows.filter((row) => row.id === "managed_revenue_follow_through");
+  const rest = rows.filter((row) => row.id !== "managed_revenue_follow_through");
+  return [...rft, ...rest];
 }
 
 /**
@@ -790,6 +797,11 @@ export function businessHasAiProspecting(purchasedPackages = []) {
   const packages = normalizePurchasedPackages(purchasedPackages);
   if (packages.includes("ai_prospecting")) return true;
   return isFullOsPurchasedScope(packages);
+}
+
+export function businessHasManagedRevenueFollowThrough(purchasedPackages = []) {
+  const list = Array.isArray(purchasedPackages) ? purchasedPackages : [];
+  return list.some((p) => String(p?.id ?? p) === "managed_revenue_follow_through");
 }
 
 /**

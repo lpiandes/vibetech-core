@@ -209,6 +209,62 @@ export async function POST(
         /* sync failure still allows baseline from whatever is already stored */
       }
 
+      // Best-effort historical Google Calendar pull into CRM calendarEvents for baseline.
+      try {
+        const platform = (ctx.service as any)?.connected?.integrationPlatform ?? null;
+        const calConnection = platform?.connectionRuntime?.getConnectionByType?.("calendar") ?? null;
+        if (calConnection && platform?.credentialResolver) {
+          const { GoogleCalendarIntegrationAdapter } = await import(
+            "../../../../../../../backend/core/integrations/adapters/GoogleCalendarIntegrationAdapter.js"
+          );
+          const { INTEGRATION_CAPABILITIES } = await import(
+            "../../../../../../../backend/core/integrations/capabilities/IntegrationCapability.js"
+          );
+          const { readCrmState, writeCrmState, upsertCalendarEvent } = await import(
+            "../../../../../../../backend/core/crm/CrmStore.js"
+          );
+          const adapter = new GoogleCalendarIntegrationAdapter();
+          const listed = await adapter.executeAction({
+            actionRequest: {
+              capability: INTEGRATION_CAPABILITIES.LIST_CALENDAR_EVENTS,
+              parameters: {
+                timeMin: new Date(Date.now() - windowDays * 86_400_000).toISOString(),
+                timeMax: new Date().toISOString(),
+                maxResults: Math.min(100, Number(body.maxResults ?? 50) || 50),
+              },
+            },
+            connection: calConnection,
+            credentialResolver: platform.credentialResolver,
+          });
+          const events = Array.isArray(listed?.metadata?.events) ? listed.metadata.events : [];
+          if (events.length) {
+            let crm = readCrmState(installation);
+            for (const ev of events) {
+              const externalId = String(ev.id ?? "");
+              if (!externalId) continue;
+              crm = upsertCalendarEvent(crm, {
+                id: `gcal_${externalId}`,
+                externalId,
+                title: String(ev.summary ?? "Calendar event"),
+                startsAt: ev.start ?? null,
+                endsAt: ev.end ?? null,
+                source: "google_calendar_observe",
+                hasNextStep: Boolean(ev.description || ev.location),
+              });
+            }
+            await writeCrmState({
+              platformStore,
+              installation,
+              crm,
+              actorId: "rft_observe",
+            });
+            installation = await reloadInstallation(businessId);
+          }
+        }
+      } catch {
+        /* calendar sync failure is non-blocking */
+      }
+
       const observation = await runHistoricalObservation({
         platformStore,
         installation,
@@ -310,6 +366,41 @@ export async function POST(
         ok: true,
         replay: lastReplay,
         launch: evaluateRftLaunch({ installation, connectionStatuses, proofRecords }),
+      });
+    }
+
+    if (action === "acknowledgeEmptyReplay") {
+      const lastReplay = readRftReplay(installation)?.lastReplay ?? null;
+      if (!lastReplay?.emptyWindow && lastReplay?.passed) {
+        return NextResponse.json({
+          ok: false,
+          error: "Replay already passed with events — empty acknowledge not needed.",
+        }, { status: 400 });
+      }
+      if (!lastReplay) {
+        return NextResponse.json({
+          ok: false,
+          error: "Run historical replay first.",
+        }, { status: 400 });
+      }
+      const patched = applyRftLaunchPatch(readRftLaunch(installation), {
+        replayEmptyAcknowledged: true,
+        replayDetail: "Empty window acknowledged — not treated as proof.",
+      });
+      if (!patched.ok) {
+        return NextResponse.json({ ok: false, error: patched.message }, { status: 400 });
+      }
+      await persistRftLaunch({
+        platformStore,
+        installation,
+        launch: patched.launch,
+        actorId,
+      });
+      installation = await reloadInstallation(businessId);
+      return NextResponse.json({
+        ok: true,
+        launch: evaluateRftLaunch({ installation, connectionStatuses, proofRecords }),
+        honesty: "Empty window is not proof. Connect channels and re-run when history exists.",
       });
     }
 

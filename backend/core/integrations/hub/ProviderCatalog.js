@@ -48,6 +48,7 @@ function provider(def) {
     setupGuide: def.setupGuide ?? `Connect ${def.label} to enable ${def.capabilities.join(", ")}.`,
     scopes: def.scopes ?? [],
     status: def.status ?? "available",
+    honestyNote: def.honestyNote ?? null,
   });
 }
 
@@ -71,6 +72,9 @@ export const PROVIDER_CATALOG = deepFreeze({
     connectionType: "business_email",
     capabilities: ["send_email", "read_email"],
     scopes: ["Mail.Send", "Mail.Read"],
+    status: "planned",
+    honestyNote: "Roadmap — Outlook is not connectable yet. Use Gmail until Microsoft OAuth ships.",
+    setupGuide: "Outlook connection is on the roadmap and not connectable yet.",
   }),
   microsoft_365: provider({
     providerId: "microsoft_365",
@@ -80,6 +84,9 @@ export const PROVIDER_CATALOG = deepFreeze({
     connectionType: "business_email",
     capabilities: ["send_email", "read_email", "calendar_read", "calendar_write", "files"],
     scopes: ["Mail.Send", "Calendars.ReadWrite", "Files.Read"],
+    status: "planned",
+    honestyNote: "Roadmap — Microsoft 365 is not connectable yet. Use Google Workspace until Microsoft OAuth ships.",
+    setupGuide: "Microsoft 365 connection is on the roadmap and not connectable yet.",
   }),
   google_workspace: provider({
     providerId: "google_workspace",
@@ -139,6 +146,9 @@ export const PROVIDER_CATALOG = deepFreeze({
     authMethod: "oauth2",
     connectionType: "calendar",
     capabilities: ["calendar_read", "calendar_write", "scheduling"],
+    status: "planned",
+    honestyNote: "Roadmap — Outlook Calendar is not connectable yet. Use Google Calendar until Microsoft OAuth ships.",
+    setupGuide: "Outlook Calendar connection is on the roadmap and not connectable yet.",
   }),
   microsoft_calendar: provider({
     providerId: "microsoft_calendar",
@@ -147,6 +157,9 @@ export const PROVIDER_CATALOG = deepFreeze({
     authMethod: "oauth2",
     connectionType: "calendar",
     capabilities: ["calendar_read", "calendar_write"],
+    status: "planned",
+    honestyNote: "Roadmap — Microsoft Calendar is not connectable yet. Use Google Calendar until Microsoft OAuth ships.",
+    setupGuide: "Microsoft Calendar connection is on the roadmap and not connectable yet.",
   }),
   // Accounting
   quickbooks_online: provider({

@@ -51,6 +51,7 @@ function IntegrationRow({
   const status = connectionStatusPresentation(String(conn.status ?? ""), presentation);
   const action = primaryIntegrationAction(conn, display);
   const blocker = setupBlockerSummary(conn, display);
+  const ladder = proveLadderLabel(conn);
 
   return (
     <div
@@ -81,10 +82,25 @@ function IntegrationRow({
         <div style={{ display: "flex", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" }}>
           <div style={{ fontWeight: 650, color: cockpitColors.textPrimary }}>{display.title}</div>
           <StatusBadge label={status.label} tone={status.tone} />
+          <span style={{ fontSize: 11, fontWeight: 650, color: cockpitColors.textMuted }}>
+            {ladder}
+          </span>
         </div>
         {blocker ? (
           <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, marginTop: 4 }}>
             {blocker}
+          </div>
+        ) : String(conn.status ?? "").toUpperCase() === "CONNECTED" ? (
+          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 4 }}>
+            Connected is not Proven — run Prove with a real provider id before treating this channel as live.
+          </div>
+        ) : String(conn.status ?? "").toUpperCase() === "PROVEN" || String(conn.status ?? "").toUpperCase() === "VERIFIED" ? (
+          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 4 }}>
+            Proven with provider evidence.
+          </div>
+        ) : display.description ? (
+          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 4 }}>
+            {display.description}
           </div>
         ) : null}
       </div>
@@ -99,6 +115,14 @@ function IntegrationRow({
       ) : null}
     </div>
   );
+}
+
+function proveLadderLabel(conn: ConnectionViewRow) {
+  const status = String(conn.status ?? "").toUpperCase();
+  if (status === "PROVEN" || status === "VERIFIED") return "Proven";
+  if (status === "CONNECTED") return "Connected · Prove next";
+  if (status === "CONFIGURING" || status === "NEEDS_ATTENTION") return "Setup in progress";
+  return "Not connected";
 }
 
 export default function ConnectionsExecutiveLayout() {

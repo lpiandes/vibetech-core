@@ -1,5 +1,5 @@
 /**
- * Project every installed BOS AI teammate onto the Team roster.
+ * Project every installed BOS operating responsibility onto the Team roster.
  * Pack defaults, owner-added, and specialty AIs all must appear — not only owner_emp_*.
  */
 import {
@@ -26,7 +26,7 @@ function projectEmployee(employee, { businessId = null, knowledgeCount = 0 } = {
   if (!employeeId) return null;
   const ownerAdded = isOwnerAdded(employee, employeeId);
   const packDefault = Boolean(employee.packDefault || employeeId.startsWith("emp_pack_"));
-  // Every installed AI teammate gets a specialty workspace — not Architect.
+  // Every installed operating responsibility gets a specialty workspace — not Architect.
   const specialtyHref = specialtyHrefFor(businessId, employeeId);
 
   const publicStatus = ownerAdded
@@ -49,8 +49,8 @@ function projectEmployee(employee, { businessId = null, knowledgeCount = 0 } = {
     id: employeeId,
     employeeId,
     name: String(employee.label ?? employee.name ?? employeeId),
-    role: String(employee.purpose ?? employee.role ?? "AI teammate"),
-    responsibility: String(employee.purpose ?? employee.role ?? "AI teammate"),
+    role: String(employee.purpose ?? employee.role ?? "operating responsibility"),
+    responsibility: String(employee.purpose ?? employee.role ?? "operating responsibility"),
     description: employee.purpose ?? null,
     statusKey: publicStatus.statusKey,
     status: publicStatus.statusKey,

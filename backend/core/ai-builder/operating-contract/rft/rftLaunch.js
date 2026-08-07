@@ -29,9 +29,26 @@ export const RFT_LAUNCH_STEP_STATUS = Object.freeze({
  */
 export const RFT_CONNECT_CONNECTION_IDS = Object.freeze(["business_email", "calendar"]);
 
+/**
+ * Always-listed RFT channels (required + optional prove). SMS is not a connect gate,
+ * but must stay visible for appointment-setter prove after go-live.
+ */
+export const RFT_LISTED_CONNECTION_IDS = Object.freeze([
+  "business_email",
+  "calendar",
+  "sms_channel",
+  "website_forms",
+  "hubspot",
+  "highlevel",
+]);
+
 const RFT_CONNECT_LABELS = Object.freeze({
   business_email: "Business email",
   calendar: "Calendar",
+  sms_channel: "Text messaging",
+  website_forms: "Website forms",
+  hubspot: "HubSpot",
+  highlevel: "HighLevel",
 });
 
 /**
@@ -42,13 +59,44 @@ export function rftConnectRequirementsActive(installation = null) {
   return !installation?.configuration?.rftLaunch?.goLiveAt;
 }
 
+export function isRftBeachheadInstall(installation = null) {
+  const packages = installation?.configuration?.purchasedPackages
+    ?? installation?.configuration?.packages
+    ?? [];
+  const ids = Array.isArray(packages)
+    ? packages.map((p) => String(p?.id ?? p))
+    : [];
+  if (ids.includes("managed_revenue_follow_through")) return true;
+  if (installation?.configuration?.rftLaunch) return true;
+  if (Array.isArray(installation?.configuration?.employees)
+    && installation.configuration.employees.some((e) => e?.operatingContract?.rft)) {
+    return true;
+  }
+  return false;
+}
+
 export function connectionRequirementsFromRftConnect(installation = null) {
-  if (!rftConnectRequirementsActive(installation)) return [];
-  return RFT_CONNECT_CONNECTION_IDS.map((id) => ({
-    id,
-    displayName: RFT_CONNECT_LABELS[id] ?? id.replace(/_/g, " "),
-    requirementLevel: "required",
-  }));
+  const required = rftConnectRequirementsActive(installation)
+    ? RFT_CONNECT_CONNECTION_IDS.map((id) => ({
+      id,
+      displayName: RFT_CONNECT_LABELS[id] ?? id.replace(/_/g, " "),
+      requirementLevel: "required",
+    }))
+    : [];
+  if (!isRftBeachheadInstall(installation) && !rftConnectRequirementsActive(installation)) {
+    return required;
+  }
+  // Keep calendar/SMS/forms/CRM visible after go-live for prove + open constraints.
+  const byId = new Map(required.map((row) => [row.id, row]));
+  for (const id of RFT_LISTED_CONNECTION_IDS) {
+    if (byId.has(id)) continue;
+    byId.set(id, {
+      id,
+      displayName: RFT_CONNECT_LABELS[id] ?? id.replace(/_/g, " "),
+      requirementLevel: id === "business_email" || id === "calendar" ? "required" : "optional",
+    });
+  }
+  return [...byId.values()];
 }
 
 function emptySteps() {
@@ -91,6 +139,7 @@ export function readRftLaunch(installation = null) {
     goLiveAt: raw?.goLiveAt ? String(raw.goLiveAt) : null,
     observeCompletedAt: raw?.observeCompletedAt ?? null,
     replayPassedAt: raw?.replayPassedAt ?? null,
+    replayEmptyAcknowledgedAt: raw?.replayEmptyAcknowledgedAt ?? null,
     shadowPassedAt: raw?.shadowPassedAt ?? null,
     updatedAt: raw?.updatedAt ?? null,
   };
@@ -158,17 +207,26 @@ export function evaluateRftLaunch({
       : "Confirm SLAs and what needs your approval.",
   };
 
-  const replayPassed = Boolean(replayState.lastReplay?.passed) || Boolean(launch.replayPassedAt);
+  const replayPassed = Boolean(replayState.lastReplay?.passed)
+    || Boolean(launch.replayPassedAt)
+    || (Boolean(replayState.lastReplay?.emptyWindow) && Boolean(launch.replayEmptyAcknowledgedAt));
   launch.steps.replay = {
     status: replayPassed
       ? "complete"
       : (hasBaseline && launch.confirmedContentHash ? "ready" : "pending"),
-    at: launch.replayPassedAt ?? replayState.lastReplay?.ranAt ?? launch.steps.replay.at,
+    at: launch.replayPassedAt
+      ?? launch.replayEmptyAcknowledgedAt
+      ?? replayState.lastReplay?.ranAt
+      ?? launch.steps.replay.at,
     detail: replayPassed
-      ? (replayState.lastReplay?.passDetail ?? "Replay passed.")
-      : (hasBaseline
-        ? "Replay history against your rules (no sends)."
-        : "Complete the baseline first."),
+      ? (launch.replayEmptyAcknowledgedAt && !replayState.lastReplay?.passed
+        ? "Empty window acknowledged — not treated as proof."
+        : (replayState.lastReplay?.passDetail ?? "Replay passed."))
+      : (replayState.lastReplay?.emptyWindow
+        ? "Empty window — acknowledge to continue, or connect history and re-run."
+        : (hasBaseline
+          ? "Replay history against your rules (no sends)."
+          : "Complete the baseline first.")),
   };
 
   const shadowPassed = Boolean(replayState.shadow?.passed) || Boolean(launch.shadowPassedAt);
@@ -267,6 +325,7 @@ export function applyRftLaunchPatch(launch, patch = {}, { nowISO = null } = {}) 
     goLiveAt: launch.goLiveAt ?? null,
     observeCompletedAt: launch.observeCompletedAt ?? null,
     replayPassedAt: launch.replayPassedAt ?? null,
+    replayEmptyAcknowledgedAt: launch.replayEmptyAcknowledgedAt ?? null,
     shadowPassedAt: launch.shadowPassedAt ?? null,
     updatedAt: at,
   };
@@ -306,6 +365,14 @@ export function applyRftLaunchPatch(launch, patch = {}, { nowISO = null } = {}) 
       detail: patch.replayDetail ?? "Historical replay passed.",
     };
   }
+  if (patch.replayEmptyAcknowledged === true) {
+    next.replayEmptyAcknowledgedAt = at;
+    next.steps.replay = {
+      status: "complete",
+      at,
+      detail: patch.replayDetail ?? "Empty window acknowledged — not treated as proof.",
+    };
+  }
   if (patch.shadowPassed === true) {
     next.shadowPassedAt = at;
     next.steps.shadow = {
@@ -323,11 +390,11 @@ export function applyRftLaunchPatch(launch, patch = {}, { nowISO = null } = {}) 
         launch: deepFreeze(next),
       };
     }
-    if (!next.observeCompletedAt || !next.replayPassedAt || !next.shadowPassedAt) {
+    if (!next.observeCompletedAt || !(next.replayPassedAt || next.replayEmptyAcknowledgedAt) || !next.shadowPassedAt) {
       return {
         ok: false,
         code: "go_live_gate",
-        message: "Observe, replay, and shadow must pass before go-live.",
+        message: "Observe, replay (or acknowledge empty), and shadow must pass before go-live.",
         launch: deepFreeze(next),
       };
     }

@@ -491,6 +491,20 @@ test("historical replay classifies approval vs escalate and never claims outboun
   assert.equal(replay.passed, true);
 });
 
+test("empty historical replay is not a green pass", async () => {
+  const { runHistoricalReplay } = await import("./rftReplay.js");
+  const replay = runHistoricalReplay({
+    installation: {
+      configuration: {
+        rftObservation: { events: [] },
+      },
+    },
+  });
+  assert.equal(replay.emptyWindow, true);
+  assert.equal(replay.passed, false);
+  assert.match(String(replay.passDetail), /Empty window/i);
+});
+
 test("shadow mode blocks outbound in executeSpecialtyPathSteps", async () => {
   const { executeSpecialtyPathSteps } = await import("../../specialty/executeSpecialtyPathSteps.js");
   const { PATH_STEP_TYPES, PATH_RUN_MODES } = await import("../automationPath.js");
@@ -538,9 +552,20 @@ test("prove action maps to evidence kinds and extracts provider ids", () => {
   assert.equal(mapProveActionToEvidenceKind("create_test_event"), "calendar_event_id");
   assert.equal(mapProveActionToEvidenceKind("submit_test_form"), "form_submission_id");
   assert.equal(mapProveActionToEvidenceKind("send_test_sms"), "twilio_message_sid");
+  assert.equal(mapProveActionToEvidenceKind("sync_test_crm_contact"), "hubspot_record_id");
+  assert.equal(
+    mapProveActionToEvidenceKind("sync_test_crm_contact", {
+      detail: { providerKind: "highlevel_record_id" },
+    }),
+    "highlevel_record_id",
+  );
   assert.equal(
     extractProveProviderId({ detail: { externalReference: "msg_abc" } }),
     "msg_abc",
+  );
+  assert.equal(
+    extractProveProviderId({ detail: { providerId: "hs_99" } }),
+    "hs_99",
   );
   assert.equal(
     extractProveProviderId({ detail: { contactId: "contact_1", cardId: "card_1" } }),

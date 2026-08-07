@@ -67,7 +67,7 @@ export default function ShellTopBar() {
     const subjectLabel = subjects.length
       ? `Add ${String(subjects[0]).replace(/_/g, " ")}`
       : "Add contact";
-    const subjectHref = subjects.includes("property") ? `${base}/properties?add=1` : `${base}/people`;
+    const subjectHref = subjects.includes("property") ? `${base}/properties?add=1` : `${base}/work`;
     return [
       { label: subjectLabel, href: subjectHref },
       { label: "Add knowledge", href: `${base}/knowledge?add=1` },
@@ -75,14 +75,7 @@ export default function ShellTopBar() {
     ];
   })();
 
-  const searchPlaceholder = (() => {
-    const terminology = scope.installedBusinessOS?.terminology as any;
-    const entities = terminology?.entityLabels ?? terminology?.presentation?.entityLabels ?? {};
-    const people = entities.people ?? entities.person ?? "people";
-    const subjects =
-      entities.subject ?? entities.record ?? (scope.installedBusinessOS?.subjectTypes?.[0] ?? "records");
-    return `Search ${people}, ${String(subjects).replace(/_/g, " ")}, work…`;
-  })();
+  const searchPlaceholder = "Search work, knowledge, decisions…";
 
   const supportAccess = scope.supportAccess;
   const adminView = Boolean(supportAccess?.active);
@@ -167,7 +160,8 @@ export default function ShellTopBar() {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: spacing.md, flex: 1, justifyContent: "flex-end" }}>
-        <div style={{ position: "relative", maxWidth: 300, width: "100%" }}>
+        <GlobalAskVibeTechEntry />
+        <div style={{ position: "relative", maxWidth: 220, width: "100%" }}>
           <Search
             aria-hidden
             style={{
@@ -319,8 +313,6 @@ export default function ShellTopBar() {
             </div>
           ) : null}
         </div>
-
-        <GlobalAskVibeTechEntry compact />
       </div>
     </header>
     </>

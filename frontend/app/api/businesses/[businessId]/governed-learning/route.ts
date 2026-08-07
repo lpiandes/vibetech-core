@@ -13,6 +13,8 @@ import {
   rollbackRule,
   runProposalReplay,
   EDIT_REASON_CODES,
+  REPEAT_THRESHOLD,
+  correctionProgressTowardProposals,
 } from "../../../../../../backend/core/company-rules/governedLearning.js";
 import { applyOperatingContractPatch } from "../../../../../../backend/core/ai-builder/operating-contract/buildOperatingContract.js";
 import { resolveOperatingIndustry } from "../../../../../../backend/core/ai-builder/mapPackAiRolesToSelectedEmployees.js";
@@ -39,9 +41,13 @@ export async function GET(
       return NextResponse.json({ ok: false, error: "No installed Business OS." }, { status: 400 });
     }
     const learning = readGovernedLearning(installation);
+    const correctionProgress = learning.correctionProgress
+      ?? correctionProgressTowardProposals(learning);
     return NextResponse.json({
       ok: true,
       learning,
+      threshold: REPEAT_THRESHOLD,
+      correctionProgress,
       editReasonCodes: [...EDIT_REASON_CODES],
       honesty: "Proposals never auto-apply. Approve after replay to version a Company Rule.",
     });

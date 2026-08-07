@@ -5,11 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, MessageSquare, X } from "lucide-react";
 
+import GlobalAskVibeTechEntry from "@/components/shell/GlobalAskVibeTechEntry";
 import PrimaryNavigation from "@/components/shell/PrimaryNavigation";
 import AccountMenu from "@/components/shell/AccountMenu";
 import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { cockpitColors, spacing, radius, typography } from "@/design/tokens";
-import { ASK_NEW_CHAT_EVENT } from "@/components/architect/askOpenChat";
 
 /**
  * Mobile drawer + sticky Ask VIBETech entry for the business shell.
@@ -84,26 +84,7 @@ export default function MobileNavigationDrawer({
         <div style={{ fontWeight: 700, fontSize: typography.body.fontSize, color: cockpitColors.textPrimary }}>
           {scope.businessName || "VIBETech"}
         </div>
-        <Link
-          href={architectHref}
-          aria-label="Ask VIBETech"
-          onClick={(event) => {
-            if (!onAsk) return;
-            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-            event.preventDefault();
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent(ASK_NEW_CHAT_EVENT));
-            }
-          }}
-          style={{
-            ...iconButtonStyle,
-            backgroundColor: cockpitColors.accent,
-            color: "#fff",
-            borderColor: cockpitColors.accent,
-          }}
-        >
-          <MessageSquare size={18} aria-hidden />
-        </Link>
+        <GlobalAskVibeTechEntry compact />
       </div>
 
       {!onAsk ? (

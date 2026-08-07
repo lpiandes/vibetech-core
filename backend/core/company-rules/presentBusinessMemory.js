@@ -261,6 +261,27 @@ export function presentBusinessMemory(installation = null) {
       .join(" ");
   }
 
+  // Fill remaining empty domains with honest contract-derived placeholders (never invent facts).
+  if (rft || contracts.length) {
+    const derived = `Derived from installed operating contract v${presented?.contractVersion ?? contracts[0]?.contractVersion ?? "1"} — confirm via Ask if this should change.`;
+    const fillIfEmpty = (key, value) => {
+      if (!memoryValues[key] && value) memoryValues[key] = value;
+    };
+    fillIfEmpty("Services", services.length ? null : "Managed Revenue Follow-Through owns acknowledge → assign → next step → chase → handoff.");
+    fillIfEmpty("Customer types", "Eligible inbound opportunities from connected email, forms, or CRM — confirm who may be contacted.");
+    fillIfEmpty("Approved pricing boundaries", rft?.approvalRules?.pricingOutsidePolicyRequiresApproval
+      ? "Pricing outside approved policy requires approval — confirm boundaries via Ask."
+      : derived);
+    fillIfEmpty("Tone & communication", brandVoice ?? "Professional, concise, customer-facing tone — confirm brand voice via Ask.");
+    fillIfEmpty("Response-time promises", derived);
+    fillIfEmpty("Assignment rules", derived);
+    fillIfEmpty("Escalation rules", derived);
+    fillIfEmpty("Approval policies", derived);
+    fillIfEmpty("Scheduling rules", derived);
+    fillIfEmpty("Known exceptions", "No confirmed exceptions yet — add via Ask or after repeated corrections.");
+    fillIfEmpty("Learned preferences", "No repeating corrections yet — preferences appear after governed learning proposals are approved.");
+  }
+
   return {
     contracts,
     memoryValues,

@@ -180,12 +180,11 @@ export function runHistoricalReplay({
     }
   }
 
-  // Pass criteria: ran on at least one event OR empty history with honest zero; no pathOk failures
+  // Pass criteria: classified at least one event with no illegal paths.
+  // Empty window is NOT a green pass — launch may acknowledge empty separately.
   const pathFailures = classifications.filter((c) => c.pathOk === false).length;
-  const passed = pathFailures === 0 && (
-    classifications.length === 0
-    || summary.wouldEscalate < classifications.length // not everything escalates as hard fail
-  );
+  const emptyWindow = classifications.length === 0;
+  const passed = !emptyWindow && pathFailures === 0;
 
   return deepFreeze({
     version: 1,
@@ -195,15 +194,15 @@ export function runHistoricalReplay({
     classifications,
     potentialProblems: potentialProblems.slice(0, 50),
     passed,
-    emptyWindow: classifications.length === 0,
-    passDetail: passed
-      ? (classifications.length
+    emptyWindow,
+    passDetail: emptyWindow
+      ? "Empty window — no historical opportunities to replay. Connect channels and observe first, or acknowledge empty to continue launch."
+      : passed
         ? `Replay classified ${classifications.length} opportunit${classifications.length === 1 ? "y" : "ies"}.`
-        : "Empty-window pass — no historical opportunities in the observation window yet (not a success theater).")
-      : `${pathFailures} illegal path(s) in replay.`,
+        : `${pathFailures} illegal path(s) in replay.`,
     honesty: {
-      message: classifications.length === 0
-        ? "Empty observation window. Replay passed only because there was nothing to classify — connect channels and import history before treating this as proof."
+      message: emptyWindow
+        ? "Not proof. Zero events in the observation window — do not treat this as a successful replay."
         : "Replay proposes only. No email, SMS, or external CRM writes were performed.",
     },
   });

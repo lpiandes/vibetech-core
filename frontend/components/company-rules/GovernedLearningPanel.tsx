@@ -25,10 +25,18 @@ type RuleVersion = {
   approvedAt?: string;
 };
 
+type CorrectionProgress = {
+  reasonCode: string;
+  count: number;
+  threshold: number;
+  remaining: number;
+};
+
 type LearningState = {
   corrections?: unknown[];
   proposals?: Proposal[];
   ruleVersions?: RuleVersion[];
+  correctionProgress?: CorrectionProgress[];
 };
 
 /**
@@ -37,10 +45,20 @@ type LearningState = {
  */
 export default function GovernedLearningPanel({ businessId }: { businessId: string }) {
   const [learning, setLearning] = useState<LearningState | null>(null);
+  const [correctionProgress, setCorrectionProgress] = useState<CorrectionProgress[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const api = `/api/businesses/${encodeURIComponent(businessId)}/governed-learning`;
+
+  const applyPayload = useCallback((json: Record<string, unknown>) => {
+    const nextLearning = (json.learning as LearningState | null | undefined) ?? null;
+    setLearning(nextLearning);
+    const progress = (json.correctionProgress as CorrectionProgress[] | undefined)
+      ?? nextLearning?.correctionProgress
+      ?? [];
+    setCorrectionProgress(Array.isArray(progress) ? progress : []);
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -50,8 +68,8 @@ export default function GovernedLearningPanel({ businessId }: { businessId: stri
       setError(json.error ?? json.message ?? "Could not load learning state.");
       return;
     }
-    setLearning(json.learning ?? null);
-  }, [api]);
+    applyPayload(json);
+  }, [api, applyPayload]);
 
   const post = useCallback(async (action: string, extra: Record<string, unknown> = {}) => {
     setBusy(action);
@@ -67,11 +85,11 @@ export default function GovernedLearningPanel({ businessId }: { businessId: stri
         setError(json.message ?? json.error ?? json.code ?? "Action failed.");
         return;
       }
-      setLearning(json.learning ?? null);
+      applyPayload(json);
     } finally {
       setBusy(null);
     }
-  }, [api]);
+  }, [api, applyPayload]);
 
   useEffect(() => {
     void load().then(() => post("refresh"));
@@ -95,6 +113,16 @@ export default function GovernedLearningPanel({ businessId }: { businessId: stri
       <p style={{ margin: `${spacing.xs} 0 0`, color: cockpitColors.textMuted, fontSize: typography.meta.fontSize }}>
         {correctionCount} correction{correctionCount === 1 ? "" : "s"} recorded
       </p>
+      {correctionProgress.length > 0 ? (
+        <ul style={{ margin: `${spacing.sm} 0 0`, paddingLeft: spacing.md, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize }}>
+          {correctionProgress.map((row) => (
+            <li key={row.reasonCode}>
+              {row.reasonCode}: {row.count} of {row.threshold} toward proposal
+              {row.remaining > 0 ? ` (${row.remaining} more)` : ""}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       {error ? (
         <p style={{ margin: `${spacing.sm} 0 0`, color: cockpitColors.critical, fontSize: typography.meta.fontSize }}>
@@ -105,7 +133,9 @@ export default function GovernedLearningPanel({ businessId }: { businessId: stri
       {!proposals.length ? (
         <div style={{ marginTop: spacing.md, display: "grid", gap: spacing.sm }}>
           <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: typography.meta.fontSize }}>
-            No repeating corrections yet — reject or edit decisions a few times and matching patterns become rule proposals here. Or confirm a rule via Ask above.
+            {correctionCount > 0
+              ? `${correctionCount} correction${correctionCount === 1 ? "" : "s"} recorded — proposals appear when the same reason repeats enough times. Or confirm a rule via Ask above.`
+              : "No repeating corrections yet — reject or edit decisions a few times and matching patterns become rule proposals here. Or confirm a rule via Ask above."}
           </p>
           <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
             <Button asChild variant="outline" size="sm">

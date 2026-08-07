@@ -1,5 +1,5 @@
 /**
- * One-line Home glance for an AI teammate.
+ * One-line Home glance for an operating responsibility.
  * Generic — no vertical hardcoding. Shortens process chains and "Runs:" dumps.
  */
 
@@ -50,7 +50,7 @@ export function presentTeammateHomeGlance(emp = {}) {
     .map((entry) => String(entry ?? "").replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
-  if (!candidates.length) return "AI teammate";
+  if (!candidates.length) return "Operating responsibility";
 
   // Prefer a short, non-dump line when the primary purpose is a full playbook.
   let text = candidates[0];
@@ -80,7 +80,7 @@ export function presentTeammateHomeGlance(emp = {}) {
       .trim();
   }
 
-  return clipAtWord(text, MAX_LEN) || "AI teammate";
+  return clipAtWord(text, MAX_LEN) || "Operating responsibility";
 }
 
 function clipAtWord(text, max = MAX_LEN) {

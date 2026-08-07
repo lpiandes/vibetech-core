@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getAuthorizedWorkspace } from "@/lib/platform/AuthorizedWorkspaceService";
 import { redirectIfModuleDenied } from "@/lib/platform/enforceRoleModuleAccess";
 import CommunicationRenderer from "@/components/communications/CommunicationRenderer";
@@ -5,11 +6,23 @@ import { runTimedPage } from "@/lib/platform/runTimedPage";
 import { markRequestTiming } from "@/lib/platform/pageRequestTiming";
 import { brand, cockpitColors } from "@/design/tokens";
 import Link from "next/link";
+import { platformStore } from "@/lib/server/compose";
+import {
+  businessHasManagedRevenueFollowThrough,
+  readPurchasedPackagesFromConfig,
+} from "../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
 export default async function InboxPage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   return runTimedPage("inbox", async () => {
     const ctx = await getAuthorizedWorkspace(businessId);
+
+    const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+    const purchasedPackages = readPurchasedPackagesFromConfig(installation?.configuration ?? {});
+    if (businessHasManagedRevenueFollowThrough(purchasedPackages)) {
+      redirect(`/b/${businessId}/intelligence`);
+    }
+
     await redirectIfModuleDenied({ businessId, role: ctx.role, moduleId: "inbox" });
     const { service } = ctx;
     const viewModel = service.loadCommunicationViewModel({ includeProductContext: false });

@@ -44,7 +44,7 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
     tier: "live",
     icon: Calendar,
     setupMode: "oauth",
-    listed: false, // promoted when Google OAuth app is configured (see isIntegrationListed)
+    listed: true,
     unlocks: "Calendar sync",
   },
   zoom: {
@@ -62,7 +62,7 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
     tier: "live",
     icon: MessageSquare,
     setupMode: "api_key",
-    listed: false,
+    listed: true,
     unlocks: "Approved SMS after carrier registration",
   },
   voice_channel: {

@@ -1,7 +1,8 @@
 /**
  * Canonical navigation for `/b/[businessId]/**`.
  * Primary IA (Plan 3): Today · Decisions · Outcomes · Company Rules.
- * CRM modules live under Records; connections/admin under System.
+ * Records: evidence + secondary admin (Calendar, Work, Team, Connections).
+ * System: Settings only for beachhead.
  */
 
 import { filterCanonicalNavForPurchasedPackages } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
@@ -62,7 +63,7 @@ const CANONICAL_ORDER: NavDef[] = [
     permission: null,
     group: "primary",
   },
-  // Records — evidence only (Plan 28: no CRM-primary People/Pipelines/Inbox theater)
+  // Records — evidence + secondary admin (Plan 28: no CRM-primary People/Pipelines/Inbox theater)
   { id: "calendar", label: "Calendar", path: "calendar", iconName: "calendar", permission: "people.view", group: "records" },
   { id: "work", label: "Work", path: "work", iconName: "inbox", permission: "work.view", group: "records" },
   {
@@ -73,16 +74,16 @@ const CANONICAL_ORDER: NavDef[] = [
     permission: "people.view",
     group: "records",
   },
-  // System — Connections + Settings only for beachhead (no Automations builder as product)
-  { id: "team", label: "Team", path: "team", iconName: "users", permission: "team.manage", group: "system" },
+  { id: "team", label: "Team", path: "team", iconName: "users", permission: "team.manage", group: "records" },
   {
     id: "integrations",
     label: "Connections",
     path: "integrations",
     iconName: "link",
     permission: "integrations.manage",
-    group: "system",
+    group: "records",
   },
+  // System — Settings only for beachhead (no Automations builder as product)
   {
     id: "settings",
     label: "Settings",
@@ -114,7 +115,7 @@ export type SpecialtyNavSource = {
 
 /**
  * Build shell nav. Labels may be terminology-adjusted by caller.
- * Specialty modules append in the System group after Team.
+ * Specialty modules append in the Records group after Team.
  */
 export function getCanonicalBusinessNav(
   businessId: string,
@@ -205,7 +206,7 @@ export function getCanonicalBusinessNav(
         href: finalHref,
         iconName: String(module.iconName || (module.surfaceKind === "ai_teammate" ? "users" : "folder")),
         permission: null as string | null,
-        group: "system" as NavGroup,
+        group: "records" as NavGroup,
         badgeKey: null as "needsAttention" | null,
       };
     });
@@ -248,7 +249,10 @@ export const CANONICAL_REDIRECTS: Record<string, string> = {
   attention: "intelligence",
   decisions: "intelligence",
   "company-rules": "knowledge",
-  engagement: "people",
+  engagement: "work",
+  people: "work",
+  pipelines: "work",
+  inbox: "intelligence",
   performance: "home",
   analytics: "home",
   "digital-workforce": "team",

@@ -395,13 +395,13 @@ function employeeAskHref(base, employeeId, operating) {
   if (!base || !employeeId) return null;
   const params = new URLSearchParams({ employeeId });
   if (operating.id === "needs_approval") {
-    params.set("prompt", "Review what this teammate needs approved and recommend the next step.");
+    params.set("prompt", "Review what this operating responsibility needs approved and recommend the next step.");
   } else if (operating.id === "blocked" || operating.id === "needs_setup") {
-    params.set("prompt", "Help me unblock this teammate.");
+    params.set("prompt", "Help me unblock this operating responsibility.");
   } else if (operating.id === "idle" || operating.id === "waiting") {
-    params.set("prompt", "What should this teammate take on next?");
+    params.set("prompt", "What should this responsibility take on next?");
   } else {
-    params.set("prompt", "What is this teammate working on?");
+    params.set("prompt", "What is this responsibility working on?");
   }
   return `${base}/architect?${params.toString()}`;
 }

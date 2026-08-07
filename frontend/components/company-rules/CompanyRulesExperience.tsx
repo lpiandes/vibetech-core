@@ -19,6 +19,12 @@ export type PresentedCompanyRuleContract = {
 
 const EMPTY_MEMORY_COPY = "Not confirmed yet — confirm during launch or from Ask.";
 
+function isUnconfirmedMemory(value: string) {
+  return !value
+    || value === EMPTY_MEMORY_COPY
+    || /confirm via Ask|Not confirmed|No confirmed exceptions|No repeating corrections/i.test(value);
+}
+
 type MemoryDomain = {
   title: string;
   value: string;
@@ -72,7 +78,7 @@ export default function CompanyRulesExperience({
         <AskVibeTechPrompt
           businessId={businessId}
           showSuggestions
-          unconfirmedRuleCount={memoryDomains.filter((d) => d.value === EMPTY_MEMORY_COPY).length}
+          unconfirmedRuleCount={memoryDomains.filter((d) => isUnconfirmedMemory(d.value)).length}
           placeholder="Ask to confirm a rule, response promise, or approval policy"
           helperText="Confirmed answers become Company Rules — nothing applies until you approve."
         />
@@ -137,7 +143,7 @@ export default function CompanyRulesExperience({
                 <p
                   style={{
                     margin: 0,
-                    color: domain.value === EMPTY_MEMORY_COPY
+                    color: isUnconfirmedMemory(domain.value)
                       ? cockpitColors.textMuted
                       : cockpitColors.textSecondary,
                     fontSize: typography.meta.fontSize,
@@ -146,7 +152,7 @@ export default function CompanyRulesExperience({
                 >
                   {domain.value}
                 </p>
-                {domain.value === EMPTY_MEMORY_COPY ? (
+                {isUnconfirmedMemory(domain.value) ? (
                   <Link
                     href={`${base}/architect?${new URLSearchParams({
                       prompt: `Confirm the company rule for ${domain.title}. Be specific enough to apply as an operating rule.`,

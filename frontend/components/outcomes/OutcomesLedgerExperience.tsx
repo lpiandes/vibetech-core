@@ -163,10 +163,22 @@ export default function OutcomesLedgerExperience({ view }: { view: OutcomesLedge
             <MetricChip
               label="Baseline delta"
               value={formatMetricStatus(view.metrics.baselineDelta)}
+              action={notObservableAction(
+                view.metrics.baselineDelta?.status === "not_observable"
+                  ? (view.metrics.baselineDelta?.reason ?? formatMetricStatus(view.metrics.baselineDelta))
+                  : null,
+                view.businessId,
+              )}
             />
             <MetricChip
               label="SLA attainment"
               value={formatSlaMetric(view.metrics.slaAttainment)}
+              action={notObservableAction(
+                view.metrics.slaAttainment?.status === "not_observable"
+                  ? (view.metrics.slaAttainment?.reason ?? formatSlaMetric(view.metrics.slaAttainment))
+                  : null,
+                view.businessId,
+              )}
             />
             <MetricChip
               label="Auto vs human"
@@ -175,6 +187,12 @@ export default function OutcomesLedgerExperience({ view }: { view: OutcomesLedge
                   ? String(view.metrics.autoVsHuman.not_observable)
                   : `${view.metrics.autoVsHuman?.auto ?? 0} auto / ${view.metrics.autoVsHuman?.human ?? 0} human`
               }
+              action={notObservableAction(
+                view.metrics.autoVsHuman?.not_observable
+                  ? String(view.metrics.autoVsHuman.not_observable)
+                  : null,
+                view.businessId,
+              )}
             />
             <MetricChip
               label="Proof-backed"
@@ -185,14 +203,34 @@ export default function OutcomesLedgerExperience({ view }: { view: OutcomesLedge
             <MetricChip
               label="Conversion movement"
               value={formatConversionMovement(view.metrics.conversionMovement)}
+              action={notObservableAction(
+                view.metrics.conversionMovement?.status === "not_observable"
+                  ? (view.metrics.conversionMovement?.reason ?? formatConversionMovement(view.metrics.conversionMovement))
+                  : null,
+                view.businessId,
+              )}
             />
             <MetricChip
               label="Human time avoided"
               value={formatTimeAvoided(view.metrics.humanTimeAvoided, view.metrics.humanTimeAvoidedMinutes)}
+              action={notObservableAction(
+                view.metrics.humanTimeAvoided?.status === "not_observable"
+                  || (view.metrics.humanTimeAvoidedMinutes == null && view.metrics.humanTimeAvoided?.status !== "observable")
+                  ? (view.metrics.humanTimeAvoided?.reason ?? formatTimeAvoided(view.metrics.humanTimeAvoided, view.metrics.humanTimeAvoidedMinutes))
+                  : null,
+                view.businessId,
+              )}
             />
             <MetricChip
               label="Operating cost"
               value={formatOperatingCost(view.metrics.operatingCost, view.metrics.operatingCostUsd)}
+              action={notObservableAction(
+                view.metrics.operatingCost?.status === "not_observable"
+                  || (view.metrics.operatingCostUsd == null && view.metrics.operatingCost?.status !== "observable")
+                  ? (view.metrics.operatingCost?.reason ?? formatOperatingCost(view.metrics.operatingCost, view.metrics.operatingCostUsd))
+                  : null,
+                view.businessId,
+              )}
             />
             <MetricChip
               label="Service standard"
@@ -414,14 +452,60 @@ function StatusPill({ status }: { status?: string }) {
   );
 }
 
-function MetricChip({ label, value, detail }: { label: string; value: string; detail?: string }) {
+function MetricChip({
+  label,
+  value,
+  detail,
+  action,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  action?: { href: string; label: string } | null;
+}) {
   return (
     <div style={{ padding: spacing.md, borderRadius: radius.medium, border: `1px solid ${cockpitColors.panelBorder}` }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: cockpitColors.textMuted, textTransform: "uppercase" }}>{label}</div>
       <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4 }}>{value}</div>
       {detail ? <div style={{ fontSize: 12, color: cockpitColors.textMuted, marginTop: 4 }}>{detail}</div> : null}
+      {action ? (
+        <Link
+          href={action.href}
+          style={{
+            display: "inline-block",
+            marginTop: 6,
+            fontSize: 12,
+            fontWeight: 650,
+            color: cockpitColors.accent,
+            textDecoration: "none",
+          }}
+        >
+          {action.label}
+        </Link>
+      ) : null}
     </div>
   );
+}
+
+/** Optional CTA under not_observable chips — skip when businessId is missing. */
+function notObservableAction(
+  reasonOrValue?: string | null,
+  businessId?: string | null,
+): { href: string; label: string } | null {
+  if (!businessId) return null;
+  const text = String(reasonOrValue ?? "").trim();
+  if (!text) return null;
+  const looksNotObservable = /not observable/i.test(text)
+    || /connect|email|calendar|sms|channel|baseline|observe|history|proof-backed|sla|won or lost|intervention/i.test(text);
+  if (!looksNotObservable) return null;
+  const base = `/b/${encodeURIComponent(businessId)}`;
+  if (/connect|email|calendar|sms|channel/i.test(text)) {
+    return { href: `${base}/integrations`, label: "Connect / Prove →" };
+  }
+  if (/baseline|observe|history/i.test(text)) {
+    return { href: `${base}/home`, label: "Open Today →" };
+  }
+  return null;
 }
 
 function formatMetricStatus(metric?: { status?: string; reason?: string; note?: string; baselineMedianMinutes?: number }) {

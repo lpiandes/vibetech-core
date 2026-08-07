@@ -6,7 +6,7 @@
 
 export const AUTOMATION_HOWTO_REPLY = [
   "To change an automation in VIBETech:",
-  "1. Open Automations in the left nav (or open the AI teammate from Team).",
+  "1. Open Automations in the left nav (or open the operating responsibility from Team).",
   "2. Select the teammate whose path you want to edit.",
   "3. Edit the steps on the path canvas, or type a change in the AI Assistant panel",
   "   (for example: \"Add an SMS step\" or \"When a pipeline stage changes, draft an email\") and click Apply.",

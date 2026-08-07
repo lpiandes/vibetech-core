@@ -127,7 +127,7 @@ export default function KnowledgeAddDialog({
       }
     >
       <p style={{ ...typography.caption, color: cockpitColors.textSecondary, margin: `0 0 ${spacing.md}`, lineHeight: 1.45 }}>
-        Tag documents so AI teammates know what they can cite. Untagged uploads stay searchable but do not count toward category readiness. No files yet? Skip and keep proving other capabilities.
+        Tag documents so operating responsibilities know what they can cite. Untagged uploads stay searchable but do not count toward category readiness. No files yet? Skip and keep proving other capabilities.
       </p>
       <div
         style={{

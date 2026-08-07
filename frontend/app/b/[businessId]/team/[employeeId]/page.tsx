@@ -80,7 +80,7 @@ export default async function AiTeammatePage({
       notFound();
     }
 
-    const name = String(employee?.name ?? bosEmployee?.label ?? bosEmployee?.name ?? "AI teammate");
+    const name = String(employee?.name ?? bosEmployee?.label ?? bosEmployee?.name ?? "Operating responsibility");
     const purpose = String(
       employee?.description
         ?? employee?.responsibility

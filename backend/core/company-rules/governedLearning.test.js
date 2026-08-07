@@ -10,6 +10,7 @@ import {
   attachReplayToProposal,
   ingestExternalFeeds,
   readGovernedLearning,
+  correctionProgressTowardProposals,
   REPEAT_THRESHOLD,
 } from "./governedLearning.js";
 
@@ -184,4 +185,30 @@ test("ingestExternalFeeds pulls operator closed + shadow corrections", () => {
   assert.equal(state.corrections.length, 2);
   assert.ok(state.corrections.some((c) => c.source === "operator_intervention"));
   assert.ok(state.corrections.some((c) => c.source === "shadow_correction"));
+});
+
+test("correctionProgressTowardProposals groups open corrections by reasonCode", () => {
+  let state = blank();
+  for (let i = 0; i < 2; i += 1) {
+    const r = recordCorrection(state, {
+      correctionId: `prog_${i}`,
+      source: "owner",
+      reasonCode: "tone_edit",
+      original: { i },
+      approved: { fixed: true },
+    });
+    assert.equal(r.ok, true);
+    state = r.state;
+  }
+  const progress = correctionProgressTowardProposals(state);
+  assert.deepEqual(progress, [{
+    reasonCode: "tone_edit",
+    count: 2,
+    threshold: REPEAT_THRESHOLD,
+    remaining: REPEAT_THRESHOLD - 2,
+  }]);
+  const fromRead = readGovernedLearning({
+    configuration: { governedLearning: state },
+  });
+  assert.deepEqual(fromRead.correctionProgress, progress);
 });

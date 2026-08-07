@@ -121,7 +121,7 @@ function detailFor(mission: LaunchMission) {
   }
   if (isDeferredMission(mission)) {
     if (mission.id === "knowledge_consult") {
-      return "Paused — add playbooks or FAQs whenever you’re ready. AI teammates work better with your voice.";
+      return "Paused — add playbooks or FAQs whenever you’re ready. Operating responsibilities work better with your voice.";
     }
     return mission.blockedReason || "Paused — come back whenever you’re ready.";
   }

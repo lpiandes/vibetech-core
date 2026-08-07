@@ -192,7 +192,7 @@ export default async function SpecialtySurfacePage({
       employee = {
         employeeId: surfaceId,
         label: surfaceId.replace(/^emp_(pack_)?/, "").replace(/_/g, " "),
-        purpose: "AI teammate. Prepares work for your review and never sends without approval.",
+        purpose: "Operating responsibility. Prepares work for your review and never sends without approval.",
         packDefault: String(surfaceId).startsWith("emp_pack_"),
         approvalRequirements: ["human_approval"],
         prohibitedActions: ["autonomous_customer_send"],

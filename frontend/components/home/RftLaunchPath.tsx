@@ -534,14 +534,27 @@ export default function RftLaunchPath({
                   </Button>
                 ) : null}
                 {meta.id === "replay" && status !== "complete" ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={busy != null || status === "pending"}
-                    onClick={() => void runAction("replay")}
-                  >
-                    {busy === "replay" ? "Replaying…" : "Run historical replay"}
-                  </Button>
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={busy != null || status === "pending"}
+                      onClick={() => void runAction("replay")}
+                    >
+                      {busy === "replay" ? "Replaying…" : "Run historical replay"}
+                    </Button>
+                    {replay?.emptyWindow || replay?.lastReplay?.emptyWindow ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy != null}
+                        onClick={() => void runAction("acknowledgeEmptyReplay")}
+                      >
+                        {busy === "acknowledgeEmptyReplay" ? "Saving…" : "Acknowledge empty window"}
+                      </Button>
+                    ) : null}
+                  </>
                 ) : null}
                 {meta.id === "shadow" && status !== "complete" ? (
                   <>
@@ -612,6 +625,11 @@ export default function RftLaunchPath({
                   </Button>
                 ) : null}
               </div>
+              {meta.id === "observe" && status !== "complete" && observeEmptyHonesty(observation, baseline) ? (
+                <p style={{ margin: 0, fontSize: typography.meta.fontSize, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
+                  {observeEmptyHonesty(observation, baseline)}
+                </p>
+              ) : null}
               {meta.id === "prove" && proveFeedback ? (
                 <p
                   role="status"
@@ -698,6 +716,11 @@ function BaselineStrip({ baseline, outcomesHref }: { baseline: any; outcomesHref
     { label: "Waiting >1 day", metric: metrics.waitingOverOneBusinessDay },
     { label: "Meetings w/o next step", metric: metrics.meetingsWithoutNextStep },
   ];
+  const eventCount = Number(baseline.eventCount ?? baseline.honesty?.volume?.totalEvents ?? 0);
+  const emptyHonesty = baseline.honesty?.volume?.note
+    ?? (eventCount === 0
+      ? "Zero events in window — connect channels or import history before treating baseline as a value report."
+      : null);
   return (
     <div style={{ display: "grid", gap: spacing.sm }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: spacing.sm, flexWrap: "wrap" }}>
@@ -724,14 +747,35 @@ function BaselineStrip({ baseline, outcomesHref }: { baseline: any; outcomesHref
             <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>
               {formatMetric(chip.metric, chip.format)}
             </div>
+            {chip.metric?.status === "not_observable" && chip.metric?.reason ? (
+              <div style={{ fontSize: 11, color: cockpitColors.textMuted, marginTop: 4, lineHeight: 1.35 }}>
+                {chip.metric.reason}
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
-      {baseline.honesty?.message ? (
+      {emptyHonesty ? (
+        <p style={{ margin: 0, fontSize: 11, color: cockpitColors.textMuted }}>{emptyHonesty}</p>
+      ) : baseline.honesty?.message ? (
         <p style={{ margin: 0, fontSize: 11, color: cockpitColors.textMuted }}>{baseline.honesty.message}</p>
       ) : null}
     </div>
   );
+}
+
+/** Observe incomplete + empty window: zero events is not a value report. */
+function observeEmptyHonesty(observation: any, baseline: any): string | null {
+  const eventCount = Number(
+    baseline?.eventCount
+    ?? baseline?.honesty?.volume?.totalEvents
+    ?? observation?.events?.length
+    ?? observation?.eventCount
+    ?? NaN,
+  );
+  if (Number.isFinite(eventCount) && eventCount > 0) return null;
+  return baseline?.honesty?.volume?.note
+    ?? "Zero events is not a value report — connect channels or import history, then build baseline again.";
 }
 
 function formatMetric(metric: any, format?: string) {
