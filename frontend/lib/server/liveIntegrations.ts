@@ -19,6 +19,17 @@ export {
   getGoogleOAuthAppConfig,
   googleScopesIncludeGmailSend,
 } from "../../../backend/core/integrations/oauth/GoogleOAuthClient.js";
+export {
+  buildMicrosoftAuthorizeUrl,
+  exchangeMicrosoftAuthorizationCode,
+  refreshMicrosoftAccessToken,
+  OUTLOOK_MAIL_OAUTH_SCOPES,
+  OUTLOOK_CALENDAR_OAUTH_SCOPES,
+  isMicrosoftOAuthAppConfigured,
+  getMicrosoftOAuthAppConfig,
+  microsoftScopesIncludeMailSend,
+  microsoftScopesIncludeCalendar,
+} from "../../../backend/core/integrations/oauth/MicrosoftOAuthClient.js";
 export { isTwilioSmsConfigured } from "../../../backend/core/integrations/adapters/TwilioSmsIntegrationAdapter.js";
 export { isTwilioVoiceConfigured } from "../../../backend/core/integrations/adapters/TwilioVoiceIntegrationAdapter.js";
 export { isMetaLeadAdsConfigured } from "../../../backend/core/integrations/adapters/MetaLeadAdsIntegrationAdapter.js";

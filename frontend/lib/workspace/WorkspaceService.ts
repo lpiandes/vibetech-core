@@ -2408,6 +2408,80 @@ export class WorkspaceService {
     return connection;
   }
 
+  async connectBusinessEmailOutlook({
+    credentialId,
+    senderEmail,
+    platformActiveKnowledgeCount,
+  }: {
+    credentialId: string;
+    senderEmail?: string | null;
+    platformActiveKnowledgeCount?: number;
+  }) {
+    if (!this.connected.integrationPlatform) {
+      throw new Error("Integrations are not available for this workspace.");
+    }
+    const connection = await connectProviderConnection({
+      integrationPlatform: this.connected.integrationPlatform,
+      workspaceId: this.workspaceId,
+      connectionType: "business_email",
+      displayName: "Business Email",
+      providerType: "outlook",
+      credentialId,
+      credentialType: "oauth2",
+      externalAccountReference: senderEmail ? `outlook:${senderEmail}` : `outlook:${credentialId}`,
+      metadata: { senderEmail: senderEmail ?? null },
+    });
+    const knowledgeCount =
+      platformActiveKnowledgeCount ??
+      this.connected.platformKnowledgeCoverage?.activeDocumentCount ??
+      0;
+    this.refreshOperationalState(knowledgeCount);
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
+    });
+    return connection;
+  }
+
+  async connectOutlookCalendar({
+    credentialId,
+    senderEmail,
+    platformActiveKnowledgeCount,
+  }: {
+    credentialId: string;
+    senderEmail?: string | null;
+    platformActiveKnowledgeCount?: number;
+  }) {
+    if (!this.connected.integrationPlatform) {
+      throw new Error("Integrations are not available for this workspace.");
+    }
+    const connection = await connectProviderConnection({
+      integrationPlatform: this.connected.integrationPlatform,
+      workspaceId: this.workspaceId,
+      connectionType: "calendar",
+      displayName: "Calendar",
+      providerType: "outlook_calendar",
+      credentialId,
+      credentialType: "oauth2",
+      externalAccountReference: senderEmail ? `outlook_cal:${senderEmail}` : `outlook_cal:${credentialId}`,
+      metadata: { senderEmail: senderEmail ?? null },
+    });
+    const knowledgeCount =
+      platformActiveKnowledgeCount ??
+      this.connected.platformKnowledgeCoverage?.activeDocumentCount ??
+      0;
+    this.refreshOperationalState(knowledgeCount);
+    await persistAffectedRuntimes({
+      workspaceId: this.workspaceId,
+      stack: this.connected.operatingStack,
+      integrationPlatform: this.connected.integrationPlatform,
+      kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
+    });
+    return connection;
+  }
+
   async connectCrmPrivateApp({
     connectionType,
     displayName,
