@@ -53,6 +53,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin/architect", label: "Architect", icon: <Sparkles size={16} aria-hidden /> },
       { href: "/admin/blueprints", label: "Blueprints", icon: <Layers size={16} aria-hidden /> },
       { href: "/admin/patterns", label: "Patterns", icon: <Package size={16} aria-hidden /> },
+      { href: "/admin/offers", label: "Offer Matrix", icon: <Package size={16} aria-hidden /> },
       { href: "/admin/components", label: "Components", icon: <Boxes size={16} aria-hidden /> },
       { href: "/admin/employees", label: "Employees", icon: <Bot size={16} aria-hidden /> },
       { href: "/admin/installations", label: "Installations", icon: <Package size={16} aria-hidden /> },

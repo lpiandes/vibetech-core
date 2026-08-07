@@ -12,6 +12,7 @@ import {
   scrubInternalWording,
 } from "@/lib/operating/businessLanguage";
 import RftLaunchPath from "@/components/home/RftLaunchPath";
+import CustomBuildPath from "@/components/home/CustomBuildPath";
 import ResponsibilityGoLivePanel from "@/components/home/ResponsibilityGoLivePanel";
 import {
   SimpleEmptyLine,
@@ -125,6 +126,8 @@ export default function OperatingHomeExperience() {
           connectionStatuses={viewModel?.connectionStatuses ?? {}}
           proofRecords={viewModel?.proofRecords ?? {}}
         />
+      ) : businessId ? (
+        <CustomBuildPath businessId={businessId} />
       ) : null}
 
       {/* Managed RFT: RftLaunchPath owns setup — don't stack a second dense checklist. */}

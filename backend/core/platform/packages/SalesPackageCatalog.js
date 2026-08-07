@@ -730,6 +730,21 @@ export function listSalesPackagesForAdmin({ includeRoadmap = true } = {}) {
 }
 
 /**
+ * Commercial Offer Matrix for admin Can-we-sell flows.
+ * Re-exported helpers live in platform/commercial — kept here for discoverability.
+ */
+export {
+  listCommercialOffers,
+  listOfferableOffers,
+  getCommercialOffer,
+  presentOfferMatrixSummary,
+  canOfferLine,
+} from "../commercial/CommercialOfferMatrix.js";
+
+export { canSellOffer } from "../commercial/CanSellOffer.js";
+
+
+/**
  * Packages offered on Create & invite (live sales sheet).
  * Only Managed Revenue Follow-Through and other sellable managed products.
  * RFT always leads.
