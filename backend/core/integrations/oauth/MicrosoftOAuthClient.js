@@ -89,6 +89,9 @@ export function buildMicrosoftAuthorizeUrl({
   return url.toString();
 }
 
+/**
+ * @param {{code?: string, redirectUri?: string, scopes?: string[], fetchImpl?: typeof fetch}} options
+ */
 export async function exchangeMicrosoftAuthorizationCode({
   code,
   redirectUri,

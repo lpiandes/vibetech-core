@@ -18,6 +18,8 @@ export type IntegrationDisplay = {
   setupMode?: IntegrationSetupMode;
   /** When false, this connection is hidden from the owner UI. */
   listed?: boolean;
+  /** business_email / calendar: offer a "Connect with Microsoft" option alongside Google. */
+  microsoftOAuthAvailable?: boolean;
 };
 
 const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
@@ -187,6 +189,7 @@ export type LiveIntegrationFlags = {
   highlevel?: boolean;
   website_forms?: boolean;
   _googleOAuth?: boolean;
+  _microsoftOAuth?: boolean;
 };
 
 export function isIntegrationListed(
@@ -207,7 +210,7 @@ export function isIntegrationListed(
   if (config.listed === false) {
     // Promote when the matching live provider app is configured.
     if (id === "calendar" || id === "business_email") {
-      return Boolean(liveFlags.business_email || liveFlags.calendar || liveFlags._googleOAuth);
+      return Boolean(liveFlags.business_email || liveFlags.calendar || liveFlags._googleOAuth || liveFlags._microsoftOAuth);
     }
     if (id === "sms_channel") return Boolean(liveFlags.sms_channel);
     if (id === "voice_channel") return Boolean(liveFlags.voice_channel);
@@ -233,9 +236,9 @@ export function getIntegrationDisplay(
   if (config) {
     let setupMode = config.setupMode;
     if (id === "business_email") {
-      setupMode = (liveFlags.business_email_oauth || liveFlags._googleOAuth) ? "oauth" : "dev_connect";
+      setupMode = (liveFlags.business_email_oauth || liveFlags._googleOAuth || liveFlags._microsoftOAuth) ? "oauth" : "dev_connect";
     }
-    if ((id === "calendar") && liveFlags.calendar) setupMode = "oauth";
+    if ((id === "calendar") && (liveFlags.calendar || liveFlags._microsoftOAuth)) setupMode = "oauth";
     if (id === "sms_channel" && liveFlags.sms_channel) setupMode = "api_key";
     if (id === "voice_channel" && liveFlags.voice_channel) setupMode = "api_key";
     if (id === "social_screening" && liveFlags.social_screening) setupMode = "api_key";
@@ -249,6 +252,7 @@ export function getIntegrationDisplay(
       ...config,
       setupMode,
       listed: isIntegrationListed(id, liveFlags),
+      microsoftOAuthAvailable: (id === "business_email" || id === "calendar") ? Boolean(liveFlags._microsoftOAuth) : false,
     };
   }
   return {

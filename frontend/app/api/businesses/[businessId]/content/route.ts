@@ -11,10 +11,12 @@ import {
   createDraftPost,
   approveAndQueuePublish,
   listDrafts,
+  runSocialContentDraftProve,
 } from "../../../../../../backend/core/platform/content/SocialContentAutomation.js";
 import {
   fromBrief,
   listJobs,
+  approveMarketingContentJob,
 } from "../../../../../../backend/core/platform/content/MarketingContentEngine.js";
 
 function jsonError(error: unknown) {
@@ -86,6 +88,29 @@ export async function POST(
         platformStore,
         installation,
         draftId: body.draftId,
+        actorId,
+      });
+      invalidateCachedBusinessOsInstallation(businessId);
+      return NextResponse.json(result, { status: result.ok ? 200 : 400 });
+    }
+
+    if (action === "prove") {
+      const result = await runSocialContentDraftProve({
+        platformStore,
+        installation,
+        channel: body.channel,
+        actorId,
+      });
+      invalidateCachedBusinessOsInstallation(businessId);
+      return NextResponse.json(result);
+    }
+
+    if (action === "marketing_approve") {
+      const result = await approveMarketingContentJob({
+        platformStore,
+        installation,
+        jobId: body.jobId,
+        channels: body.channels,
         actorId,
       });
       invalidateCachedBusinessOsInstallation(businessId);

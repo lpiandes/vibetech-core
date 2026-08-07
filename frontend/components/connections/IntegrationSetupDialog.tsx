@@ -109,6 +109,11 @@ export default function IntegrationSetupDialog({
   // Local skip only when Google OAuth is not available — never as an escape hatch
   // that marks email Connected without gmail.send.
   const allowLocalDesignPartnerConnect = isBusinessEmail && canConnect && setupMode === "dev_connect";
+  const showMicrosoftOAuthOption =
+    canConnect
+    && setupMode === "oauth"
+    && Boolean(integration.microsoftOAuthAvailable)
+    && (integration.id === "business_email" || integration.id === "calendar");
   const oauthReturnTo = resolveOAuthReturnPath(
     returnTo ?? searchParams.get("returnTo"),
     `/b/${businessId}/integrations`,
@@ -159,6 +164,33 @@ export default function IntegrationSetupDialog({
           : integration.id === "google_search_console"
             ? `/api/businesses/${businessId}/integrations/search-console/oauth/start`
           : `/api/businesses/${businessId}/integrations/gmail/oauth/start`;
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ returnTo: oauthReturnTo }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.authorizeUrl) {
+        setError(String(data.error ?? "Could not start connection."));
+        setLoading(false);
+        return;
+      }
+      window.location.href = String(data.authorizeUrl);
+    } catch {
+      setError("Network error. Please try again.");
+      setLoading(false);
+    }
+  }
+
+  async function startMicrosoftOAuth() {
+    if (!businessId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const path =
+        integration.id === "calendar"
+          ? `/api/businesses/${businessId}/integrations/outlook-calendar/oauth/start`
+          : `/api/businesses/${businessId}/integrations/outlook/oauth/start`;
       const res = await fetch(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -379,6 +411,11 @@ export default function IntegrationSetupDialog({
                 {loading ? "Connecting…" : "Connect locally (skip Google)"}
               </SecondaryButton>
             ) : null}
+            {showMicrosoftOAuthOption ? (
+              <SecondaryButton onClick={loading ? undefined : () => void startMicrosoftOAuth()}>
+                {loading ? "Connecting…" : "Connect with Microsoft"}
+              </SecondaryButton>
+            ) : null}
             <PrimaryButton onClick={loading ? undefined : primaryAction()}>{primaryLabel()}</PrimaryButton>
           </>
         ) : canConnect && ((integration.id === "meta_lead_ads" && metaRequestResult) || (integration.id === "sms_channel" && provisionResult) || (integration.id === "voice_channel" && voiceConnectResult)) ? (
@@ -410,9 +447,9 @@ export default function IntegrationSetupDialog({
         {isGoogleOAuth ? (
           <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: 14, lineHeight: 1.45 }}>
             {integration.id === "business_email"
-              ? "You’ll sign in with Google. Nothing sends until you approve it."
+              ? `You’ll sign in with Google. Nothing sends until you approve it.${showMicrosoftOAuthOption ? " Use Outlook or Microsoft 365 instead? Connect with Microsoft below." : ""}`
               : integration.id === "calendar"
-                ? "You’ll sign in with Google to sync this business calendar."
+                ? `You’ll sign in with Google to sync this business calendar.${showMicrosoftOAuthOption ? " Use Outlook Calendar instead? Connect with Microsoft below." : ""}`
                 : "You’ll sign in with Google on the next screen."}
           </p>
         ) : null}

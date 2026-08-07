@@ -12,6 +12,7 @@ import { cockpitColors, spacing } from "@/design/tokens";
 import { settingsHubLinks, type SetupChecklistItem } from "./settingsSemantics";
 import AccessRequestsPanel from "./AccessRequestsPanel";
 import BillingUsagePanel from "./BillingUsagePanel";
+import SalesAnalyticsPanel from "./SalesAnalyticsPanel";
 import { businessGrantsSocialCheckerAccess } from "../../../backend/core/platform/packages/socialCheckerEntitlement.js";
 
 /**
@@ -45,6 +46,7 @@ export default function SettingsScreen({
   const [resettingLaunch, setResettingLaunch] = useState(false);
   const hubLinks = settingsHubLinks({ businessId, canManageTeam, canManageIntegrations, canManageKnowledge });
   const hasSocial = businessGrantsSocialCheckerAccess(purchasedPackages);
+  const hasSalesAnalytics = purchasedPackages.some((id) => ["sales_analytics", "reporting_automation"].includes(String(id)));
   const canResetLaunch = canManageIntegrations
     || /owner|admin/i.test(String(roleLabel ?? ""));
 
@@ -190,6 +192,19 @@ export default function SettingsScreen({
       >
         <BillingUsagePanel businessId={businessId} purchasedPackages={purchasedPackages} />
       </div>
+
+      {hasSalesAnalytics ? (
+        <div
+          style={{
+            padding: 16,
+            borderRadius: 16,
+            background: cockpitColors.panel,
+            border: `1px solid ${cockpitColors.panelBorder}`,
+          }}
+        >
+          <SalesAnalyticsPanel businessId={businessId} />
+        </div>
+      ) : null}
 
       <PrimaryButton onClick={() => signOut({ callbackUrl: "/login" })}>Sign out</PrimaryButton>
     </div>

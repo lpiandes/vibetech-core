@@ -412,6 +412,30 @@ test("thin SKU default employees use registered archetypes", () => {
   );
 });
 
+test("voice_support_agent gets a Knowledge-first support contract distinct from the receptionist", () => {
+  const support = filterEmployeesForPurchasedPackages([], ["voice_support_agent"]);
+  assert.equal(support.length, 1);
+  assert.match(String(support[0].label ?? ""), /Support Voice/i);
+  const supportSteps = support[0].operatingContract?.automationPath?.steps ?? [];
+  assert.ok(supportSteps.some((s) => s.type === "notify_team"), "support path escalates to the team");
+  assert.ok(
+    supportSteps.some((s) => /support ticket/i.test(String(s.label ?? ""))),
+    "support path opens a support ticket, not a generic intake log",
+  );
+
+  const receptionist = filterEmployeesForPurchasedPackages([], ["ai_receptionist"]);
+  const receptionistSteps = receptionist[0].operatingContract?.automationPath?.steps ?? [];
+  assert.notDeepEqual(supportSteps, receptionistSteps);
+  assert.equal(receptionistSteps.some((s) => s.type === "notify_team"), false);
+});
+
+test("voice_scheduling_agent gets a default scheduling voice worker with live slot booking", () => {
+  const scheduling = filterEmployeesForPurchasedPackages([], ["voice_scheduling_agent"]);
+  assert.equal(scheduling.length, 1);
+  assert.match(String(scheduling[0].label ?? ""), /Scheduling Voice/i);
+  assert.ok(scheduling[0].operatingContract?.trigger?.eventTypes?.includes("INBOUND_VOICE_CALL"));
+});
+
 test("lead_follow_up guarantees a default follow-up worker", () => {
   const kept = filterEmployeesForPurchasedPackages([], ["lead_follow_up"]);
   assert.equal(kept.length, 1);

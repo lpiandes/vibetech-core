@@ -56,6 +56,14 @@ export function createOutboundCampaign({
 
 /**
  * Dial next pending contact. Requires outboundApproved === true.
+ * @param {{
+ *   installation: any,
+ *   campaignId: string,
+ *   outboundApproved?: boolean,
+ *   placeCall: (args: { to: string, contactId?: string|null, campaignId?: string }) =>
+ *     Promise<{ ok?: boolean, externalReference?: string|null, message?: string|null, reason?: string|null }>,
+ *   nowISO?: string,
+ * }} input
  */
 export async function dialNextOutboundCampaignContact({
   installation,

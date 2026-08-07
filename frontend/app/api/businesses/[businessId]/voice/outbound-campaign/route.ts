@@ -56,9 +56,8 @@ export async function POST(
         actionCheckpoints: Array.isArray(nextInstallation.actionCheckpoints) ? nextInstallation.actionCheckpoints : [],
         configuration: nextInstallation.configuration ?? {},
         history: Array.isArray(nextInstallation.history) ? nextInstallation.history.slice(-50) : [],
+        actorUserId: nextInstallation.actorUserId ?? actorId,
         installedAt: nextInstallation.installedAt ?? new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        updatedBy: actorId,
       });
       invalidateCachedBusinessOsInstallation(businessId);
     }

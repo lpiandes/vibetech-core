@@ -66,6 +66,42 @@ function receptionistPath() {
   };
 }
 
+function supportVoicePath() {
+  return {
+    version: 1,
+    customized: true,
+    steps: [
+      {
+        id: "step_ticket",
+        type: PATH_STEP_TYPES.ADD_TO_PIPELINE,
+        enabled: true,
+        runMode: PATH_RUN_MODES.AUTO,
+        audience: PATH_AUDIENCES.SUBMITTER,
+        label: "Open support ticket",
+      },
+      {
+        id: "step_notify",
+        type: PATH_STEP_TYPES.NOTIFY_TEAM,
+        enabled: true,
+        runMode: PATH_RUN_MODES.AUTO,
+        audience: PATH_AUDIENCES.TEAM,
+        label: "Escalate to support team when Knowledge can't resolve it",
+        body: "A support call needs a teammate follow-up — Knowledge did not fully resolve the caller's issue.",
+      },
+      {
+        id: "step_draft",
+        type: PATH_STEP_TYPES.SEND_EMAIL,
+        enabled: true,
+        runMode: PATH_RUN_MODES.MANUAL,
+        audience: PATH_AUDIENCES.SUBMITTER,
+        label: "Draft support resolution follow-up",
+        subject: "Following up on your support call — {{businessName}}",
+        body: "Hi {{name}},\n\nThanks for calling support. Here is a summary of what we discussed and the next steps.\n\n— {{businessName}}",
+      },
+    ],
+  };
+}
+
 function leadFollowUpPath() {
   return {
     version: 1,
@@ -225,14 +261,14 @@ export function buildDefaultSupportVoiceEmployee() {
       archetypeId: "intake_specialist",
       label: "Support Voice Agent",
       displayName: "Support Voice Agent",
-      purpose: "Answer inbound support calls from Knowledge and open support Work tickets for escalation.",
+      purpose: "Answer inbound support calls from Knowledge first; open a support ticket and escalate to the team when Knowledge can't resolve it.",
       communicationPermissions: { customerFacingRequiresApproval: true },
       connectionDependencies: ["twilio_voice"],
       supportScoped: true,
       workType: "support_ticket",
     },
     {
-      automationPath: receptionistPath(),
+      automationPath: supportVoicePath(),
       trigger: {
         mode: "manual_or_events",
         summary: "When an inbound support voice call arrives",

@@ -55,7 +55,7 @@ test("professional managed tier presents caps and priority flag", () => {
   const tier = presentManagedTierEntitlements("professional_managed");
   assert.equal(tier.maxWorkers, 25);
   assert.equal(tier.prioritySupport, true);
-  assert.equal(tier.sellable, false);
+  assert.equal(tier.sellable, true);
 });
 
 test("enterprise managed marks dedicated advisor", () => {
