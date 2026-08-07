@@ -115,9 +115,9 @@ export function presentBusinessMemory(installation = null) {
   const employees = collectContractEmployees(installation);
   const contracts = presentContracts(employees);
   const primaryEmployee = employees.find((e) => e?.operatingContract?.rft) ?? employees[0] ?? null;
-  const rft = primaryEmployee
-    ? normalizeRftServiceStandard(primaryEmployee?.operatingContract?.rft ?? null)
-    : null;
+  // normalizeRftServiceStandard(null) invents a default RFT doc — only normalize when raw rft exists.
+  const rftRaw = primaryEmployee?.operatingContract?.rft ?? null;
+  const rft = rftRaw ? normalizeRftServiceStandard(rftRaw) : null;
   const presented = rft ? presentRftServiceStandard(rft) : null;
   const learning = readGovernedLearning(installation);
   const activeRules = asArray(learning.ruleVersions).filter((rule) => rule?.status === "active");
@@ -262,7 +262,8 @@ export function presentBusinessMemory(installation = null) {
   }
 
   // Fill remaining empty domains with honest contract-derived placeholders (never invent facts).
-  if (rft || contracts.length) {
+  // RFT-specific service copy only when an RFT contract is installed.
+  if (rft) {
     const derived = `Derived from installed operating contract v${presented?.contractVersion ?? contracts[0]?.contractVersion ?? "1"} — confirm via Ask if this should change.`;
     const fillIfEmpty = (key, value) => {
       if (!memoryValues[key] && value) memoryValues[key] = value;
@@ -280,6 +281,12 @@ export function presentBusinessMemory(installation = null) {
     fillIfEmpty("Scheduling rules", derived);
     fillIfEmpty("Known exceptions", "No confirmed exceptions yet — add via Ask or after repeated corrections.");
     fillIfEmpty("Learned preferences", "No repeating corrections yet — preferences appear after governed learning proposals are approved.");
+  } else if (contracts.length) {
+    const derived = `Derived from installed operating contract v${contracts[0]?.contractVersion ?? "1"} — confirm via Ask if this should change.`;
+    if (!memoryValues["Learned preferences"]) {
+      memoryValues["Learned preferences"] = "No repeating corrections yet — preferences appear after governed learning proposals are approved.";
+    }
+    if (!memoryValues["Approval policies"]) memoryValues["Approval policies"] = derived;
   }
 
   return {

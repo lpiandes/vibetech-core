@@ -12,7 +12,9 @@ const CANONICAL_REDIRECTS: Record<string, string> = {
   "mission-control": "home",
   "for-you": "intelligence",
   attention: "intelligence",
-  engagement: "people",
+  decisions: "intelligence",
+  "company-rules": "knowledge",
+  engagement: "work",
   performance: "home",
   analytics: "home",
   "digital-workforce": "team",
@@ -102,7 +104,7 @@ test("active nav highlights the exact tab for each primary route", () => {
 test("active nav maps redirected routes onto canonical tabs", () => {
   assert.equal(resolveActiveNavPath(`/b/${businessId}/mission-control`, businessId), `/b/${businessId}/home`);
   assert.equal(findActiveNavHref(`/b/${businessId}/for-you`, businessId, hrefs), `/b/${businessId}/intelligence`);
-  assert.equal(findActiveNavHref(`/b/${businessId}/engagement`, businessId, hrefs), `/b/${businessId}/people`);
+  assert.equal(findActiveNavHref(`/b/${businessId}/engagement`, businessId, hrefs), `/b/${businessId}/work`);
 });
 
 test("Ask / Architect does not falsely highlight Home", () => {

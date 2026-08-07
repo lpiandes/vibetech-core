@@ -67,3 +67,34 @@ test("presentBusinessMemory maps RFT contract and active rules into business mem
   assert.match(presented.memoryValues["Approved pricing boundaries"], /pricing outside approved policy requires approval/i);
   assert.match(presented.memoryValues["Learned preferences"], /use a calmer proposal tone/i);
 });
+
+test("non-RFT operating contracts do not invent Managed Revenue Follow-Through memory", () => {
+  const presented = presentBusinessMemory({
+    configuration: {
+      employees: [{
+        employeeId: "emp_receptionist",
+        label: "AI Receptionist",
+        operatingContract: {
+          schemaId: "responsibility_operator",
+          responsibilityId: "front_desk",
+          version: "2",
+          approvalSummary: "Owner approves after-hours callbacks.",
+        },
+      }],
+    },
+  });
+
+  assert.equal(presented.contracts.length, 1);
+  assert.equal(presented.memoryValues.Services, undefined);
+  assert.equal(presented.memoryValues["Customer types"], undefined);
+  assert.equal(presented.memoryValues["Response-time promises"], undefined);
+  assert.equal(presented.memoryValues["Assignment rules"], undefined);
+  assert.equal(presented.memoryValues["Escalation rules"], undefined);
+  assert.equal(presented.memoryValues["Scheduling rules"], undefined);
+  assert.match(presented.memoryValues["Approval policies"], /installed operating contract v2/i);
+  assert.match(presented.memoryValues["Learned preferences"], /No repeating corrections yet/i);
+  assert.equal(
+    /Managed Revenue Follow-Through/.test(JSON.stringify(presented.memoryValues)),
+    false,
+  );
+});

@@ -214,9 +214,14 @@ export default function RftLaunchPath({
         const messages: Record<string, string> = {
           observe: "Baseline built from connected evidence.",
           confirm: "Responsibility confirmed.",
-          replay: data.replay?.passDetail ?? "Replay finished.",
+          // POST returns { replay: readRftReplay(...), lastReplay } — passDetail lives on lastReplay.
+          replay: data.lastReplay?.passDetail
+            ?? data.replay?.lastReplay?.passDetail
+            ?? "Replay finished.",
           enableShadow: "Shadow mode enabled — no external sends.",
           passShadow: "Shadow review passed.",
+          acknowledgeEmptyReplay: data.honesty
+            ?? "Empty window acknowledged — not treated as proof.",
           prove: data.message ?? "Prove opportunity ready.",
           goLive: "Revenue Follow-Through is live (approval-gated).",
         };
@@ -543,7 +548,7 @@ export default function RftLaunchPath({
                     >
                       {busy === "replay" ? "Replaying…" : "Run historical replay"}
                     </Button>
-                    {replay?.emptyWindow || replay?.lastReplay?.emptyWindow ? (
+                    {replay?.lastReplay?.emptyWindow ? (
                       <Button
                         type="button"
                         size="sm"

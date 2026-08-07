@@ -36,7 +36,9 @@ export default auth((request) => {
   // Preflight for public marketing APIs (browser CORS from Hostinger site).
   if (
     request.method === "OPTIONS"
-    && (pathname === "/api/marketing/consultant" || pathname === "/api/marketing/meeting-request")
+    && (pathname === "/api/marketing/consultant"
+      || pathname === "/api/marketing/meeting-request"
+      || pathname === "/api/marketing/intake")
   ) {
     return withMarketingCors(
       request,

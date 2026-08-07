@@ -88,12 +88,14 @@ export function connectionRequirementsFromRftConnect(installation = null) {
   }
   // Keep calendar/SMS/forms/CRM visible after go-live for prove + open constraints.
   const byId = new Map(required.map((row) => [row.id, row]));
+  const launchActive = rftConnectRequirementsActive(installation);
   for (const id of RFT_LISTED_CONNECTION_IDS) {
     if (byId.has(id)) continue;
+    const isConnectGate = id === "business_email" || id === "calendar";
     byId.set(id, {
       id,
       displayName: RFT_CONNECT_LABELS[id] ?? id.replace(/_/g, " "),
-      requirementLevel: id === "business_email" || id === "calendar" ? "required" : "optional",
+      requirementLevel: launchActive && isConnectGate ? "required" : "optional",
     });
   }
   return [...byId.values()];

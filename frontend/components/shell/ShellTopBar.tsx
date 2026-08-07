@@ -9,6 +9,7 @@ import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import BusinessSwitcher from "@/components/shell/BusinessSwitcher";
 import GlobalAskVibeTechEntry from "@/components/shell/GlobalAskVibeTechEntry";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
+import { businessHasManagedRevenueFollowThrough } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
 type SearchResult = { id: string; label: string; sublabel?: string; href: string };
 
@@ -64,15 +65,16 @@ export default function ShellTopBar() {
       return fromOs.slice(0, 4).map((action) => ({ label: action.label, href: action.href }));
     }
     const subjects = scope.installedBusinessOS?.subjectTypes ?? [];
-    const subjectLabel = subjects.length
-      ? `Add ${String(subjects[0]).replace(/_/g, " ")}`
-      : "Add contact";
-    const subjectHref = subjects.includes("property") ? `${base}/properties?add=1` : `${base}/work`;
-    return [
-      { label: subjectLabel, href: subjectHref },
-      { label: "Add knowledge", href: `${base}/knowledge?add=1` },
-      { label: "Invite team", href: `${base}/team` },
-    ];
+    const isManagedRft = businessHasManagedRevenueFollowThrough(scope.purchasedPackages ?? []);
+    const actions = [];
+    if (subjects.includes("property")) {
+      actions.push({ label: `Add ${String(subjects[0]).replace(/_/g, " ")}`, href: `${base}/properties?add=1` });
+    } else if (!isManagedRft) {
+      actions.push({ label: "Add contact", href: `${base}/people` });
+    }
+    actions.push({ label: "Add knowledge", href: `${base}/knowledge?add=1` });
+    actions.push({ label: "Invite team", href: `${base}/team` });
+    return actions;
   })();
 
   const searchPlaceholder = "Search work, knowledge, decisions…";

@@ -78,8 +78,9 @@ export function matchOperatingCommandIntent(text = "") {
     return { intent: "list_proposals_no_next_step" };
   }
   if (
-    /\b(show|list|every|all|how many|count|open)\b/.test(t)
+    /\b(show|list|every|all|how many|count)\b/.test(t)
     && /\bproposal/.test(t)
+    && /\b(open|stall|waiting|without|no|missing|next\s*step|follow[- ]?up)\b/.test(t)
   ) {
     return { intent: "list_proposals_no_next_step" };
   }

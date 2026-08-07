@@ -236,20 +236,28 @@ export async function POST(
             connection: calConnection,
             credentialResolver: platform.credentialResolver,
           });
+          if (String(listed?.status ?? "") === "failed") {
+            throw new Error(String(listed?.error ?? "calendar_list_failed"));
+          }
           const events = Array.isArray(listed?.metadata?.events) ? listed.metadata.events : [];
           if (events.length) {
             let crm = readCrmState(installation);
             for (const ev of events) {
               const externalId = String(ev.id ?? "");
               if (!externalId) continue;
+              // upsertCalendarEvent reads start/end (not startsAt/endsAt).
               crm = upsertCalendarEvent(crm, {
                 id: `gcal_${externalId}`,
                 externalId,
                 title: String(ev.summary ?? "Calendar event"),
-                startsAt: ev.start ?? null,
-                endsAt: ev.end ?? null,
+                description: String(ev.description ?? ""),
+                location: String(ev.location ?? ""),
+                start: ev.start ?? null,
+                end: ev.end ?? null,
+                htmlLink: ev.htmlLink ?? null,
+                conferenceUrl: ev.conferenceUrl ?? null,
+                conferenceType: ev.conferenceType ?? null,
                 source: "google_calendar_observe",
-                hasNextStep: Boolean(ev.description || ev.location),
               });
             }
             await writeCrmState({
@@ -364,23 +372,26 @@ export async function POST(
       installation = await reloadInstallation(businessId);
       return NextResponse.json({
         ok: true,
-        replay: lastReplay,
+        replay: readRftReplay(installation),
+        lastReplay,
         launch: evaluateRftLaunch({ installation, connectionStatuses, proofRecords }),
       });
     }
 
     if (action === "acknowledgeEmptyReplay") {
       const lastReplay = readRftReplay(installation)?.lastReplay ?? null;
-      if (!lastReplay?.emptyWindow && lastReplay?.passed) {
-        return NextResponse.json({
-          ok: false,
-          error: "Replay already passed with events — empty acknowledge not needed.",
-        }, { status: 400 });
-      }
       if (!lastReplay) {
         return NextResponse.json({
           ok: false,
           error: "Run historical replay first.",
+        }, { status: 400 });
+      }
+      if (!lastReplay.emptyWindow) {
+        return NextResponse.json({
+          ok: false,
+          error: lastReplay.passed
+            ? "Replay already passed with events — empty acknowledge not needed."
+            : "Replay has events but did not pass — fix illegal paths or re-run; do not acknowledge empty.",
         }, { status: 400 });
       }
       const patched = applyRftLaunchPatch(readRftLaunch(installation), {

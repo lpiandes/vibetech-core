@@ -29,6 +29,7 @@ export function isPublicPath(pathname: string): boolean {
   if (
     pathname === "/api/marketing/consultant"
     || pathname === "/api/marketing/meeting-request"
+    || pathname === "/api/marketing/intake"
   ) {
     return true;
   }
