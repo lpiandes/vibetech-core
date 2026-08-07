@@ -153,6 +153,17 @@ export async function checkAiAskQuota({
         /* memory already updated */
       }
     }
+    try {
+      const { recordUsageSafe } = await import("../platform/billing/UsageMetering.js");
+      recordUsageSafe({
+        businessId: businessId || userId || "platform",
+        meterId: "ai_work_credits",
+        quantity: 1,
+        platformStore,
+      });
+    } catch {
+      /* non-blocking */
+    }
   }
 
   return deepFreeze({

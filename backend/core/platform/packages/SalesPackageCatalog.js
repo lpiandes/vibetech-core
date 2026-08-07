@@ -133,7 +133,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     launchMissionIds: ["knowledge_consult", "voice_calls", "outbound_approvals"],
     honestyNote: "Knowledge-backed inbound. Booking → appointment Work + calendar HOLD when Google Calendar is connected (team confirms).",
     commercialStatus: "product",
-    sellable: false,
+    sellable: true,
   },
   {
     id: "voice_inbound_agent",
@@ -238,7 +238,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: ["meta_platform", "gmail", "twilio_sms", "twilio_voice"],
     honestyNote: "Intake + approved drafts — not a scored lead engine.",
     commercialStatus: "product",
-    sellable: false,
+    sellable: true,
   },
   {
     id: "appointment_setter",
@@ -323,7 +323,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: ["none_yet"],
     honestyNote: "Forms embed → People until native website chat ships.",
     commercialStatus: "product",
-    sellable: false,
+    sellable: true,
   },
   {
     id: "ai_prospecting",
@@ -385,9 +385,9 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     launchMissionIds: ["knowledge_consult"],
     packageAskQuestionIds: ["q_documents", "q_desired_outcomes"],
     packageAskConnectionOptions: null,
-    honestyNote: null,
+    honestyNote: "Ask cites uploaded playbooks/FAQs only — never invents. Not a public website bot.",
     commercialStatus: "product",
-    sellable: false,
+    sellable: true,
   },
   {
     id: "email_sms_marketing",
@@ -500,7 +500,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     packageAskConnectionOptions: ["gmail", "google_calendar", "twilio_sms"],
     honestyNote: "Prove whichever connection they buy — email, calendar, or SMS.",
     commercialStatus: "product",
-    sellable: false,
+    sellable: true,
   },
   {
     id: "crm_external_integration",
@@ -559,7 +559,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     ],
     honestyNote: "Includes product scope plus VIBETech managed ops retainer. Soft caps enforced at install.",
     commercialStatus: "managed_product",
-    sellable: false,
+    sellable: true,
     maxWorkers: 3,
     maxWorkflows: 5,
   },
@@ -617,7 +617,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     ],
     honestyNote: "Includes product scope plus VIBETech managed ops retainer. Soft caps enforced at install.",
     commercialStatus: "managed_product",
-    sellable: false,
+    sellable: true,
     maxWorkers: 8,
     maxWorkflows: 15,
   },
@@ -746,12 +746,21 @@ export { canSellOffer } from "../commercial/CanSellOffer.js";
 
 /**
  * Packages offered on Create & invite (live sales sheet).
- * Only Managed Revenue Follow-Through and other sellable managed products.
- * RFT always leads.
+ * Wave A sellable products + RFT. RFT always leads.
  */
+export const WAVE_A_SELLABLE_PACKAGE_IDS = Object.freeze([
+  "managed_revenue_follow_through",
+  "ai_receptionist",
+  "lead_follow_up",
+  "website_chatbot",
+  "knowledge_assistant",
+  "basic_integration",
+]);
+
 export function listSellableSalesPackagesForAdmin() {
+  const waveA = new Set(WAVE_A_SELLABLE_PACKAGE_IDS);
   const rows = listSalesPackagesForAdmin({ includeRoadmap: true }).filter((row) => (
-    row.id === "managed_revenue_follow_through"
+    (waveA.has(row.id) && row.sellable !== false)
     || (row.commercialStatus === "managed_product" && row.sellable !== false)
   ));
   const rft = rows.filter((row) => row.id === "managed_revenue_follow_through");

@@ -1,6 +1,6 @@
 /**
- * Commercial usage meter definitions (Phase 5 scaffolding).
- * Ask quota remains the live spend guard; these meters are for billing entitlement wiring.
+ * Commercial usage meters — Settings billing panel + overage math.
+ * Uses in-memory ledger by default; prefers platformStore durable methods when present.
  */
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 
@@ -63,9 +63,6 @@ export const USAGE_METERS = deepFreeze({
   },
 });
 
-/**
- * In-memory usage ledger for staging demos until durable billing tables ship.
- */
 const memory = new Map();
 
 function monthKey(nowISO = new Date().toISOString()) {
@@ -76,18 +73,8 @@ function usageKey(businessId, meterId, month) {
   return `${String(businessId)}:${String(meterId)}:${month}`;
 }
 
-export function peekUsage({
-  businessId,
-  meterId,
-  nowISO = new Date().toISOString(),
-} = {}) {
+function buildPeek({ businessId, meterId, month, used }) {
   const meter = USAGE_METERS[meterId];
-  if (!meter || !businessId) {
-    return deepFreeze({ ok: false, reason: "invalid_meter" });
-  }
-  const month = monthKey(nowISO);
-  const key = usageKey(businessId, meterId, month);
-  const used = Number(memory.get(key) ?? 0) || 0;
   const included = Number(meter.includedDefault ?? 0);
   const remaining = Math.max(0, included - used);
   const overageUnits = Math.max(0, used - included);
@@ -104,20 +91,76 @@ export function peekUsage({
   });
 }
 
+export function peekUsage({
+  businessId,
+  meterId,
+  nowISO = new Date().toISOString(),
+  platformStore = null,
+} = {}) {
+  const meter = USAGE_METERS[meterId];
+  if (!meter || !businessId) {
+    return deepFreeze({ ok: false, reason: "invalid_meter" });
+  }
+  const month = monthKey(nowISO);
+  if (platformStore?.getUsageMeter) {
+    try {
+      const remote = platformStore.getUsageMeter({ businessId, meterId, month });
+      if (remote && typeof remote.then !== "function" && Number.isFinite(Number(remote.used))) {
+        return buildPeek({ businessId, meterId, month, used: Number(remote.used) });
+      }
+    } catch {
+      /* fall through to memory */
+    }
+  }
+  const key = usageKey(businessId, meterId, month);
+  const used = Number(memory.get(key) ?? 0) || 0;
+  return buildPeek({ businessId, meterId, month, used });
+}
+
 export function recordUsage({
   businessId,
   meterId,
   quantity = 1,
   nowISO = new Date().toISOString(),
+  platformStore = null,
 } = {}) {
-  const peek = peekUsage({ businessId, meterId, nowISO });
-  if (!peek.ok) return peek;
-  const key = usageKey(businessId, meterId, peek.month);
-  const next = (Number(memory.get(key) ?? 0) || 0) + Math.max(0, Number(quantity) || 0);
+  const meter = USAGE_METERS[meterId];
+  if (!meter || !businessId) {
+    return deepFreeze({ ok: false, reason: "invalid_meter" });
+  }
+  const month = monthKey(nowISO);
+  const qty = Math.max(0, Number(quantity) || 0);
+
+  if (platformStore?.incrementUsageMeter) {
+    try {
+      const remote = platformStore.incrementUsageMeter({ businessId, meterId, month, quantity: qty });
+      if (remote && typeof remote.then !== "function" && Number.isFinite(Number(remote.used))) {
+        return buildPeek({ businessId, meterId, month, used: Number(remote.used) });
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const key = usageKey(businessId, meterId, month);
+  const next = (Number(memory.get(key) ?? 0) || 0) + qty;
   memory.set(key, next);
-  return peekUsage({ businessId, meterId, nowISO });
+  return peekUsage({ businessId, meterId, nowISO, platformStore: null });
+}
+
+/** Fire-and-forget usage record — never throws into product paths. */
+export function recordUsageSafe(input = {}) {
+  try {
+    return recordUsage(input);
+  } catch {
+    return deepFreeze({ ok: false, reason: "usage_record_failed" });
+  }
 }
 
 export function listUsageMeters() {
   return deepFreeze(Object.values(USAGE_METERS));
+}
+
+export function resetUsageMetersForTests() {
+  memory.clear();
 }

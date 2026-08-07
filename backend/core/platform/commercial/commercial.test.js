@@ -60,10 +60,10 @@ test("listOfferableOffers excludes building rows", () => {
   assert.equal(summary.complete + summary.building, summary.total);
 });
 
-test("canSellOffer allows complete custom builds", () => {
+test("canSellOffer allows complete Wave A ready lines", () => {
   const gate = canSellOffer({ sheetLine: "Automated Lead Follow-Up" });
   assert.equal(gate.allowed, true);
-  assert.equal(gate.offerClass, "custom_build");
+  assert.equal(gate.offerClass, "ready");
 });
 
 test("Custom Build Factory advances in order and blocks go_live without acceptance", () => {

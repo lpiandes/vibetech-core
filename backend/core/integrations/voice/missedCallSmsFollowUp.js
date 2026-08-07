@@ -247,6 +247,14 @@ export async function handleMissedCallFollowUp({
         if (!smsSent) smsSkipReason = "sms_send_failed";
       }
     }
+    if (smsSent) {
+      try {
+        const { recordUsageSafe } = await import("../../platform/billing/UsageMetering.js");
+        recordUsageSafe({ businessId: bid, meterId: "sms_segments", quantity: 1 });
+      } catch {
+        /* non-blocking */
+      }
+    }
   } catch (error) {
     smsSkipReason = error instanceof Error ? error.message : "sms_send_failed";
   }

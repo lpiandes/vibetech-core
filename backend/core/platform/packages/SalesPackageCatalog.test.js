@@ -363,20 +363,26 @@ test("package Ask focuses on catalog question IDs for scheduling", async () => {
   assert.equal(skipped.skipBecauseConnected, true);
 });
 
-test("sellable admin list is RFT only and RFT-first", () => {
+test("sellable admin list is Wave A and RFT-first", () => {
   const sellable = listSellableSalesPackagesForAdmin();
-  assert.ok(sellable.length >= 1);
+  assert.ok(sellable.length >= 6);
   assert.equal(sellable[0]?.id, "managed_revenue_follow_through");
-  assert.ok(sellable.every((row) => (
-    row.id === "managed_revenue_follow_through"
-    || (row.commercialStatus === "managed_product" && row.sellable !== false)
-  )));
-  assert.ok(!sellable.some((row) => row.id === "ai_receptionist"));
-  assert.ok(!sellable.some((row) => row.id === "essential_managed"));
-  assert.ok(!sellable.some((row) => row.id === "growth_managed"));
+  const ids = new Set(sellable.map((row) => row.id));
+  for (const id of [
+    "managed_revenue_follow_through",
+    "ai_receptionist",
+    "lead_follow_up",
+    "website_chatbot",
+    "knowledge_assistant",
+    "basic_integration",
+  ]) {
+    assert.ok(ids.has(id), `missing ${id}`);
+  }
   assert.ok(!sellable.some((row) => row.id === "addon_priority_support"));
   assert.ok(!sellable.some((row) => row.id === "voice_outbound_agent"));
   assert.ok(!sellable.some((row) => row.id === "ai_business_os"));
+  assert.ok(sellable.some((row) => row.id === "essential_managed"));
+  assert.ok(sellable.some((row) => row.id === "growth_managed"));
 });
 
 test("thin SKU default employees use registered archetypes", () => {
@@ -454,7 +460,7 @@ test("essential managed soft-caps workflows", () => {
 test("website lead capture honesty stays forms until native chat", () => {
   const pkg = listSalesPackagesForAdmin().find((row) => row.id === "website_chatbot");
   assert.ok(pkg);
-  assert.equal(pkg.sellable, false);
+  assert.equal(pkg.sellable, true);
   assert.match(pkg.label, /form/i);
   assert.match(String(pkg.honestyNote ?? ""), /Forms|form/i);
 });

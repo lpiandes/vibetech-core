@@ -5,8 +5,13 @@ import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
 import { getCommercialOffer, listOffersByPackageId } from "./CommercialOfferMatrix.js";
 import { assertPlaybookComplete } from "./DeliveryPlaybookRegistry.js";
 
+export function requiresA2pApproval(offer) {
+  if (!offer) return false;
+  return (offer.requiredProveMissionIds ?? []).includes("sms_send");
+}
+
 /**
- * @param {{ sheetLine?: string, offerId?: string, packageId?: string }} input
+ * @param {{ sheetLine?: string, offerId?: string, packageId?: string, a2pRegistrationStatus?: string | null }} input
  */
 export function canSellOffer(input = {}) {
   const offer = resolveOffer(input);
@@ -43,6 +48,13 @@ export function canSellOffer(input = {}) {
     }
   }
 
+  if (requiresA2pApproval(offer) && process.env.TWILIO_A2P_ENFORCE === "1") {
+    const status = String(input.a2pRegistrationStatus ?? "").toLowerCase();
+    if (status !== "approved") {
+      blockers.push("US SMS requires Twilio A2P Trust Hub Approved (TWILIO_A2P_ENFORCE=1)");
+    }
+  }
+
   const allowed = blockers.length === 0;
   return deepFreeze({
     allowed,
@@ -56,6 +68,7 @@ export function canSellOffer(input = {}) {
     packageId: offer.packageId,
     setupPriceUsd: offer.setupPriceUsd,
     monthlyPriceUsd: offer.monthlyPriceUsd,
+    requiresA2p: requiresA2pApproval(offer),
   });
 }
 

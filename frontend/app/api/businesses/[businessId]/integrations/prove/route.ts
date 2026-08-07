@@ -230,12 +230,13 @@ export async function POST(
       });
     }
 
-    const [credentials, connections, knowledgeCount] = await Promise.all([
+    const [credentials, connections, knowledgeCount, knowledgeDocs] = await Promise.all([
       platformStore.listIntegrationCredentialsForWorkspace(businessId),
       Promise.resolve(
         (ctx.service as any)?.connected?.connectedSystemsSnapshot?.connections ?? [],
       ),
       platformStore.countActiveKnowledgeDocuments(businessId).catch(() => 0),
+      platformStore.listKnowledgeDocumentsForBusiness(businessId).catch(() => []),
     ]);
 
     const connectionStatus =
@@ -255,6 +256,7 @@ export async function POST(
               businessId,
               platformStore,
               knowledgeCount,
+              knowledgeDocs: Array.isArray(knowledgeDocs) ? knowledgeDocs : [],
               proveEmail: body?.proveEmail ?? process.env.PROVE_TEST_EMAIL ?? null,
               provePhone: body?.provePhone ?? process.env.PROVE_TEST_PHONE ?? null,
               allowSimulated: body?.allowSimulated === true || process.env.PROVE_ALLOW_SIMULATED === "1",
@@ -378,6 +380,8 @@ async function executeProveForAction(input: {
   businessId: string;
   platformStore: any;
   knowledgeCount: number;
+  knowledgeDocs?: unknown[];
+  knowledgeCited?: unknown[];
   proveEmail: string | null;
   provePhone: string | null;
   allowSimulated: boolean;
@@ -394,11 +398,37 @@ async function executeProveForAction(input: {
         message: "Add at least one Knowledge document, then prove again.",
       };
     }
+    const docs = Array.isArray(input.knowledgeDocs) ? input.knowledgeDocs : [];
+    const cited = docs
+      .slice(0, 3)
+      .map((doc: any) => String(doc?.id ?? doc?.documentId ?? doc?.title ?? "").trim())
+      .filter(Boolean);
+    if (!cited.length && Number(input.knowledgeCount) >= 1) {
+      // Docs exist in count but ids unavailable — still require explicit cite payload from caller.
+      if (!Array.isArray(input.knowledgeCited) || input.knowledgeCited.length < 1) {
+        return {
+          ok: false,
+          reason: "knowledge_cite_missing",
+          message: "Knowledge is present but no citeable document ids were returned. Re-upload or refresh Knowledge, then prove again.",
+        };
+      }
+    }
+    const knowledgeCited = cited.length
+      ? cited
+      : (input.knowledgeCited ?? []).map((id: unknown) => String(id)).filter(Boolean);
+    if (knowledgeCited.length < 1) {
+      return {
+        ok: false,
+        reason: "knowledge_cite_missing",
+        message: "Prove requires at least one cited Knowledge document id.",
+      };
+    }
     return {
       ok: true,
       simulated: false,
       knowledgeCount: input.knowledgeCount,
-      message: "Knowledge documents are present and citeable.",
+      knowledgeCited,
+      message: `Knowledge cite prove passed (${knowledgeCited.length} document${knowledgeCited.length === 1 ? "" : "s"}).`,
     };
   }
 

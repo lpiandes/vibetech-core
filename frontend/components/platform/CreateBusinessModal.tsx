@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import SimpleModal from "@/components/product/SimpleModal";
 import PrimaryButton from "@/components/product/PrimaryButton";
 import SecondaryButton from "@/components/product/SecondaryButton";
 import { typography, cockpitColors } from "@/design/tokens";
+import { listSellableSalesPackagesForAdmin } from "../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 
 const fieldStyle = {
   padding: "10px 12px",
@@ -34,8 +35,10 @@ export default function CreateBusinessModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const sellablePackages = useMemo(() => listSellableSalesPackagesForAdmin(), []);
   const [name, setName] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
+  const [purchasedPackages, setPurchasedPackages] = useState<string[]>(["managed_revenue_follow_through"]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<CreateSuccess | null>(null);
@@ -52,7 +55,21 @@ export default function CreateBusinessModal({
     window.setTimeout(() => setCopied(false), 2500);
   }
 
+  function togglePackage(id: string) {
+    setPurchasedPackages((prev) => {
+      if (prev.includes(id)) {
+        if (prev.length === 1) return prev;
+        return prev.filter((row) => row !== id);
+      }
+      return [...prev, id];
+    });
+  }
+
   async function submit() {
+    if (!purchasedPackages.length) {
+      setError("Select at least one package.");
+      return;
+    }
     setBusy(true);
     setError(null);
     const res = await fetch("/api/platform/businesses", {
@@ -61,7 +78,7 @@ export default function CreateBusinessModal({
       body: JSON.stringify({
         name,
         ownerEmail,
-        purchasedPackages: ["managed_revenue_follow_through"],
+        purchasedPackages,
       }),
     });
     const data = await res.json();
@@ -84,7 +101,7 @@ export default function CreateBusinessModal({
     <SimpleModal
       title="Create business"
       onClose={onClose}
-      maxWidth={520}
+      maxWidth={560}
       footer={
         success ? (
           <PrimaryButton onClick={onClose}>Done</PrimaryButton>
@@ -159,7 +176,7 @@ export default function CreateBusinessModal({
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div>
               <div style={{ fontWeight: 600, fontSize: 13, color: cockpitColors.textPrimary }}>
-                Purchase
+                Packages
               </div>
               <p
                 style={{
@@ -169,25 +186,41 @@ export default function CreateBusinessModal({
                   lineHeight: 1.4,
                 }}
               >
-                Every new business starts with <strong>Managed Revenue Follow-Through</strong>.
+                Select Wave A sellable packages. Managed Revenue Follow-Through is recommended for design partners.
               </p>
             </div>
-            <div
-              style={{
-                border: `1px solid ${cockpitColors.panelBorder}`,
-                borderRadius: 12,
-                background: cockpitColors.panel,
-                padding: "12px 14px",
-                display: "grid",
-                gap: 4,
-              }}
-            >
-              <strong style={{ fontSize: 14, color: cockpitColors.textPrimary }}>
-                Managed Revenue Follow-Through
-              </strong>
-              <span style={{ fontSize: 12, color: cockpitColors.textSecondary, lineHeight: 1.45 }}>
-                We own follow-through ops with evidence-backed outcomes.
-              </span>
+            <div style={{ display: "grid", gap: 8 }}>
+              {sellablePackages.map((pkg: { id: string; label: string; description?: string; honestyNote?: string | null }) => {
+                const checked = purchasedPackages.includes(pkg.id);
+                return (
+                  <label
+                    key={pkg.id}
+                    style={{
+                      border: `1px solid ${cockpitColors.panelBorder}`,
+                      borderRadius: 12,
+                      background: checked ? "rgba(34,211,238,0.08)" : cockpitColors.panel,
+                      padding: "12px 14px",
+                      display: "grid",
+                      gridTemplateColumns: "auto 1fr",
+                      gap: 10,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => togglePackage(pkg.id)}
+                      style={{ marginTop: 3 }}
+                    />
+                    <span>
+                      <strong style={{ fontSize: 14, color: cockpitColors.textPrimary }}>{pkg.label}</strong>
+                      <span style={{ display: "block", fontSize: 12, color: cockpitColors.textSecondary, lineHeight: 1.45, marginTop: 2 }}>
+                        {pkg.description || pkg.honestyNote || ""}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
             </div>
           </div>
           {error ? (

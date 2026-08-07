@@ -32,7 +32,7 @@ const ROWS = [
   offer("discovery", "Custom Workshop or Training Session", null, "consulting", "consulting_workshop", [], 5000, null),
 
   // —— 2. AI Voice and Communication ——
-  offer("voice", "AI Receptionist", "ai_receptionist", "custom_build", "sku_ai_receptionist", ["voice_calls", "knowledge_consult"], 4000, 997),
+  offer("voice", "AI Receptionist", "ai_receptionist", "ready", "sku_ai_receptionist", ["voice_calls", "knowledge_consult"], 4000, 997),
   offer("voice", "AI Inbound Call Agent", "voice_inbound_agent", "custom_build", "sku_voice_inbound", ["voice_calls", "knowledge_consult", "outbound_approvals"], 5000, 1497),
   offer("voice", "AI Outbound Call Agent", "voice_outbound_agent", "custom_build", "sku_voice_outbound", ["voice_calls", "outbound_approvals"], 9000, 2497),
   offer("voice", "Appointment Scheduling Agent", "voice_scheduling_agent", "custom_build", "sku_voice_scheduling", ["voice_calls", "calendar_scheduling"], 4500, 1297),
@@ -40,9 +40,9 @@ const ROWS = [
   offer("voice", "Custom Voice Agent", "voice_custom_agent", "custom_build", "sku_voice_custom", ["voice_calls", "knowledge_consult", "outbound_approvals"], 15000, 3500),
 
   // —— 3. Sales and Marketing ——
-  offer("sales", "AI Lead Qualification System", "lead_follow_up", "custom_build", "sku_lead_qualification", ["website_forms", "outbound_approvals", "customer_email_send"], 4000, 997),
-  offer("sales", "Automated Lead Follow-Up", "lead_follow_up", "custom_build", "sku_lead_follow_up", ["website_forms", "customer_email_send", "outbound_approvals", "sms_send"], 3500, 797, {
-    notes: "Delivered via Custom Build Factory + lead_follow_up entitlement (RFT specialization when entitled)",
+  offer("sales", "AI Lead Qualification System", "lead_follow_up", "ready", "sku_lead_qualification", ["website_forms", "outbound_approvals", "customer_email_send"], 4000, 997),
+  offer("sales", "Automated Lead Follow-Up", "lead_follow_up", "ready", "sku_lead_follow_up", ["website_forms", "customer_email_send", "outbound_approvals", "sms_send"], 3500, 797, {
+    notes: "Wave A Ready — lead_follow_up entitlement with prove missions",
   }),
   offer("sales", "CRM Automation", "crm_automation", "custom_build", "sku_crm_automation", ["outbound_approvals", "customer_email_send", "website_forms"], 6000, 1497),
   offer("sales", "AI Sales Assistant", "sales_assistant", "custom_build", "sku_sales_assistant", ["knowledge_consult", "customer_email_send", "outbound_approvals"], 5000, 1497),
@@ -53,17 +53,17 @@ const ROWS = [
 
   // —— 4. Customer Service and Operations ——
   offer("ops", "AI Customer Support Agent", "voice_support_agent", "custom_build", "sku_support_agent", ["knowledge_consult", "outbound_approvals"], 6000, 1997),
-  offer("ops", "Website Chatbot", "website_chatbot", "custom_build", "sku_website_forms", ["website_forms"], 3500, 797, {
-    notes: "Forms → People today; native chat is sku_website_native_chat",
+  offer("ops", "Website Chatbot", "website_chatbot", "ready", "sku_website_forms", ["website_forms"], 3500, 797, {
+    notes: "Forms → People (Wave A Ready); native chat remains custom_build under website_native_chat",
   }),
-  offer("ops", "Internal Knowledge Base Assistant", "knowledge_assistant", "custom_build", "sku_knowledge_assistant", ["knowledge_consult"], 5000, 1297),
+  offer("ops", "Internal Knowledge Base Assistant", "knowledge_assistant", "ready", "sku_knowledge_assistant", ["knowledge_consult"], 5000, 1297),
   offer("ops", "Workflow Automation", "ai_business_os", "custom_build", "sku_workflow_automation", ["outbound_approvals"], 3000, 697),
   offer("ops", "Scheduling Automation", "scheduling", "custom_build", "sku_scheduling", ["calendar_scheduling"], 4500, 997),
   offer("ops", "Document Processing Automation", "document_processing", "custom_build", "sku_document_processing", ["knowledge_consult"], 8000, 1997),
   offer("ops", "Reporting and Dashboard Automation", "reporting_automation", "custom_build", "sku_reporting", ["knowledge_consult"], 5000, 997),
 
   // —— 5. Systems Integration and Custom Development ——
-  offer("integration", "Basic System Integration", "basic_integration", "custom_build", "sku_basic_integration", ["customer_email_send", "calendar_scheduling", "sms_send"], 3500, 397),
+  offer("integration", "Basic System Integration", "basic_integration", "ready", "sku_basic_integration", ["customer_email_send", "calendar_scheduling", "sms_send"], 3500, 397),
   offer("integration", "CRM Integration", "crm_external_integration", "custom_build", "sku_crm_external", ["knowledge_consult"], 7500, 697),
   offer("integration", "Multi-System Integration", "multi_system_integration", "custom_build", "sku_multi_system", ["customer_email_send", "calendar_scheduling", "sms_send"], 15000, 1497),
   offer("integration", "Custom AI Application", "ai_business_os", "custom_build", "custom_build_factory", ["knowledge_consult", "outbound_approvals"], 25000, 2500),
