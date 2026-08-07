@@ -13,8 +13,8 @@ import {
   persistCustomBuild,
   presentCustomBuildFromInstallation,
   startCustomBuildOnInstallation,
-} from "../../../../../../../backend/core/platform/commercial/persistCustomBuild.js";
-import { canSellOffer } from "../../../../../../../backend/core/platform/commercial/CanSellOffer.js";
+} from "../../../../../../backend/core/platform/commercial/persistCustomBuild.js";
+import { canSellOffer } from "../../../../../../backend/core/platform/commercial/CanSellOffer.js";
 
 function jsonRouteError(error: unknown) {
   if (error instanceof AuthorizationError) {
@@ -58,7 +58,7 @@ export async function POST(
     const { businessId } = await context.params;
     const body = await request.json().catch(() => ({}));
     const action = String(body.action ?? "start");
-    const scope = await getAuthorizedBusinessScope(businessId, PERMISSIONS.WORK_EDIT);
+    const scope = await getAuthorizedBusinessScope(businessId, PERMISSIONS.WORK_MANAGE);
     let installation = await loadInstallation(businessId);
     if (!installation) {
       return NextResponse.json({ ok: false, error: "Installation not found" }, { status: 404 });

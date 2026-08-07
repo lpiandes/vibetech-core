@@ -6,9 +6,9 @@ import {
   listOfferableOffers,
   presentOfferMatrixSummary,
   getCommercialOffer,
-} from "../../../../../../backend/core/platform/commercial/CommercialOfferMatrix.js";
-import { canSellOffer } from "../../../../../../backend/core/platform/commercial/CanSellOffer.js";
-import { getPlaybook, listMissingPlaybooksForMatrix } from "../../../../../../backend/core/platform/commercial/DeliveryPlaybookRegistry.js";
+} from "../../../../../backend/core/platform/commercial/CommercialOfferMatrix.js";
+import { canSellOffer } from "../../../../../backend/core/platform/commercial/CanSellOffer.js";
+import { getPlaybook, listMissingPlaybooksForMatrix } from "../../../../../backend/core/platform/commercial/DeliveryPlaybookRegistry.js";
 
 export async function GET(request: Request) {
   try {
