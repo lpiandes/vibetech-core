@@ -8,6 +8,9 @@ import { getAuthorizedWorkspace, authorizationErrorResponse } from "@/lib/platfo
 import { PERMISSIONS } from "@/lib/platform/permissions";
 import { getPlatformStore, withClient } from "@/lib/server/compose";
 import { invalidateCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
+import { workspaceCompositionRegistry } from "@/lib/workspace/WorkspaceCompositionRegistry.js";
+import { syncDurableDecisionDraftsForWorkspace } from "../../../../../../../backend/core/approvals/syncDurableDecisionDraftsForWorkspace.js";
+import { buildProveOwnerVerification } from "../../../../../../../backend/core/integrations/prove/proveOwnerVerification.js";
 import {
   proofRecordFromResult,
   runIntegrationProveTest,
@@ -357,11 +360,50 @@ export async function POST(
 
     invalidateCachedBusinessOsInstallation(businessId);
 
+    // Form / Meta / chat proves write pendingDecisionDrafts to Postgres. Warm composition
+    // would leave Decisions empty — sync durable drafts into ApprovalRuntime now.
+    let decisionSync = null;
+    let verification = null;
+    const wroteDecisionDraft = Boolean(
+      storedResult?.followUpDraft
+      || storedResult?.detail?.followUpDraft
+      || storedResult?.detail?.pendingApproval === true,
+    );
+    if (wroteDecisionDraft || action === "submit_test_form" || action === "ingest_test_lead" || action === "submit_test_chat") {
+      try {
+        decisionSync = await syncDurableDecisionDraftsForWorkspace({
+          platformStore,
+          businessId,
+          service: ctx.service,
+        });
+      } catch {
+        decisionSync = null;
+      }
+    }
+    // Next soft-nav must reload snapshots so installationResult includes the new drafts.
+    try {
+      workspaceCompositionRegistry.clear(businessId);
+    } catch {
+      /* best effort */
+    }
+
+    if (storedResult?.ok && !deferComplete) {
+      verification = buildProveOwnerVerification({
+        action,
+        businessId,
+        result: storedResult,
+        ok: true,
+        peopleVisible: false,
+      });
+    }
+
     return NextResponse.json({
       result: storedResult,
       proofRecord,
       rftAttach,
       responsibilityProof,
+      decisionSync,
+      verification,
       rule: "Connected is not proven. Proven requires a successful proveAction.",
     });
   } catch (err) {

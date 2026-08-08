@@ -3,6 +3,7 @@
  * Destination + confirm rules come from proveOwnerGuidance (single source of truth).
  */
 import { proveGuidanceForAction } from "./proveOwnerGuidance.js";
+import { buildProveOwnerVerification } from "./proveOwnerVerification.js";
 
 /** Actions that must collect a destination before proving. */
 export function proveNeedsDestination(action) {
@@ -41,20 +42,28 @@ export function isProveAwaitingConfirm(result = {}) {
 
 /**
  * Build owner-facing result copy after a prove attempt (modal + banner).
+ * Pass businessId so verification can deep-link Decisions honestly.
  */
-export function buildProveOwnerResultCopy({ action, result = {}, ok = false } = {}) {
-  const guidance = proveGuidanceForAction(action);
-  if (ok) {
-    return {
-      title: guidance.successTitle,
-      steps: [...guidance.successSteps],
-      banner: [guidance.successTitle, ...(guidance.successSteps ?? [])].filter(Boolean).join(" — "),
-    };
-  }
-  const message = String(result?.message ?? "Prove failed.");
+export function buildProveOwnerResultCopy({
+  action,
+  result = {},
+  ok = false,
+  businessId = null,
+  peopleVisible = false,
+} = {}) {
+  const verification = buildProveOwnerVerification({
+    action,
+    businessId,
+    result,
+    ok,
+    peopleVisible,
+  });
   return {
-    title: "Test didn’t finish",
-    steps: [message, "Fix the issue, then tap Test it works again."],
-    banner: message,
+    title: verification.title,
+    steps: verification.steps.map((s) => (typeof s === "string" ? s : s.text)),
+    stepItems: verification.steps,
+    evidence: verification.evidence,
+    primaryCta: verification.primaryCta,
+    banner: verification.banner,
   };
 }

@@ -209,7 +209,9 @@ export default function ConnectionsExecutiveLayout() {
     sentTo: string;
     error: string | null;
     resultTitle?: string;
-    resultSteps?: string[];
+    resultSteps?: Array<string | { text: string; href?: string | null }>;
+    resultEvidence?: Array<{ label: string; value: string }>;
+    primaryCta?: { label: string; href: string } | null;
     resultOk?: boolean;
   } | null>(null);
   const consumedFocusRef = useRef<string | null>(null);
@@ -349,11 +351,31 @@ export default function ConnectionsExecutiveLayout() {
             resultSteps: guidance.confirmSteps?.length
               ? [...guidance.confirmSteps]
               : [`We dialed/sent to ${sentTo || "your test destination"}. Confirm you received it.`],
+            resultEvidence: [],
+            primaryCta: null,
           });
           setProveMessage(String(result?.message ?? "Confirm you received the test."));
           return;
         }
-        const copy = buildProveOwnerResultCopy({ action, result, ok });
+        const apiVerification = body?.verification && typeof body.verification === "object"
+          ? body.verification
+          : null;
+        const copy = apiVerification
+          ? {
+            title: String(apiVerification.title ?? "Test result"),
+            steps: Array.isArray(apiVerification.steps) ? apiVerification.steps : [],
+            stepItems: Array.isArray(apiVerification.steps) ? apiVerification.steps : [],
+            evidence: Array.isArray(apiVerification.evidence) ? apiVerification.evidence : [],
+            primaryCta: apiVerification.primaryCta ?? null,
+            banner: String(apiVerification.banner ?? result?.message ?? ""),
+          }
+          : buildProveOwnerResultCopy({
+            action,
+            result,
+            ok,
+            businessId,
+            peopleVisible: false,
+          });
         const followThrough = responsibility?.promoted
           ? ` Responsibility promoted to live (${responsibility.promoted}).`
           : responsibility?.resolvedConstraints?.length
@@ -369,7 +391,9 @@ export default function ConnectionsExecutiveLayout() {
           sentTo: opts.provePhone || opts.proveEmail || "",
           error: null,
           resultTitle: copy.title,
-          resultSteps: copy.steps,
+          resultSteps: (copy as any).stepItems ?? copy.steps,
+          resultEvidence: (copy as any).evidence ?? [],
+          primaryCta: (copy as any).primaryCta ?? null,
           resultOk: ok,
         });
         if (ok) router.refresh();
@@ -386,6 +410,8 @@ export default function ConnectionsExecutiveLayout() {
           error: null,
           resultTitle: "Test didn’t finish",
           resultSteps: [message, "Fix the issue, then tap Test it works again."],
+          resultEvidence: [],
+          primaryCta: null,
           resultOk: false,
         });
       } finally {
@@ -780,7 +806,22 @@ export default function ConnectionsExecutiveLayout() {
           maxWidth={460}
           footer={
             proveDialog.kind === "result" ? (
-              <PrimaryButton onClick={() => setProveDialog(null)}>Got it</PrimaryButton>
+              <>
+                {proveDialog.primaryCta?.href ? (
+                  <PrimaryButton
+                    onClick={() => {
+                      const href = proveDialog.primaryCta!.href;
+                      setProveDialog(null);
+                      router.push(href);
+                    }}
+                  >
+                    {proveDialog.primaryCta.label}
+                  </PrimaryButton>
+                ) : null}
+                <SecondaryButton onClick={() => setProveDialog(null)}>
+                  {proveDialog.primaryCta?.href ? "Stay here" : "Got it"}
+                </SecondaryButton>
+              </>
             ) : proveDialog.kind === "intro" ? (
               <>
                 <SecondaryButton onClick={() => setProveDialog(null)}>Cancel</SecondaryButton>
@@ -829,6 +870,7 @@ export default function ConnectionsExecutiveLayout() {
               <OwnerGuidanceBlock
                 title={null}
                 steps={proveDialog.resultSteps ?? []}
+                evidence={proveDialog.kind === "result" ? (proveDialog.resultEvidence ?? []) : []}
                 tone={
                   proveDialog.kind === "result"
                     ? (proveDialog.resultOk ? "success" : "danger")

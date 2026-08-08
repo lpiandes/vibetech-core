@@ -132,12 +132,12 @@ const BY_ACTION = {
     beforeTitle: "Test website forms",
     beforeSteps: [
       "We’ll record a controlled test form lead (no live website click needed).",
-      "Then you’ll verify it landed in People and Decisions.",
+      "You’ll see proof on this screen, then open Decisions to approve the follow-up draft.",
     ],
     successTitle: "Form test recorded — do this next",
     successSteps: [
-      "Open People — look for “Prove Form Lead”.",
-      "Open Decisions — you’ll see a pending follow-up draft to approve or dismiss.",
+      "Confirm the proof listed above (contact + draft).",
+      "Open Decisions — approve or dismiss the pending follow-up draft.",
       "That’s the same path a real website lead uses.",
     ],
   },
@@ -147,11 +147,11 @@ const BY_ACTION = {
     beforeTitle: "Test website chat",
     beforeSteps: [
       "We’ll run a controlled chat turn and save a contact.",
-      "Then check People for the prove chat contact.",
+      "You’ll see proof on this screen.",
     ],
     successTitle: "Chat test passed",
     successSteps: [
-      "Open People — the prove chat contact should be there.",
+      "Confirm the prove contact in the proof list above.",
       "Live widget chats use the same intake path.",
     ],
   },
@@ -161,11 +161,11 @@ const BY_ACTION = {
     beforeTitle: "Test Meta Lead Forms",
     beforeSteps: [
       "We’ll ingest a controlled Facebook-style test lead.",
-      "Then check People and Decisions for the follow-up draft.",
+      "You’ll see proof here, then open Decisions for the follow-up draft.",
     ],
     successTitle: "Meta lead test recorded",
     successSteps: [
-      "Open People — the test Facebook lead should appear.",
+      "Confirm the proof listed above.",
       "Open Decisions — approve or dismiss the pending follow-up draft.",
       "Live Instant Form leads arrive the same way via webhook.",
     ],

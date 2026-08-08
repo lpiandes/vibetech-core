@@ -13,7 +13,7 @@ import {
   tryAutoFulfillOwnerSetup,
 } from "./resolveOwnerSetupRequest.js";
 import { proveGuidanceForAction } from "../prove/proveOwnerGuidance.js";
-import { proveNeedsDestination, proveNeedsOwnerConfirm, buildProveOwnerResultCopy } from "../prove/proveOwnerFlow.js";
+import { proveNeedsDestination, proveNeedsOwnerConfirm } from "../prove/proveOwnerFlow.js";
 import { getWhiteGloveConnection } from "../whiteglove/WhiteGloveConnectionRegistry.js";
 
 test("HighLevel collectFromOwner drives Location ID + access how-to", () => {
@@ -85,14 +85,31 @@ test("resolveOwnerSetupRequest canSubmit for voice with empty optional fields", 
   assert.equal(resolved.canSubmit, true);
 });
 
-test("prove guidance: website forms has success hand-holding", () => {
+test("prove guidance: website forms does not send owners to People", () => {
   const g = proveGuidanceForAction("submit_test_form");
   assert.equal(proveNeedsDestination("submit_test_form"), null);
   assert.equal(proveNeedsOwnerConfirm("submit_test_form"), false);
   assert.ok(g.beforeSteps.length >= 1);
-  assert.ok(g.successSteps.some((s) => /People|Decisions/i.test(s)));
-  const copy = buildProveOwnerResultCopy({ action: "submit_test_form", ok: true, result: {} });
-  assert.match(copy.banner, /Form test|People|Decisions/i);
+  assert.ok(g.successSteps.every((s) => !/open people/i.test(s)));
+  assert.ok(g.successSteps.some((s) => /Decisions/i.test(s)));
+});
+
+test("prove verification deep-links Decisions and shows proof without People", async () => {
+  const { buildProveOwnerVerification } = await import("../prove/proveOwnerVerification.js");
+  const verification = buildProveOwnerVerification({
+    action: "submit_test_form",
+    businessId: "biz_1",
+    ok: true,
+    peopleVisible: false,
+    result: {
+      contactId: "contact_form_prove_x",
+      followUpDraft: { id: "draft_1", subject: "Thanks — we received your inquiry" },
+      detail: { pendingApproval: true },
+    },
+  });
+  assert.ok(verification.evidence.length >= 1);
+  assert.equal(verification.primaryCta?.href, "/b/biz_1/intelligence");
+  assert.ok(verification.steps.every((s) => !/open people/i.test(String(s.text ?? s))));
 });
 
 test("prove guidance: email needs destination + confirm", () => {
