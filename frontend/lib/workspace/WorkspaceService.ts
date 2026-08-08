@@ -71,6 +71,11 @@ import { PM_CAMPAIGN_SECTION_TYPES } from "../../../industries/property-manageme
 import { MCBRIDE_MAGNA_MARE_CLIENT_TEMPLATE } from "../../../industries/property-management/config/mcbrideClientTemplate.js";
 import { materializeDueRecurringOperations } from "../../../backend/core/campaigns/RecurringOperationService.js";
 import { platformStore } from "@/lib/server/compose";
+import { syncOwnerVisibleConnection } from "../../../backend/core/integrations/connections/syncOwnerVisibleConnection.js";
+import {
+  configureInboundSmsWebhook,
+  configureInboundVoiceWebhook,
+} from "../../../backend/core/integrations/twilio/TwilioProvisioningService.js";
 import { buildDemoStorySteps } from "../../../backend/core/demo/buildDemoStorySteps.js";
 import { projectSegmentMembership } from "../../../backend/core/segments/SegmentProjectionEngine.js";
 import { checkCommunicationPermitted } from "../../../backend/core/communications/preferences/CommunicationPreferenceEnforcer.js";
@@ -2508,6 +2513,20 @@ export class WorkspaceService {
     return connection;
   }
 
+
+  /** Admin/AI/Support connect → owner Integrations shows Connected (and clears white-glove Pending). */
+  async syncOwnerVisibleAfterConnect(connection: { connectionType?: string; status?: string } | null | undefined, extras: { providerType?: string; credentialId?: string } = {}) {
+    await syncOwnerVisibleConnection({
+      platformStore,
+      businessId: this.workspaceId,
+      connectionId: connection?.connectionType ?? null,
+      connectionStatus: connection?.status ?? null,
+      providerType: extras.providerType ?? null,
+      credentialId: extras.credentialId ?? null,
+      actorId: "credentials_connected",
+    }).catch(() => null);
+  }
+
   async connectCrmPrivateApp({
     connectionType,
     displayName,
@@ -2551,6 +2570,7 @@ export class WorkspaceService {
       integrationPlatform: this.connected.integrationPlatform,
       kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
     });
+    await this.syncOwnerVisibleAfterConnect(connection, { providerType: String(providerType), credentialId });
     return connection;
   }
 
@@ -2601,6 +2621,33 @@ export class WorkspaceService {
       integrationPlatform: this.connected.integrationPlatform,
       kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
     });
+    try {
+      const vault = this.connected.integrationPlatform?.credentialVault;
+      const record = vault?.get?.(credentialId);
+      const accountSid = String(record?.secrets?.accountSid ?? "");
+      const authToken = String(record?.secrets?.authToken ?? "");
+      if (accountSid && authToken) {
+        const webhook = await configureInboundSmsWebhook({
+          businessId: this.workspaceId,
+          accountSid,
+          authToken,
+          fromNumber: fromNumber ?? record?.secrets?.fromNumber ?? null,
+        });
+        const smsConn = this.connected.integrationPlatform.connectionRuntime.getConnectionByType?.("sms_channel");
+        if (smsConn?.id) {
+          this.connected.integrationPlatform.connectionService.updateMetadata({
+            connectionId: smsConn.id,
+            metadata: {
+              inboundWebhookConfigured: Boolean(webhook?.ok) && webhook?.configured !== false,
+              inboundWebhookUrl: webhook?.inboundWebhookUrl ?? null,
+            },
+          });
+        }
+      }
+    } catch {
+      /* best-effort */
+    }
+    await this.syncOwnerVisibleAfterConnect(connection, { providerType: "twilio_sms", credentialId });
     return connection;
   }
 
@@ -2638,6 +2685,40 @@ export class WorkspaceService {
       integrationPlatform: this.connected.integrationPlatform,
       kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
     });
+    try {
+      const vault = this.connected.integrationPlatform?.credentialVault;
+      const record = vault?.get?.(credentialId);
+      const accountSid = String(record?.secrets?.accountSid ?? "");
+      const authToken = String(record?.secrets?.authToken ?? "");
+      if (accountSid && authToken) {
+        const webhook = await configureInboundVoiceWebhook({
+          businessId: this.workspaceId,
+          accountSid,
+          authToken,
+          fromNumber: fromNumber ?? record?.secrets?.fromNumber ?? null,
+        });
+        const smsConn = this.connected.integrationPlatform.connectionRuntime.getConnectionByType?.("voice_channel");
+        if (smsConn?.id) {
+          this.connected.integrationPlatform.connectionService.updateMetadata({
+            connectionId: smsConn.id,
+            metadata: {
+              voiceWebhookConfigured: webhook?.configured === true,
+              voiceWebhookMessage: webhook?.message ?? null,
+              inboundUrl: webhook?.inboundUrl ?? null,
+            },
+          });
+          await persistAffectedRuntimes({
+            workspaceId: this.workspaceId,
+            stack: this.connected.operatingStack,
+            integrationPlatform: this.connected.integrationPlatform,
+            kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
+          });
+        }
+      }
+    } catch {
+      /* webhook best-effort — credentials still Connected */
+    }
+    await this.syncOwnerVisibleAfterConnect(connection, { providerType: "twilio_voice", credentialId });
     return connection;
   }
 
@@ -2675,6 +2756,7 @@ export class WorkspaceService {
       integrationPlatform: this.connected.integrationPlatform,
       kinds: [RUNTIME_SNAPSHOT_KINDS.CONNECTION],
     });
+    await this.syncOwnerVisibleAfterConnect(connection, { providerType: "meta_lead_ads", credentialId });
     return connection;
   }
 

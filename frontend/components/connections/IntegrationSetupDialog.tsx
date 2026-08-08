@@ -9,8 +9,17 @@ import SecondaryButton from "@/components/product/SecondaryButton";
 import type { IntegrationDisplay } from "./integrationDisplay";
 import SmsProvisioningStatus, { resolveSmsProvisioningStage } from "./SmsProvisioningStatus";
 import { cockpitColors, spacing, typography } from "@/design/tokens";
-import { useBusinessScope } from "@/lib/platform/BusinessScopeContext";
+import { useBusinessScope, useOptionalBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import { resolveOAuthReturnPath } from "@/lib/connections/integrationFocusRouting.js";
+import {
+  getWhiteGloveConnection,
+  isWhiteGloveConnection,
+} from "../../../backend/core/integrations/whiteglove/WhiteGloveConnectionRegistry.js";
+import {
+  OPS_STATUS,
+  resolveWhiteGloveOwnerPhase,
+} from "../../../backend/core/integrations/whiteglove/whiteGloveOpsState.js";
+import { ConnectionJourneyRail } from "./setupJourneyUi";
 
 export default function IntegrationSetupDialog({
   integration,
@@ -18,6 +27,8 @@ export default function IntegrationSetupDialog({
   onClose,
   returnTo = null,
   onMetaSetupRequested,
+  pendingOpsRequest = null,
+  onSetupRequested,
 }: {
   integration: IntegrationDisplay;
   hasRealConnect?: boolean;
@@ -26,11 +37,16 @@ export default function IntegrationSetupDialog({
   returnTo?: string | null;
   /** Home Launch Center: flip Mission 6 to Pending without a full refresh. */
   onMetaSetupRequested?: (() => void) | null;
+  pendingOpsRequest?: Record<string, unknown> | null;
+  onSetupRequested?: (() => void) | null;
 }) {
   const Icon = integration.icon;
   const router = useRouter();
   const searchParams = useSearchParams();
   const { businessId } = useBusinessScope();
+  const optionalScope = useOptionalBusinessScope();
+  /** Owners never see Twilio/CRM token forms — Support access only. */
+  const canUseAdvancedCredentials = Boolean(optionalScope?.supportAccess?.active);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [apiKeyForm, setApiKeyForm] = useState({
@@ -59,6 +75,20 @@ export default function IntegrationSetupDialog({
     emailed?: boolean;
     operatorEmail?: string;
   } | null>(null);
+  const [whiteGloveForm, setWhiteGloveForm] = useState({
+    cell: "",
+    notes: "",
+    pageName: "",
+    pageUrl: "",
+    brand: "",
+  });
+  const [whiteGloveResult, setWhiteGloveResult] = useState<{
+    message?: string;
+    notifyOk?: boolean;
+    notifyError?: string | null;
+  } | null>(null);
+  const [showAdvancedCreds, setShowAdvancedCreds] = useState(false);
+  const [metaCredForm, setMetaCredForm] = useState({ pageId: "", pageAccessToken: "" });
   const [growthForm, setGrowthForm] = useState({ customerId: "", developerToken: "", adAccountId: "", accessToken: "", loginCustomerId: "" });
   const [crmForm, setCrmForm] = useState({ accessToken: "", locationId: "" });
   const [smsAdvanced, setSmsAdvanced] = useState(false);
@@ -101,7 +131,38 @@ export default function IntegrationSetupDialog({
   } | null>(null);
 
   const setupMode = integration.setupMode ?? "manual";
-  const canConnect = hasRealConnect && setupMode !== "manual";
+  const whiteGloveMeta = isWhiteGloveConnection(integration.id)
+    ? getWhiteGloveConnection(integration.id)
+    : null;
+  const whiteGlovePhase = whiteGloveMeta
+    ? resolveWhiteGloveOwnerPhase({
+      connectionId: integration.id,
+      connectionStatus: (pendingOpsRequest as { connectionStatus?: string } | null)?.connectionStatus
+        ?? undefined,
+      pendingOpsRequests: pendingOpsRequest
+        ? { [integration.id]: pendingOpsRequest }
+        : {},
+    })
+    : "self_serve";
+  const isWhiteGlove = Boolean(whiteGloveMeta);
+  const whiteGlovePending = isWhiteGlove && (
+    whiteGlovePhase === "pending"
+    || String(pendingOpsRequest?.status ?? "") === OPS_STATUS.PENDING
+    || Boolean(whiteGloveResult)
+    || Boolean(metaRequestResult)
+  );
+  const whiteGloveReady = isWhiteGlove && (
+    whiteGlovePhase === "good_to_go" || whiteGlovePhase === "connected"
+  ) && !whiteGloveResult && !metaRequestResult;
+  const allowAdvancedCreds = canUseAdvancedCredentials && showAdvancedCreds;
+  const useWhiteGloveRequestUi = isWhiteGlove
+    && !allowAdvancedCreds
+    && !voiceConnectResult
+    && !provisionResult;
+  const canConnect = (
+    hasRealConnect
+    || (isWhiteGlove && allowAdvancedCreds)
+  ) && setupMode !== "manual" && !(useWhiteGloveRequestUi && !whiteGloveReady);
   const isBusinessEmail = integration.id === "business_email";
   const isGoogleOAuth =
     setupMode === "oauth"
@@ -346,13 +407,98 @@ export default function IntegrationSetupDialog({
         return;
       }
       setMetaRequestResult({
-        message: String(data.message ?? "VIBETech will connect your Facebook Page."),
+        message: data.emailed === true
+          ? String(data.message ?? "VIBETech will connect your Facebook Page.")
+          : "Request saved, but the ops notification email failed. Retry or contact support.",
         emailed: data.emailed === true,
         operatorEmail: data.operatorEmail ? String(data.operatorEmail) : "leopiandes@vtechdevelopment.com",
       });
       // Flip Mission 6 to Pending immediately (parent). Avoid router.refresh() —
       // a pending package-Ask heal used to soft-nav into /architect?packageAsk=1.
       onMetaSetupRequested?.();
+      onSetupRequested?.();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function requestWhiteGloveSetup() {
+    if (!businessId || !isWhiteGlove) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/businesses/${businessId}/integrations/request-setup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          connectionId: integration.id,
+          cell: whiteGloveForm.cell || null,
+          forwardNumber: whiteGloveForm.cell || null,
+          notes: whiteGloveForm.notes
+            || (integration.id === "sms_channel" && smsBrand.legalBusinessName
+              ? `Legal: ${smsBrand.legalBusinessName}; EIN: ${smsBrand.ein}; Contact: ${smsBrand.contactEmail}`
+              : null),
+          pageName: whiteGloveForm.pageName || metaForm.pageName || null,
+          pageUrl: whiteGloveForm.pageUrl || metaForm.pageUrl || null,
+          brand: whiteGloveForm.brand || smsBrand.legalBusinessName || null,
+          needEverything: integration.id === "meta_lead_ads" && !whiteGloveForm.pageName && !metaForm.pageName,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(String(data.error ?? "Could not send setup request."));
+        return;
+      }
+      const notifyOk = data.notifyOk !== false && data.notify?.ok !== false;
+      const notifyError = data.notify?.error
+        ? String(data.notify.error)
+        : (notifyOk ? null : "Ops email may not have been delivered.");
+      setWhiteGloveResult({
+        message: notifyOk
+          ? String(data.message ?? whiteGloveMeta?.ownerPendingCopy ?? "Hold on — VIBETech is setting this up for you.")
+          : "Request saved — but the ops email failed. VIBETech may not have been notified yet. Try again or contact support.",
+        notifyOk,
+        notifyError,
+      });
+      if (integration.id === "meta_lead_ads") {
+        setMetaRequestResult({
+          message: notifyOk
+            ? String(data.message ?? "VIBETech will connect your Facebook Page.")
+            : "Request saved, but the ops notification email failed.",
+          emailed: notifyOk,
+          operatorEmail: "leopiandes@vtechdevelopment.com",
+        });
+        onMetaSetupRequested?.();
+      }
+      onSetupRequested?.();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function connectMetaCredentials() {
+    if (!businessId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/businesses/${businessId}/integrations/meta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pageId: metaCredForm.pageId,
+          pageAccessToken: metaCredForm.pageAccessToken,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(String(data.error ?? "Could not connect Meta Lead Forms."));
+        return;
+      }
+      finishConnected();
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -361,8 +507,13 @@ export default function IntegrationSetupDialog({
   }
 
   function primaryAction() {
+    if (useWhiteGloveRequestUi) {
+      if (whiteGlovePending || whiteGloveReady) return onClose;
+      return requestWhiteGloveSetup;
+    }
     if (!canConnect) return onClose;
     if (setupMode === "oauth" && integration.id !== "meta_lead_ads") return startOAuth;
+    if (integration.id === "meta_lead_ads" && allowAdvancedCreds) return connectMetaCredentials;
     if (integration.id === "meta_lead_ads") return requestMetaSetup;
     if (setupMode === "api_key") return connectApiKey;
     if (setupMode === "dev_connect") return connectDevEmail;
@@ -370,40 +521,65 @@ export default function IntegrationSetupDialog({
   }
 
   function primaryLabel() {
+    if (useWhiteGloveRequestUi) {
+      if (whiteGlovePending) return "Got it";
+      if (whiteGloveReady) return "Close";
+      if (loading) return "Sending request…";
+      return "Request setup";
+    }
     if (!canConnect) return "Got it";
     if (loading) {
       if (integration.id === "sms_channel" && !smsAdvanced) return "Setting up texting…";
+      if (integration.id === "meta_lead_ads" && allowAdvancedCreds) return "Connecting…";
       if (integration.id === "meta_lead_ads") return "Sending request…";
       return "Connecting…";
     }
     if (setupMode === "oauth" && (integration.id === "business_email" || integration.id === "calendar" || integration.id === "google_search_console")) {
       return "Connect with Google";
     }
+    if (integration.id === "meta_lead_ads" && allowAdvancedCreds) return "Connect Page credentials";
     if (integration.id === "meta_lead_ads") return "Request VIBETech setup";
     if (setupMode === "dev_connect") return "Connect for development";
     if (integration.id === "sms_channel" && !smsAdvanced) return "Set up texting for my business";
     return "Connect";
   }
 
+  const modalTitle = isBusinessEmail
+    ? "Connect business email"
+    : useWhiteGloveRequestUi
+      ? (whiteGlovePending
+        ? "Setup in progress"
+        : whiteGloveReady
+          ? "Good to go"
+          : `Request ${integration.title} setup`)
+      : integration.id === "sms_channel"
+        ? "Set up text messaging"
+        : integration.id === "meta_lead_ads"
+          ? "Request Meta Lead Forms setup"
+          : integration.id === "voice_channel"
+            ? "Set up business phone"
+            : integration.id === "calendar"
+              ? "Connect calendar"
+              : `Connect ${integration.title}`;
+
   return (
     <SimpleModal
-      title={
-        isBusinessEmail
-          ? "Connect business email"
-          : integration.id === "sms_channel"
-            ? "Set up text messaging"
-            : integration.id === "meta_lead_ads"
-              ? "Request Meta Lead Forms setup"
-              : integration.id === "voice_channel"
-                ? "Set up missed-call texts"
-              : integration.id === "calendar"
-                ? "Connect calendar"
-              : `Connect ${integration.title}`
-      }
+      title={modalTitle}
       onClose={onClose}
-      maxWidth={integration.id === "sms_channel" || integration.id === "meta_lead_ads" || integration.id === "voice_channel" ? 560 : 440}
+      maxWidth={integration.id === "sms_channel" || integration.id === "meta_lead_ads" || integration.id === "voice_channel" || isWhiteGlove ? 560 : 440}
       footer={
-        canConnect && !(integration.id === "meta_lead_ads" && metaRequestResult) && !(integration.id === "sms_channel" && provisionResult) && !(integration.id === "voice_channel" && voiceConnectResult) ? (
+        useWhiteGloveRequestUi ? (
+          whiteGlovePending || whiteGloveReady ? (
+            <PrimaryButton onClick={onClose}>Got it</PrimaryButton>
+          ) : (
+            <>
+              <SecondaryButton onClick={loading ? undefined : onClose}>Cancel</SecondaryButton>
+              <PrimaryButton onClick={loading ? undefined : () => void requestWhiteGloveSetup()}>
+                {primaryLabel()}
+              </PrimaryButton>
+            </>
+          )
+        ) : canConnect && !(integration.id === "meta_lead_ads" && metaRequestResult) && !(integration.id === "sms_channel" && provisionResult) && !(integration.id === "voice_channel" && voiceConnectResult) ? (
           <>
             <SecondaryButton onClick={loading ? undefined : onClose}>Cancel</SecondaryButton>
             {allowLocalDesignPartnerConnect ? (
@@ -462,7 +638,149 @@ export default function IntegrationSetupDialog({
             border: `1px solid ${cockpitColors.panelBorder}`,
           }}
         >
-          {canConnect && setupMode === "api_key" && (integration.id === "google_ads" || integration.id === "meta_ads") ? (
+          {useWhiteGloveRequestUi ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
+              {whiteGlovePending ? (
+                <>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: whiteGloveResult?.notifyOk === false ? "#b91c1c" : cockpitColors.textPrimary }}>
+                    {whiteGloveResult?.notifyOk === false ? "Request saved — notify failed" : "Pending"}
+                  </div>
+                  <p style={{ margin: 0, fontSize: 14, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
+                    {String(whiteGloveResult?.message
+                      ?? (pendingOpsRequest as { ownerPendingCopy?: string } | null)?.ownerPendingCopy
+                      ?? whiteGloveMeta?.ownerPendingCopy
+                      ?? "Hold on — VIBETech is setting this up for you.")}
+                  </p>
+                  <ConnectionJourneyRail phase={whiteGloveResult?.notifyOk === false ? "request" : "pending"} />
+                  {whiteGloveResult?.notifyOk === false ? (
+                    <p style={{ margin: 0, fontSize: 12, color: "#b91c1c", lineHeight: 1.45 }}>
+                      {whiteGloveResult.notifyError ?? "Ops email failed."} Close and tap Request setup again, or email support so we see this request.
+                    </p>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
+                      Your checklist stays incomplete until we mark this ready. Then you&apos;ll see Good to go → Test it → Go live.
+                    </p>
+                  )}
+                </>
+              ) : whiteGloveReady ? (
+                <>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: cockpitColors.textPrimary }}>Good to go</div>
+                  <p style={{ margin: 0, fontSize: 14, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
+                    {String((pendingOpsRequest as { ownerReadyCopy?: string } | null)?.ownerReadyCopy
+                      ?? whiteGloveMeta?.ownerReadyCopy
+                      ?? "VIBETech finished setup. When Connected appears, run Test it works.")}
+                  </p>
+                  <ConnectionJourneyRail phase="ready" />
+                </>
+              ) : (
+                <>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: cockpitColors.textPrimary }}>
+                    We set this up for you
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
+                    You don&apos;t need Twilio, Meta, or CRM passwords. Tell us a couple details and we&apos;ll finish the wiring.
+                  </p>
+                  {integration.id === "voice_channel" ? (
+                    <label style={fieldLabelStyle}>
+                      Your cell (optional)
+                      <span style={fieldHintStyle}>Only if you want missed calls to ring you first</span>
+                      <input
+                        placeholder="+1…"
+                        value={whiteGloveForm.cell}
+                        onChange={(e) => setWhiteGloveForm((s) => ({ ...s, cell: e.target.value }))}
+                        style={fieldInputStyle}
+                      />
+                    </label>
+                  ) : null}
+                  {integration.id === "sms_channel" ? (
+                    <>
+                      <label style={fieldLabelStyle}>
+                        Legal business name
+                        <span style={fieldHintStyle}>Exact name on your EIN letter — carriers require this</span>
+                        <input
+                          placeholder="Abc Dentistry LLC"
+                          value={smsBrand.legalBusinessName}
+                          onChange={(e) => setSmsBrand((s) => ({ ...s, legalBusinessName: e.target.value }))}
+                          style={fieldInputStyle}
+                        />
+                      </label>
+                      <label style={fieldLabelStyle}>
+                        EIN
+                        <input
+                          placeholder="12-3456789"
+                          value={smsBrand.ein}
+                          onChange={(e) => setSmsBrand((s) => ({ ...s, ein: e.target.value }))}
+                          style={fieldInputStyle}
+                        />
+                      </label>
+                      <label style={fieldLabelStyle}>
+                        Contact email for carrier paperwork
+                        <input
+                          placeholder="you@business.com"
+                          value={smsBrand.contactEmail}
+                          onChange={(e) => setSmsBrand((s) => ({ ...s, contactEmail: e.target.value }))}
+                          style={fieldInputStyle}
+                        />
+                      </label>
+                    </>
+                  ) : null}
+                  {integration.id === "meta_lead_ads" ? (
+                    <>
+                      <label style={fieldLabelStyle}>
+                        Facebook Page name
+                        <input
+                          placeholder="Usually your business name"
+                          value={whiteGloveForm.pageName}
+                          onChange={(e) => setWhiteGloveForm((s) => ({ ...s, pageName: e.target.value }))}
+                          style={fieldInputStyle}
+                        />
+                      </label>
+                      <label style={fieldLabelStyle}>
+                        Facebook Page URL (optional)
+                        <input
+                          placeholder="https://facebook.com/…"
+                          value={whiteGloveForm.pageUrl}
+                          onChange={(e) => setWhiteGloveForm((s) => ({ ...s, pageUrl: e.target.value }))}
+                          style={fieldInputStyle}
+                        />
+                      </label>
+                    </>
+                  ) : null}
+                  <label style={fieldLabelStyle}>
+                    Anything else we should know?
+                    <textarea
+                      placeholder="Hours, preferred number area code, who manages HubSpot, etc."
+                      value={whiteGloveForm.notes}
+                      onChange={(e) => setWhiteGloveForm((s) => ({ ...s, notes: e.target.value }))}
+                      rows={3}
+                      style={{ ...fieldInputStyle, resize: "vertical" as const }}
+                    />
+                  </label>
+                  {canUseAdvancedCredentials ? (
+                    <button
+                      type="button"
+                      onClick={() => { setShowAdvancedCreds(true); setError(null); }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: cockpitColors.textMuted,
+                        fontSize: 12,
+                        fontWeight: 650,
+                        cursor: "pointer",
+                        padding: 0,
+                        textAlign: "left",
+                      }}
+                    >
+                      Support: I already have credentials (advanced)
+                    </button>
+                  ) : null}
+                </>
+              )}
+              {error ? (
+                <p style={{ color: "#b91c1c", margin: `${spacing.sm} 0 0`, fontSize: typography.caption.fontSize }}>{error}</p>
+              ) : null}
+            </div>
+          ) : canConnect && setupMode === "api_key" && (integration.id === "google_ads" || integration.id === "meta_ads") ? (
             <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
               <div style={{ fontWeight: 600, fontSize: typography.caption.fontSize, color: cockpitColors.textPrimary }}>{integration.id === "google_ads" ? "Google Ads credentials" : "Meta Ads credentials"}</div>
               <input placeholder={integration.id === "google_ads" ? "Google Ads customer ID" : "Meta ad account ID"} value={integration.id === "google_ads" ? growthForm.customerId : growthForm.adAccountId} onChange={(e) => setGrowthForm((s) => integration.id === "google_ads" ? { ...s, customerId: e.target.value } : { ...s, adAccountId: e.target.value })} style={{ padding: 8, borderRadius: 6, border: `1px solid ${cockpitColors.panelBorder}` }} />
@@ -471,6 +789,24 @@ export default function IntegrationSetupDialog({
             </div>
           ) : canConnect && setupMode === "api_key" && (integration.id === "hubspot" || integration.id === "highlevel") ? (
             <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
+              {isWhiteGlove ? (
+                <button
+                  type="button"
+                  onClick={() => { setShowAdvancedCreds(false); setError(null); }}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: cockpitColors.textMuted,
+                    fontSize: 12,
+                    fontWeight: 650,
+                    cursor: "pointer",
+                    padding: 0,
+                    textAlign: "left",
+                  }}
+                >
+                  ← Back to Request setup
+                </button>
+              ) : null}
               <div style={{ fontWeight: 600, fontSize: typography.caption.fontSize, color: cockpitColors.textPrimary }}>
                 {integration.id === "hubspot" ? "HubSpot private app token" : "HighLevel API credentials"}
               </div>
@@ -498,7 +834,10 @@ export default function IntegrationSetupDialog({
               {!smsAdvanced ? (
                 <>
                   <div style={{ fontWeight: 600, fontSize: typography.caption.fontSize, color: cockpitColors.textPrimary }}>
-                    A2P business + messaging details
+                    Carrier approval for business texting
+                    <span style={fieldHintStyle}>
+                      Carriers require legal business details before US texts deliver reliably. (Technical name: A2P / 10DLC.)
+                    </span>
                   </div>
                   <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
                     Needed for US texting approval. Use your exact legal business name.
@@ -693,7 +1032,7 @@ export default function IntegrationSetupDialog({
                   </label>
                   <label style={fieldLabelStyle}>
                     Your business privacy policy URL
-                    <span style={fieldHintStyle}>Required for carrier A2P — use this business&apos;s policy, not VIBETech&apos;s</span>
+                    <span style={fieldHintStyle}>Required for carrier approval — use this business&apos;s policy, not VIBETech&apos;s</span>
                     <input
                       placeholder="https://yourbusiness.com/privacy"
                       value={smsBrand.privacyPolicyUrl}
@@ -809,7 +1148,7 @@ export default function IntegrationSetupDialog({
                     />
                   </label>
                   <p style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, margin: 0, lineHeight: 1.45 }}>
-                    A2P / 10DLC status syncs from Twilio after you save business details (not a checkbox). Use Refresh A2P on the SMS connection when carriers update.
+                    Carrier approval is not automatic in this screen. After connect, use Refresh status on text messaging (Integrations) to pull the latest Trust Hub / A2P status from Twilio.
                   </p>
                   <button
                     type="button"
@@ -852,8 +1191,26 @@ export default function IntegrationSetupDialog({
                 </>
               ) : (
                 <>
+                  {isWhiteGlove ? (
+                    <button
+                      type="button"
+                      onClick={() => { setShowAdvancedCreds(false); setError(null); }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: cockpitColors.textMuted,
+                        fontSize: 12,
+                        fontWeight: 650,
+                        cursor: "pointer",
+                        padding: 0,
+                        textAlign: "left",
+                      }}
+                    >
+                      ← Back to Request setup
+                    </button>
+                  ) : null}
                   <div style={{ fontWeight: 700, fontSize: 14, color: cockpitColors.textPrimary }}>
-                    Missed-call texts (4 steps)
+                    Advanced: connect Twilio yourself
                   </div>
                   <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.55 }}>
                     <li>Have a Twilio number (buy one, or reuse your SMS number if it supports Voice).</li>
@@ -1018,6 +1375,50 @@ export default function IntegrationSetupDialog({
                 </>
               ) : null}
             </div>
+          ) : canConnect && integration.id === "meta_lead_ads" && allowAdvancedCreds ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
+              <button
+                type="button"
+                onClick={() => { setShowAdvancedCreds(false); setError(null); }}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: cockpitColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: 650,
+                  cursor: "pointer",
+                  padding: 0,
+                  textAlign: "left",
+                }}
+              >
+                ← Back to Request setup
+              </button>
+              <div style={{ fontWeight: 600, fontSize: typography.caption.fontSize, color: cockpitColors.textPrimary }}>
+                Support: Facebook Page credentials
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
+                Paste a Page ID + Page access token. This marks Meta Connected and attempts leadgen subscribe — still confirm webhooks in Meta Developer.
+              </p>
+              <label style={fieldLabelStyle}>
+                Page ID
+                <input
+                  placeholder="Facebook Page ID"
+                  value={metaCredForm.pageId}
+                  onChange={(e) => setMetaCredForm((s) => ({ ...s, pageId: e.target.value }))}
+                  style={fieldInputStyle}
+                />
+              </label>
+              <label style={fieldLabelStyle}>
+                Page access token
+                <input
+                  placeholder="Page access token"
+                  type="password"
+                  value={metaCredForm.pageAccessToken}
+                  onChange={(e) => setMetaCredForm((s) => ({ ...s, pageAccessToken: e.target.value }))}
+                  style={fieldInputStyle}
+                />
+              </label>
+            </div>
           ) : canConnect && integration.id === "meta_lead_ads" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm }}>
               {metaRequestResult ? (
@@ -1026,19 +1427,25 @@ export default function IntegrationSetupDialog({
                   gap: 10,
                   padding: 12,
                   borderRadius: 12,
-                  border: "1px solid #a7f3d0",
-                  background: "#ecfdf5",
+                  border: metaRequestResult.emailed === false ? "1px solid #fecaca" : "1px solid #a7f3d0",
+                  background: metaRequestResult.emailed === false ? "#fef2f2" : "#ecfdf5",
                 }}>
-                  <div style={{ fontWeight: 800, color: "#047857" }}>
-                    Setup requested
+                  <div style={{ fontWeight: 800, color: metaRequestResult.emailed === false ? "#b91c1c" : "#047857" }}>
+                    {metaRequestResult.emailed === false ? "Request saved — notify failed" : "Setup requested"}
                   </div>
-                  <p style={{ margin: 0, fontSize: 13, color: "#065f46", lineHeight: 1.5, fontWeight: 600 }}>
+                  <p style={{ margin: 0, fontSize: 13, color: metaRequestResult.emailed === false ? "#991b1b" : "#065f46", lineHeight: 1.5, fontWeight: 600 }}>
                     {metaRequestResult.message
                       || "Our team is on it — we’ll create your Facebook Page ASAP (usually less than 24 hours)."}
                   </p>
-                  <p style={{ margin: 0, fontSize: 12, color: "#047857", lineHeight: 1.45 }}>
-                    You don’t need to do anything else. We’ll email you when Lead Ads are connected.
-                  </p>
+                  {metaRequestResult.emailed === false ? (
+                    <p style={{ margin: 0, fontSize: 12, color: "#b91c1c", lineHeight: 1.45 }}>
+                      Ops may not have been emailed. Retry Request setup or contact support.
+                    </p>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 12, color: "#047857", lineHeight: 1.45 }}>
+                      You don’t need to do anything else. We’ll email you when Lead Ads are connected.
+                    </p>
+                  )}
                   <PrimaryButton onClick={onClose}>Done</PrimaryButton>
                 </div>
               ) : (

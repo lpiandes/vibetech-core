@@ -49,6 +49,7 @@ export async function getSystemWorkspaceForBusiness(businessId: string) {
     integrationPlatform: (service as any)?.connected?.integrationPlatform,
     operatingStack: (service as any)?.connected?.operatingStack,
     vault,
+    platformStore,
   }).then((result) => {
     if (result?.healed?.length) service.refreshOperationalState(0);
   });

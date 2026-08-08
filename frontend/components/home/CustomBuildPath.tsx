@@ -117,16 +117,16 @@ export default function CustomBuildPath({
   }
 
   function advanceLabel(stepId: string) {
-    if (stepId === "prove") return "Verify prove records";
+    if (stepId === "prove") return "Verify tests";
     if (stepId === "acceptance") return "Accept checklist";
     if (stepId === "go_live") return "Go live";
-    if (stepId === "intake") return "Save intake";
-    return "Mark done";
+    if (stepId === "intake") return "Save brief";
+    return "Continue";
   }
 
   return (
     <section
-      aria-label="Custom Build Factory"
+      aria-label="Build your AI"
       style={{
         display: "grid",
         gap: spacing.md,
@@ -138,17 +138,17 @@ export default function CustomBuildPath({
     >
       <div>
         <h2 style={{ margin: 0, fontSize: typography.cardTitle.fontSize, fontWeight: 700, color: cockpitColors.textPrimary }}>
-          Custom Build Factory
+          Build your AI
         </h2>
         <p style={{ margin: `${spacing.xs} 0 0`, color: cockpitColors.textSecondary, fontSize: 14, lineHeight: 1.45 }}>
-          Deliver any custom AI build end-to-end: intake → prove → acceptance → go-live. Prove steps read live capability proof records — operator clicks alone cannot go live.
+          Tell us what you need → test it → go live. Tests need real evidence — marking done is not enough.
         </p>
       </div>
 
       {!view ? (
         <div style={{ display: "grid", gap: spacing.sm }}>
           <label style={{ fontSize: 12, fontWeight: 650, color: cockpitColors.textMuted }}>
-            Sheet line
+            What are we building?
             <input
               value={sheetLine}
               onChange={(e) => setSheetLine(e.target.value)}
@@ -168,7 +168,7 @@ export default function CustomBuildPath({
             <input value={channels} onChange={(e) => setChannels(e.target.value)} style={inputStyle()} />
           </label>
           <Button type="button" disabled={busy} onClick={() => void start()}>
-            Start custom build
+            Start
           </Button>
         </div>
       ) : (
@@ -183,7 +183,7 @@ export default function CustomBuildPath({
           </div>
           {(view.summary?.missingProveMissionIds?.length ?? 0) > 0 ? (
             <p style={{ margin: 0, fontSize: 12, color: "#991B1B" }}>
-              Missing prove: {view.summary?.missingProveMissionIds?.join(", ")}
+              Still need to test: {view.summary?.missingProveMissionIds?.join(", ")}
             </p>
           ) : null}
           <ol style={{ margin: 0, paddingLeft: spacing.lg, display: "grid", gap: 8 }}>
@@ -202,11 +202,6 @@ export default function CustomBuildPath({
               </li>
             ))}
           </ol>
-          {(view.requiredProveMissionIds?.length ?? 0) > 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted }}>
-              Prove missions: {view.requiredProveMissionIds?.join(", ")}
-            </p>
-          ) : null}
         </div>
       )}
 

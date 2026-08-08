@@ -173,6 +173,7 @@ export async function healWorkspaceConnections(
     integrationPlatform: platform,
     operatingStack: (service as any)?.connected?.operatingStack,
     vault,
+    platformStore,
   });
   if (result?.healed?.length) {
     const knowledgeCount = await platformStore.countActiveKnowledgeDocuments(businessId).catch(() => 0);

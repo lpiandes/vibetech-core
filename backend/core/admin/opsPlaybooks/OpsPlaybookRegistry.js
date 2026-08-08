@@ -183,61 +183,150 @@ const PLAYBOOK_BUILDERS = {
     };
   },
 
-  twilio_sms_provision({ origin, businessId, businessName, integrationsHref, adminHref, fromNumber, a2pStatus }) {
+  twilio_voice_connect({ origin, businessId, businessName, integrationsHref, adminHref, ownerCell, notes }) {
     const name = safe(businessName) || businessId;
+    const cell = safe(ownerCell);
     return {
-      id: "twilio_sms_provision",
-      title: `Finish SMS / A2P for — ${name}`,
-      when: "Client requested or triggered SMS setup; ops must finish Twilio + platform connect.",
+      id: "twilio_voice_connect",
+      title: `Set up business phone — ${name}`,
+      when: "Owner requested business phone. They should NOT paste Twilio SID/token — you do this.",
       prerequisites: [
-        "TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN set on the server (or per-business vault).",
-        "Legal business name, address, EIN ready for Trust Hub / Brand.",
+        "Access to the company Twilio account (or create one under VIBETech).",
+        cell ? `Owner cell for ring-first: ${cell}` : "Ask owner for their cell if missed-call ring-first is wanted.",
+        "SMS channel ideally ready so missed-call texts can send (can finish after voice).",
       ],
       steps: [
-        `Open Admin: ${origin}${adminHref}`,
-        `Integrations focus SMS: ${integrationsHref}`,
-        fromNumber
-          ? `Number already provisioned: ${fromNumber}. Confirm inbound webhook points at VIBETech SMS webhook.`
-          : "In-app SMS setup should buy a number (preferred). If Console: Buy a number → set Messaging webhook to VIBETech inbound SMS URL.",
-        "Trust Hub / A2P: create Customer Profile + Brand with legal name + EIN matching IRS records.",
-        "Campaign: Low Volume Mixed or Standard; sample messages include STOP / HELP; link Privacy + Terms (https://vtechdevelopment.com/privacy , https://vtechdevelopment.com/terms).",
-        `If credentials were set in Console only: POST secrets via Integrations or durable credential for twilio_sms on business ${businessId}.`,
-        "Launch Center → Send test text to the owner phone → confirm delivery.",
-        a2pStatus ? `Current A2P status: ${a2pStatus}. Re-check Twilio Console if pending/rejected.` : "Monitor A2P until approved (US delivery may wait).",
-      ],
+        `Open Admin for this business: ${origin}${adminHref}`,
+        "Buy or pick a voice-capable Twilio number (or reuse the SMS number if it supports voice).",
+        "In Twilio Console → Phone number → Voice & Fax: set A CALL COMES IN webhook (HTTP POST) to the business inbound voice URL (from Integrations after you connect, or /api/businesses/{id}/integrations/voice/inbound).",
+        `Connect credentials in the platform (Support access → Integrations → Business phone → advanced “I have Twilio”, OR put durable cred_twilio_voice_${businessId}). Use Account SID, Auth Token, From number.`,
+        cell
+          ? `Turn on “Ring my phone first” and set forward/cell to ${cell}.`
+          : "If they want missed-call texts: enable ring-first and enter their cell.",
+        notes ? `Owner notes: ${notes}` : null,
+        "Call the Twilio number once → confirm AI receptionist or missed-call path works.",
+        `Mark ready in Admin (Ops setup) so the owner sees Good to go: ${origin}${adminHref}`,
+        `Owner Integrations: ${integrationsHref}`,
+      ].filter(Boolean),
       verifyChecklist: [
-        "fromNumber present on SMS credential",
-        "Test SMS received",
-        "A2P not failed/rejected",
+        "Voice connection shows Connected",
+        "Test call reaches receptionist or missed-call SMS",
+        "Owner Today checklist can complete “Connect business phone”",
       ],
       creativeBrief: null,
     };
   },
 
-  twilio_voice_connect({ origin, businessId, businessName, integrationsHref, adminHref }) {
+  twilio_sms_provision({ origin, businessId, businessName, integrationsHref, adminHref, fromNumber, a2pStatus, notes }) {
     const name = safe(businessName) || businessId;
     return {
-      id: "twilio_voice_connect",
-      title: `Connect business phone — ${name}`,
-      when: "Client connected Voice for missed-call SMS (ring cell → text if unanswered).",
+      id: "twilio_sms_provision",
+      title: `Set up text messaging — ${name}`,
+      when: "Owner requested texting. You buy the number + finish carrier approval. Owner only gave business/legal details if asked.",
       prerequisites: [
-        "Twilio account with a voice-capable number (or reuse SMS number if voice-enabled)",
-        "Owner cell number for forward / ring-first",
-        "SMS channel connected so missed-call texts can send",
+        "Company Twilio account available.",
+        "Legal business name + EIN (from owner form or ask them) matching IRS records.",
       ],
       steps: [
-        `Open Integrations → Business phone: ${integrationsHref}`,
-        "Owner pastes Account SID, Auth Token, Twilio From number, and their cell as forward number.",
-        "Platform auto-sets Voice webhook when possible; if not, set Voice URL (POST) to the inbound URL shown after connect.",
-        "Owner publishes the Twilio number as the business line, or forwards unanswered calls from their existing business number to Twilio.",
-        "Prove: call Twilio number → do not answer → confirm SMS + People contact created.",
-        `Admin: ${origin}${adminHref}`,
-      ],
+        `Open Admin: ${origin}${adminHref}`,
+        fromNumber
+          ? `Number already on file: ${fromNumber}. Confirm Messaging webhook points at VIBETech SMS inbound.`
+          : "Buy a Twilio number (US) OR run in-app SMS provision with master Twilio env credentials.",
+        "Set Messaging webhook (POST) to the business SMS inbound URL.",
+        "Trust Hub / Brand / Campaign (A2P): use exact legal name + EIN. Sample texts must include STOP. Privacy + Terms URLs required.",
+        "Save credentials on the business (durable twilio_sms credential) if not already.",
+        "Send a test text to the owner’s phone.",
+        a2pStatus ? `Current carrier status: ${a2pStatus}. Recheck Twilio Trust Hub if pending/rejected.` : "Watch carrier approval (can take days for US).",
+        notes ? `Owner notes: ${notes}` : null,
+        `Mark ready in Admin when Connected: ${origin}${adminHref}`,
+        `Owner Integrations: ${integrationsHref}`,
+      ].filter(Boolean),
       verifyChecklist: [
-        "Voice connection Connected",
-        "Missed-call follow-up enabled with forward number",
-        "Test miss produces SMS from Twilio number",
-        "Caller appears in People",
+        "fromNumber on SMS credential",
+        "Test SMS received",
+        "Owner sees Good to go / Connected",
+      ],
+      creativeBrief: null,
+    };
+  },
+
+  hubspot_connect({ origin, businessId, businessName, integrationsHref, adminHref, notes }) {
+    const name = safe(businessName) || businessId;
+    return {
+      id: "hubspot_connect",
+      title: `Connect HubSpot — ${name}`,
+      when: "Owner requested HubSpot sync. You paste the private app token — they should not.",
+      prerequisites: [
+        "HubSpot portal access (owner invites you, or they create a Private App).",
+        "Scopes: crm.objects.contacts read/write (minimum).",
+      ],
+      steps: [
+        `Open Admin: ${origin}${adminHref}`,
+        "In HubSpot: Settings → Integrations → Private Apps → Create app → Contacts read/write → copy access token.",
+        `In the business workspace (Support access): Integrations → HubSpot → paste token and connect.`,
+        "Run Test it works (sync a test contact) — confirm a HubSpot record id comes back.",
+        notes ? `Owner notes: ${notes}` : null,
+        `Mark ready: ${origin}${adminHref}`,
+        `Owner view: ${integrationsHref}`,
+      ].filter(Boolean),
+      verifyChecklist: [
+        "HubSpot Connected",
+        "Test contact sync has provider id",
+      ],
+      creativeBrief: null,
+    };
+  },
+
+  highlevel_connect({ origin, businessId, businessName, integrationsHref, adminHref, notes }) {
+    const name = safe(businessName) || businessId;
+    return {
+      id: "highlevel_connect",
+      title: `Connect HighLevel — ${name}`,
+      when: "Owner requested HighLevel sync. You connect API key + location — they should not dig through console alone.",
+      prerequisites: [
+        "HighLevel agency/location access.",
+        "API key + Location ID for that sub-account.",
+      ],
+      steps: [
+        `Open Admin: ${origin}${adminHref}`,
+        "In HighLevel: get API key and Location ID for this client’s location.",
+        "Support access → Integrations → HighLevel → paste key + location → connect.",
+        "Test contact sync — confirm HighLevel record id.",
+        notes ? `Owner notes: ${notes}` : null,
+        `Mark ready: ${origin}${adminHref}`,
+        `Owner view: ${integrationsHref}`,
+      ].filter(Boolean),
+      verifyChecklist: [
+        "HighLevel Connected",
+        "Test sync has provider id",
+      ],
+      creativeBrief: null,
+    };
+  },
+
+  salesforce_connect({ origin, businessId, businessName, integrationsHref, adminHref, notes }) {
+    const name = safe(businessName) || businessId;
+    return {
+      id: "salesforce_connect",
+      title: `Salesforce Custom Build — ${name}`,
+      when: "Owner requested Salesforce. There is no in-app token paste — scope a Custom Build / SOW, then attest ready.",
+      prerequisites: [
+        "Salesforce org access (or partner login) for this client.",
+        "Clear SOW: objects, sync direction, auth (Connected App / JWT), go-live criteria.",
+      ],
+      steps: [
+        `Open Admin: ${origin}${adminHref}`,
+        "Confirm owner notes and which Salesforce objects matter (Contacts, Leads, Opportunities, custom).",
+        "Open or create a Custom Build / SOW — do not invent an in-app Connected status.",
+        "Deliver integration work outside the fake CRM connect modal.",
+        notes ? `Owner notes: ${notes}` : null,
+        `When SOW is delivered / ready for owner sign-off: Mark ready on Admin (attestation — Connected vault not required).`,
+        `Owner view: ${integrationsHref}`,
+      ].filter(Boolean),
+      verifyChecklist: [
+        "SOW accepted or delivery criteria met",
+        "Owner sees Good to go / ready copy for Salesforce",
+        "No fake Connected badge without real Salesforce work",
       ],
       creativeBrief: null,
     };

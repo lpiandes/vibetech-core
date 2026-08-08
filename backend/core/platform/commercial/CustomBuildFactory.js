@@ -7,12 +7,12 @@ import { getCommercialOffer } from "./CommercialOfferMatrix.js";
 import { getPlaybook } from "./DeliveryPlaybookRegistry.js";
 
 export const CUSTOM_BUILD_STEPS = deepFreeze([
-  { id: "intake", label: "Intake brief" },
-  { id: "scope", label: "Scope entitlements" },
-  { id: "architect", label: "Architect / Package Ask" },
+  { id: "intake", label: "Tell us what you need" },
+  { id: "scope", label: "Confirm what’s included" },
+  { id: "architect", label: "Answer a few setup questions" },
   { id: "install", label: "Install workers & workflows" },
-  { id: "prove", label: "Prove missions" },
-  { id: "acceptance", label: "Acceptance checklist" },
+  { id: "prove", label: "Test that it works" },
+  { id: "acceptance", label: "Accept the checklist" },
   { id: "go_live", label: "Go live" },
   { id: "handoff", label: "Handoff" },
 ]);

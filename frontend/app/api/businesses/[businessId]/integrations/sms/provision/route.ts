@@ -21,6 +21,7 @@ import {
 } from "../../../../../../../../backend/core/integrations/twilio/TwilioA2pTrustHubService.js";
 import { buildOperatorActions } from "../../../../../../../../backend/core/admin/buildOperatorActions.js";
 import { notifyPlatformOperators } from "../../../../../../../../backend/core/admin/notifyPlatformOperators.js";
+import { markWhiteGloveReadyFromCredentials } from "../../../../../../../../backend/core/integrations/whiteglove/requestWhiteGloveSetup.js";
 
 async function runA2pSubmit({
   businessId,
@@ -158,6 +159,13 @@ export async function POST(
         fromNumber: existing.fromNumber,
       }).catch((err) => ({ ok: false, message: err instanceof Error ? err.message : String(err) }));
 
+      await markWhiteGloveReadyFromCredentials({
+        platformStore,
+        businessId,
+        connectionId: "sms_channel",
+        actorId: "credentials_connected",
+      }).catch(() => null);
+
       return NextResponse.json({
         ok: true,
         provisioned: false,
@@ -286,6 +294,13 @@ export async function POST(
     if (String(nextMeta.a2pRegistrationStatus) !== "approved") {
       void notifyA2pOperatorAction(businessId);
     }
+
+    await markWhiteGloveReadyFromCredentials({
+      platformStore,
+      businessId,
+      connectionId: "sms_channel",
+      actorId: "credentials_connected",
+    }).catch(() => null);
 
     return NextResponse.json({
       ok: true,

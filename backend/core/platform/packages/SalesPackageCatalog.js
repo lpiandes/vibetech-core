@@ -513,7 +513,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     canonicalNavIds: ["home", "people", "pipelines", "integrations", "settings"],
     discoveryTopics: ["identity", "industry", "integrations", "outcomes"],
     launchMissionIds: ["knowledge_consult"],
-    honestyNote: "HubSpot/HighLevel connect, prove contact, and push/pull People sync. Salesforce is Custom Build when required.",
+    honestyNote: "HubSpot/HighLevel connect + prove. Salesforce is white-glove Request setup → Custom Build (no fake Connected).",
     commercialStatus: "product",
     sellable: true,
   },

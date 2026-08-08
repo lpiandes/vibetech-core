@@ -13,6 +13,7 @@ test("ops playbook ids are locked", () => {
   assert.ok(ids.includes("meta_lead_create_from_scratch"));
   assert.ok(ids.includes("twilio_sms_provision"));
   assert.ok(ids.includes("twilio_voice_connect"));
+  assert.ok(ids.includes("salesforce_connect"));
 });
 
 test("meta connect playbook has POST connect step", () => {

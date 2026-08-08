@@ -102,7 +102,9 @@ export async function POST(
     const needsOwnerReceipt =
       action === "send_test_email"
       || action === "send_test_sms"
-      || action === "create_test_event";
+      || action === "create_test_event"
+      || action === "place_test_call"
+      || action === "place_test_outbound_call";
 
     // Knowledge defer is a Knowledge action — Integrations manage is not required.
     const isKnowledgeDefer = body?.defer === true && capabilityId === "knowledge_consult";

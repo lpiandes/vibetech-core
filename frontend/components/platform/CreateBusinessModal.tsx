@@ -38,7 +38,7 @@ export default function CreateBusinessModal({
   const sellablePackages = useMemo(() => listSellableSalesPackagesForAdmin(), []);
   const [name, setName] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
-  const [purchasedPackages, setPurchasedPackages] = useState<string[]>(["managed_revenue_follow_through"]);
+  const [purchasedPackages, setPurchasedPackages] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<CreateSuccess | null>(null);
@@ -57,10 +57,7 @@ export default function CreateBusinessModal({
 
   function togglePackage(id: string) {
     setPurchasedPackages((prev) => {
-      if (prev.includes(id)) {
-        if (prev.length === 1) return prev;
-        return prev.filter((row) => row !== id);
-      }
+      if (prev.includes(id)) return prev.filter((row) => row !== id);
       return [...prev, id];
     });
   }
@@ -186,7 +183,7 @@ export default function CreateBusinessModal({
                   lineHeight: 1.4,
                 }}
               >
-                Select Wave A sellable packages. Managed Revenue Follow-Through is recommended for design partners.
+                Nothing pre-selected. Pick only what they bought — AI Receptionist alone for phone setup (leave RFT unchecked unless they bought it).
               </p>
             </div>
             <div style={{ display: "grid", gap: 8 }}>

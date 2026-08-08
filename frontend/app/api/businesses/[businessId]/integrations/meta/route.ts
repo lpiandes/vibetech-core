@@ -6,6 +6,7 @@ import { platformStore } from "@/lib/server/compose";
 import { getSharedCredentialVault, isMetaLeadAdsConfigured } from "@/lib/server/liveIntegrations";
 import { putDurableCredential } from "../../../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
 import { subscribeMetaPageToLeadgen } from "../../../../../../../backend/core/integrations/meta/ingestMetaLead.js";
+import { markWhiteGloveReadyFromCredentials } from "../../../../../../../backend/core/integrations/whiteglove/requestWhiteGloveSetup.js";
 
 export async function POST(
   request: Request,
@@ -94,24 +95,14 @@ export async function POST(
     });
 
     try {
-      if (typeof platformStore.updateBusinessPackageConfiguration === "function") {
-        const business = await platformStore.getBusinessById(businessId).catch(() => null);
-        const current = business?.packageConfiguration && typeof business.packageConfiguration === "object"
-          ? business.packageConfiguration
-          : {};
-        const pendingOpsRequests = {
-          ...(current.pendingOpsRequests && typeof current.pendingOpsRequests === "object"
-            ? current.pendingOpsRequests
-            : {}),
-        };
-        delete pendingOpsRequests.meta_lead_ads;
-        await platformStore.updateBusinessPackageConfiguration({
+      const status = String(connection?.status ?? "").toUpperCase();
+      if (status === "CONNECTED" || status === "VERIFIED" || status === "PROVEN") {
+        await markWhiteGloveReadyFromCredentials({
+          platformStore,
           businessId,
-          packageConfiguration: {
-            ...current,
-            pendingOpsRequests,
-          },
-        });
+          connectionId: "meta_lead_ads",
+          actorId: "credentials_connected",
+        }).catch(() => null);
       }
     } catch {
       /* non-blocking */

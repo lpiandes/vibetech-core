@@ -2572,6 +2572,22 @@ export class AiBuilderService {
       });
     }
 
+    // Ops heads-up only — does not create owner Pending rows.
+    try {
+      const { notifyWhiteGloveHandoffForBusiness } = await import(
+        "../integrations/whiteglove/requestWhiteGloveSetup.js"
+      );
+      void notifyWhiteGloveHandoffForBusiness({
+        platformStore: this.platformStore,
+        businessId,
+        origin: process.env.NEXT_PUBLIC_APP_ORIGIN
+          || process.env.APP_ORIGIN
+          || "https://app.vtechdevelopment.com",
+      }).catch(() => null);
+    } catch {
+      /* non-blocking */
+    }
+
     return { specification: specRow, installation: installRow };
   }
 

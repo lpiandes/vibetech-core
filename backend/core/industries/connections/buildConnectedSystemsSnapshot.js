@@ -13,6 +13,10 @@ function connectionRow({ id, req = {}, guide = {}, runtimeConn = null }) {
   const status = runtimeConn?.status ?? CONNECTION_STATUSES.NOT_CONNECTED;
   const health = runtimeConn ? buildConnectionHealth(runtimeConn) : { level: CONNECTION_HEALTH_LEVELS.DISCONNECTED };
 
+  const metadata = runtimeConn?.metadata && typeof runtimeConn.metadata === "object"
+    ? { ...runtimeConn.metadata }
+    : {};
+
   return deepFreeze({
     id,
     connectionId: runtimeConn?.id ?? null,
@@ -22,6 +26,8 @@ function connectionRow({ id, req = {}, guide = {}, runtimeConn = null }) {
     health,
     providerType: runtimeConn?.providerType ?? null,
     providerSelected: Boolean(runtimeConn?.providerType),
+    metadata: deepFreeze(metadata),
+    a2pRegistrationStatus: metadata.a2pRegistrationStatus ?? null,
     connectionLabel:
       runtimeConn?.providerType?.startsWith("provider_mock") && status === CONNECTION_STATUSES.CONNECTED
         ? "Demo connection active"

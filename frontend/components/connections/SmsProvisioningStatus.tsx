@@ -1,6 +1,7 @@
 "use client";
 
 import { cockpitColors } from "@/design/tokens";
+import { normalizeSmsCarrierPhase } from "../../../backend/core/integrations/sms/smsCarrierStatus.js";
 
 export type SmsProvisioningStage = "provisioning" | "pending_carrier" | "ready";
 
@@ -16,7 +17,7 @@ export function resolveSmsProvisioningStage({
 }): SmsProvisioningStage {
   if (loading && !fromNumber) return "provisioning";
   if (!fromNumber) return "provisioning";
-  if (String(a2pRegistrationStatus ?? "").toLowerCase() === "approved") return "ready";
+  if (normalizeSmsCarrierPhase(a2pRegistrationStatus) === "approved") return "ready";
   return "pending_carrier";
 }
 
@@ -28,7 +29,7 @@ const STEPS: { stage: SmsProvisioningStage; label: string }[] = [
 
 /**
  * Small step indicator for the white-glove Twilio flow: VIBETech buys the
- * number, then carriers approve A2P registration in the background.
+ * number, then carriers approve business texting registration in the background.
  */
 export default function SmsProvisioningStatus({
   stage,
@@ -84,8 +85,8 @@ export default function SmsProvisioningStatus({
       </div>
       {stage === "pending_carrier" ? (
         <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textSecondary, lineHeight: 1.45 }}>
-          {fromNumber ? `${fromNumber} is live for testing.` : "Number is live for testing."} US carrier brand/campaign
-          registration can take a few days — VIBETech tracks it automatically; no action needed.
+          {fromNumber ? `${fromNumber} is provisioned.` : "Number is provisioned."} US carrier brand/campaign
+          approval can take a few days. Use <strong>Refresh status</strong> on Integrations to check Twilio — we do not auto-poll from this screen.
         </p>
       ) : null}
       {stage === "ready" ? (

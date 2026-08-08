@@ -9,8 +9,16 @@ import { getCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOs
 import {
   PACKAGE_ASK_OPTION_TO_CONNECTION,
   resolvePackageAskConnectionOptions,
+  readPurchasedPackagesFromConfig,
 } from "../../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 import { connectionHealLikelyNeeded } from "../../../../../backend/core/integrations/credentials/reconcileConnectionsFromDurableCredentials.js";
+import { resolveWhiteGloveNeeds } from "../../../../../backend/core/integrations/whiteglove/resolveWhiteGloveNeeds.js";
+import { listWhiteGloveConnections } from "../../../../../backend/core/integrations/whiteglove/WhiteGloveConnectionRegistry.js";
+import {
+  applyCredentialStatusesToConnectionRows,
+  connectionStatusesFromCredentials,
+  mergeConnectionStatuses,
+} from "../../../../../backend/core/integrations/credentials/connectionStatusesFromDurableCredentials.js";
 
 /**
  * Owner Integrations surface — connections that can operate this business.
@@ -86,26 +94,57 @@ export default async function IntegrationsPage({
     }
 
     // Plan 26 — always surface RFT min-set prove channels (forms + CRM) when missing.
-    const rftMinSet = ["website_forms", "hubspot", "highlevel"];
+    // White-glove registry channels always list so Request setup is reachable.
+    const business = await platformStore.getBusinessById(businessId).catch(() => null);
     {
+      const packages = readPurchasedPackagesFromConfig({
+        ...(business?.packageConfiguration ?? {}),
+        ...(osInstallation?.configuration ?? {}),
+        purchasedPackages: purchased.length ? purchased : undefined,
+      });
+      const needs = resolveWhiteGloveNeeds({
+        purchasedPackages: packages.length ? packages : purchased,
+        configuration: osInstallation?.configuration ?? {},
+      });
+      const pendingIds = Object.keys({
+        ...(osInstallation?.configuration?.pendingOpsRequests ?? {}),
+        ...(business?.packageConfiguration?.pendingOpsRequests ?? {}),
+      });
       const existing = new Set(
         businessOsIntegrations.map((entry: any) =>
           String(entry.integrationId ?? entry.id ?? "").toLowerCase(),
         ),
       );
-      for (const connectionId of rftMinSet) {
-        if (existing.has(connectionId)) continue;
-        existing.add(connectionId);
+      const ensure = (connectionId: string, status = "optional") => {
+        const key = String(connectionId).toLowerCase();
+        if (!key || existing.has(key)) return;
+        existing.add(key);
         businessOsIntegrations.push({
           integrationId: connectionId,
           id: connectionId,
-          label: connectionId.replace(/_/g, " "),
-          status: "optional",
+          label: String(connectionId).replace(/_/g, " "),
+          status,
         });
-      }
+      };
+      for (const connectionId of ["website_forms", "hubspot", "highlevel", "salesforce"]) ensure(connectionId);
+      for (const row of listWhiteGloveConnections()) ensure(row.connectionId);
+      for (const need of needs) ensure(need.connectionId);
+      for (const id of pendingIds) ensure(id);
     }
 
-    const viewModel = service.loadConnectionCenterViewModel({
+    const pendingOpsRequests = {
+      ...(osInstallation?.configuration?.pendingOpsRequests && typeof osInstallation.configuration.pendingOpsRequests === "object"
+        ? osInstallation.configuration.pendingOpsRequests
+        : {}),
+      ...(business?.packageConfiguration?.pendingOpsRequests && typeof business.packageConfiguration.pendingOpsRequests === "object"
+        ? business.packageConfiguration.pendingOpsRequests
+        : {}),
+    };
+
+    const credentialRows = await platformStore.listIntegrationCredentialsForWorkspace(businessId).catch(() => []);
+    const fromCreds = connectionStatusesFromCredentials(credentialRows ?? []);
+
+    const baseViewModel = service.loadConnectionCenterViewModel({
       businessOsIntegrations: businessOsIntegrations.length ? businessOsIntegrations : null,
       liveFlags: liveIntegrationAvailability(),
       employees: Array.isArray(osInstallation?.configuration?.employees)
@@ -113,6 +152,22 @@ export default async function IntegrationsPage({
         : null,
       osConfiguration: osInstallation?.configuration ?? null,
     });
+
+    const connections = applyCredentialStatusesToConnectionRows(
+      Array.isArray(baseViewModel?.connections) ? baseViewModel.connections : [],
+      fromCreds,
+    );
+
+    const viewModel = {
+      ...baseViewModel,
+      connections,
+      connectionStatuses: mergeConnectionStatuses(
+        Object.fromEntries(connections.map((c: any) => [String(c.id), String(c.status ?? "")])),
+        fromCreds,
+      ),
+      pendingOpsRequests,
+      purchasedPackages: purchased,
+    };
     markRequestTiming("VIEW_MODEL");
 
     return (

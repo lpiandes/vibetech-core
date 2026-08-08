@@ -5,6 +5,7 @@ import { PERMISSIONS } from "@/lib/platform/permissions";
 import { platformStore } from "@/lib/server/compose";
 import { getSharedCredentialVault, isTwilioSmsConfigured } from "@/lib/server/liveIntegrations";
 import { putDurableCredential } from "../../../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
+import { markWhiteGloveReadyFromCredentials } from "../../../../../../../backend/core/integrations/whiteglove/requestWhiteGloveSetup.js";
 
 export async function POST(
   request: Request,
@@ -68,6 +69,13 @@ export async function POST(
         { status: 400 },
       );
     }
+
+    await markWhiteGloveReadyFromCredentials({
+      platformStore,
+      businessId,
+      connectionId: "sms_channel",
+      actorId: "credentials_connected",
+    }).catch(() => null);
 
     return NextResponse.json({
       ok: true,

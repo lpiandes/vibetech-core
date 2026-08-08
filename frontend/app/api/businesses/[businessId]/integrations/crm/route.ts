@@ -9,6 +9,7 @@ import {
   CRM_PROVIDERS,
   verifyCrmPrivateApp,
 } from "../../../../../../../backend/core/integrations/crm/CrmPrivateAppConnect.js";
+import { markWhiteGloveReadyFromCredentials } from "../../../../../../../backend/core/integrations/whiteglove/requestWhiteGloveSetup.js";
 
 /**
  * Connect HubSpot or HighLevel via private app / API key (Plan 26).
@@ -75,6 +76,13 @@ export async function POST(
         { status: 400 },
       );
     }
+
+    await markWhiteGloveReadyFromCredentials({
+      platformStore,
+      businessId,
+      connectionId: provider,
+      actorId: "credentials_connected",
+    }).catch(() => null);
 
     return NextResponse.json({
       ok: true,

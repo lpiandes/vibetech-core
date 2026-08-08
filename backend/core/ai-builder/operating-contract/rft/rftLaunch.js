@@ -54,9 +54,12 @@ const RFT_CONNECT_LABELS = Object.freeze({
 /**
  * Match OperatingHomeExperience: RFT launch until go-live.
  * When active, Connections must surface every RFT_CONNECT_CONNECTION_IDS row.
+ * Only when an rftLaunch object exists (or RFT beachhead) — never on empty configs.
  */
 export function rftConnectRequirementsActive(installation = null) {
-  return !installation?.configuration?.rftLaunch?.goLiveAt;
+  const launch = installation?.configuration?.rftLaunch;
+  if (!launch || typeof launch !== "object") return false;
+  return !launch.goLiveAt;
 }
 
 export function isRftBeachheadInstall(installation = null) {

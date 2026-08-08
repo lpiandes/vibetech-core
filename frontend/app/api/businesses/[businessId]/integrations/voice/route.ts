@@ -13,6 +13,7 @@ import {
   buildOpsPlaybook,
   playbookToOperatorAction,
 } from "../../../../../../../backend/core/admin/opsPlaybooks/OpsPlaybookRegistry.js";
+import { markWhiteGloveReadyFromCredentials } from "../../../../../../../backend/core/integrations/whiteglove/requestWhiteGloveSetup.js";
 
 export async function POST(
   request: Request,
@@ -138,6 +139,13 @@ export async function POST(
         : "Add your cell as the forward number to turn on missed-call texts (or leave off for AI receptionist only).",
       "Prove with a real call from another phone — do not answer — confirm you get the SMS.",
     ];
+
+    await markWhiteGloveReadyFromCredentials({
+      platformStore,
+      businessId,
+      connectionId: "voice_channel",
+      actorId: "credentials_connected",
+    }).catch(() => null);
 
     return NextResponse.json({
       ok: true,

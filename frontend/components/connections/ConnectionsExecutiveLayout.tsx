@@ -9,12 +9,13 @@ import { getIntegrationDisplay } from "./integrationDisplay";
 import { buildPathWithoutFocus, resolveOAuthReturnPath, shouldOpenIntegrationFromFocus } from "@/lib/connections/integrationFocusRouting.js";
 import PageHeader from "@/components/product/PageHeader";
 import PrimaryButton from "@/components/product/PrimaryButton";
-import { NextBanner, SimpleEmpty, SimplePanel, simplePageStyle } from "@/components/product/SimpleUI";
+import { NextBanner, simplePageStyle } from "@/components/product/SimpleUI";
 import StatusBadge from "@/components/product/StatusBadge";
 import { cockpitColors, spacing, typography, radius } from "@/design/tokens";
 import { useOptionalBusinessScope } from "@/lib/platform/BusinessScopeContext";
 import {
   connectionStatusPresentation,
+  deriveIntegrationMetrics,
   hasRealConnectAction,
   mergeIntegrationDisplay,
   partitionIntegrationSections,
@@ -24,6 +25,24 @@ import {
   type IntegrationsPresentation,
 } from "./integrationsSemantics";
 import type { IntegrationDisplay } from "./integrationDisplay";
+import { resolveNextConnectionFocus } from "../../../backend/core/platform/commercial/resolveOwnerSetupPath.js";
+import {
+  buildProveRequestBody,
+  isProveAwaitingConfirm,
+  proveNeedsDestination,
+  proveNeedsOwnerConfirm,
+} from "../../../backend/core/integrations/prove/proveOwnerFlow.js";
+import SimpleModal from "@/components/product/SimpleModal";
+import SecondaryButton from "@/components/product/SecondaryButton";
+import { smsCarrierOwnerCopy } from "../../../backend/core/integrations/sms/smsCarrierStatus.js";
+import {
+  ConnectionCardShell,
+  ConnectionJourneyRail,
+  IntegrationsHero,
+  SectionLabel,
+  resolveJourneyPhase,
+  setupJourneyKeyframes,
+} from "./setupJourneyUi";
 
 function safeArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
@@ -34,40 +53,79 @@ function IntegrationRow({
   display,
   presentation,
   businessId,
+  pendingOpsRequests,
   onAction,
   onProve,
+  onRequestSetup,
+  onRefreshA2p,
   proving,
+  refreshingA2p,
 }: {
   conn: ConnectionViewRow;
   display: IntegrationDisplay;
   presentation: IntegrationsPresentation;
   businessId?: string;
+  pendingOpsRequests?: Record<string, unknown>;
   onAction: (display: IntegrationDisplay) => void;
   onProve?: (action: string, capabilityId: string) => void;
+  onRequestSetup?: (display: IntegrationDisplay) => void;
+  onRefreshA2p?: () => void;
   proving?: boolean;
+  refreshingA2p?: boolean;
 }) {
   const Icon = display.icon;
   const status = connectionStatusPresentation(String(conn.status ?? ""), presentation);
-  const action = primaryIntegrationAction(conn, display);
+  const action = primaryIntegrationAction(conn, display, pendingOpsRequests ?? {});
   const blocker = setupBlockerSummary(conn, display);
-  const ladder = proveLadderLabel(conn);
+  const phase = resolveJourneyPhase({ actionKind: action?.kind, status: conn.status });
+  const smsConnected = display.id === "sms_channel" && String(conn.status ?? "").toUpperCase() === "CONNECTED";
+  const badgeLabel =
+    action?.kind === "pending_ops"
+      ? "Pending"
+      : action?.kind === "good_to_go"
+        ? "Good to go"
+        : status.label;
+  const badgeTone =
+    action?.kind === "pending_ops"
+      ? "warning"
+      : action?.kind === "good_to_go"
+        ? "success"
+        : status.tone;
+  const cardAccent =
+    action?.kind === "pending_ops"
+      ? ("pending" as const)
+      : action?.kind === "good_to_go" || action?.kind === "prove"
+        ? ("ready" as const)
+        : (String(conn.status ?? "").toUpperCase() === "PROVEN" || String(conn.status ?? "").toUpperCase() === "VERIFIED")
+          ? ("live" as const)
+          : ("idle" as const);
+
+  const helper =
+    action?.kind === "pending_ops"
+      ? ((action as { pendingCopy?: string }).pendingCopy
+        ?? "Hold on — VIBETech is setting this up for you.")
+      : action?.kind === "good_to_go"
+        ? ((action as { readyCopy?: string }).readyCopy
+          ?? "VIBETech finished setup. Confirm Connected, then run Test it works.")
+        : smsConnected
+          ? smsCarrierCopy(conn)
+          : blocker
+            ? blocker
+            : String(conn.status ?? "").toUpperCase() === "CONNECTED"
+              ? "Connected is not tested yet — run Test it works with a real send."
+              : String(conn.status ?? "").toUpperCase() === "PROVEN" || String(conn.status ?? "").toUpperCase() === "VERIFIED"
+                ? "Tested with real evidence. You're good."
+                : (display.description ?? null);
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: spacing.md,
-        padding: spacing.md,
-        borderBottom: `1px solid ${cockpitColors.panelBorder}`,
-      }}
-    >
+    <ConnectionCardShell accent={cardAccent} style={{ animation: "vtSetupFadeUp 280ms ease-out" }}>
       <span
         style={{
-          width: 36,
-          height: 36,
-          borderRadius: radius.medium,
-          backgroundColor: cockpitColors.panelElevated,
+          width: 44,
+          height: 44,
+          borderRadius: 14,
+          background: "linear-gradient(145deg, rgba(34,211,238,0.18), rgba(15,23,42,0.9))",
+          border: "1px solid rgba(34,211,238,0.25)",
           color: cockpitColors.accent,
           display: "inline-flex",
           alignItems: "center",
@@ -75,53 +133,49 @@ function IntegrationRow({
           flexShrink: 0,
         }}
       >
-        <Icon size={18} />
+        <Icon size={20} />
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" }}>
-          <div style={{ fontWeight: 650, color: cockpitColors.textPrimary }}>{display.title}</div>
-          <StatusBadge label={status.label} tone={status.tone} />
-          <span style={{ fontSize: 11, fontWeight: 650, color: cockpitColors.textMuted }}>
-            {ladder}
-          </span>
+          <div style={{ fontWeight: 750, fontSize: 15, color: cockpitColors.textPrimary }}>{display.title}</div>
+          <StatusBadge label={badgeLabel} tone={badgeTone} />
         </div>
-        {blocker ? (
-          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textSecondary, marginTop: 4 }}>
-            {blocker}
-          </div>
-        ) : String(conn.status ?? "").toUpperCase() === "CONNECTED" ? (
-          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 4 }}>
-            Connected is not Proven — run Prove with a real provider id before treating this channel as live.
-          </div>
-        ) : String(conn.status ?? "").toUpperCase() === "PROVEN" || String(conn.status ?? "").toUpperCase() === "VERIFIED" ? (
-          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 4 }}>
-            Proven with provider evidence.
-          </div>
-        ) : display.description ? (
-          <div style={{ fontSize: typography.caption.fontSize, color: cockpitColors.textMuted, marginTop: 4 }}>
-            {display.description}
+        {helper ? (
+          <div style={{ fontSize: 13, color: cockpitColors.textSecondary, marginTop: 6, lineHeight: 1.45 }}>
+            {helper}
           </div>
         ) : null}
+        <ConnectionJourneyRail phase={phase} />
       </div>
-      {action?.kind === "prove" && onProve && businessId ? (
-        <PrimaryButton onClick={() => onProve(action.proveAction!, action.capabilityId!)} disabled={proving}>
-          {proving ? "Proving…" : action.label}
-        </PrimaryButton>
-      ) : action ? (
-        <PrimaryButton onClick={() => onAction(display)}>
-          {action.label}
-        </PrimaryButton>
-      ) : null}
-    </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", flexShrink: 0 }}>
+        {smsConnected && onRefreshA2p ? (
+          <SecondaryButton onClick={onRefreshA2p} disabled={Boolean(refreshingA2p || proving)}>
+            {refreshingA2p ? "Refreshing…" : "Refresh status"}
+          </SecondaryButton>
+        ) : null}
+        {action?.kind === "prove" && onProve && businessId ? (
+          <PrimaryButton onClick={() => onProve(action.proveAction!, action.capabilityId!)} disabled={proving}>
+            {proving ? "Testing…" : action.label}
+          </PrimaryButton>
+        ) : action?.kind === "pending_ops" ? (
+          <PrimaryButton disabled>{action.label}</PrimaryButton>
+        ) : action?.kind === "request_setup" && onRequestSetup ? (
+          <PrimaryButton onClick={() => onRequestSetup(display)}>{action.label}</PrimaryButton>
+        ) : action?.kind === "good_to_go" ? (
+          <PrimaryButton onClick={() => onAction(display)}>{action.label}</PrimaryButton>
+        ) : action ? (
+          <PrimaryButton onClick={() => onAction(display)} disabled={(action as { disabled?: boolean }).disabled}>
+            {action.label}
+          </PrimaryButton>
+        ) : null}
+      </div>
+    </ConnectionCardShell>
   );
 }
 
-function proveLadderLabel(conn: ConnectionViewRow) {
-  const status = String(conn.status ?? "").toUpperCase();
-  if (status === "PROVEN" || status === "VERIFIED") return "Proven";
-  if (status === "CONNECTED") return "Connected · Prove next";
-  if (status === "CONFIGURING" || status === "NEEDS_ATTENTION") return "Setup in progress";
-  return "Not connected";
+/** Connected SMS is not fully live until carrier (A2P) approval. */
+function smsCarrierCopy(conn: ConnectionViewRow) {
+  return smsCarrierOwnerCopy(conn);
 }
 
 export default function ConnectionsExecutiveLayout() {
@@ -137,9 +191,20 @@ export default function ConnectionsExecutiveLayout() {
     {}) as { integrations?: IntegrationsPresentation }).integrations ?? {};
   const liveFlags = (vm?.liveFlags ?? presentation.liveFlags ?? {}) as IntegrationsPresentation["liveFlags"];
   const presentationWithFlags: IntegrationsPresentation = { ...presentation, liveFlags };
+  const pendingOpsRequests = (vm?.pendingOpsRequests && typeof vm.pendingOpsRequests === "object"
+    ? vm.pendingOpsRequests
+    : {}) as Record<string, unknown>;
   const [setupTarget, setSetupTarget] = useState<IntegrationDisplay | null>(null);
   const [provingId, setProvingId] = useState<string | null>(null);
   const [proveMessage, setProveMessage] = useState<string | null>(null);
+  const [proveDialog, setProveDialog] = useState<{
+    action: string;
+    capabilityId: string;
+    kind: "phone" | "email" | "confirm";
+    value: string;
+    sentTo: string;
+    error: string | null;
+  } | null>(null);
   const consumedFocusRef = useRef<string | null>(null);
   const consumedConnectedRef = useRef<string | null>(null);
   const connectError = searchParams.get("error");
@@ -174,6 +239,36 @@ export default function ConnectionsExecutiveLayout() {
   }, [connectError]);
 
   const [localConnecting, setLocalConnecting] = useState(false);
+  const [refreshingA2p, setRefreshingA2p] = useState(false);
+
+  async function refreshSmsA2pStatus() {
+    if (!businessId) return;
+    setRefreshingA2p(true);
+    setProveMessage(null);
+    try {
+      const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/integrations/sms/a2p`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setProveMessage(String(data.error ?? "Could not refresh carrier status."));
+        return;
+      }
+      const status = String(data.a2pRegistrationStatus ?? "pending");
+      setProveMessage(
+        data.message
+          ? String(data.message)
+          : `Carrier status: ${status}. ${status === "approved" ? "US texts can deliver — run Test it works." : "Still pending — check again later."}`,
+      );
+      router.refresh();
+    } catch (err) {
+      setProveMessage(err instanceof Error ? err.message : "Carrier refresh failed.");
+    } finally {
+      setRefreshingA2p(false);
+    }
+  }
 
   async function connectEmailLocally() {
     if (!businessId) return;
@@ -198,8 +293,12 @@ export default function ConnectionsExecutiveLayout() {
     }
   }
 
-  const runProve = useCallback(
-    async (action: string, capabilityId: string) => {
+  const executeProve = useCallback(
+    async (
+      action: string,
+      capabilityId: string,
+      opts: { provePhone?: string; proveEmail?: string; ownerConfirmedReceipt?: boolean } = {},
+    ) => {
       if (!businessId) return;
       setProvingId(capabilityId);
       setProveMessage(null);
@@ -207,12 +306,33 @@ export default function ConnectionsExecutiveLayout() {
         const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/integrations/prove`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, capabilityId, outboundApproved: true }),
+          body: JSON.stringify(buildProveRequestBody({
+            action,
+            capabilityId,
+            provePhone: opts.provePhone ? String(opts.provePhone) : null,
+            proveEmail: opts.proveEmail ? String(opts.proveEmail) : null,
+            ownerConfirmedReceipt: opts.ownerConfirmedReceipt === true,
+            outboundApproved: true,
+          } as any)),
         });
         const body = await res.json().catch(() => ({}));
-        const ok = Boolean(body?.result?.ok);
-        const responsibility = body?.responsibilityProof ?? body?.result?.responsibilityProof ?? null;
-        const baseMessage = ok ? (body?.result?.message ?? "Proven.") : (body?.result?.message ?? "Prove failed.");
+        const result = body?.result ?? {};
+        const ok = Boolean(result?.ok);
+        const responsibility = body?.responsibilityProof ?? result?.responsibilityProof ?? null;
+        if (isProveAwaitingConfirm(result) && !opts.ownerConfirmedReceipt && proveNeedsOwnerConfirm(action)) {
+          const sentTo = opts.provePhone || opts.proveEmail || "";
+          setProveDialog({
+            action,
+            capabilityId,
+            kind: "confirm",
+            value: "",
+            sentTo,
+            error: null,
+          });
+          setProveMessage(String(result?.message ?? "Confirm you received the test."));
+          return;
+        }
+        const baseMessage = ok ? (result?.message ?? "Proven.") : (result?.message ?? "Prove failed.");
         const followThrough = responsibility?.promoted
           ? ` Responsibility promoted to live (${responsibility.promoted}).`
           : responsibility?.resolvedConstraints?.length
@@ -221,9 +341,8 @@ export default function ConnectionsExecutiveLayout() {
               ? " If a responsibility still waits on this channel, refresh Today."
               : "";
         setProveMessage(`${baseMessage}${followThrough}`);
-        if (ok) {
-          router.refresh();
-        }
+        setProveDialog(null);
+        if (ok) router.refresh();
       } catch (err) {
         setProveMessage(err instanceof Error ? err.message : "Prove failed.");
       } finally {
@@ -231,6 +350,25 @@ export default function ConnectionsExecutiveLayout() {
       }
     },
     [businessId, router],
+  );
+
+  const runProve = useCallback(
+    (action: string, capabilityId: string) => {
+      const dest = proveNeedsDestination(action);
+      if (dest === "phone" || dest === "email") {
+        setProveDialog({
+          action,
+          capabilityId,
+          kind: dest,
+          value: "",
+          sentTo: "",
+          error: null,
+        });
+        return;
+      }
+      void executeProve(action, capabilityId);
+    },
+    [executeProve],
   );
   const resolveDisplay = useCallback(
     (conn: ConnectionViewRow) =>
@@ -251,6 +389,57 @@ export default function ConnectionsExecutiveLayout() {
     () => sections.required.find(({ conn }) => connectionStatusPresentation(String(conn.status ?? ""), presentationWithFlags).label !== "Connected") ?? null,
     [sections.required, presentationWithFlags],
   );
+
+  const packageNext = useMemo(() => {
+    const statuses: Record<string, string> = {};
+    for (const conn of connections) {
+      statuses[String(conn.id)] = String(conn.status ?? "");
+    }
+    return resolveNextConnectionFocus({
+      purchasedPackages: (scope?.purchasedPackages ?? []) as string[],
+      connectionStatuses: statuses,
+    } as any);
+  }, [connections, scope?.purchasedPackages]);
+
+  const nextBanner = useMemo(() => {
+    const resolveActionLabel = (display: IntegrationDisplay, conn?: ConnectionViewRow | null) => {
+      if (!conn) return "Connect →";
+      const action = primaryIntegrationAction(conn, display, pendingOpsRequests);
+      if (action?.kind === "pending_ops") return "Pending";
+      if (action?.kind === "good_to_go") return "Good to go →";
+      if (action?.kind === "request_setup") return "Request setup →";
+      if (action?.kind === "prove") return "Test it →";
+      return "Connect →";
+    };
+    if (packageNext.connectionId) {
+      const fromSections = [...sections.required, ...sections.available, ...sections.connected]
+        .find(({ display }) => display.id === packageNext.connectionId);
+      if (fromSections) {
+        return {
+          display: fromSections.display,
+          conn: fromSections.conn,
+          label: packageNext.label || fromSections.display.title,
+          actionLabel: resolveActionLabel(fromSections.display, fromSections.conn),
+        };
+      }
+      const display = getIntegrationDisplay(packageNext.connectionId, packageNext.label ?? packageNext.connectionId, liveFlags ?? {});
+      return {
+        display,
+        conn: null,
+        label: packageNext.label || packageNext.connectionId,
+        actionLabel: "Request setup →",
+      };
+    }
+    if (nextRequired) {
+      return {
+        display: nextRequired.display,
+        conn: nextRequired.conn,
+        label: nextRequired.display.title,
+        actionLabel: resolveActionLabel(nextRequired.display, nextRequired.conn),
+      };
+    }
+    return null;
+  }, [packageNext, nextRequired, sections, liveFlags, pendingOpsRequests]);
 
   const dismissSetupDialog = useCallback(() => {
     setSetupTarget(null);
@@ -320,10 +509,20 @@ export default function ConnectionsExecutiveLayout() {
   const emptyRequired = presentationWithFlags.emptyStates?.required ?? "Nothing required yet.";
   const emptyConnected = presentationWithFlags.emptyStates?.connected ?? "Nothing connected yet.";
   const emptyAvailable = presentationWithFlags.emptyStates?.available ?? "Nothing available yet.";
+  const metrics = deriveIntegrationMetrics(connections, presentationWithFlags);
+  const needsYou = sections.required.filter(({ conn, display }) => {
+    const action = primaryIntegrationAction(conn, display, pendingOpsRequests);
+    const st = String(conn.status ?? "").toUpperCase();
+    return action?.kind === "request_setup" || action?.kind === "pending_ops" || action?.kind === "good_to_go"
+      || action?.kind === "prove" || st === "NOT_CONNECTED" || st === "CONFIGURING";
+  }).length;
+
 
   return (
     <div style={simplePageStyle}>
+      <style dangerouslySetInnerHTML={{ __html: setupJourneyKeyframes }} />
       <PageHeader title="Integrations" />
+      <IntegrationsHero connectedCount={metrics.connected} needsAttentionCount={needsYou} />
 
       {connectError === "access_denied" ? (
         <div
@@ -375,7 +574,7 @@ export default function ConnectionsExecutiveLayout() {
             lineHeight: 1.5,
           }}
         >
-          Connected. Use Prove on this row when you are ready to verify a real send or calendar action.
+          Connected. Use <strong>Test it works</strong> on this row when you are ready to verify a real send or calendar action.
         </div>
       ) : null}
       {proveMessage ? (
@@ -394,19 +593,22 @@ export default function ConnectionsExecutiveLayout() {
         </div>
       ) : null}
 
-      {nextRequired ? (
+      {nextBanner ? (
         <NextBanner
-          label={nextRequired.display.title}
-          onClick={() => setSetupTarget(nextRequired.display)}
-          actionLabel="Connect →"
+          label={nextBanner.label}
+          onClick={() => setSetupTarget(nextBanner.display)}
+          actionLabel={nextBanner.actionLabel}
         />
       ) : null}
 
-      <SimplePanel title="Required">
+      <section style={{ display: "grid", gap: 12 }}>
+        <SectionLabel hint="Start here if something still needs setup">Needs attention</SectionLabel>
         {sections.required.length === 0 ? (
-          <SimpleEmpty>{emptyRequired}</SimpleEmpty>
+          <div style={{ padding: "18px 16px", borderRadius: 16, border: `1px solid ${cockpitColors.panelBorder}`, background: cockpitColors.panel, color: cockpitColors.textSecondary, fontSize: 14, fontWeight: 600 }}>
+            {emptyRequired}
+          </div>
         ) : (
-          <div>
+          <div style={{ display: "grid", gap: 12 }}>
             {sections.required.map(({ conn, display }) => (
               <IntegrationRow
                 key={display.id}
@@ -414,20 +616,27 @@ export default function ConnectionsExecutiveLayout() {
                 display={display}
                 presentation={presentationWithFlags}
                 businessId={businessId}
+                pendingOpsRequests={pendingOpsRequests}
                 onAction={setSetupTarget}
+                onRequestSetup={setSetupTarget}
                 onProve={runProve}
+                onRefreshA2p={display.id === "sms_channel" ? () => void refreshSmsA2pStatus() : undefined}
+                refreshingA2p={refreshingA2p}
                 proving={provingId === display.id || provingId != null && provingId.includes(display.id)}
               />
             ))}
           </div>
         )}
-      </SimplePanel>
+      </section>
 
-      <SimplePanel title="Connected">
+      <section style={{ display: "grid", gap: 12 }}>
+        <SectionLabel hint="Already linked — still run Test when you see it">Connected</SectionLabel>
         {sections.connected.length === 0 ? (
-          <SimpleEmpty>{emptyConnected}</SimpleEmpty>
+          <div style={{ padding: "18px 16px", borderRadius: 16, border: `1px solid ${cockpitColors.panelBorder}`, background: cockpitColors.panel, color: cockpitColors.textSecondary, fontSize: 14, fontWeight: 600 }}>
+            {emptyConnected}
+          </div>
         ) : (
-          <div>
+          <div style={{ display: "grid", gap: 12 }}>
             {sections.connected.map(({ conn, display }) => (
               <IntegrationRow
                 key={`connected_${display.id}`}
@@ -435,20 +644,27 @@ export default function ConnectionsExecutiveLayout() {
                 display={display}
                 presentation={presentationWithFlags}
                 businessId={businessId}
+                pendingOpsRequests={pendingOpsRequests}
                 onAction={setSetupTarget}
+                onRequestSetup={setSetupTarget}
                 onProve={runProve}
+                onRefreshA2p={display.id === "sms_channel" ? () => void refreshSmsA2pStatus() : undefined}
+                refreshingA2p={refreshingA2p}
                 proving={Boolean(provingId)}
               />
             ))}
           </div>
         )}
-      </SimplePanel>
+      </section>
 
-      <SimplePanel title="Available">
+      <section style={{ display: "grid", gap: 12 }}>
+        <SectionLabel hint="Optional channels you can add anytime">Available</SectionLabel>
         {sections.available.length === 0 ? (
-          <SimpleEmpty>{emptyAvailable}</SimpleEmpty>
+          <div style={{ padding: "18px 16px", borderRadius: 16, border: `1px solid ${cockpitColors.panelBorder}`, background: cockpitColors.panel, color: cockpitColors.textSecondary, fontSize: 14, fontWeight: 600 }}>
+            {emptyAvailable}
+          </div>
         ) : (
-          <div>
+          <div style={{ display: "grid", gap: 12 }}>
             {sections.available.map(({ conn, display }) => (
               <IntegrationRow
                 key={`available_${display.id}`}
@@ -456,24 +672,113 @@ export default function ConnectionsExecutiveLayout() {
                 display={display}
                 presentation={presentationWithFlags}
                 businessId={businessId}
+                pendingOpsRequests={pendingOpsRequests}
                 onAction={setSetupTarget}
+                onRequestSetup={setSetupTarget}
                 onProve={runProve}
+                onRefreshA2p={display.id === "sms_channel" ? () => void refreshSmsA2pStatus() : undefined}
+                refreshingA2p={refreshingA2p}
                 proving={Boolean(provingId)}
               />
             ))}
           </div>
         )}
-      </SimplePanel>
+      </section>
+
+      {proveDialog ? (
+        <SimpleModal
+          title={
+            proveDialog.kind === "confirm"
+              ? "Did you get it?"
+              : proveDialog.kind === "phone"
+                ? "Test phone number"
+                : "Test email"
+          }
+          onClose={() => setProveDialog(null)}
+          maxWidth={420}
+          footer={
+            <>
+              <SecondaryButton onClick={() => setProveDialog(null)}>Cancel</SecondaryButton>
+              <PrimaryButton
+                onClick={() => {
+                  if (proveDialog.kind === "confirm") {
+                    void executeProve(proveDialog.action, proveDialog.capabilityId, {
+                      provePhone: proveDialog.sentTo || undefined,
+                      ownerConfirmedReceipt: true,
+                    });
+                    return;
+                  }
+                  const value = proveDialog.value.trim();
+                  if (!value) {
+                    setProveDialog((d) => d ? { ...d, error: proveDialog.kind === "phone" ? "Enter a phone like +1…" : "Enter an email." } : d);
+                    return;
+                  }
+                  void executeProve(proveDialog.action, proveDialog.capabilityId, {
+                    provePhone: proveDialog.kind === "phone" ? value : undefined,
+                    proveEmail: proveDialog.kind === "email" ? value : undefined,
+                  });
+                }}
+                disabled={Boolean(provingId)}
+              >
+                {provingId ? "Testing…" : proveDialog.kind === "confirm" ? "Yes — I got it" : "Test it works"}
+              </PrimaryButton>
+            </>
+          }
+        >
+          <div style={{ display: "grid", gap: 10 }}>
+            <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: 14, lineHeight: 1.45 }}>
+              {proveDialog.kind === "confirm"
+                ? `We dialed/sent to ${proveDialog.sentTo || "your test destination"}. Confirm you received it so we can mark this tested.`
+                : proveDialog.kind === "phone"
+                  ? "Enter a real phone (E.164, e.g. +15551234567). We’ll place a short test call to prove the line works."
+                  : "Enter an email address for the test send."}
+            </p>
+            {proveDialog.kind !== "confirm" ? (
+              <input
+                value={proveDialog.value}
+                onChange={(e) => setProveDialog((d) => d ? { ...d, value: e.target.value, error: null } : d)}
+                placeholder={proveDialog.kind === "phone" ? "+1…" : "you@business.com"}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  border: `1px solid ${cockpitColors.panelBorder}`,
+                  background: cockpitColors.panelElevated,
+                  color: cockpitColors.textPrimary,
+                }}
+              />
+            ) : null}
+            {proveDialog.error ? (
+              <p style={{ margin: 0, color: "#b91c1c", fontSize: 13 }}>{proveDialog.error}</p>
+            ) : null}
+          </div>
+        </SimpleModal>
+      ) : null}
 
       {setupTarget ? (
         <IntegrationSetupDialog
           integration={setupTarget}
           hasRealConnect={(() => {
-            const match = [...sections.required, ...sections.available].find(({ display }) => display.id === setupTarget.id);
-            return match ? hasRealConnectAction(match.conn, match.display) : false;
+            const match = [...sections.required, ...sections.available, ...sections.connected]
+              .find(({ display }) => display.id === setupTarget.id);
+            return match ? hasRealConnectAction(match.conn, match.display, pendingOpsRequests) : false;
+          })()}
+          pendingOpsRequest={(() => {
+            const match = [...sections.required, ...sections.available, ...sections.connected]
+              .find(({ display }) => display.id === setupTarget.id);
+            const base = pendingOpsRequests[setupTarget.id];
+            const status = match?.conn?.status ?? null;
+            if (!base && !status) return null;
+            return {
+              ...(base && typeof base === "object" ? base : {}),
+              connectionStatus: status,
+            };
           })()}
           returnTo={searchParams.get("returnTo")}
           onClose={dismissSetupDialog}
+          onSetupRequested={() => {
+            dismissSetupDialog();
+            router.refresh();
+          }}
         />
       ) : null}
     </div>

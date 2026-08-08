@@ -1,6 +1,9 @@
 import type { StatusBadgeTone } from "@/components/product/StatusBadge";
 import type { IntegrationDisplay, IntegrationSetupMode, IntegrationTier, LiveIntegrationFlags } from "./integrationDisplay.ts";
 import { isIntegrationListed } from "./integrationDisplay.ts";
+import { isWhiteGloveConnection } from "../../../backend/core/integrations/whiteglove/WhiteGloveConnectionRegistry.js";
+import { resolveWhiteGloveOwnerPhase } from "../../../backend/core/integrations/whiteglove/whiteGloveOpsState.js";
+import { proveActionForConnectionId } from "../../../backend/core/integrations/connectionProveRegistry.js";
 
 export type ConnectionViewRow = {
   id: string;
@@ -8,6 +11,8 @@ export type ConnectionViewRow = {
   purpose?: string;
   requirementLevel?: string;
   status?: string;
+  metadata?: Record<string, unknown> | null;
+  a2pRegistrationStatus?: string | null;
   health?: { level?: string; label?: string; message?: string; detail?: string } | null;
   healthLabel?: string | null;
   healthDetail?: string | null;
@@ -161,7 +166,11 @@ export function blockedEmployeeNames(conn: ConnectionViewRow) {
     .filter(Boolean);
 }
 
-export function primaryIntegrationAction(conn: ConnectionViewRow, display: IntegrationDisplay) {
+export function primaryIntegrationAction(
+  conn: ConnectionViewRow,
+  display: IntegrationDisplay,
+  pendingOpsRequests: Record<string, unknown> = {},
+) {
   if (display.listed === false) return null;
 
   const healthLevel = String(conn.health?.level ?? "").toUpperCase();
@@ -178,7 +187,7 @@ export function primaryIntegrationAction(conn: ConnectionViewRow, display: Integ
   if (display.setupMode === "prove_only") {
     const prove = proveActionForConnection(String(conn.id));
     if (prove) {
-      return { kind: "prove" as const, label: "Prove it works", proveAction: prove.action, capabilityId: prove.capabilityId };
+      return { kind: "prove" as const, label: "Test it works", proveAction: prove.action, capabilityId: prove.capabilityId };
     }
   }
 
@@ -187,8 +196,35 @@ export function primaryIntegrationAction(conn: ConnectionViewRow, display: Integ
       return { kind: "connect" as const, label: reconnectAction?.label ?? "Reconnect" };
     }
     const prove = proveActionForConnection(String(conn.id));
-    if (prove) return { kind: "prove" as const, label: "Prove it works", proveAction: prove.action, capabilityId: prove.capabilityId };
+    if (prove) return { kind: "prove" as const, label: "Test it works", proveAction: prove.action, capabilityId: prove.capabilityId };
     return null;
+  }
+
+  // White-glove: Request setup → Pending → Good to go (then Test when connected).
+  if (isWhiteGloveConnection(String(display.id))) {
+    const phase = resolveWhiteGloveOwnerPhase({
+      connectionId: String(display.id),
+      connectionStatus: conn.status,
+      pendingOpsRequests,
+    });
+    if (phase === "pending") {
+      return {
+        kind: "pending_ops" as const,
+        label: "Pending — we're on it",
+        disabled: true,
+        pendingCopy: (pendingOpsRequests?.[String(display.id)] as { ownerPendingCopy?: string } | undefined)?.ownerPendingCopy
+          ?? "Hold on — VIBETech is setting this up for you.",
+      };
+    }
+    if (phase === "good_to_go") {
+      return {
+        kind: "good_to_go" as const,
+        label: "Good to go",
+        readyCopy: (pendingOpsRequests?.[String(display.id)] as { ownerReadyCopy?: string } | undefined)?.ownerReadyCopy
+          ?? "VIBETech finished setup — refresh or wait for Connected, then Test it works.",
+      };
+    }
+    return { kind: "request_setup" as const, label: "Request setup" };
   }
 
   if (display.setupMode === "oauth" || display.setupMode === "api_key" || display.setupMode === "dev_connect") {
@@ -196,12 +232,8 @@ export function primaryIntegrationAction(conn: ConnectionViewRow, display: Integ
       display.setupMode === "oauth"
         ? display.id === "business_email" || display.id === "calendar"
           ? "Connect with Google"
-          : display.id === "meta_lead_ads"
-            ? "Request setup"
-            : "Connect"
-        : display.setupMode === "api_key"
-          ? "Connect"
-          : "Connect";
+          : "Connect"
+        : "Connect";
     return { kind: "connect" as const, label };
   }
 
@@ -217,20 +249,16 @@ export function primaryIntegrationAction(conn: ConnectionViewRow, display: Integ
 }
 
 export function proveActionForConnection(connectionId: string): { action: string; capabilityId: string } | null {
-  const map: Record<string, { action: string; capabilityId: string }> = {
-    business_email: { action: "send_test_email", capabilityId: "customer_email_send" },
-    calendar: { action: "create_test_event", capabilityId: "calendar_scheduling" },
-    sms_channel: { action: "send_test_sms", capabilityId: "sms_send" },
-    meta_lead_ads: { action: "ingest_test_lead", capabilityId: "meta_lead_intake" },
-    website_forms: { action: "submit_test_form", capabilityId: "website_forms" },
-    hubspot: { action: "sync_test_crm_contact", capabilityId: "crm_hubspot" },
-    highlevel: { action: "sync_test_crm_contact", capabilityId: "crm_highlevel" },
-  };
-  return map[String(connectionId)] ?? null;
+  return proveActionForConnectionId(String(connectionId));
 }
 
-export function hasRealConnectAction(conn: ConnectionViewRow, display: IntegrationDisplay) {
-  return primaryIntegrationAction(conn, display)?.kind === "connect";
+export function hasRealConnectAction(
+  conn: ConnectionViewRow,
+  display: IntegrationDisplay,
+  pendingOpsRequests: Record<string, unknown> = {},
+) {
+  const kind = primaryIntegrationAction(conn, display, pendingOpsRequests)?.kind;
+  return kind === "connect" || kind === "good_to_go";
 }
 
 export function setupBlockerSummary(conn: ConnectionViewRow, display: IntegrationDisplay) {

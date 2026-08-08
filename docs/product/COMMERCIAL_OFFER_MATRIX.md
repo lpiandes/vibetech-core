@@ -30,6 +30,7 @@ Every pricing-sheet line is classified and gated by code:
 - Wave B/C productized: sales assistant, CRM automation, scheduling, native chat, outbound voice campaigns, HubSpot/HighLevel sync, social/marketing content, document extract, sales analytics/reporting, Professional/Enterprise, add-on soft-cap metering, Outlook Graph adapters, Executive Dashboard
 - **Create & invite** includes Wave A/B/C sellable products + managed packages (RFT first)
 - **Custom Build Factory:** prove step reads `capability_proof_records`; go-live blocked without mission evidence
+- **Owner setup:** package-driven Today checklists (`OwnerPackageSetupRegistry` + `PackageSetupPath`). Managed Revenue Follow-Through keeps RFT launch; every other product package gets Connect → Test → Go live. Consulting lines show a human-delivery card.
 - **Decisions:** `pendingDecisionDrafts` sync into ApprovalRuntime on Mission Control / shell compose
 - **Voice scheduling:** live slot book when team availability + calendar confirm; else Work + HOLD
 - **Usage:** Settings meters hydrate from `installation.configuration.usageMeters`

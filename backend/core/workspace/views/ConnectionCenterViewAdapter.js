@@ -29,6 +29,11 @@ const OS_INTEGRATION_TO_CONNECTION = Object.freeze({
   facebook_leads: "meta_lead_ads",
   social_screening: "social_screening",
   prospecting_enrichment: "prospecting_enrichment",
+  hubspot: "hubspot",
+  highlevel: "highlevel",
+  gohighlevel: "highlevel",
+  salesforce: "salesforce",
+  sfdc: "salesforce",
 });
 
 function normalizeRequirementEntry(entry) {
@@ -135,14 +140,23 @@ export function resolveConnectionRequirements({
   for (const req of connectionRequirementsFromRftConnect(
     configuration ? { configuration } : installationResult,
   )) {
-    if (!byId.has(req.id)) byId.set(req.id, req);
+    const existing = byId.get(req.id);
+    if (!existing) {
+      byId.set(req.id, req);
+    } else if (
+      existing.requirementLevel !== "required"
+      && req.requirementLevel === "required"
+    ) {
+      byId.set(req.id, req);
+    }
   }
 
   for (const req of connectionRequirementsFromResponsibilityRequests(
     configuration?.responsibilityRequests
     ?? installationResult?.configuration?.responsibilityRequests,
   )) {
-    if (!byId.has(req.id)) byId.set(req.id, req);
+    // Open ACCOUNT_CONNECTION_REQUIRED always elevates / keeps the row required.
+    byId.set(req.id, req);
   }
 
   if (byId.size) return [...byId.values()];
@@ -248,6 +262,10 @@ export function buildConnectionCenterViewModel({
       });
     }
 
+    const metadata = snapshot?.metadata && typeof snapshot.metadata === "object"
+      ? { ...snapshot.metadata }
+      : {};
+
     return deepFreeze({
       id,
       connectionId: snapshot?.connectionId ?? null,
@@ -259,6 +277,8 @@ export function buildConnectionCenterViewModel({
       healthLabel: health?.label ?? health?.level ?? null,
       healthDetail: health?.message ?? health?.detail ?? providerGuidance?.reconnectInstructions ?? null,
       unlockMessage: buildUnlockMessage(id, status),
+      metadata: deepFreeze(metadata),
+      a2pRegistrationStatus: snapshot?.a2pRegistrationStatus ?? metadata.a2pRegistrationStatus ?? null,
       enables: dependency?.enables ?? deepFreeze({ capabilities: [], employees: [], automations: [], communicationIntents: [] }),
       blockedWithout: dependency?.blockedWithout ?? deepFreeze({ capabilities: [], employees: [], automations: [], communicationIntents: [] }),
       setupInstructions: String(providerGuidance?.steps?.join(" ") ?? guide.setupInstructions ?? "Provider-specific setup will appear when a provider is selected."),

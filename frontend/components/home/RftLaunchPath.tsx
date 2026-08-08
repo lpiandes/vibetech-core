@@ -50,13 +50,13 @@ type ShadowProposal = {
 
 const STEP_META: Array<{ id: string; label: string; hint?: string }> = [
   { id: "connect", label: "Connect email & calendar" },
-  { id: "observe", label: "See how work happens" },
+  { id: "observe", label: "See how work happens today" },
   { id: "confirm", label: "Confirm how you operate" },
-  { id: "replay", label: "Review the replay" },
-  { id: "shadow", label: "Try shadow mode" },
+  { id: "replay", label: "Review a sample of recent work" },
+  { id: "shadow", label: "Try a practice run (nothing sends)" },
   {
     id: "prove",
-    label: "Prove email & calendar work",
+    label: "Test email & calendar",
     hint: "Create one test opportunity, then send yourself a real test email and calendar event so go-live isn’t guesswork.",
   },
   { id: "goLive", label: "Go live" },

@@ -5,6 +5,7 @@ import OpenBusinessAsAdminButton from "@/components/admin/OpenBusinessAsAdminBut
 import AdminOwnerInviteActions from "@/components/admin/AdminOwnerInviteActions";
 import SupportEnterForm from "@/components/admin/SupportEnterForm";
 import AdminBusinessManagePanel from "@/components/admin/AdminBusinessManagePanel";
+import AdminWhiteGloveOpsPanel from "@/components/admin/AdminWhiteGloveOpsPanel";
 import { VtCard, VtDockLink, VtPanel } from "@/components/product/VtChrome";
 import { cockpitColors } from "@/design/tokens";
 
@@ -87,6 +88,8 @@ export default async function AdminBusinessDetailPage({
         status={business.status ?? "ACTIVE"}
         initialPackageConfiguration={business.packageConfiguration ?? null}
       />
+
+      <AdminWhiteGloveOpsPanel businessId={business.id} />
 
       {business.members?.length ? (
         <VtPanel title="Members">

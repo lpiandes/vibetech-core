@@ -12,8 +12,10 @@ import {
   scrubInternalWording,
 } from "@/lib/operating/businessLanguage";
 import RftLaunchPath from "@/components/home/RftLaunchPath";
+import PackageSetupPath from "@/components/home/PackageSetupPath";
 import CustomBuildPath from "@/components/home/CustomBuildPath";
 import ResponsibilityGoLivePanel from "@/components/home/ResponsibilityGoLivePanel";
+import { resolveOwnerSetupPath } from "../../../backend/core/platform/commercial/resolveOwnerSetupPath.js";
 import {
   SimpleEmptyLine,
   SimplePanel,
@@ -69,7 +71,31 @@ export default function OperatingHomeExperience() {
   const launchGoLiveAt = viewModel?.rftGoLiveAt
     ?? viewModel?.productContext?.installationResult?.configuration?.rftLaunch?.goLiveAt
     ?? null;
-  const showRftLaunch = Boolean(businessId) && !launchGoLiveAt;
+  const purchasedPackages: string[] = Array.isArray(scope?.purchasedPackages)
+    ? scope.purchasedPackages.map(String)
+    : (Array.isArray(viewModel?.purchasedPackages) ? viewModel.purchasedPackages.map(String) : []);
+  const packageSetup = viewModel?.packageSetup
+    ?? viewModel?.productContext?.installationResult?.configuration?.packageSetup
+    ?? null;
+  const setupPath = resolveOwnerSetupPath({
+    purchasedPackages,
+    rftGoLiveAt: launchGoLiveAt,
+    packageSetupGoLiveAt: packageSetup?.goLiveAt ?? null,
+    packageSetupById: packageSetup?.byPackageId ?? null,
+  });
+  const showRftLaunch = Boolean(businessId)
+    && (setupPath.mode === "rft" || setupPath.mode === "rft_and_package" || setupPath.showRft === true);
+  const showPackageSetup = Boolean(businessId)
+    && (
+      setupPath.mode === "package"
+      || setupPath.mode === "consulting"
+      || setupPath.mode === "rft_and_package"
+      || setupPath.showPackage === true
+    );
+  const showCustomBuild = Boolean(businessId)
+    && !showRftLaunch
+    && !showPackageSetup
+    && setupPath.showCustomBuild;
 
   const needsCount = waitingItems.length + approvalItems.length;
   const completedToday = outcomes.filter((entry: any) =>
@@ -88,7 +114,7 @@ export default function OperatingHomeExperience() {
   const healthLine = buildHealthLine({
     summary,
     needsCount,
-    remainingSetup: showRftLaunch ? 1 : 0,
+    remainingSetup: (showRftLaunch || showPackageSetup) ? 1 : 0,
     businessName,
   });
 
@@ -100,7 +126,7 @@ export default function OperatingHomeExperience() {
     <HomeCanvas>
       <HomeHero greeting={greeting} />
 
-      {showRftLaunch ? null : healthLine.headline ? (
+      {(showRftLaunch || showPackageSetup) ? null : healthLine.headline ? (
         <section
           aria-label="Operation health"
           style={{
@@ -126,19 +152,33 @@ export default function OperatingHomeExperience() {
           connectionStatuses={viewModel?.connectionStatuses ?? {}}
           proofRecords={viewModel?.proofRecords ?? {}}
         />
-      ) : businessId ? (
+      ) : null}
+      {showPackageSetup ? (
+        <PackageSetupPath
+          businessId={businessId}
+          purchasedPackages={purchasedPackages}
+          connectionStatuses={viewModel?.connectionStatuses ?? {}}
+          proofRecords={viewModel?.proofRecords ?? {}}
+          knowledgeCount={Number(viewModel?.knowledgeCount ?? 0)}
+          packageSetupGoLiveAt={packageSetup?.goLiveAt ?? null}
+          packageSetupById={packageSetup?.byPackageId ?? null}
+          pendingOpsRequests={viewModel?.pendingOpsRequests ?? {}}
+          mode={setupPath.mode === "consulting" ? "consulting" : "package"}
+        />
+      ) : null}
+      {!showRftLaunch && !showPackageSetup && showCustomBuild ? (
         <CustomBuildPath businessId={businessId} />
       ) : null}
 
       {/* Managed RFT: RftLaunchPath owns setup — don't stack a second dense checklist. */}
-      {!showRftLaunch && viewModel?.responsibilityGoLive?.total ? (
+      {!showRftLaunch && !showPackageSetup && viewModel?.responsibilityGoLive?.total ? (
         <ResponsibilityGoLivePanel
           businessId={businessId}
           view={viewModel.responsibilityGoLive}
         />
       ) : null}
 
-      {!showRftLaunch ? (
+      {!showRftLaunch && !showPackageSetup ? (
         <section aria-label="Work handled today" style={{ display: "grid", gap: spacing.sm }}>
           <h2 style={{ margin: 0, fontSize: typography.meta.fontSize, fontWeight: 700, color: cockpitColors.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
             Today
@@ -161,7 +201,7 @@ export default function OperatingHomeExperience() {
         baseline={viewModel?.outcomesLedger?.baseline ?? viewModel?.productContext?.rftObservation?.baseline ?? null}
         metrics={viewModel?.outcomesLedger?.metrics ?? null}
         outcomesHref={outcomesHref}
-        hidden={showRftLaunch}
+        hidden={showRftLaunch || showPackageSetup}
       />
 
       <section aria-label="Needs you" style={{ display: "grid", gap: spacing.sm }}>

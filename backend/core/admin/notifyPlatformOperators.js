@@ -194,7 +194,29 @@ export async function notifyPlatformOperators({
   }
 
   recentlyNotified.set(fingerprint, Date.now());
-  return { ok: true, results, count: list.length, fingerprint };
+
+  const emailSent = Array.isArray(results.email) && results.email.some((row) => row?.sent === true);
+  const webhookOk = Boolean(results.webhook?.ok);
+  const delivered = emailSent || webhookOk;
+  const attemptedDelivery = Boolean(emails.length || webhook);
+
+  return {
+    ok: delivered || (!attemptedDelivery && Boolean(list.length)),
+    delivered,
+    results,
+    count: list.length,
+    fingerprint,
+    reason: delivered
+      ? null
+      : attemptedDelivery
+        ? "delivery_failed"
+        : "no_notify_channel",
+    error: delivered
+      ? null
+      : attemptedDelivery
+        ? "Could not deliver ops email/webhook. Check RESEND_API_KEY / SMTP and PLATFORM_OPERATOR_EMAIL."
+        : "no_notify_channel",
+  };
 }
 
 function escapeHtml(text) {

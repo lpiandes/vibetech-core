@@ -20,6 +20,8 @@ import {
   connectionStatusesFromCredentials,
   mergeConnectionStatuses,
 } from "../../../../../backend/core/integrations/credentials/connectionStatusesFromDurableCredentials.js";
+import { notifyWhiteGloveHandoffForBusiness } from "../../../../../backend/core/integrations/whiteglove/requestWhiteGloveSetup.js";
+import { readPendingOpsRequests } from "../../../../../backend/core/integrations/whiteglove/whiteGloveOpsState.js";
 
 /**
  * Home is one experience with two moments:
@@ -37,6 +39,13 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       ctx.service.materializeDueRecurringCampaignOperationsIfNeeded().catch(() => null),
     ]);
     markRequestTiming("HOME_MAINTENANCE_QUEUED");
+
+    // White-glove handoff email (ops checklist) — once per install, never blocks paint.
+    void notifyWhiteGloveHandoffForBusiness({
+      platformStore,
+      businessId,
+      origin: process.env.NEXT_PUBLIC_APP_URL || "https://app.vtechdevelopment.com",
+    }).catch(() => null);
 
     let hasInstalledOs = false;
     let installedSpecification: Record<string, unknown> | null = null;
@@ -211,7 +220,7 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       (ctx.service as any)?.connected?.integrationPlatform?.connectionRuntime?.getConnections?.() ?? [];
     const snapshotConnections =
       (ctx.service as any)?.connected?.connectedSystemsSnapshot?.connections ?? [];
-    let connectionStatuses: Record<string, string> = {};
+    let connectionStatuses: Record<string, unknown> = {};
     for (const conn of snapshotConnections) {
       if (conn?.id) connectionStatuses[String(conn.id)] = String(conn.status ?? "NOT_CONNECTED");
     }
@@ -222,9 +231,9 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
     }
     // Durable vault wins when runtime/snapshot lag after OAuth (same SoT as Connections / RFT launch).
     connectionStatuses = mergeConnectionStatuses(
-      connectionStatuses,
+      connectionStatuses as Record<string, string>,
       connectionStatusesFromCredentials(credentialRows ?? []),
-    );
+    ) as Record<string, unknown>;
     const connections = (snapshotConnections.length
       ? snapshotConnections
       : runtimeConnections.map((conn: any) => ({
@@ -235,22 +244,42 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
     ).map((conn: any) => {
       const id = String(conn?.id ?? conn?.connectionType ?? "");
       const live = id ? connectionStatuses[id] : null;
-      return live ? { ...conn, status: live } : conn;
+      const liveStatus = typeof live === "object" && live != null
+        ? String((live as { status?: string }).status ?? "")
+        : live;
+      return liveStatus ? { ...conn, status: liveStatus } : conn;
     });
 
     // Prefer runtime metadata over vault list + business re-fetch (cold login cost).
     const smsRuntime = runtimeConnections.find((c: any) => String(c?.connectionType ?? "") === "sms_channel");
     const smsRuntimeMeta = smsRuntime?.metadata && typeof smsRuntime.metadata === "object" ? smsRuntime.metadata : {};
+    const smsStatusRaw = connectionStatuses.sms_channel;
+    const smsStatusStr = typeof smsStatusRaw === "object" && smsStatusRaw != null
+      ? String((smsStatusRaw as { status?: string }).status ?? "")
+      : String(smsStatusRaw ?? "");
+    // Checklist honesty: SMS connect needs Connected + A2P approved (object form).
+    if (smsStatusStr) {
+      connectionStatuses.sms_channel = {
+        status: smsStatusStr,
+        a2pRegistrationStatus: String(smsRuntimeMeta.a2pRegistrationStatus ?? "pending"),
+        metadata: smsRuntimeMeta,
+      };
+    }
     const smsSetup = {
-      connected: String(connectionStatuses.sms_channel ?? "").toUpperCase() === "CONNECTED",
+      connected: smsStatusStr.toUpperCase() === "CONNECTED",
       fromNumber: String(smsRuntimeMeta.fromNumber ?? ""),
       a2pRegistrationStatus: String(smsRuntimeMeta.a2pRegistrationStatus ?? "pending"),
       brand: smsRuntimeMeta.brand ?? null,
     };
 
-    const metaConnected = String(connectionStatuses.meta_lead_ads ?? "").toUpperCase() === "CONNECTED";
+    const metaStatusRaw = connectionStatuses.meta_lead_ads;
+    const metaStatusStr = typeof metaStatusRaw === "object" && metaStatusRaw != null
+      ? String((metaStatusRaw as { status?: string }).status ?? "")
+      : String(metaStatusRaw ?? "");
+    const metaConnected = metaStatusStr.toUpperCase() === "CONNECTED";
     const packageConfiguration = (ctx as any).authz?.business?.packageConfiguration ?? {};
-    const pendingOps = packageConfiguration?.pendingOpsRequests?.meta_lead_ads;
+    const pendingOpsRequests = readPendingOpsRequests(packageConfiguration, installation);
+    const pendingOps = pendingOpsRequests?.meta_lead_ads;
     const metaSetupPending = !metaConnected && (
       String(pendingOps?.status ?? "") === "pending_ops"
       || Boolean(pendingOps?.requestedAt)
@@ -265,6 +294,14 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
     const rftGoLiveAt = installation?.configuration?.rftLaunch?.goLiveAt
       ? String(installation.configuration.rftLaunch.goLiveAt)
       : null;
+    const packageSetup = installation?.configuration?.packageSetup && typeof installation.configuration.packageSetup === "object"
+      ? installation.configuration.packageSetup
+      : null;
+    const purchasedPackages = Array.isArray((ctx as any).authz?.purchasedPackages)
+      ? (ctx as any).authz.purchasedPackages.map(String)
+      : (Array.isArray(packageConfiguration?.purchasedPackages)
+        ? packageConfiguration.purchasedPackages.map(String)
+        : []);
 
     const enrichedViewModel = {
       ...missionControlViewModel,
@@ -273,11 +310,14 @@ export default async function BusinessHomePage({ params }: { params: Promise<{ b
       connections,
       smsSetup,
       metaSetupPending,
+      pendingOpsRequests,
       knowledgeCount: knowledgeDocumentCount,
       liveFlags: liveIntegrationAvailability(),
       bosEmployees,
       responsibilityGoLive,
       rftGoLiveAt,
+      packageSetup,
+      purchasedPackages,
     };
     markRequestTiming("MISSION_CONTROL", {
       ready: true,

@@ -144,3 +144,37 @@ test("business email connected state renders human label", () => {
   assert.equal(status.label, "Connected");
   assert.equal(status.tone, "success");
 });
+
+test("white-glove voice: Request setup → Pending → Good to go; Connected offers Test", () => {
+  const display = getIntegrationDisplay("voice_channel", undefined, liveFlags);
+  const request = primaryIntegrationAction(
+    { id: "voice_channel", status: "NOT_CONNECTED" },
+    display,
+    {},
+  );
+  assert.equal(request?.kind, "request_setup");
+
+  const pending = primaryIntegrationAction(
+    { id: "voice_channel", status: "NOT_CONNECTED" },
+    display,
+    { voice_channel: { status: "pending_ops", ownerPendingCopy: "Hold on — VIBETech is setting this up for you." } },
+  );
+  assert.equal(pending?.kind, "pending_ops");
+  assert.equal(pending?.disabled, true);
+
+  const ready = primaryIntegrationAction(
+    { id: "voice_channel", status: "NOT_CONNECTED" },
+    display,
+    { voice_channel: { status: "ops_ready" } },
+  );
+  assert.equal(ready?.kind, "good_to_go");
+
+  const connected = primaryIntegrationAction(
+    { id: "voice_channel", status: "CONNECTED" },
+    display,
+    { voice_channel: { status: "ops_ready" } },
+  );
+  assert.equal(connected?.kind, "prove");
+  assert.equal(connected?.proveAction, "place_test_call");
+  assert.equal(connected?.capabilityId, "voice_calls");
+});

@@ -60,21 +60,21 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
   },
   sms_channel: {
     title: "Text messaging",
-    description: "Enter business + A2P details — VIBETech provisions a number. Carrier brand/campaign approval is pending until registration finishes (can take days).",
+    description: "Request setup — VIBETech buys the number and handles carrier approval. You only share business details.",
     tier: "live",
     icon: MessageSquare,
     setupMode: "api_key",
     listed: true,
-    unlocks: "Approved SMS after carrier registration",
+    unlocks: "Business texting after carrier approval",
   },
   voice_channel: {
     title: "Business phone",
-    description: "Missed calls ring your cell, then text the caller from your Twilio number. One-time connect — after that it runs automatically.",
+    description: "Request setup — VIBETech wires your business phone. Share your cell only if you want missed calls to ring you first.",
     tier: "live",
     icon: Phone,
     setupMode: "api_key",
-    listed: false,
-    unlocks: "Missed call → contact + SMS · optional AI receptionist if forward is off",
+    listed: true,
+    unlocks: "AI receptionist · missed-call follow-up",
   },
   social_screening: {
     title: "Social screening",
@@ -96,11 +96,11 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
   },
   meta_lead_ads: {
     title: "Meta Lead Forms",
-    description: "Most clients just put their Facebook Page name. No Page yet? Say so — VIBETech builds Lead Ads with you. New leads become contacts and fire intake automations.",
+    description: "Request setup — VIBETech connects your Facebook Lead Forms. You only share the Page name.",
     tier: "live",
     icon: Share2,
     setupMode: "api_key",
-    listed: false,
+    listed: true,
     unlocks: "Lead → contact → Work + META_LEAD automations",
   },
   website_forms: {
@@ -114,7 +114,7 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
   },
   hubspot: {
     title: "HubSpot",
-    description: "Paste a private app token with contacts read/write. Prove creates a real HubSpot contact.",
+    description: "Request setup — VIBETech connects HubSpot with the right token. You don’t paste credentials.",
     tier: "live",
     icon: Database,
     setupMode: "api_key",
@@ -123,12 +123,21 @@ const INTEGRATION_CONFIG: Record<string, Omit<IntegrationDisplay, "id">> = {
   },
   highlevel: {
     title: "HighLevel",
-    description: "Paste API key + location ID. Prove creates a real HighLevel contact.",
+    description: "Request setup — VIBETech connects HighLevel for you. You don’t dig through API keys alone.",
     tier: "live",
     icon: Database,
     setupMode: "api_key",
     listed: true,
     unlocks: "CRM updates with highlevel_record_id proof",
+  },
+  salesforce: {
+    title: "Salesforce",
+    description: "Request setup — VIBETech scopes a Custom Build. There is no in-app token paste.",
+    tier: "live",
+    icon: Database,
+    setupMode: "manual",
+    listed: true,
+    unlocks: "Custom Build / SOW delivery — not a fake Connected badge",
   },
   google_search_console: {
     title: "Google Search Console",
@@ -187,6 +196,7 @@ export type LiveIntegrationFlags = {
   property_management_system?: boolean;
   hubspot?: boolean;
   highlevel?: boolean;
+  salesforce?: boolean;
   website_forms?: boolean;
   _googleOAuth?: boolean;
   _microsoftOAuth?: boolean;

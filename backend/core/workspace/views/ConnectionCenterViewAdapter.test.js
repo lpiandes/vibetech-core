@@ -17,8 +17,8 @@ test("employee connectionDependencies surface calendar when OS list only has ema
         connectionDependencies: ["business_email", "calendar"],
       },
     ],
-    // Already go-live — RFT connect merge stays off so this test isolates employees.
-    osConfiguration: { rftLaunch: { goLiveAt: "2026-01-01T00:00:00.000Z" } },
+    // No rftLaunch key — isolate employees without RFT listed-channel merge.
+    osConfiguration: {},
   });
   const ids = reqs.map((r) => r.id).sort();
   assert.deepEqual(ids, ["business_email", "calendar"]);
@@ -40,10 +40,13 @@ test("RFT launch path surfaces calendar even when discovery only listed email", 
     employees: [{ connectionDependencies: ["business_email"] }],
     osConfiguration: { rftLaunch: {} },
   });
-  assert.deepEqual(reqs.map((r) => r.id).sort(), ["business_email", "calendar"]);
+  const ids = reqs.map((r) => r.id);
+  assert.ok(ids.includes("business_email"));
+  assert.ok(ids.includes("calendar"));
+  assert.equal(reqs.find((r) => r.id === "calendar")?.requirementLevel, "required");
 });
 
-test("after go-live RFT connect channels are not force-added", () => {
+test("after go-live RFT listed channels stay optional (not force-required)", () => {
   const reqs = resolveConnectionRequirements({
     businessOsIntegrations: [
       { integrationId: "business_email", label: "Business email", status: "required" },
@@ -51,7 +54,11 @@ test("after go-live RFT connect channels are not force-added", () => {
     employees: [{ connectionDependencies: ["business_email"] }],
     osConfiguration: { rftLaunch: { goLiveAt: "2026-08-01T00:00:00.000Z" } },
   });
-  assert.deepEqual(reqs.map((r) => r.id), ["business_email"]);
+  const byId = Object.fromEntries(reqs.map((r) => [r.id, r]));
+  assert.equal(byId.business_email?.requirementLevel, "required");
+  assert.equal(byId.calendar?.requirementLevel, "optional");
+  assert.equal(byId.hubspot?.requirementLevel, "optional");
+  assert.ok(byId.website_forms);
 });
 
 test("open responsibility connection constraints keep calendar after go-live", () => {
@@ -78,5 +85,9 @@ test("open responsibility connection constraints keep calendar after go-live", (
       ],
     },
   });
-  assert.deepEqual(reqs.map((r) => r.id).sort(), ["business_email", "calendar"]);
+  const byId = Object.fromEntries(reqs.map((r) => [r.id, r]));
+  assert.ok(byId.business_email);
+  assert.ok(byId.calendar);
+  // Open ACCOUNT_CONNECTION_REQUIRED wins over optional RFT listed merge.
+  assert.equal(byId.calendar.requirementLevel, "required");
 });
