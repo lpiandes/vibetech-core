@@ -11,7 +11,9 @@ import {
   readGovernedLearning,
 } from "../../../../../../backend/core/company-rules/governedLearning.js";
 import { fulfillSpecialtyApprovalGrant } from "../../../../../../backend/core/ai-builder/specialty/fulfillSpecialtyApprovalGrant.js";
+import { fulfillPendingDecisionDraftGrant } from "../../../../../../backend/core/approvals/fulfillPendingDecisionDraftGrant.js";
 import { markPendingDecisionDraftDecided } from "../../../../../../backend/core/approvals/syncPendingDecisionDraftsToApprovals.js";
+import { syncDurableDecisionDraftsForWorkspace } from "../../../../../../backend/core/approvals/syncDurableDecisionDraftsForWorkspace.js";
 import { progressRftOpportunity } from "../../../../../../backend/core/ai-builder/operating-contract/rft/rftOpportunityRuntime.js";
 import { invalidateCachedBusinessOsInstallation } from "@/lib/platform/cachedBusinessOsInstallation";
 
@@ -40,13 +42,34 @@ export async function POST(
       return NextResponse.json({ ok: false, error: "Not allowed to decide approvals" }, { status: 403 });
     }
 
+    // Serverless / cleared composition: rehydrate durable drafts before lookup.
+    await syncDurableDecisionDraftsForWorkspace({
+      platformStore,
+      businessId,
+      service: ctx.service,
+    });
+
     const approvalId = resolvedParams.id;
     const approvalRuntime = (ctx.service as any)?.connected?.ctx?.approvalRuntime
       ?? (ctx.service as any)?.approvalRuntime
       ?? null;
     const priorReq = approvalRuntime?.getRequestById?.(approvalId) ?? null;
+    if (!priorReq) {
+      return NextResponse.json({
+        ok: false,
+        error: "That decision is no longer open — refresh Decisions and try again.",
+      }, { status: 404 });
+    }
 
-    const result = ctx.service.applyOwnerApprovalDecision(approvalId, decision);
+    let result;
+    try {
+      result = ctx.service.applyOwnerApprovalDecision(approvalId, decision);
+    } catch (err) {
+      return NextResponse.json({
+        ok: false,
+        error: err instanceof Error ? err.message : "Could not save your decision.",
+      }, { status: 400 });
+    }
 
     const granted = decision === "GRANT" || decision === "APPROVE";
     const reasonCode = String(body?.reasonCode ?? body?.rootCause ?? "").trim()
@@ -104,20 +127,30 @@ export async function POST(
       ?? (ctx.service as any)?.connected?.integrationHub
       ?? null;
 
-    // Plan 19 — GRANT on specialty approvals must actually send + advance RFT.
     let fulfillment: Record<string, unknown> | null = null;
     if (granted && priorReq) {
       try {
         const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
-        fulfillment = await fulfillSpecialtyApprovalGrant({
-          approvalRequest: priorReq,
-          businessId,
-          platformStore,
-          installation,
-          workRuntime,
-          integrationHub,
-          actorId,
-        }) as Record<string, unknown>;
+        if (String(priorReq.source ?? "") === "pending_decision_draft") {
+          fulfillment = await fulfillPendingDecisionDraftGrant({
+            approvalRequest: priorReq,
+            businessId,
+            platformStore,
+            installation,
+            integrationHub,
+            actorId,
+          }) as Record<string, unknown>;
+        } else {
+          fulfillment = await fulfillSpecialtyApprovalGrant({
+            approvalRequest: priorReq,
+            businessId,
+            platformStore,
+            installation,
+            workRuntime,
+            integrationHub,
+            actorId,
+          }) as Record<string, unknown>;
+        }
         invalidateCachedBusinessOsInstallation(businessId);
 
         if (fulfillment && fulfillment.ok === false && fulfillment.skipped !== true) {
@@ -137,8 +170,8 @@ export async function POST(
       }
     }
 
-    // Decision drafts (forms / Meta / marketing) — mark durable draft decided.
-    if (priorReq && String(priorReq.source ?? "") === "pending_decision_draft") {
+    // REJECT on decision drafts — mark durable draft decided (GRANT path marks inside fulfill).
+    if (!granted && priorReq && String(priorReq.source ?? "") === "pending_decision_draft") {
       try {
         const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
         const draftId = String(
@@ -152,7 +185,7 @@ export async function POST(
             platformStore,
             installation,
             draftId,
-            decision: granted ? "GRANT" : "REJECT",
+            decision: "REJECT",
             actorId,
           });
           invalidateCachedBusinessOsInstallation(businessId);

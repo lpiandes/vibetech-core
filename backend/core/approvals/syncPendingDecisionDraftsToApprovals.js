@@ -8,6 +8,7 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { createApprovalRequest } from "./ApprovalRequest.js";
 import { APPROVAL_INTERNAL_EVENT_TYPES } from "./ApprovalEventTypes.js";
+import { isPendingDecisionDraftStatus } from "./collapsePendingDecisionDrafts.js";
 
 function safeArray(v) {
   return Array.isArray(v) ? v : [];
@@ -15,6 +16,48 @@ function safeArray(v) {
 
 export function approvalIdForDecisionDraft(draftId) {
   return `apr_${String(draftId)}`;
+}
+
+/**
+ * Cancel PENDING decision-draft approvals whose draft is no longer pending
+ * (e.g. after prove-draft collapse removes duplicates).
+ */
+export function pruneStaleDecisionDraftApprovals({
+  approvalRuntime = null,
+  pendingDecisionDrafts = [],
+  nowISO = new Date().toISOString(),
+} = {}) {
+  if (!approvalRuntime?.applyEvent || typeof approvalRuntime.getRequests !== "function") {
+    return deepFreeze({ pruned: 0 });
+  }
+  const keep = new Set(
+    safeArray(pendingDecisionDrafts)
+      .filter((d) => d?.id && isPendingDecisionDraftStatus(d.status))
+      .map((d) => approvalIdForDecisionDraft(d.id)),
+  );
+  const at = typeof nowISO === "function" ? nowISO() : String(nowISO);
+  let pruned = 0;
+  for (const req of safeArray(approvalRuntime.getRequests())) {
+    if (String(req?.source ?? "") !== "pending_decision_draft") continue;
+    if (String(req?.status ?? "") !== "PENDING") continue;
+    const id = String(req.id ?? "");
+    if (!id || keep.has(id)) continue;
+    try {
+      approvalRuntime.applyEvent({
+        id: `evt_approval_cancelled_${id}_${at.replace(/[^0-9]/g, "").slice(0, 14)}`,
+        timestampISO: at,
+        type: APPROVAL_INTERNAL_EVENT_TYPES.APPROVAL_CANCELLED,
+        payload: {
+          approvalId: id,
+          reason: "stale_decision_draft_pruned",
+        },
+      });
+      pruned += 1;
+    } catch {
+      /* ignore */
+    }
+  }
+  return deepFreeze({ pruned });
 }
 
 /**
@@ -26,9 +69,10 @@ export function syncPendingDecisionDraftsToApprovals({
   businessId = null,
   nowISO = new Date().toISOString(),
   actorId = "decision_draft_sync",
+  pruneStale = true,
 } = {}) {
   if (!approvalRuntime?.applyEvent || typeof approvalRuntime.getRequestById !== "function") {
-    return deepFreeze({ synced: 0, approvalIds: [] });
+    return deepFreeze({ synced: 0, approvalIds: [], pruned: 0 });
   }
 
   const at = typeof nowISO === "function" ? nowISO() : String(nowISO);
@@ -100,7 +144,15 @@ export function syncPendingDecisionDraftsToApprovals({
     }
   }
 
-  return deepFreeze({ synced, approvalIds });
+  const pruneResult = pruneStale
+    ? pruneStaleDecisionDraftApprovals({
+      approvalRuntime,
+      pendingDecisionDrafts,
+      nowISO: at,
+    })
+    : { pruned: 0 };
+
+  return deepFreeze({ synced, approvalIds, pruned: Number(pruneResult?.pruned ?? 0) });
 }
 
 /**

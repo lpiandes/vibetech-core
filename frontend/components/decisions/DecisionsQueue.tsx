@@ -57,6 +57,7 @@ export default function DecisionsQueue({
 }) {
   const router = useRouter();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const queue = safeArray(items).filter((item) => String(item?.sourceType ?? "") !== "intelligence_candidate");
 
@@ -67,6 +68,7 @@ export default function DecisionsQueue({
         return;
       }
       setActionError(null);
+      setActionNotice(null);
       setPendingId(approvalId);
       try {
         const res = await fetch(`/api/approvals/${approvalId}/decision`, {
@@ -78,6 +80,9 @@ export default function DecisionsQueue({
         if (!res.ok || data.ok === false) {
           setActionError(String(data.error ?? "Could not save your decision."));
           return;
+        }
+        if (data?.fulfillment?.message) {
+          setActionNotice(String(data.fulfillment.message));
         }
         router.refresh();
       } catch {
@@ -132,6 +137,23 @@ export default function DecisionsQueue({
           role="alert"
         >
           {actionError}
+        </div>
+      ) : null}
+      {actionNotice ? (
+        <div
+          style={{
+            padding: spacing.sm,
+            borderRadius: radius.medium,
+            border: `1px solid rgba(52,211,153,0.35)`,
+            backgroundColor: "rgba(52,211,153,0.12)",
+            color: cockpitColors.handled,
+            fontSize: 13,
+            fontWeight: 650,
+            lineHeight: 1.45,
+          }}
+          role="status"
+        >
+          {actionNotice}
         </div>
       ) : null}
 

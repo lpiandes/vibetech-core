@@ -146,11 +146,14 @@ export async function executeLiveProveAction({
     };
 
     try {
+      const { upsertPendingDecisionDraft } = await import(
+        "../../approvals/collapsePendingDecisionDrafts.js"
+      );
       const fresh = await platformStore.getBusinessOSInstallation(businessId).catch(() => installation);
-      const drafts = Array.isArray(fresh?.configuration?.pendingDecisionDrafts)
-        ? fresh.configuration.pendingDecisionDrafts.filter((d) => d?.id !== followUpDraft.id)
-        : [];
-      drafts.push(followUpDraft);
+      const drafts = upsertPendingDecisionDraft(
+        fresh?.configuration?.pendingDecisionDrafts,
+        followUpDraft,
+      );
       await platformStore.upsertBusinessOSInstallation({
         id: fresh.id ?? fresh.installationId ?? `install_${businessId}`,
         businessId,
@@ -1010,12 +1013,15 @@ export async function executeLiveProveAction({
         source: "meta_lead_prove",
       };
       try {
+        const { upsertPendingDecisionDraft } = await import(
+          "../../approvals/collapsePendingDecisionDrafts.js"
+        );
         const fresh = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
         if (fresh) {
-          const drafts = Array.isArray(fresh?.configuration?.pendingDecisionDrafts)
-            ? fresh.configuration.pendingDecisionDrafts.filter((d) => d?.id !== followUpDraft.id)
-            : [];
-          drafts.push(followUpDraft);
+          const drafts = upsertPendingDecisionDraft(
+            fresh?.configuration?.pendingDecisionDrafts,
+            followUpDraft,
+          );
           await platformStore.upsertBusinessOSInstallation({
             id: fresh.id ?? fresh.installationId ?? `install_${businessId}`,
             businessId,
