@@ -3,8 +3,8 @@
  * Prove / content engines write Postgres; warm WorkspaceService composition often still
  * holds a stale installationResult — Decisions would look empty without this.
  */
-import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
-import { syncPendingDecisionDraftsToApprovals } from "../../approvals/syncPendingDecisionDraftsToApprovals.js";
+import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
+import { syncPendingDecisionDraftsToApprovals } from "./syncPendingDecisionDraftsToApprovals.js";
 
 /**
  * @returns {{ ok: boolean, draftCount: number, synced: number, approvalIds: string[] }}
