@@ -250,14 +250,15 @@ const PLAYBOOK_BUILDERS = {
     };
   },
 
-  hubspot_connect({ origin, businessId, businessName, integrationsHref, adminHref, notes }) {
+  hubspot_connect({ origin, businessId, businessName, integrationsHref, adminHref, notes, hubspotPortal, accessInvite }) {
     const name = safe(businessName) || businessId;
     return {
       id: "hubspot_connect",
       title: `Connect HubSpot — ${name}`,
       when: "Owner requested HubSpot sync. You paste the private app token — they should not.",
       prerequisites: [
-        "HubSpot portal access (owner invites you, or they create a Private App).",
+        hubspotPortal ? `HubSpot portal: ${hubspotPortal}` : "Confirm which HubSpot portal with the owner.",
+        accessInvite ? `Access notes: ${accessInvite}` : "Owner invites you, or they create a Private App for you to paste.",
         "Scopes: crm.objects.contacts read/write (minimum).",
       ],
       steps: [
@@ -277,19 +278,22 @@ const PLAYBOOK_BUILDERS = {
     };
   },
 
-  highlevel_connect({ origin, businessId, businessName, integrationsHref, adminHref, notes }) {
+  highlevel_connect({ origin, businessId, businessName, integrationsHref, adminHref, notes, locationId, accessInvite }) {
     const name = safe(businessName) || businessId;
     return {
       id: "highlevel_connect",
       title: `Connect HighLevel — ${name}`,
       when: "Owner requested HighLevel sync. You connect API key + location — they should not dig through console alone.",
       prerequisites: [
-        "HighLevel agency/location access.",
-        "API key + Location ID for that sub-account.",
+        locationId ? `Location ID from owner: ${locationId}` : "Get Location ID from owner (Settings → Company / Business Profile).",
+        accessInvite ? `Access: ${accessInvite}` : "HighLevel agency/location access (invite or scheduled handoff).",
+        "API key for that sub-account (ops pastes — never ask owner to email keys).",
       ],
       steps: [
         `Open Admin: ${origin}${adminHref}`,
-        "In HighLevel: get API key and Location ID for this client’s location.",
+        locationId
+          ? `Use Location ID ${locationId}. Generate/locate API key for that location.`
+          : "In HighLevel: get API key and Location ID for this client’s location.",
         "Support access → Integrations → HighLevel → paste key + location → connect.",
         "Test contact sync — confirm HighLevel record id.",
         notes ? `Owner notes: ${notes}` : null,
@@ -304,19 +308,20 @@ const PLAYBOOK_BUILDERS = {
     };
   },
 
-  salesforce_connect({ origin, businessId, businessName, integrationsHref, adminHref, notes }) {
+  salesforce_connect({ origin, businessId, businessName, integrationsHref, adminHref, notes, salesforceOrg }) {
     const name = safe(businessName) || businessId;
     return {
       id: "salesforce_connect",
       title: `Salesforce Custom Build — ${name}`,
       when: "Owner requested Salesforce. There is no in-app token paste — scope a Custom Build / SOW, then attest ready.",
       prerequisites: [
-        "Salesforce org access (or partner login) for this client.",
+        salesforceOrg ? `Org details from owner: ${salesforceOrg}` : "Salesforce org access (or partner login) for this client.",
         "Clear SOW: objects, sync direction, auth (Connected App / JWT), go-live criteria.",
       ],
       steps: [
         `Open Admin: ${origin}${adminHref}`,
         "Confirm owner notes and which Salesforce objects matter (Contacts, Leads, Opportunities, custom).",
+        salesforceOrg ? `Owner org notes: ${salesforceOrg}` : null,
         "Open or create a Custom Build / SOW — do not invent an in-app Connected status.",
         "Deliver integration work outside the fake CRM connect modal.",
         notes ? `Owner notes: ${notes}` : null,

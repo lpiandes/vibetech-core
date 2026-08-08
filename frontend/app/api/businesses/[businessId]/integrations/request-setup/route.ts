@@ -53,11 +53,26 @@ export async function POST(
         pageName: body.pageName ?? null,
         pageUrl: body.pageUrl ?? null,
         brand: body.brand ?? null,
+        ein: body.ein ?? null,
+        contactEmail: body.contactEmail ?? null,
+        locationId: body.locationId ?? null,
+        accessInvite: body.accessInvite ?? null,
+        hubspotPortal: body.hubspotPortal ?? null,
+        salesforceOrg: body.salesforceOrg ?? null,
       },
-      notify: true,
+      // null → policy + auto-fulfill decide; explicit false still allowed for tests
+      notify: body.notify === false ? false : body.notify === true ? true : null,
     });
 
     invalidateCachedBusinessOsInstallation(businessId);
+    if (!result.ok && result.reason === "missing_owner_inputs") {
+      return NextResponse.json({
+        ok: false,
+        error: result.message ?? "Missing required setup details.",
+        missing: result.missing ?? [],
+        form: result.form ?? null,
+      }, { status: 400 });
+    }
     return NextResponse.json({
       ok: result.ok,
       connectionId: result.connectionId,
@@ -65,6 +80,8 @@ export async function POST(
       message: result.ownerMessage,
       notify: result.notify ?? null,
       notifyOk: result.notifyOk !== false,
+      notifySkipped: result.notifySkipped === true,
+      notifyDecision: result.notifyDecision ?? null,
       error: result.ok ? null : result.reason,
     }, { status: result.ok ? 200 : 400 });
   } catch (error) {

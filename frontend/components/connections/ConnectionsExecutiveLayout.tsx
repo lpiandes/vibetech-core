@@ -27,13 +27,16 @@ import {
 import type { IntegrationDisplay } from "./integrationDisplay";
 import { resolveNextConnectionFocus } from "../../../backend/core/platform/commercial/resolveOwnerSetupPath.js";
 import {
+  buildProveOwnerResultCopy,
   buildProveRequestBody,
   isProveAwaitingConfirm,
   proveNeedsDestination,
   proveNeedsOwnerConfirm,
 } from "../../../backend/core/integrations/prove/proveOwnerFlow.js";
+import { proveGuidanceForAction } from "../../../backend/core/integrations/prove/proveOwnerGuidance.js";
 import SimpleModal from "@/components/product/SimpleModal";
 import SecondaryButton from "@/components/product/SecondaryButton";
+import { OwnerGuidanceBlock } from "./OwnerGuidanceBlock";
 import { smsCarrierOwnerCopy } from "../../../backend/core/integrations/sms/smsCarrierStatus.js";
 import {
   ConnectionCardShell,
@@ -67,7 +70,7 @@ function IntegrationRow({
   businessId?: string;
   pendingOpsRequests?: Record<string, unknown>;
   onAction: (display: IntegrationDisplay) => void;
-  onProve?: (action: string, capabilityId: string) => void;
+  onProve?: (action: string, capabilityId: string, connectionId: string) => void;
   onRequestSetup?: (display: IntegrationDisplay) => void;
   onRefreshA2p?: () => void;
   proving?: boolean;
@@ -154,7 +157,7 @@ function IntegrationRow({
           </SecondaryButton>
         ) : null}
         {action?.kind === "prove" && onProve && businessId ? (
-          <PrimaryButton onClick={() => onProve(action.proveAction!, action.capabilityId!)} disabled={proving}>
+          <PrimaryButton onClick={() => onProve(action.proveAction!, action.capabilityId!, display.id)} disabled={proving}>
             {proving ? "Testing…" : action.label}
           </PrimaryButton>
         ) : action?.kind === "pending_ops" ? (
@@ -200,10 +203,14 @@ export default function ConnectionsExecutiveLayout() {
   const [proveDialog, setProveDialog] = useState<{
     action: string;
     capabilityId: string;
-    kind: "phone" | "email" | "confirm";
+    connectionId: string;
+    kind: "intro" | "phone" | "email" | "confirm" | "result";
     value: string;
     sentTo: string;
     error: string | null;
+    resultTitle?: string;
+    resultSteps?: string[];
+    resultOk?: boolean;
   } | null>(null);
   const consumedFocusRef = useRef<string | null>(null);
   const consumedConnectedRef = useRef<string | null>(null);
@@ -297,10 +304,18 @@ export default function ConnectionsExecutiveLayout() {
     async (
       action: string,
       capabilityId: string,
-      opts: { provePhone?: string; proveEmail?: string; ownerConfirmedReceipt?: boolean } = {},
+      opts: {
+        provePhone?: string;
+        proveEmail?: string;
+        ownerConfirmedReceipt?: boolean;
+        connectionId?: string;
+      } = {},
     ) => {
       if (!businessId) return;
-      setProvingId(capabilityId);
+      const connectionId = opts.connectionId
+        || proveDialog?.connectionId
+        || capabilityId;
+      setProvingId(connectionId);
       setProveMessage(null);
       try {
         const res = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/integrations/prove`, {
@@ -320,55 +335,118 @@ export default function ConnectionsExecutiveLayout() {
         const ok = Boolean(result?.ok);
         const responsibility = body?.responsibilityProof ?? result?.responsibilityProof ?? null;
         if (isProveAwaitingConfirm(result) && !opts.ownerConfirmedReceipt && proveNeedsOwnerConfirm(action)) {
+          const guidance = proveGuidanceForAction(action);
           const sentTo = opts.provePhone || opts.proveEmail || "";
           setProveDialog({
             action,
             capabilityId,
+            connectionId,
             kind: "confirm",
             value: "",
             sentTo,
             error: null,
+            resultTitle: guidance.confirmTitle ?? "Did you get it?",
+            resultSteps: guidance.confirmSteps?.length
+              ? [...guidance.confirmSteps]
+              : [`We dialed/sent to ${sentTo || "your test destination"}. Confirm you received it.`],
           });
           setProveMessage(String(result?.message ?? "Confirm you received the test."));
           return;
         }
-        const baseMessage = ok ? (result?.message ?? "Proven.") : (result?.message ?? "Prove failed.");
+        const copy = buildProveOwnerResultCopy({ action, result, ok });
         const followThrough = responsibility?.promoted
           ? ` Responsibility promoted to live (${responsibility.promoted}).`
           : responsibility?.resolvedConstraints?.length
             ? ` Closed ${responsibility.resolvedConstraints.length} connection constraint(s).`
-            : ok
-              ? " If a responsibility still waits on this channel, refresh Today."
-              : "";
-        setProveMessage(`${baseMessage}${followThrough}`);
-        setProveDialog(null);
+            : "";
+        setProveMessage(`${copy.banner}${followThrough}`);
+        setProveDialog({
+          action,
+          capabilityId,
+          connectionId,
+          kind: "result",
+          value: "",
+          sentTo: opts.provePhone || opts.proveEmail || "",
+          error: null,
+          resultTitle: copy.title,
+          resultSteps: copy.steps,
+          resultOk: ok,
+        });
         if (ok) router.refresh();
       } catch (err) {
-        setProveMessage(err instanceof Error ? err.message : "Prove failed.");
+        const message = err instanceof Error ? err.message : "Prove failed.";
+        setProveMessage(message);
+        setProveDialog({
+          action,
+          capabilityId,
+          connectionId,
+          kind: "result",
+          value: "",
+          sentTo: "",
+          error: null,
+          resultTitle: "Test didn’t finish",
+          resultSteps: [message, "Fix the issue, then tap Test it works again."],
+          resultOk: false,
+        });
       } finally {
         setProvingId(null);
       }
     },
-    [businessId, router],
+    [businessId, proveDialog?.connectionId, router],
   );
 
   const runProve = useCallback(
-    (action: string, capabilityId: string) => {
-      const dest = proveNeedsDestination(action);
-      if (dest === "phone" || dest === "email") {
-        setProveDialog({
-          action,
-          capabilityId,
-          kind: dest,
-          value: "",
-          sentTo: "",
-          error: null,
-        });
+    (action: string, capabilityId: string, connectionId?: string) => {
+      const guidance = proveGuidanceForAction(action);
+      setProveDialog({
+        action,
+        capabilityId,
+        connectionId: connectionId || capabilityId,
+        kind: "intro",
+        value: "",
+        sentTo: "",
+        error: null,
+        resultTitle: guidance.beforeTitle,
+        resultSteps: [...guidance.beforeSteps],
+      });
+    },
+    [],
+  );
+
+  const continueProveFromIntro = useCallback(() => {
+    if (!proveDialog) return;
+    const dest = proveNeedsDestination(proveDialog.action);
+    if (dest === "phone" || dest === "email") {
+      const guidance = proveGuidanceForAction(proveDialog.action);
+      setProveDialog({
+        ...proveDialog,
+        kind: dest,
+        value: "",
+        error: null,
+        resultTitle: guidance.destinationHint ?? (dest === "phone" ? "Test phone number" : "Test email"),
+        resultSteps: [],
+      });
+      return;
+    }
+    void executeProve(proveDialog.action, proveDialog.capabilityId, {
+      connectionId: proveDialog.connectionId,
+    });
+  }, [executeProve, proveDialog]);
+
+  const dispatchConnectionAction = useCallback(
+    (display: IntegrationDisplay, conn?: ConnectionViewRow | null) => {
+      if (!conn) {
+        setSetupTarget(display);
         return;
       }
-      void executeProve(action, capabilityId);
+      const action = primaryIntegrationAction(conn, display, pendingOpsRequests);
+      if (action?.kind === "prove" && action.proveAction && action.capabilityId) {
+        runProve(action.proveAction, action.capabilityId, display.id);
+        return;
+      }
+      setSetupTarget(display);
     },
-    [executeProve],
+    [pendingOpsRequests, runProve],
   );
   const resolveDisplay = useCallback(
     (conn: ConnectionViewRow) =>
@@ -596,7 +674,7 @@ export default function ConnectionsExecutiveLayout() {
       {nextBanner ? (
         <NextBanner
           label={nextBanner.label}
-          onClick={() => setSetupTarget(nextBanner.display)}
+          onClick={() => dispatchConnectionAction(nextBanner.display, nextBanner.conn)}
           actionLabel={nextBanner.actionLabel}
         />
       ) : null}
@@ -622,7 +700,7 @@ export default function ConnectionsExecutiveLayout() {
                 onProve={runProve}
                 onRefreshA2p={display.id === "sms_channel" ? () => void refreshSmsA2pStatus() : undefined}
                 refreshingA2p={refreshingA2p}
-                proving={provingId === display.id || provingId != null && provingId.includes(display.id)}
+                proving={provingId === display.id}
               />
             ))}
           </div>
@@ -650,7 +728,7 @@ export default function ConnectionsExecutiveLayout() {
                 onProve={runProve}
                 onRefreshA2p={display.id === "sms_channel" ? () => void refreshSmsA2pStatus() : undefined}
                 refreshingA2p={refreshingA2p}
-                proving={Boolean(provingId)}
+                proving={provingId === display.id}
               />
             ))}
           </div>
@@ -678,7 +756,7 @@ export default function ConnectionsExecutiveLayout() {
                 onProve={runProve}
                 onRefreshA2p={display.id === "sms_channel" ? () => void refreshSmsA2pStatus() : undefined}
                 refreshingA2p={refreshingA2p}
-                proving={Boolean(provingId)}
+                proving={provingId === display.id}
               />
             ))}
           </div>
@@ -688,52 +766,84 @@ export default function ConnectionsExecutiveLayout() {
       {proveDialog ? (
         <SimpleModal
           title={
-            proveDialog.kind === "confirm"
-              ? "Did you get it?"
-              : proveDialog.kind === "phone"
-                ? "Test phone number"
-                : "Test email"
+            proveDialog.kind === "intro"
+              ? (proveDialog.resultTitle ?? "Test it works")
+              : proveDialog.kind === "confirm"
+                ? (proveDialog.resultTitle ?? "Did you get it?")
+                : proveDialog.kind === "result"
+                  ? (proveDialog.resultTitle ?? "Test result")
+                  : proveDialog.kind === "phone"
+                    ? "Test phone number"
+                    : "Test email"
           }
           onClose={() => setProveDialog(null)}
-          maxWidth={420}
+          maxWidth={460}
           footer={
-            <>
-              <SecondaryButton onClick={() => setProveDialog(null)}>Cancel</SecondaryButton>
-              <PrimaryButton
-                onClick={() => {
-                  if (proveDialog.kind === "confirm") {
+            proveDialog.kind === "result" ? (
+              <PrimaryButton onClick={() => setProveDialog(null)}>Got it</PrimaryButton>
+            ) : proveDialog.kind === "intro" ? (
+              <>
+                <SecondaryButton onClick={() => setProveDialog(null)}>Cancel</SecondaryButton>
+                <PrimaryButton onClick={continueProveFromIntro} disabled={Boolean(provingId)}>
+                  {provingId ? "Testing…" : "Continue"}
+                </PrimaryButton>
+              </>
+            ) : (
+              <>
+                <SecondaryButton onClick={() => setProveDialog(null)}>Cancel</SecondaryButton>
+                <PrimaryButton
+                  onClick={() => {
+                    if (proveDialog.kind === "confirm") {
+                      const dest = proveNeedsDestination(proveDialog.action);
+                      void executeProve(proveDialog.action, proveDialog.capabilityId, {
+                        provePhone: dest === "phone" ? (proveDialog.sentTo || undefined) : undefined,
+                        proveEmail: dest === "email" || proveDialog.sentTo.includes("@")
+                          ? (proveDialog.sentTo || undefined)
+                          : undefined,
+                        ownerConfirmedReceipt: true,
+                        connectionId: proveDialog.connectionId,
+                      });
+                      return;
+                    }
+                    const value = proveDialog.value.trim();
+                    if (!value) {
+                      setProveDialog((d) => d ? { ...d, error: proveDialog.kind === "phone" ? "Enter a phone like +1…" : "Enter an email." } : d);
+                      return;
+                    }
                     void executeProve(proveDialog.action, proveDialog.capabilityId, {
-                      provePhone: proveDialog.sentTo || undefined,
-                      ownerConfirmedReceipt: true,
+                      provePhone: proveDialog.kind === "phone" ? value : undefined,
+                      proveEmail: proveDialog.kind === "email" ? value : undefined,
+                      connectionId: proveDialog.connectionId,
                     });
-                    return;
-                  }
-                  const value = proveDialog.value.trim();
-                  if (!value) {
-                    setProveDialog((d) => d ? { ...d, error: proveDialog.kind === "phone" ? "Enter a phone like +1…" : "Enter an email." } : d);
-                    return;
-                  }
-                  void executeProve(proveDialog.action, proveDialog.capabilityId, {
-                    provePhone: proveDialog.kind === "phone" ? value : undefined,
-                    proveEmail: proveDialog.kind === "email" ? value : undefined,
-                  });
-                }}
-                disabled={Boolean(provingId)}
-              >
-                {provingId ? "Testing…" : proveDialog.kind === "confirm" ? "Yes — I got it" : "Test it works"}
-              </PrimaryButton>
-            </>
+                  }}
+                  disabled={Boolean(provingId)}
+                >
+                  {provingId ? "Testing…" : proveDialog.kind === "confirm" ? "Yes — I got it" : "Send test"}
+                </PrimaryButton>
+              </>
+            )
           }
         >
           <div style={{ display: "grid", gap: 10 }}>
-            <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: 14, lineHeight: 1.45 }}>
-              {proveDialog.kind === "confirm"
-                ? `We dialed/sent to ${proveDialog.sentTo || "your test destination"}. Confirm you received it so we can mark this tested.`
-                : proveDialog.kind === "phone"
-                  ? "Enter a real phone (E.164, e.g. +15551234567). We’ll place a short test call to prove the line works."
-                  : "Enter an email address for the test send."}
-            </p>
-            {proveDialog.kind !== "confirm" ? (
+            {proveDialog.kind === "intro" || proveDialog.kind === "confirm" || proveDialog.kind === "result" ? (
+              <OwnerGuidanceBlock
+                title={null}
+                steps={proveDialog.resultSteps ?? []}
+                tone={
+                  proveDialog.kind === "result"
+                    ? (proveDialog.resultOk ? "success" : "danger")
+                    : "default"
+                }
+              />
+            ) : (
+              <p style={{ margin: 0, color: cockpitColors.textSecondary, fontSize: 14, lineHeight: 1.45 }}>
+                {proveGuidanceForAction(proveDialog.action).destinationHint
+                  ?? (proveDialog.kind === "phone"
+                    ? "Enter a real phone (E.164, e.g. +15551234567)."
+                    : "Enter an email address for the test send.")}
+              </p>
+            )}
+            {proveDialog.kind === "phone" || proveDialog.kind === "email" ? (
               <input
                 value={proveDialog.value}
                 onChange={(e) => setProveDialog((d) => d ? { ...d, value: e.target.value, error: null } : d)}

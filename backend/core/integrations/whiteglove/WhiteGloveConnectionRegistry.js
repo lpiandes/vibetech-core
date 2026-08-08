@@ -11,8 +11,11 @@ import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
  *   ownerTitle: string,
  *   ownerPendingCopy: string,
  *   ownerReadyCopy: string,
- *   collectFromOwner?: Array<"cell" | "forward" | "pageName" | "pageUrl" | "notes" | "brand">,
- *   proveCapabilityId?: string,
+ *   ownerRequestIntro?: string,
+ *   collectFromOwner?: string[],
+ *   proveCapabilityId?: string | null,
+ *   markReadyRequiresConnected?: boolean,
+ *   opsNotifyPolicy?: "always" | "only_if_ops_needed" | "never",
  * }} WhiteGloveConnection
  *
  * @typedef {{ all?: string[], anyOf?: string[] }} PackageWhiteGloveSpec
@@ -26,8 +29,10 @@ const WHITE_GLOVE = {
     ownerTitle: "Business phone",
     ownerPendingCopy: "Hold on — VIBETech is setting up your business phone for you.",
     ownerReadyCopy: "Good to go — your business phone is ready. Test a call next.",
+    ownerRequestIntro: "We’ll set up your business phone. Optional: add your cell if you want missed calls to ring you first.",
     collectFromOwner: ["cell", "forward", "notes"],
     proveCapabilityId: "voice_calls",
+    opsNotifyPolicy: "always",
   },
   sms_channel: {
     connectionId: "sms_channel",
@@ -35,8 +40,10 @@ const WHITE_GLOVE = {
     ownerTitle: "Text messaging",
     ownerPendingCopy: "Hold on — VIBETech is setting up text messaging and carrier approval for you.",
     ownerReadyCopy: "Good to go — texting is ready. Send a test text next.",
-    collectFromOwner: ["brand", "notes"],
+    ownerRequestIntro: "Carriers need your legal business details. Follow the short steps, then we’ll buy the number and finish approval.",
+    collectFromOwner: ["brand", "ein", "contactEmail", "notes"],
     proveCapabilityId: "sms_send",
+    opsNotifyPolicy: "always",
   },
   meta_lead_ads: {
     connectionId: "meta_lead_ads",
@@ -44,8 +51,10 @@ const WHITE_GLOVE = {
     ownerTitle: "Meta Lead Forms",
     ownerPendingCopy: "Hold on — VIBETech is connecting your Meta Lead Forms.",
     ownerReadyCopy: "Good to go — Meta Lead Forms are connected. Test a lead next.",
+    ownerRequestIntro: "Tell us which Facebook Page runs your Lead Forms — we’ll connect the webhook and tokens.",
     collectFromOwner: ["pageName", "pageUrl", "notes"],
     proveCapabilityId: "meta_lead_ingest",
+    opsNotifyPolicy: "always",
   },
   hubspot: {
     connectionId: "hubspot",
@@ -53,8 +62,10 @@ const WHITE_GLOVE = {
     ownerTitle: "HubSpot",
     ownerPendingCopy: "Hold on — VIBETech is connecting HubSpot for you.",
     ownerReadyCopy: "Good to go — HubSpot is connected. Test a contact sync next.",
-    collectFromOwner: ["notes"],
+    ownerRequestIntro: "To connect HubSpot for you we need portal details and access — follow the steps (don’t paste private app tokens here).",
+    collectFromOwner: ["hubspotPortal", "accessInvite", "notes"],
     proveCapabilityId: "crm_hubspot",
+    opsNotifyPolicy: "always",
   },
   highlevel: {
     connectionId: "highlevel",
@@ -62,8 +73,10 @@ const WHITE_GLOVE = {
     ownerTitle: "HighLevel",
     ownerPendingCopy: "Hold on — VIBETech is connecting HighLevel for you.",
     ownerReadyCopy: "Good to go — HighLevel is connected. Test a contact sync next.",
-    collectFromOwner: ["notes"],
+    ownerRequestIntro: "To connect HighLevel for you we need your Location ID and access — follow the steps under each field (don’t paste API keys here).",
+    collectFromOwner: ["locationId", "accessInvite", "notes"],
     proveCapabilityId: "crm_highlevel",
+    opsNotifyPolicy: "always",
   },
   /**
    * Salesforce is request-only: no in-app token paste / fake Connected.
@@ -75,10 +88,12 @@ const WHITE_GLOVE = {
     ownerTitle: "Salesforce",
     ownerPendingCopy: "Hold on — VIBETech is scoping Salesforce for you (Custom Build).",
     ownerReadyCopy: "Good to go — Salesforce work is ready for your sign-off.",
-    collectFromOwner: ["notes"],
+    ownerRequestIntro: "Salesforce is a Custom Build. Tell us the org and who can grant admin access so we can scope the SOW.",
+    collectFromOwner: ["salesforceOrg", "notes"],
     proveCapabilityId: null,
     /** No durable vault connect path yet — Mark ready is ops attestation. */
     markReadyRequiresConnected: false,
+    opsNotifyPolicy: "always",
   },
 };
 

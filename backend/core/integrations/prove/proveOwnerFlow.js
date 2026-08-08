@@ -1,27 +1,18 @@
 /**
  * Shared owner prove flow helpers for Integrations / Launch.
- * Voice/SMS/email need a destination + optional owner confirm.
+ * Destination + confirm rules come from proveOwnerGuidance (single source of truth).
  */
+import { proveGuidanceForAction } from "./proveOwnerGuidance.js";
 
 /** Actions that must collect a destination before proving. */
 export function proveNeedsDestination(action) {
-  const a = String(action ?? "");
-  if (a === "place_test_call" || a === "place_test_outbound_call") return "phone";
-  if (a === "send_test_sms") return "phone";
-  if (a === "send_test_email") return "email";
-  return null;
+  const kind = proveGuidanceForAction(action).destinationKind;
+  return kind === "phone" || kind === "email" ? kind : null;
 }
 
 /** Actions that ask the owner to confirm receipt after dial/send. */
 export function proveNeedsOwnerConfirm(action) {
-  const a = String(action ?? "");
-  return (
-    a === "send_test_email"
-    || a === "send_test_sms"
-    || a === "create_test_event"
-    || a === "place_test_call"
-    || a === "place_test_outbound_call"
-  );
+  return proveGuidanceForAction(action).needsConfirm === true;
 }
 
 export function buildProveRequestBody({
@@ -46,4 +37,24 @@ export function isProveAwaitingConfirm(result = {}) {
   return String(result?.status ?? "") === "awaiting_confirm"
     || result?.awaitingOwnerConfirm === true
     || result?.detail?.awaitingOwnerConfirm === true;
+}
+
+/**
+ * Build owner-facing result copy after a prove attempt (modal + banner).
+ */
+export function buildProveOwnerResultCopy({ action, result = {}, ok = false } = {}) {
+  const guidance = proveGuidanceForAction(action);
+  if (ok) {
+    return {
+      title: guidance.successTitle,
+      steps: [...guidance.successSteps],
+      banner: [guidance.successTitle, ...(guidance.successSteps ?? [])].filter(Boolean).join(" — "),
+    };
+  }
+  const message = String(result?.message ?? "Prove failed.");
+  return {
+    title: "Test didn’t finish",
+    steps: [message, "Fix the issue, then tap Test it works again."],
+    banner: message,
+  };
 }

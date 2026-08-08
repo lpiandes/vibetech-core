@@ -20,6 +20,10 @@ import {
   resolveWhiteGloveOwnerPhase,
 } from "../../../backend/core/integrations/whiteglove/whiteGloveOpsState.js";
 import { ConnectionJourneyRail } from "./setupJourneyUi";
+import OwnerSetupFields, { emptyOwnerSetupValues } from "./OwnerSetupFields";
+import {
+  resolveOwnerSetupRequest,
+} from "../../../backend/core/integrations/ownerSetup/resolveOwnerSetupRequest.js";
 
 export default function IntegrationSetupDialog({
   integration,
@@ -75,17 +79,15 @@ export default function IntegrationSetupDialog({
     emailed?: boolean;
     operatorEmail?: string;
   } | null>(null);
-  const [whiteGloveForm, setWhiteGloveForm] = useState({
-    cell: "",
-    notes: "",
-    pageName: "",
-    pageUrl: "",
-    brand: "",
-  });
+  const [whiteGloveValues, setWhiteGloveValues] = useState<Record<string, string>>(() =>
+    isWhiteGloveConnection(integration.id) ? emptyOwnerSetupValues(integration.id) : {},
+  );
+  const [whiteGloveMissing, setWhiteGloveMissing] = useState<string[]>([]);
   const [whiteGloveResult, setWhiteGloveResult] = useState<{
     message?: string;
     notifyOk?: boolean;
     notifyError?: string | null;
+    notifySkipped?: boolean;
   } | null>(null);
   const [showAdvancedCreds, setShowAdvancedCreds] = useState(false);
   const [metaCredForm, setMetaCredForm] = useState({ pageId: "", pageAccessToken: "" });
@@ -426,48 +428,65 @@ export default function IntegrationSetupDialog({
 
   async function requestWhiteGloveSetup() {
     if (!businessId || !isWhiteGlove) return;
+    const resolved = resolveOwnerSetupRequest({
+      connectionId: integration.id,
+      values: {
+        ...whiteGloveValues,
+        // Keep Meta starting-point compatibility when page fields empty
+        pageName: whiteGloveValues.pageName || metaForm.pageName || "",
+        pageUrl: whiteGloveValues.pageUrl || metaForm.pageUrl || "",
+      },
+    });
+    if (!resolved.canSubmit) {
+      setWhiteGloveMissing(resolved.validation.missing);
+      setError("Fill the required fields so we can set this up for you.");
+      return;
+    }
     setLoading(true);
     setError(null);
+    setWhiteGloveMissing([]);
     try {
+      const inputs = resolved.ownerInputs;
       const res = await fetch(`/api/businesses/${businessId}/integrations/request-setup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           connectionId: integration.id,
-          cell: whiteGloveForm.cell || null,
-          forwardNumber: whiteGloveForm.cell || null,
-          notes: whiteGloveForm.notes
-            || (integration.id === "sms_channel" && smsBrand.legalBusinessName
-              ? `Legal: ${smsBrand.legalBusinessName}; EIN: ${smsBrand.ein}; Contact: ${smsBrand.contactEmail}`
-              : null),
-          pageName: whiteGloveForm.pageName || metaForm.pageName || null,
-          pageUrl: whiteGloveForm.pageUrl || metaForm.pageUrl || null,
-          brand: whiteGloveForm.brand || smsBrand.legalBusinessName || null,
-          needEverything: integration.id === "meta_lead_ads" && !whiteGloveForm.pageName && !metaForm.pageName,
+          ...inputs,
+          cell: inputs.cell || inputs.forwardNumber || null,
+          forwardNumber: inputs.forwardNumber || inputs.cell || null,
+          needEverything: integration.id === "meta_lead_ads"
+            && !inputs.pageName
+            && !metaForm.pageName,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (Array.isArray(data.missing)) setWhiteGloveMissing(data.missing.map(String));
         setError(String(data.error ?? "Could not send setup request."));
         return;
       }
-      const notifyOk = data.notifyOk !== false && data.notify?.ok !== false;
-      const notifyError = data.notify?.error
-        ? String(data.notify.error)
-        : (notifyOk ? null : "Ops email may not have been delivered.");
+      const notifySkipped = data.notifySkipped === true;
+      const notifyOk = notifySkipped || (data.notifyOk !== false && data.notify?.ok !== false);
+      const notifyError = notifySkipped
+        ? null
+        : (data.notify?.error
+          ? String(data.notify.error)
+          : (notifyOk ? null : "Ops email may not have been delivered."));
       setWhiteGloveResult({
         message: notifyOk
           ? String(data.message ?? whiteGloveMeta?.ownerPendingCopy ?? "Hold on — VIBETech is setting this up for you.")
           : "Request saved — but the ops email failed. VIBETech may not have been notified yet. Try again or contact support.",
         notifyOk,
         notifyError,
+        notifySkipped,
       });
       if (integration.id === "meta_lead_ads") {
         setMetaRequestResult({
           message: notifyOk
             ? String(data.message ?? "VIBETech will connect your Facebook Page.")
             : "Request saved, but the ops notification email failed.",
-          emailed: notifyOk,
+          emailed: notifyOk && !notifySkipped,
           operatorEmail: "leopiandes@vtechdevelopment.com",
         });
         onMetaSetupRequested?.();
@@ -656,6 +675,10 @@ export default function IntegrationSetupDialog({
                     <p style={{ margin: 0, fontSize: 12, color: "#b91c1c", lineHeight: 1.45 }}>
                       {whiteGloveResult.notifyError ?? "Ops email failed."} Close and tap Request setup again, or email support so we see this request.
                     </p>
+                  ) : whiteGloveResult?.notifySkipped ? (
+                    <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
+                      We handled this without paging ops. When Connected appears, run Test it works.
+                    </p>
                   ) : (
                     <p style={{ margin: 0, fontSize: 12, color: cockpitColors.textMuted, lineHeight: 1.45 }}>
                       Your checklist stays incomplete until we mark this ready. Then you&apos;ll see Good to go → Test it → Go live.
@@ -674,88 +697,16 @@ export default function IntegrationSetupDialog({
                 </>
               ) : (
                 <>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: cockpitColors.textPrimary }}>
-                    We set this up for you
-                  </div>
-                  <p style={{ margin: 0, fontSize: 13, color: cockpitColors.textSecondary, lineHeight: 1.5 }}>
-                    You don&apos;t need Twilio, Meta, or CRM passwords. Tell us a couple details and we&apos;ll finish the wiring.
-                  </p>
-                  {integration.id === "voice_channel" ? (
-                    <label style={fieldLabelStyle}>
-                      Your cell (optional)
-                      <span style={fieldHintStyle}>Only if you want missed calls to ring you first</span>
-                      <input
-                        placeholder="+1…"
-                        value={whiteGloveForm.cell}
-                        onChange={(e) => setWhiteGloveForm((s) => ({ ...s, cell: e.target.value }))}
-                        style={fieldInputStyle}
-                      />
-                    </label>
-                  ) : null}
-                  {integration.id === "sms_channel" ? (
-                    <>
-                      <label style={fieldLabelStyle}>
-                        Legal business name
-                        <span style={fieldHintStyle}>Exact name on your EIN letter — carriers require this</span>
-                        <input
-                          placeholder="Abc Dentistry LLC"
-                          value={smsBrand.legalBusinessName}
-                          onChange={(e) => setSmsBrand((s) => ({ ...s, legalBusinessName: e.target.value }))}
-                          style={fieldInputStyle}
-                        />
-                      </label>
-                      <label style={fieldLabelStyle}>
-                        EIN
-                        <input
-                          placeholder="12-3456789"
-                          value={smsBrand.ein}
-                          onChange={(e) => setSmsBrand((s) => ({ ...s, ein: e.target.value }))}
-                          style={fieldInputStyle}
-                        />
-                      </label>
-                      <label style={fieldLabelStyle}>
-                        Contact email for carrier paperwork
-                        <input
-                          placeholder="you@business.com"
-                          value={smsBrand.contactEmail}
-                          onChange={(e) => setSmsBrand((s) => ({ ...s, contactEmail: e.target.value }))}
-                          style={fieldInputStyle}
-                        />
-                      </label>
-                    </>
-                  ) : null}
-                  {integration.id === "meta_lead_ads" ? (
-                    <>
-                      <label style={fieldLabelStyle}>
-                        Facebook Page name
-                        <input
-                          placeholder="Usually your business name"
-                          value={whiteGloveForm.pageName}
-                          onChange={(e) => setWhiteGloveForm((s) => ({ ...s, pageName: e.target.value }))}
-                          style={fieldInputStyle}
-                        />
-                      </label>
-                      <label style={fieldLabelStyle}>
-                        Facebook Page URL (optional)
-                        <input
-                          placeholder="https://facebook.com/…"
-                          value={whiteGloveForm.pageUrl}
-                          onChange={(e) => setWhiteGloveForm((s) => ({ ...s, pageUrl: e.target.value }))}
-                          style={fieldInputStyle}
-                        />
-                      </label>
-                    </>
-                  ) : null}
-                  <label style={fieldLabelStyle}>
-                    Anything else we should know?
-                    <textarea
-                      placeholder="Hours, preferred number area code, who manages HubSpot, etc."
-                      value={whiteGloveForm.notes}
-                      onChange={(e) => setWhiteGloveForm((s) => ({ ...s, notes: e.target.value }))}
-                      rows={3}
-                      style={{ ...fieldInputStyle, resize: "vertical" as const }}
-                    />
-                  </label>
+                  <OwnerSetupFields
+                    connectionId={integration.id}
+                    values={whiteGloveValues}
+                    missing={whiteGloveMissing}
+                    onChange={(fieldId, value) => {
+                      setWhiteGloveValues((s) => ({ ...s, [fieldId]: value }));
+                      setWhiteGloveMissing((m) => m.filter((id) => id !== fieldId));
+                      setError(null);
+                    }}
+                  />
                   {canUseAdvancedCredentials ? (
                     <button
                       type="button"

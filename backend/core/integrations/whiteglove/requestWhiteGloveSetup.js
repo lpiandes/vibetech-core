@@ -28,6 +28,11 @@ import {
   notifyPlatformOperators,
 } from "../../admin/notifyPlatformOperators.js";
 import { readPurchasedPackagesFromConfig } from "../../platform/packages/SalesPackageCatalog.js";
+import {
+  resolveOpsNotifyDecision,
+  resolveOwnerSetupRequest,
+  tryAutoFulfillOwnerSetup,
+} from "../ownerSetup/resolveOwnerSetupRequest.js";
 
 async function persistPendingOps({
   platformStore,
@@ -114,12 +119,40 @@ export async function requestWhiteGloveSetup({
   requestedBy = null,
   origin = "https://app.vtechdevelopment.com",
   needEverything = false,
-  notify = true,
+  notify = null,
+  skipValidation = false,
 } = {}) {
   const id = normalizeConnectionId(connectionId) ?? String(connectionId ?? "").trim();
   if (!isWhiteGloveConnection(id)) {
     return deepFreeze({ ok: false, reason: "not_white_glove" });
   }
+
+  const setupResolution = resolveOwnerSetupRequest({ connectionId: id, values: ownerInputs });
+  if (!skipValidation && !setupResolution.canSubmit) {
+    return deepFreeze({
+      ok: false,
+      reason: "missing_owner_inputs",
+      missing: setupResolution.validation.missing,
+      form: setupResolution.form,
+      message: "Fill the required fields so we can set this up for you.",
+    });
+  }
+  const mergedInputs = {
+    ...ownerInputs,
+    ...setupResolution.ownerInputs,
+  };
+
+  const autoResult = await tryAutoFulfillOwnerSetup({
+    connectionId: id,
+    ownerInputs: mergedInputs,
+    context: { platformStore, businessId, origin, requestedBy },
+  });
+  const notifyDecision = resolveOpsNotifyDecision({
+    connectionId: id,
+    ownerInputs: mergedInputs,
+    autoResult,
+  });
+  const shouldNotify = notify == null ? notifyDecision.notify : Boolean(notify);
 
   const business = await platformStore.getBusinessById?.(businessId).catch(() => null);
   const installation = await platformStore.getBusinessOSInstallation?.(businessId).catch(() => null);
@@ -133,14 +166,21 @@ export async function requestWhiteGloveSetup({
     businessName,
     integrationsHref,
     adminHref,
-    ownerCell: ownerInputs.cell ?? ownerInputs.forwardNumber ?? null,
-    notes: ownerInputs.notes ?? null,
-    pageName: ownerInputs.pageName ?? null,
-    pageUrl: ownerInputs.pageUrl ?? null,
+    ownerCell: mergedInputs.cell ?? mergedInputs.forwardNumber ?? null,
+    notes: mergeOwnerNotesForPlaybook(mergedInputs),
+    pageName: mergedInputs.pageName ?? null,
+    pageUrl: mergedInputs.pageUrl ?? null,
+    locationId: mergedInputs.locationId ?? null,
+    accessInvite: mergedInputs.accessInvite ?? null,
+    hubspotPortal: mergedInputs.hubspotPortal ?? null,
+    salesforceOrg: mergedInputs.salesforceOrg ?? null,
+    brand: mergedInputs.brand ?? null,
+    ein: mergedInputs.ein ?? null,
+    contactEmail: mergedInputs.contactEmail ?? null,
     webhookUrl: `${origin}/api/businesses/${encodeURIComponent(businessId)}/integrations/meta/webhook`,
     industry: business?.packageConfiguration?.industry ?? "",
-    fromNumber: ownerInputs.fromNumber ?? null,
-    a2pStatus: ownerInputs.a2pStatus ?? null,
+    fromNumber: mergedInputs.fromNumber ?? null,
+    a2pStatus: mergedInputs.a2pStatus ?? null,
   });
 
   let opsRequest = buildPendingOpsRequest({
@@ -148,13 +188,24 @@ export async function requestWhiteGloveSetup({
     playbookId: playbook.id,
     steps: playbook.steps,
     requestedBy,
-    ownerInputs,
+    ownerInputs: mergedInputs,
     integrationsHref,
     adminHref: `${origin}${adminHref}`,
   });
+  if (autoResult?.ok) {
+    opsRequest = {
+      ...opsRequest,
+      autoFulfill: {
+        ok: true,
+        opsStillNeeded: autoResult.opsStillNeeded !== false,
+        reason: autoResult.reason ?? null,
+        message: autoResult.message ?? null,
+      },
+    };
+  }
 
   let notifyResult = null;
-  if (notify) {
+  if (shouldNotify) {
     const action = playbookToOperatorAction(playbook, {
       businessId,
       businessName,
@@ -164,10 +215,20 @@ export async function requestWhiteGloveSetup({
     action.summary = [
       playbook.when,
       requestedBy ? `Requested by: ${requestedBy}` : null,
-      ownerInputs.cell ? `Owner cell: ${ownerInputs.cell}` : null,
-      ownerInputs.pageName ? `Page: ${ownerInputs.pageName}` : null,
-      ownerInputs.pageUrl ? `Page URL: ${ownerInputs.pageUrl}` : null,
-      ownerInputs.notes ? `Notes: ${ownerInputs.notes}` : null,
+      mergedInputs.cell ? `Owner cell: ${mergedInputs.cell}` : null,
+      mergedInputs.locationId ? `HighLevel Location ID: ${mergedInputs.locationId}` : null,
+      mergedInputs.hubspotPortal ? `HubSpot portal: ${mergedInputs.hubspotPortal}` : null,
+      mergedInputs.accessInvite ? `Access: ${mergedInputs.accessInvite}` : null,
+      mergedInputs.salesforceOrg ? `Salesforce: ${mergedInputs.salesforceOrg}` : null,
+      mergedInputs.brand ? `Legal name: ${mergedInputs.brand}` : null,
+      mergedInputs.ein ? `EIN: ${mergedInputs.ein}` : null,
+      mergedInputs.contactEmail ? `Carrier contact: ${mergedInputs.contactEmail}` : null,
+      mergedInputs.pageName ? `Page: ${mergedInputs.pageName}` : null,
+      mergedInputs.pageUrl ? `Page URL: ${mergedInputs.pageUrl}` : null,
+      mergedInputs.notes ? `Notes: ${mergedInputs.notes}` : null,
+      notifyDecision.reason === "auto_failed"
+        ? "Auto-fulfill failed — ops still needed."
+        : null,
       "After credentials are Connected in Support access, click Mark ready on Admin → White-glove ops.",
     ].filter(Boolean).join("\n");
 
@@ -181,6 +242,13 @@ export async function requestWhiteGloveSetup({
     }).catch((err) => ({ ok: false, error: err instanceof Error ? err.message : String(err) }));
 
     opsRequest = withOpsNotifyResult(opsRequest, buildNotifyPayload(notifyResult));
+  } else {
+    opsRequest = withOpsNotifyResult(opsRequest, {
+      ok: true,
+      skipped: true,
+      reason: notifyDecision.reason,
+      error: null,
+    });
   }
 
   await persistPendingOps({
@@ -193,15 +261,37 @@ export async function requestWhiteGloveSetup({
     actorId: requestedBy || "owner",
   });
 
+  const handledWithoutOps = shouldNotify === false && notifyDecision.reason === "auto_handled";
   return deepFreeze({
     ok: true,
     connectionId: id,
     opsRequest,
     notify: notifyResult,
-    notifyOk: buildNotifyPayload(notifyResult).ok || !notify,
-    ownerMessage: getWhiteGloveConnection(id)?.ownerPendingCopy
-      ?? "Hold on — VIBETech is setting this up for you.",
+    notifyOk: shouldNotify ? buildNotifyPayload(notifyResult).ok : true,
+    notifySkipped: !shouldNotify,
+    notifyDecision,
+    autoResult,
+    ownerMessage: handledWithoutOps
+      ? (autoResult?.message
+        ?? getWhiteGloveConnection(id)?.ownerReadyCopy
+        ?? "Setup finished — run Test it works next.")
+      : (getWhiteGloveConnection(id)?.ownerPendingCopy
+        ?? "Hold on — VIBETech is setting this up for you."),
   });
+}
+
+function mergeOwnerNotesForPlaybook(ownerInputs = {}) {
+  const parts = [
+    ownerInputs.notes ? String(ownerInputs.notes) : null,
+    ownerInputs.locationId ? `Location ID: ${ownerInputs.locationId}` : null,
+    ownerInputs.accessInvite ? `Access: ${ownerInputs.accessInvite}` : null,
+    ownerInputs.hubspotPortal ? `HubSpot portal: ${ownerInputs.hubspotPortal}` : null,
+    ownerInputs.salesforceOrg ? `Salesforce: ${ownerInputs.salesforceOrg}` : null,
+    ownerInputs.brand ? `Legal: ${ownerInputs.brand}` : null,
+    ownerInputs.ein ? `EIN: ${ownerInputs.ein}` : null,
+    ownerInputs.contactEmail ? `Contact email: ${ownerInputs.contactEmail}` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" | ") : null;
 }
 
 /**
