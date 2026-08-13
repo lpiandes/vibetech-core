@@ -1,3 +1,10 @@
+import { readPurchasedPackagesFromConfig } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
+import { businessGrantsFeRetentionAccess } from "../../../backend/core/fe-retention/feRetentionEntitlement.js";
+import { ensureFeRetentionInstallation } from "../../../backend/core/fe-retention/ensureFeRetentionInstallation.js";
+import { insuranceDashboardPath } from "@/lib/platform/hosts";
+import { putDurableCredential } from "../../../backend/core/integrations/credentials/durableCredentialVault.js";
+import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
+
 /**
  * Session stages where the owner has moved past discovery — route straight to the
  * install/recovery trail instead of the discovery conversation. "installed" is included
@@ -16,6 +23,7 @@ const INSTALL_STAGE_KEYS = new Set([
 /**
  * Post-invite / first-run routing: Architect is primary when the business
  * has no installed Operating System yet.
+ * FE Retention CRM agents skip Architect and land on the insurance dashboard.
  */
 export async function resolvePostInviteRedirect({
   platformStore,
@@ -33,6 +41,25 @@ export async function resolvePostInviteRedirect({
   businessName?: string | null;
 }): Promise<{ redirectTo: string; architectSessionId?: string }> {
   const home = `/b/${businessId}/home`;
+
+  try {
+    const business = await platformStore.getBusinessById?.(businessId);
+    const packages = readPurchasedPackagesFromConfig(business?.packageConfiguration ?? {});
+    if (businessGrantsFeRetentionAccess(packages)) {
+      await ensureFeRetentionInstallation({
+        platformStore,
+        businessId,
+        packageConfiguration: business?.packageConfiguration ?? null,
+        actorId: actorUserId,
+        putDurableCredential,
+        vault: getSharedCredentialVault(),
+      });
+      return { redirectTo: insuranceDashboardPath(businessId) };
+    }
+  } catch (err) {
+    console.error("[post-invite] fe retention check failed", err);
+  }
+
   const role = String(membershipRole ?? "").toUpperCase();
   if (role !== "OWNER") {
     return { redirectTo: home };
@@ -52,9 +79,6 @@ export async function resolvePostInviteRedirect({
     const builder = getAiBuilderService();
     const existing = await builder.listSessions?.({ businessId });
     const cards = existing?.sessions ?? [];
-    // Prefer resuming any durable, non-archived session over starting a new one — this is
-    // what previously lost owners' answers/plan/approval after a failed install (they'd land
-    // back on a sessionless /architect, which minted a brand new session at step 1).
     const resumable = cards.find((row: any) => {
       const stage = String(row.stageKey ?? "");
       return Boolean(stage) && stage !== "archived" && Boolean(row.sessionId);
@@ -73,7 +97,6 @@ export async function resolvePostInviteRedirect({
       businessId,
       businessName: businessName ?? undefined,
       actorId: actorUserId,
-      // Leave description empty so discovery starts at question 1 (what the business does).
     });
     const sessionId = started.session?.sessionId;
     if (sessionId) {

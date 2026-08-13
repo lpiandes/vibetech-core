@@ -7,6 +7,10 @@ import { PostgresPlatformJobQueue } from "../../../backend/core/platform/jobs/Po
 import { runPlatformJobTick } from "../../../backend/core/platform/jobs/createPlatformJobExecutor.js";
 import { GmailInboundSyncService } from "../../../backend/core/integrations/gmail/GmailInboundSyncService.js";
 import { selectDueGmailSyncBusinesses } from "../../../backend/core/integrations/gmail/selectDueGmailSyncBusinesses.js";
+import { runHostedFeRetentionSweep } from "../../../backend/core/fe-retention/runHostedFeRetentionSweep.js";
+import { createFrontendInvitationDeliveryProvider } from "@/lib/server/invitationDelivery";
+import { putDurableCredential } from "../../../backend/core/integrations/credentials/durableCredentialVault.js";
+import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
 
 // Gmail inbox sync has no dedicated JOB_TYPES entry / claimNext dispatch branch in
 // createPlatformJobExecutor.js (see TODO in GmailInboundSyncService.js) — wiring a
@@ -162,6 +166,21 @@ export async function runHostedPlatformJobTick({
     /* best-effort only — never fail the primary jobs drain over Gmail sync */
   }
 
+  let feRetention: Awaited<ReturnType<typeof runHostedFeRetentionSweep>> | null = null;
+  try {
+    const deliveryProvider = createFrontendInvitationDeliveryProvider();
+    feRetention = await runHostedFeRetentionSweep({
+      platformStore,
+      getSystemWorkspaceForBusiness,
+      deliveryProvider,
+      putDurableCredential,
+      vault: getSharedCredentialVault(),
+      maxBusinesses: 80,
+    });
+  } catch {
+    /* best-effort only */
+  }
+
   try {
     await withClient((client) =>
       client.query(
@@ -171,11 +190,11 @@ export async function runHostedPlatformJobTick({
            status = EXCLUDED.status,
            detail = EXCLUDED.detail,
            last_seen_at = NOW()`,
-        [workerId, JSON.stringify({ processed: result.processed, via, gmailInboxSync })],
+        [workerId, JSON.stringify({ processed: result.processed, via, gmailInboxSync, feRetention })],
       ),
     );
   } catch {
     /* table may not exist in older envs */
   }
-  return { ...result, gmailInboxSync };
+  return { ...result, gmailInboxSync, feRetention };
 }

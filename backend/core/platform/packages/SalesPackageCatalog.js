@@ -432,6 +432,23 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     sellable: false,
   },
   {
+    id: "fe_retention_crm",
+    label: "Final Expense Retention CRM",
+    description: "Agent dashboard for FE clients — automatic payment reminders, birthdays, holidays, welcome/docs texts, and lapse recovery. Lives at insurance.vtechdevelopment.com.",
+    moduleIds: ["home", "settings", "integrations"],
+    canonicalNavIds: ["home", "settings", "integrations"],
+    discoveryTopics: [],
+    packageAskQuestionIds: [],
+    packageAskConnectionOptions: ["twilio_sms", "gmail"],
+    launchMissionIds: null,
+    honestyNote: "Retention autosend without Decisions approval. Agent enters client + policy once; platform SMS + optional Gmail carrier-notice assist.",
+    commercialStatus: "product",
+    sellable: true,
+    skipPackageAsk: true,
+    autoSendWithoutApproval: true,
+    productHost: "insurance",
+  },
+  {
     id: "social_content_automation",
     label: "Social Media Content Automation",
     description: "Draft social posts for approval across connected channels.",
@@ -825,6 +842,7 @@ export { canSellOffer } from "../commercial/CanSellOffer.js";
  */
 export const WAVE_A_SELLABLE_PACKAGE_IDS = Object.freeze([
   "managed_revenue_follow_through",
+  "fe_retention_crm",
   "ai_receptionist",
   "lead_follow_up",
   "website_chatbot",
@@ -1032,21 +1050,31 @@ export function applyPurchasedPackagesChange(packageConfiguration = {}, nextPurc
   let base = mergePurchasedPackagesIntoConfig(packageConfiguration, next);
 
   if (added.length) {
-    // Merge newly added into any existing pending Ask (don't drop earlier unfinished asks).
+    // Packages with skipPackageAsk (e.g. FE Retention CRM) never require Architect Ask.
+    const askAdded = added.filter((id) => {
+      const pkg = BY_ID.get(id);
+      return pkg && pkg.skipPackageAsk !== true && Array.isArray(pkg.packageAskQuestionIds)
+        ? pkg.packageAskQuestionIds.length > 0
+        : pkg?.skipPackageAsk !== true;
+    });
     const existingPending = readPendingPackageAsk(packageConfiguration);
     const pendingPackages = normalizePurchasedPackages([
       ...(existingPending?.packages ?? []),
-      ...added,
+      ...askAdded,
     ]).filter((id) => next.includes(id));
-    base = {
-      ...base,
-      pendingPackageAsk: {
-        status: "required",
-        packages: pendingPackages,
-        createdAt: existingPending?.createdAt || new Date().toISOString(),
-        sessionId: existingPending?.sessionId ?? null,
-      },
-    };
+    if (pendingPackages.length) {
+      base = {
+        ...base,
+        pendingPackageAsk: {
+          status: "required",
+          packages: pendingPackages,
+          createdAt: existingPending?.createdAt || new Date().toISOString(),
+          sessionId: existingPending?.sessionId ?? null,
+        },
+      };
+    } else if (!existingPending) {
+      delete base.pendingPackageAsk;
+    }
   } else {
     const existingPending = readPendingPackageAsk(packageConfiguration);
     if (existingPending) {

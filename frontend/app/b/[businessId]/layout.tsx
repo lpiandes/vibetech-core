@@ -10,6 +10,8 @@ import { AuthorizationError, platformStore } from "@/lib/server/compose";
 import { sanitizeCallbackUrl } from "@/lib/platform/routeProtection";
 import { readPurchasedPackagesFromConfig, readPendingPackageAsk } from "../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 import { getCachedInstalledPortal } from "@/lib/platform/cachedInstalledPortal";
+import { businessGrantsFeRetentionAccess, isFeRetentionOnlyPurchasedScope } from "../../../../backend/core/fe-retention/feRetentionEntitlement.js";
+import { insuranceDashboardUrl } from "@/lib/platform/hosts";
 
 export default async function BusinessScopedLayout({
   children,
@@ -51,6 +53,15 @@ export default async function BusinessScopedLayout({
   let packageConfiguration = ctx.authz.business.packageConfiguration ?? {};
   const purchasedPackages = readPurchasedPackagesFromConfig(packageConfiguration);
   let pendingPackageAsk = readPendingPackageAsk(packageConfiguration);
+
+  // FE Retention-only books never use the Business OS shell.
+  if (
+    !ctx.isPlatformAdmin
+    && businessGrantsFeRetentionAccess(purchasedPackages)
+    && isFeRetentionOnlyPurchasedScope(purchasedPackages)
+  ) {
+    redirect(insuranceDashboardUrl(businessId));
+  }
 
   // Heal only when a package Ask is pending — avoid DB work on every soft navigation.
   if (purchasedPackages.length && pendingPackageAsk) {

@@ -20,6 +20,10 @@ export function isPublicPath(pathname: string): boolean {
   if (pathname === "/social-checker" || pathname.startsWith("/social-checker/")) {
     return true;
   }
+  // Insurance CRM landing — own sign-in gate.
+  if (pathname === "/insurance" || pathname === "/insurance/") {
+    return true;
+  }
   if (
     pathname === "/api/social-checker/register"
     || pathname === "/api/social-checker/join"

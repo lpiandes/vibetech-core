@@ -55,6 +55,20 @@ export async function PATCH(request: Request, { params }: Params) {
         ensurePendingAsk: true,
       });
 
+      const { businessGrantsFeRetentionAccess } = await import(
+        "../../../../../../backend/core/fe-retention/feRetentionEntitlement.js"
+      );
+      if (businessGrantsFeRetentionAccess(packages)) {
+        await (await import(
+          "../../../../../../backend/core/fe-retention/ensureFeRetentionInstallation.js"
+        )).ensureFeRetentionInstallation({
+          platformStore,
+          businessId,
+          packageConfiguration,
+          actorId: "platform_admin",
+        });
+      }
+
       // Sync may restore pending Ask when employees were missing from a prior broken save.
       if (
         installationSync?.pendingPackageAsk

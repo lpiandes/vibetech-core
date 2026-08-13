@@ -1,10 +1,12 @@
-# Hobby Vercel plans only allow daily cron. This workflow keeps the platform
-# job heartbeat fresh and drains due jobs every 5 minutes.
+# Hobby Vercel only allows one daily cron. This workflow is the reliability
+# backup: drain jobs + FE retention texts every 5 minutes, and hit /api/health
+# so a stale heartbeat still self-heals if the authenticated tick fails.
 name: Platform job tick
 
 on:
   schedule:
     - cron: "*/5 * * * *"
+    - cron: "2 13 * * *"
   workflow_dispatch:
 
 jobs:
@@ -12,20 +14,43 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Drain platform jobs
+      - name: Drain platform jobs and self-heal
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_URL: ${{ secrets.APP_URL }}
         run: |
           set -euo pipefail
-          if [ -z "${CRON_SECRET:-}" ]; then
-            echo "CRON_SECRET GitHub secret is required"
-            exit 1
-          fi
           BASE_URL="${APP_URL:-https://app.vtechdevelopment.com}"
           BASE_URL="${BASE_URL%/}"
-          curl -fsS -X POST "${BASE_URL}/api/platform/jobs/tick" \
-            -H "Authorization: Bearer ${CRON_SECRET}" \
-            -H "Content-Type: application/json" \
-            --max-time 90 \
-            -d '{}'
+          tick_ok=0
+          health_ok=0
+
+          if [ -n "${CRON_SECRET:-}" ]; then
+            if curl -fsS -X POST "${BASE_URL}/api/platform/jobs/tick?limit=16" \
+              -H "Authorization: Bearer ${CRON_SECRET}" \
+              -H "Content-Type: application/json" \
+              --retry 4 \
+              --retry-all-errors \
+              --retry-delay 8 \
+              --max-time 90 \
+              -d '{}'; then
+              tick_ok=1
+            else
+              echo "Authenticated tick failed; health self-heal will try next."
+            fi
+          else
+            echo "CRON_SECRET GitHub secret is missing; relying on health self-heal."
+          fi
+
+          if curl -fsS "${BASE_URL}/api/health" \
+            --retry 3 \
+            --retry-all-errors \
+            --retry-delay 5 \
+            --max-time 90; then
+            health_ok=1
+          fi
+
+          if [ "$tick_ok" != 1 ] && [ "$health_ok" != 1 ]; then
+            echo "Both job tick and health self-heal failed."
+            exit 1
+          fi

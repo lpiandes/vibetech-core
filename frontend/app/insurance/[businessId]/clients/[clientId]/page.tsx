@@ -1,0 +1,346 @@
+"use client";
+
+import Link from "next/link";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import {
+  MONTH_OPTIONS,
+  daysInMonth,
+} from "../../../../../../backend/core/fe-retention/FeRetentionLabels.js";
+
+type Client = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  birthday?: string | null;
+  address?: string | null;
+  holidayMonth?: number | null;
+  holidayDay?: number | null;
+  templateOverrides?: Record<string, string>;
+  smsOptedOut?: boolean;
+  reinstatementStatus?: string | null;
+  policy?: {
+    carrier?: string;
+    policyNumber?: string;
+    premium?: string;
+    dueDay?: number;
+    docsArriveDays?: number;
+    effectiveDate?: string | null;
+    status?: string;
+    statusSource?: string | null;
+  };
+};
+
+const OVERRIDE_KEYS = [
+  { key: "holiday", label: "Holiday text" },
+  { key: "birthday", label: "Birthday text" },
+  { key: "welcome", label: "Welcome text" },
+  { key: "docsMail", label: "Policy papers text" },
+  { key: "paymentReminder", label: "Payment reminder text" },
+  { key: "lapseRecovery", label: "Missed / lapse text" },
+] as const;
+
+export default function InsuranceClientDetailPage() {
+  const params = useParams();
+  const businessId = String(params.businessId ?? "");
+  const clientId = String(params.clientId ?? "");
+  const [client, setClient] = useState<Client | null>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [holidayMonth, setHolidayMonth] = useState<string>("");
+  const [holidayDay, setHolidayDay] = useState<string>("");
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [profile, setProfile] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    birthday: "",
+    address: "",
+    carrier: "",
+    policyNumber: "",
+    premium: "",
+    dueDay: "1",
+    docsArriveDays: "10",
+    effectiveDate: "",
+  });
+
+  async function load() {
+    const res = await fetch(`/api/insurance/${encodeURIComponent(businessId)}/clients/${encodeURIComponent(clientId)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not load client.");
+    setClient(data.client);
+    setHistory(data.history ?? []);
+    setHolidayMonth(data.client?.holidayMonth != null ? String(data.client.holidayMonth) : "");
+    setHolidayDay(data.client?.holidayDay != null ? String(data.client.holidayDay) : "");
+    setOverrides({ ...(data.client?.templateOverrides ?? {}) });
+    setProfile({
+      name: data.client?.name ?? "",
+      phone: data.client?.phone ?? "",
+      email: data.client?.email ?? "",
+      birthday: String(data.client?.birthday ?? "").slice(0, 10),
+      address: data.client?.address ?? "",
+      carrier: data.client?.policy?.carrier ?? "",
+      policyNumber: data.client?.policy?.policyNumber ?? "",
+      premium: data.client?.policy?.premium ?? "",
+      dueDay: String(data.client?.policy?.dueDay ?? 1),
+      docsArriveDays: String(data.client?.policy?.docsArriveDays ?? 10),
+      effectiveDate: String(data.client?.policy?.effectiveDate ?? "").slice(0, 10),
+    });
+  }
+
+  useEffect(() => {
+    load().catch((err) => setError(err instanceof Error ? err.message : "Load failed"));
+  }, [businessId, clientId]);
+
+  const dayOptions = useMemo(() => {
+    const month = Number(holidayMonth) || 12;
+    return Array.from({ length: daysInMonth(month) }, (_, i) => i + 1);
+  }, [holidayMonth]);
+
+  async function setStatus(status: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/insurance/${encodeURIComponent(businessId)}/clients/${encodeURIComponent(clientId)}/status`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Status update failed.");
+      setClient(data.client);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveCustom(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const templateOverrides: Record<string, string> = {};
+      for (const { key } of OVERRIDE_KEYS) {
+        const value = String(overrides[key] ?? "").trim();
+        if (value) templateOverrides[key] = value;
+      }
+      const res = await fetch(
+        `/api/insurance/${encodeURIComponent(businessId)}/clients/${encodeURIComponent(clientId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: profile.name,
+            phone: profile.phone,
+            email: profile.email,
+            birthday: profile.birthday || null,
+            address: profile.address || null,
+            policy: {
+              carrier: profile.carrier,
+              policyNumber: profile.policyNumber,
+              premium: profile.premium,
+              dueDay: Number(profile.dueDay) || 1,
+              docsArriveDays: Number(profile.docsArriveDays) || 10,
+              effectiveDate: profile.effectiveDate || null,
+              status: client?.policy?.status || "active",
+            },
+            holidayMonth: holidayMonth === "" ? null : Number(holidayMonth),
+            holidayDay: holidayDay === "" ? null : Number(holidayDay),
+            templateOverrides,
+          }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Save failed.");
+      setClient(data.client);
+      setMessage("Client details saved. Scheduled texts use this on the next 1:00 PM UTC job.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (error && !client) return <div className="fe-card"><p>{error}</p></div>;
+  if (!client) return <div className="fe-card"><p className="fe-muted">Loading…</p></div>;
+
+  return (
+    <>
+      <p style={{ marginBottom: "0.75rem" }}>
+        <Link href={`/insurance/${businessId}/clients`} className="fe-muted">← Clients</Link>
+      </p>
+      <div className="fe-card">
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
+          <div>
+            <h2 style={{ margin: "0 0 0.35rem" }}>{client.name}</h2>
+            <p className="fe-muted" style={{ margin: 0 }}>{client.phone}{client.email ? ` · ${client.email}` : ""}</p>
+            {client.birthday ? <p className="fe-muted">Birthday: {client.birthday}</p> : null}
+            {client.smsOptedOut ? (
+              <p className="fe-muted">SMS paused — client opted out (STOP).</p>
+            ) : null}
+            {client.reinstatementStatus === "open" ? (
+              <p className="fe-muted">They replied YES — follow up to reinstate.</p>
+            ) : null}
+          </div>
+          <span className={`fe-badge ${client.smsOptedOut ? "sms_opt_out" : (client.policy?.status || "active")}`}>
+            {client.smsOptedOut ? "sms paused" : (client.policy?.status || "active")}
+          </span>
+        </div>
+      </div>
+
+      <form className="fe-card" onSubmit={saveCustom}>
+        <h3>Edit client &amp; policy</h3>
+        <p className="fe-muted">Fix a wrong birthday, phone, due day, or anything else. Saves immediately; automation uses the new values.</p>
+        <div className="fe-grid-2">
+          <div className="fe-field">
+            <label className="fe-label">Full name</label>
+            <input className="fe-input" required value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
+          </div>
+          <div className="fe-field">
+            <label className="fe-label">Phone</label>
+            <input className="fe-input" required value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+          </div>
+          <div className="fe-field">
+            <label className="fe-label">Email</label>
+            <input className="fe-input" type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} />
+          </div>
+          <div className="fe-field">
+            <label className="fe-label">Birthday</label>
+            <input className="fe-input" type="date" value={profile.birthday} onChange={(e) => setProfile({ ...profile, birthday: e.target.value })} />
+          </div>
+          <div className="fe-field">
+            <label className="fe-label">Carrier</label>
+            <input className="fe-input" value={profile.carrier} onChange={(e) => setProfile({ ...profile, carrier: e.target.value })} />
+          </div>
+          <div className="fe-field">
+            <label className="fe-label">Policy number</label>
+            <input className="fe-input" value={profile.policyNumber} onChange={(e) => setProfile({ ...profile, policyNumber: e.target.value })} />
+          </div>
+          <div className="fe-field">
+            <label className="fe-label">Premium</label>
+            <input className="fe-input" value={profile.premium} onChange={(e) => setProfile({ ...profile, premium: e.target.value })} />
+          </div>
+          <div className="fe-field">
+            <label className="fe-label">Payment due day (1–28)</label>
+            <input className="fe-input" type="number" min={1} max={28} value={profile.dueDay} onChange={(e) => setProfile({ ...profile, dueDay: e.target.value })} />
+          </div>
+          <div className="fe-field">
+            <label className="fe-label">Papers-arrive days</label>
+            <input className="fe-input" type="number" min={1} max={60} value={profile.docsArriveDays} onChange={(e) => setProfile({ ...profile, docsArriveDays: e.target.value })} />
+          </div>
+          <div className="fe-field">
+            <label className="fe-label">Effective date</label>
+            <input className="fe-input" type="date" value={profile.effectiveDate} onChange={(e) => setProfile({ ...profile, effectiveDate: e.target.value })} />
+          </div>
+        </div>
+        <div className="fe-field">
+          <label className="fe-label">Address</label>
+          <input className="fe-input" value={profile.address} onChange={(e) => setProfile({ ...profile, address: e.target.value })} />
+        </div>
+
+      <div className="fe-card">
+        <h3>Policy status</h3>
+        <p className="fe-muted">
+          Marking missed or lapsed automatically texts the client a recovery message and texts + emails you.
+        </p>
+        {error ? <p style={{ color: "#fca5a5" }}>{error}</p> : null}
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <button type="button" className="fe-btn warn" disabled={busy} onClick={() => setStatus("missed")}>Mark missed</button>
+          <button type="button" className="fe-btn warn" disabled={busy} onClick={() => setStatus("lapsed")}>Mark lapsed</button>
+          <button type="button" className="fe-btn secondary" disabled={busy} onClick={() => setStatus("active")}>Mark reinstated</button>
+          <button type="button" className="fe-btn secondary" disabled={busy} onClick={() => setStatus("cancelled")}>Cancelled</button>
+        </div>
+      </div>
+
+        <h3>Custom messages for this client</h3>
+        <p className="fe-muted">
+          Leave blank to use Settings defaults. Example: set holiday text to a Hanukkah greeting and pick that client’s holiday date below.
+        </p>
+
+        <div className="fe-field">
+          <label className="fe-label">Holiday send date (optional override)</label>
+          <div className="fe-grid-2">
+            <select
+              className="fe-select"
+              value={holidayMonth}
+              onChange={(e) => setHolidayMonth(e.target.value)}
+            >
+              <option value="">Book default</option>
+              {MONTH_OPTIONS.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+            <select
+              className="fe-select"
+              value={holidayDay}
+              onChange={(e) => setHolidayDay(e.target.value)}
+              disabled={!holidayMonth}
+            >
+              <option value="">Book default</option>
+              {dayOptions.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {OVERRIDE_KEYS.map(({ key, label }) => (
+          <div className="fe-field" key={key}>
+            <span className="fe-template-title">{label}</span>
+            <textarea
+              className="fe-input"
+              rows={3}
+              placeholder="Leave blank to use Settings default"
+              value={overrides[key] ?? ""}
+              onChange={(e) => setOverrides({ ...overrides, [key]: e.target.value })}
+              style={{ resize: "vertical", minHeight: 72 }}
+            />
+          </div>
+        ))}
+
+        {message ? <p style={{ color: "#34d399" }}>{message}</p> : null}
+        <button type="submit" className="fe-btn" disabled={busy}>
+          {busy ? "Saving…" : "Save client"}
+        </button>
+      </form>
+
+      <div className="fe-card">
+        <h3>Message history</h3>
+        {!history.length ? (
+          <p className="fe-muted" style={{ margin: 0 }}>No messages yet.</p>
+        ) : (
+          <table className="fe-table">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Kind</th>
+                <th>Channel</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.at ? new Date(row.at).toLocaleString() : "—"}</td>
+                  <td>{row.kind}</td>
+                  <td>{row.channel}</td>
+                  <td>{row.ok ? "OK" : row.error || "Failed"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
+  );
+}

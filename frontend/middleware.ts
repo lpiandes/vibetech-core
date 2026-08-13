@@ -32,6 +32,7 @@ export default auth((request) => {
   const { pathname, search } = request.nextUrl;
   const host = String(request.headers.get("host") ?? "").toLowerCase();
   const isSocialHost = host.startsWith("social.") || host.startsWith("social-checker.");
+  const isInsuranceHost = host.startsWith("insurance.") || host.startsWith("insurance-fe.");
 
   // Preflight for public marketing APIs (browser CORS from Hostinger site).
   if (
@@ -50,6 +51,13 @@ export default auth((request) => {
   if (isSocialHost && (pathname === "/" || pathname === "")) {
     const url = request.nextUrl.clone();
     url.pathname = "/social-checker";
+    return NextResponse.rewrite(url);
+  }
+
+  // insurance.vtechdevelopment.com → FE Retention CRM surface
+  if (isInsuranceHost && (pathname === "/" || pathname === "")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/insurance";
     return NextResponse.rewrite(url);
   }
 

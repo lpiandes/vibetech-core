@@ -9,6 +9,8 @@ import {
   mergePurchasedPackagesIntoConfig,
   normalizePurchasedPackages,
 } from "../packages/SalesPackageCatalog.js";
+import { businessGrantsFeRetentionAccess } from "../../fe-retention/feRetentionEntitlement.js";
+import { ensureFeRetentionInstallation } from "../../fe-retention/ensureFeRetentionInstallation.js";
 
 const NOW_ISO = "2026-07-01T00:00:00.000Z";
 
@@ -64,6 +66,15 @@ export function createPlatformBusinessService({ store, createAndDeliverInvitatio
     });
 
     provisionEmptyBusinessWorkspace(business);
+
+    if (businessGrantsFeRetentionAccess(scopedPackages)) {
+      await ensureFeRetentionInstallation({
+        platformStore: store,
+        businessId: business.id,
+        packageConfiguration,
+        actorId: createdByUserId,
+      });
+    }
 
     const invite = await createAndDeliverInvitation({
       businessId: business.id,
