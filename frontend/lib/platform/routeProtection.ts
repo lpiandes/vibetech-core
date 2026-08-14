@@ -7,11 +7,15 @@ export function isPublicPath(pathname: string): boolean {
   if (
     pathname.startsWith("/_next")
     || pathname.startsWith("/favicon")
+    || pathname.startsWith("/brand/")
     || pathname.startsWith("/api/auth")
     || pathname === "/api/health"
     // Cron / worker backup — authorized inside the route via CRON_SECRET.
     || pathname === "/api/platform/jobs/tick"
   ) {
+    return true;
+  }
+  if (/\.(?:png|jpe?g|gif|webp|svg|ico|txt|xml|woff2?)$/i.test(pathname)) {
     return true;
   }
   // Social Checker landing page stays reachable while signed out so it can

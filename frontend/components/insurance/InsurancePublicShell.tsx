@@ -51,11 +51,11 @@ export function InsurancePublicShell({
         }
         .vk-lockup img {
           display: block;
-          width: min(220px, 72vw);
+          width: min(280px, 78vw);
           height: auto;
-          padding: 0.7rem 0.9rem 0.55rem;
+          padding: 0.55rem 0.85rem;
           background: #fff;
-          border-radius: 16px;
+          border-radius: 14px;
           box-shadow: 0 10px 40px rgba(0, 0, 0, 0.28);
         }
         .vk-grid {
@@ -158,7 +158,7 @@ export function InsurancePublicShell({
       ` }} />
       <div className="vk-frame">
         <div className="vk-lockup">
-          <img src="/brand/vibetech-lockup.png" alt="VibeTech Development" />
+          <img src="/brand/vibetech-wordmark.png" alt="VibeTech Development" />
         </div>
         <div className="vk-grid">
           {showStory ? (

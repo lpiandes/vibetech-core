@@ -19,7 +19,8 @@ describe("routeProtection", () => {
     assert.equal(isPublicPath("/api/businesses/biz_1/forms/submit"), true);
     assert.equal(isPublicPath("/social-checker"), true);
     assert.equal(isPublicPath("/insurance"), true);
-    assert.equal(isPublicPath("/insurance/signup"), true);
+    assert.equal(isPublicPath("/brand/vibetech-wordmark.png"), true);
+    assert.equal(isPublicPath("/globe.svg"), true);
     assert.equal(isPublicPath("/api/insurance/signup"), true);
     assert.equal(isPublicPath("/api/insurance/sms/inbound"), true);
     assert.equal(isPublicPath("/insurance/billing"), false);
