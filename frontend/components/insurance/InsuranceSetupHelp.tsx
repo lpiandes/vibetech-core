@@ -1,4 +1,4 @@
-import { VIBEKEEP_OPS_EMAIL, VIBEKEEP_OPS_PHONE_DISPLAY } from "../../../backend/core/fe-retention/FeRetentionOnboarding.js";
+import { VIBEKEEP_OPS_EMAIL, VIBEKEEP_OPS_PHONE_DISPLAY } from "../../../backend/core/fe-retention/FeRetentionOnboardingCatalog.js";
 
 export function InsuranceSetupHelp() {
   return (

@@ -7,7 +7,7 @@ import {
   FE_A2P_BUSINESS_TYPES,
   FE_A2P_INDUSTRIES,
   FE_A2P_JOB_POSITIONS,
-} from "../../../backend/core/fe-retention/FeRetentionOnboarding.js";
+} from "../../../backend/core/fe-retention/FeRetentionOnboardingCatalog.js";
 
 type Profile = Record<string, string>;
 
