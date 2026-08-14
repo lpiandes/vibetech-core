@@ -3,6 +3,7 @@ import { emptyFeRetentionState, readFeRetentionState } from "./FeRetentionStore.
 import { readPurchasedPackagesFromConfig } from "../platform/packages/SalesPackageCatalog.js";
 import { ensureFeRetentionPlatformSms } from "./FeRetentionSms.js";
 import { configureFeRetentionInboundSmsWebhook } from "./FeRetentionInbound.js";
+import { feRetentionMayProvisionSms } from "./FeRetentionOnboarding.js";
 
 /**
  * Ensure a minimal installed Business OS row exists for FE Retention CRM agents
@@ -100,8 +101,9 @@ export async function ensureFeRetentionInstallation({
     installation = await platformStore.getBusinessOSInstallation(businessId);
   }
 
-  // Fast path: installation already has FE state — skip Twilio HTTP on page loads.
-  if (light && installation?.configuration?.feRetention) {
+  // Fast path: skip Twilio HTTP on unpaid page loads.
+  const pkgConfig = packageConfiguration ?? {};
+  if (light && installation?.configuration?.feRetention && !attachSms) {
     return {
       ok: true,
       created: !existing,
@@ -113,7 +115,7 @@ export async function ensureFeRetentionInstallation({
   }
 
   let sms = null;
-  if (attachSms && typeof putDurableCredential === "function") {
+  if (attachSms && feRetentionMayProvisionSms(pkgConfig) && typeof putDurableCredential === "function") {
     try {
       sms = await ensureFeRetentionPlatformSms({
         platformStore,
@@ -121,6 +123,7 @@ export async function ensureFeRetentionInstallation({
         vault,
         putDurableCredential,
         actorId,
+        packageConfiguration: pkgConfig,
       });
     } catch (err) {
       sms = {
@@ -132,9 +135,13 @@ export async function ensureFeRetentionInstallation({
   }
 
   let inboundWebhook = null;
-  if (configureInboundWebhook) {
+  const webhookNumber = sms?.fromNumber || null;
+  if (configureInboundWebhook || (sms?.ok && sms.already === false && webhookNumber)) {
     try {
-      inboundWebhook = await configureFeRetentionInboundSmsWebhook();
+      inboundWebhook = await configureFeRetentionInboundSmsWebhook({
+        fromNumber: webhookNumber,
+        force: Boolean(sms?.ok && sms.already === false),
+      });
     } catch (err) {
       inboundWebhook = {
         ok: false,

@@ -9,7 +9,7 @@ import {
   markClientTouchSent,
   writeFeRetentionState,
 } from "./FeRetentionStore.js";
-import { sendFeRetentionSmsMessage } from "./FeRetentionSms.js";
+import { sendFeRetentionSmsMessage, resolveFeRetentionFromNumber } from "./FeRetentionSms.js";
 import { sendFeAgentNotifyEmail } from "./FeRetentionEmail.js";
 
 function safeString(v) {
@@ -45,6 +45,11 @@ export async function deliverFeClientTouchpoint({
   let nextState = state;
   let smsResult = { ok: false, reason: "skipped" };
   const bookName = businessName || installation?.configuration?.businessName || "FE Retention";
+  const fromNumber = await resolveFeRetentionFromNumber({
+    platformStore,
+    businessId: installation?.businessId,
+    packageConfiguration: installation?.configuration,
+  });
 
   if (isFeClientSmsPaused(client)) {
     const logged = appendFeMessageLog(nextState, {
@@ -62,6 +67,10 @@ export async function deliverFeClientTouchpoint({
   } else if (client?.phone) {
     smsResult = await sendFeRetentionSmsMessage({
       integrationPlatform,
+      platformStore,
+      businessId: installation?.businessId,
+      packageConfiguration: installation?.configuration,
+      fromNumber: fromNumber || null,
       to: client.phone,
       body,
     });
@@ -140,6 +149,10 @@ export async function deliverFeClientTouchpoint({
       const agentBody = buildFeAgentAlertSms({ client, businessName: bookName });
       const agentSms = await sendFeRetentionSmsMessage({
         integrationPlatform,
+        platformStore,
+        businessId: installation?.businessId,
+        packageConfiguration: installation?.configuration,
+        fromNumber: fromNumber || null,
         to: notifyPhone,
         body: agentBody,
       });

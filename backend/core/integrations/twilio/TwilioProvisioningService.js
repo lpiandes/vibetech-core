@@ -287,8 +287,11 @@ async function purchaseUsLocalNumber({
   smsUrl = "",
   businessId = "",
   allowSendOnlyWithoutWebhook = false,
+  skipPool = false,
 }) {
-  const pool = safeString(process.env.TWILIO_PROVISION_POOL)
+  const pool = skipPool
+    ? []
+    : safeString(process.env.TWILIO_PROVISION_POOL)
     .split(/[\s,]+/)
     .map((n) => n.trim())
     .filter(Boolean);
@@ -383,6 +386,57 @@ async function purchaseUsLocalNumber({
     fromPool: false,
     smsUrlConfigured: Boolean(smsUrl) && safeString(bought.sms_url) === smsUrl,
   };
+}
+
+/**
+ * Buy a US local SMS number on the platform Twilio account (no brand/A2P form).
+ * VibeKeep uses this so a new agency never shares another book's From-number.
+ */
+export async function purchaseTwilioLocalSmsNumber({
+  fetchImpl = globalThis.fetch,
+  smsUrl = "",
+  friendlyName = "VibeKeep",
+  areaCode = safeString(process.env.TWILIO_PROVISION_AREA_CODE),
+  businessId = "",
+  simulate = process.env.TWILIO_PROVISION_SIMULATE === "1",
+  skipPool = true,
+} = {}) {
+  if (simulate) {
+    const fakeFrom = `+1555${String(Date.now()).slice(-7)}`;
+    return deepFreeze({
+      ok: true,
+      simulated: true,
+      fromNumber: fakeFrom,
+      phoneSid: `PNsim_${safeString(businessId).slice(0, 8) || "fe"}`,
+      smsUrlConfigured: Boolean(smsUrl),
+    });
+  }
+  if (!isTwilioPlatformConfigured()) {
+    return deepFreeze({
+      ok: false,
+      reason: "platform_twilio_not_configured",
+      message: "Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.",
+    });
+  }
+  if (!smsUrl) {
+    return deepFreeze({
+      ok: false,
+      reason: "webhook_url_unresolved",
+      message: "Set APP_ORIGIN or NEXTAUTH_URL so inbound SMS can be attached at purchase.",
+    });
+  }
+  const bought = await purchaseUsLocalNumber({
+    fetchImpl,
+    accountSid: safeString(process.env.TWILIO_ACCOUNT_SID),
+    authToken: safeString(process.env.TWILIO_AUTH_TOKEN),
+    areaCode,
+    friendlyName,
+    smsUrl,
+    businessId,
+    allowSendOnlyWithoutWebhook: false,
+    skipPool,
+  });
+  return deepFreeze(bought);
 }
 
 /**

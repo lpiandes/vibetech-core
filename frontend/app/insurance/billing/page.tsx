@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getFeRetentionAccess } from "@/lib/platform/feRetentionAccess";
 import { platformStore } from "@/lib/server/compose";
 import { readFeRetentionBilling } from "../../../../backend/core/fe-retention/FeRetentionBilling.js";
+import { resolveFeRetentionContinuePath } from "../../../../backend/core/fe-retention/FeRetentionOnboarding.js";
 import { InsurancePublicShell } from "@/components/insurance/InsurancePublicShell";
 import { InsuranceBillingActions } from "@/components/insurance/InsuranceBillingActions";
 
@@ -36,11 +37,11 @@ export default async function InsuranceBillingPage({
 
   const business = await platformStore.getBusinessById(businessId).catch(() => null);
   const billing = readFeRetentionBilling(business?.packageConfiguration ?? {});
-  if (billing.allowsDashboard && params.paid === "1") {
-    redirect(`/insurance/${businessId}`);
-  }
   if (billing.allowsDashboard) {
-    redirect(`/insurance/${businessId}`);
+    redirect(resolveFeRetentionContinuePath({
+      businessId,
+      packageConfiguration: business?.packageConfiguration,
+    }));
   }
 
   const justPaid = params.paid === "1";

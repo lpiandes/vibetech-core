@@ -42,7 +42,7 @@ export function InsuranceSignupForm() {
         return;
       }
       if (data.complimentary) {
-        window.location.assign("/insurance");
+        window.location.assign(`/insurance/setup/${encodeURIComponent(data.businessId)}`);
         return;
       }
       if (data.checkoutUrl) {

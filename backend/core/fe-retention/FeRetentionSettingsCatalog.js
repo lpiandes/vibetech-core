@@ -81,7 +81,7 @@ export function describeTwilioReadiness({ ready, fromNumber, missing = [] } = {}
     return {
       ready: true,
       badge: "Active",
-      message: `Texts send from VibeTech’s number (${fromNumber}). Agents do not connect Twilio.`,
+      message: "Clients see this number on welcome, reminder, and recovery texts.",
     };
   }
   const miss = Array.isArray(missing) && missing.length

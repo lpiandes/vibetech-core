@@ -43,7 +43,7 @@ export default async function InsuranceIndexPage({
     books: access.businesses,
   });
 
-  if (next.kind === "dashboard" || next.kind === "billing") {
+  if (next.kind === "dashboard" || next.kind === "billing" || next.kind === "setup") {
     redirect(next.href);
   }
 

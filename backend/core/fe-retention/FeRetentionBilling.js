@@ -30,7 +30,9 @@ export function isFeRetentionBillingConfigured() {
 }
 
 export function feRetentionDashboardAllowed(status) {
-  return FE_RETENTION_PAID_STATUSES.includes(String(status ?? "").toLowerCase());
+  const s = String(status ?? "").toLowerCase();
+  if (s === "legacy") return true;
+  return FE_RETENTION_PAID_STATUSES.includes(s);
 }
 
 export function feRetentionNeedsPayment(status) {
@@ -47,6 +49,7 @@ export function readFeRetentionBilling(packageConfiguration = {}) {
       status: "legacy",
       stripeCustomerId: null,
       stripeSubscriptionId: null,
+      twilioFromNumber: null,
       updatedAt: null,
       allowsDashboard: true,
       needsPayment: false,
@@ -57,6 +60,7 @@ export function readFeRetentionBilling(packageConfiguration = {}) {
     status,
     stripeCustomerId: raw.stripeCustomerId ? String(raw.stripeCustomerId) : null,
     stripeSubscriptionId: raw.stripeSubscriptionId ? String(raw.stripeSubscriptionId) : null,
+    twilioFromNumber: raw.twilioFromNumber ? String(raw.twilioFromNumber) : null,
     updatedAt: raw.updatedAt ? String(raw.updatedAt) : null,
     allowsDashboard: feRetentionDashboardAllowed(status),
     needsPayment: feRetentionNeedsPayment(status),
@@ -67,7 +71,7 @@ export function writeFeRetentionBilling(packageConfiguration = {}, patch = {}) {
   const prev = readFeRetentionBilling(packageConfiguration);
   const nextStatus = patch.status != null
     ? String(patch.status).toLowerCase()
-    : (prev.status === "legacy" ? "incomplete" : prev.status);
+    : prev.status;
   const withPackage = mergePurchasedPackagesIntoConfig(
     packageConfiguration && typeof packageConfiguration === "object" ? packageConfiguration : {},
     [FE_RETENTION_CRM_PACKAGE_ID],
@@ -82,6 +86,9 @@ export function writeFeRetentionBilling(packageConfiguration = {}, patch = {}) {
       stripeSubscriptionId: patch.stripeSubscriptionId !== undefined
         ? (patch.stripeSubscriptionId ? String(patch.stripeSubscriptionId) : null)
         : prev.stripeSubscriptionId,
+      twilioFromNumber: patch.twilioFromNumber !== undefined
+        ? (patch.twilioFromNumber ? String(patch.twilioFromNumber) : null)
+        : prev.twilioFromNumber,
       updatedAt: new Date().toISOString(),
     },
   };
@@ -129,8 +136,8 @@ export async function createFeRetentionCheckoutSession({
   const origin = appOriginFromRequestUrl(requestUrl);
   const params = {
     mode: "subscription",
-    success_url: `${origin}/insurance/billing?paid=1`,
-    cancel_url: `${origin}/insurance/billing?canceled=1`,
+    success_url: `${origin}/insurance/setup/${encodeURIComponent(String(businessId))}?paid=1`,
+    cancel_url: `${origin}/insurance/billing?canceled=1&businessId=${encodeURIComponent(String(businessId))}`,
     client_reference_id: String(businessId),
     metadata: {
       businessId: String(businessId),
@@ -288,6 +295,7 @@ export async function applyFeRetentionStripeEvent({ platformStore, event } = {})
     businessId: business.id,
     packageConfiguration: nextConfig,
   });
+  business.packageConfiguration = nextConfig;
 
   const installation = await platformStore.getBusinessOSInstallation?.(business.id).catch(() => null);
   if (installation) {
@@ -305,6 +313,24 @@ export async function applyFeRetentionStripeEvent({ platformStore, event } = {})
         feRetentionBilling: nextConfig.feRetentionBilling,
       },
     });
+  }
+
+  if (feRetentionDashboardAllowed(patch.status) && typeof platformStore.upsertIntegrationCredential === "function") {
+    try {
+      const { putDurableCredential } = await import("../integrations/credentials/durableCredentialVault.js");
+      const { ensureFeRetentionInstallation } = await import("./ensureFeRetentionInstallation.js");
+      await ensureFeRetentionInstallation({
+        platformStore,
+        businessId: business.id,
+        packageConfiguration: nextConfig,
+        actorId: "fe_retention_billing",
+        putDurableCredential,
+        attachSms: false,
+        light: false,
+      });
+    } catch {
+      /* billing grant still succeeded; SMS attach retries on dashboard / sweep */
+    }
   }
 
   return deepFreeze({

@@ -1,5 +1,5 @@
 /**
- * Shared-platform Twilio inbound for FE Retention (STOP → pause SMS).
+ * Per-book Twilio inbound for FE Retention (STOP → pause SMS on that book only).
  */
 import { businessGrantsFeRetentionAccess } from "./feRetentionEntitlement.js";
 import { readPurchasedPackagesFromConfig } from "../platform/packages/SalesPackageCatalog.js";
@@ -12,9 +12,16 @@ import {
   setFeClientSmsOptOut,
   writeFeRetentionState,
 } from "./FeRetentionStore.js";
-import { readPlatformTwilioSmsEnv } from "./FeRetentionSms.js";
-import { sendFeRetentionSmsMessage } from "./FeRetentionSms.js";
+import {
+  feSmsPhonesMatch,
+  readPlatformTwilioSmsEnv,
+  resolveFeRetentionFromNumber,
+  resolveFeRetentionInboundSmsWebhookUrl,
+  sendFeRetentionSmsMessage,
+} from "./FeRetentionSms.js";
 import { sendFeAgentNotifyEmail } from "./FeRetentionEmail.js";
+
+export { resolveFeRetentionInboundSmsWebhookUrl };
 
 const OPT_OUT_KEYWORDS = new Set([
   "STOP",
@@ -77,6 +84,9 @@ async function notifyAgentOfInbound({
   businessName,
   deliveryProvider,
   integrationPlatform,
+  platformStore,
+  businessId,
+  fromNumber,
   reason,
 }) {
   const notifyEmail = safeString(state.settings?.agentNotifyEmail);
@@ -86,6 +96,9 @@ async function notifyAgentOfInbound({
     const body = `VibeTech: ${client.name} replied YES — they want help reinstating. Open Needs attention.`;
     const sms = await sendFeRetentionSmsMessage({
       integrationPlatform,
+      platformStore,
+      businessId,
+      fromNumber,
       to: notifyPhone,
       body,
     });
@@ -123,34 +136,32 @@ async function notifyAgentOfInbound({
   return next;
 }
 
-export function resolveFeRetentionInboundSmsWebhookUrl() {
-  const origin = safeString(process.env.APP_ORIGIN || process.env.NEXTAUTH_URL);
-  if (!origin) return null;
-  return `${origin.replace(/\/$/, "")}/api/insurance/sms/inbound`;
-}
-
-let lastFeInboundWebhookConfigureAt = 0;
+const lastFeInboundWebhookConfigureAtByNumber = new Map();
 const FE_INBOUND_WEBHOOK_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 /**
- * Point the shared platform From-number at the FE inbound webhook.
- * Cooldown avoids 2 Twilio HTTP calls on every page load / API request.
+ * Point a VibeKeep From-number at /api/insurance/sms/inbound.
+ * Cooldown is per number so a new purchase is not skipped after the shared number is configured.
  */
 export async function configureFeRetentionInboundSmsWebhook({
   fetchImpl = globalThis.fetch,
   force = false,
+  fromNumber = null,
 } = {}) {
+  const env = readPlatformTwilioSmsEnv();
+  const targetNumber = safeString(fromNumber) || env.fromNumber;
   const now = Date.now();
-  if (!force && lastFeInboundWebhookConfigureAt && (now - lastFeInboundWebhookConfigureAt) < FE_INBOUND_WEBHOOK_COOLDOWN_MS) {
+  const lastAt = lastFeInboundWebhookConfigureAtByNumber.get(targetNumber) || 0;
+  if (!force && lastAt && (now - lastAt) < FE_INBOUND_WEBHOOK_COOLDOWN_MS) {
     return {
       ok: true,
       skipped: true,
       reason: "cooldown",
       webhookUrl: resolveFeRetentionInboundSmsWebhookUrl(),
+      fromNumber: targetNumber,
     };
   }
 
-  const env = readPlatformTwilioSmsEnv();
   const webhookUrl = resolveFeRetentionInboundSmsWebhookUrl();
   if (!webhookUrl) {
     return {
@@ -159,26 +170,25 @@ export async function configureFeRetentionInboundSmsWebhook({
       message: "Set APP_ORIGIN or NEXTAUTH_URL so the STOP webhook can be configured.",
     };
   }
-  if (!env.accountSid || !env.authToken || !env.fromNumber) {
+  if (!env.accountSid || !env.authToken || !targetNumber) {
     return { ok: false, reason: "platform_twilio_not_configured" };
   }
 
   const auth = Buffer.from(`${env.accountSid}:${env.authToken}`).toString("base64");
   try {
     const lookupRes = await fetchImpl(
-      `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(env.accountSid)}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(env.fromNumber)}`,
+      `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(env.accountSid)}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(targetNumber)}`,
       { headers: { Authorization: `Basic ${auth}` } },
     );
     const lookup = await lookupRes.json().catch(() => ({}));
     const row = Array.isArray(lookup?.incoming_phone_numbers) ? lookup.incoming_phone_numbers[0] : null;
     const phoneSid = safeString(row?.sid);
     if (!phoneSid) {
-      return { ok: false, reason: "phone_sid_unresolved", message: "Could not find the platform Twilio number." };
+      return { ok: false, reason: "phone_sid_unresolved", message: "Could not find the Twilio number to configure." };
     }
-    // Skip update when already pointed at the FE inbound URL.
     if (!force && safeString(row?.sms_url) === webhookUrl) {
-      lastFeInboundWebhookConfigureAt = now;
-      return { ok: true, skipped: true, reason: "already_configured", webhookUrl, phoneSid };
+      lastFeInboundWebhookConfigureAtByNumber.set(targetNumber, now);
+      return { ok: true, skipped: true, reason: "already_configured", webhookUrl, phoneSid, fromNumber: targetNumber };
     }
     const updateRes = await fetchImpl(
       `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(env.accountSid)}/IncomingPhoneNumbers/${encodeURIComponent(phoneSid)}.json`,
@@ -199,11 +209,12 @@ export async function configureFeRetentionInboundSmsWebhook({
         message: safeString(updated?.message) || `HTTP ${updateRes.status}`,
       };
     }
-    lastFeInboundWebhookConfigureAt = now;
+    lastFeInboundWebhookConfigureAtByNumber.set(targetNumber, now);
     return {
       ok: true,
       webhookUrl,
       phoneSid,
+      fromNumber: targetNumber,
       configured: safeString(updated?.sms_url) === webhookUrl,
     };
   } catch (err) {
@@ -215,31 +226,41 @@ export async function configureFeRetentionInboundSmsWebhook({
   }
 }
 
-async function listFeBusinessInstallations(platformStore) {
+async function listFeBusinessInstallations(platformStore, { toNumber = "" } = {}) {
   let businesses = [];
   try {
     businesses = await platformStore.listBusinesses({ limit: 200 });
   } catch {
     businesses = await platformStore.listAllBusinesses?.() ?? [];
   }
+  const inboundTo = safeString(toNumber);
   const out = [];
   for (const business of Array.isArray(businesses) ? businesses : []) {
     const packages = readPurchasedPackagesFromConfig(business?.packageConfiguration ?? {});
     if (!businessGrantsFeRetentionAccess(packages)) continue;
     const businessId = String(business.id);
+    const fromNumber = await resolveFeRetentionFromNumber({
+      platformStore,
+      businessId,
+      packageConfiguration: business.packageConfiguration,
+    });
+    if (inboundTo) {
+      if (!fromNumber || !feSmsPhonesMatch(inboundTo, fromNumber)) continue;
+    }
     const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
     if (!installation) continue;
-    out.push({ businessId, business, installation });
+    out.push({ businessId, business, installation, fromNumber });
   }
   return out;
 }
 
 /**
- * Pause SMS for every FE client matching From (multi-tenant shared number).
+ * Pause SMS for matching FE clients on the book that owns Twilio To.
  */
 export async function applyFeSmsOptOutByInboundPhone({
   platformStore,
   fromPhone,
+  toNumber = "",
   inboundText = "",
   actorId = "fe_sms_inbound",
 } = {}) {
@@ -248,7 +269,7 @@ export async function applyFeSmsOptOutByInboundPhone({
     return { ok: false, reason: "missing_args", matches };
   }
 
-  const installations = await listFeBusinessInstallations(platformStore);
+  const installations = await listFeBusinessInstallations(platformStore, { toNumber });
   for (const { businessId, installation } of installations) {
     let state = readFeRetentionState(installation);
     const client = findFeClientByPhone(state, fromPhone);
@@ -301,6 +322,7 @@ export async function applyFeSmsOptOutByInboundPhone({
 export async function applyFeInboundByPhone({
   platformStore,
   fromPhone,
+  toNumber = "",
   inboundText = "",
   optOutType = "",
   deliveryProvider = null,
@@ -312,6 +334,7 @@ export async function applyFeInboundByPhone({
     return { intent, ...(await applyFeSmsOptOutByInboundPhone({
       platformStore,
       fromPhone,
+      toNumber,
       inboundText,
       actorId,
     })) };
@@ -321,8 +344,8 @@ export async function applyFeInboundByPhone({
     return { ok: true, intent, matches, count: 0 };
   }
 
-  const installations = await listFeBusinessInstallations(platformStore);
-  for (const { businessId, business, installation } of installations) {
+  const installations = await listFeBusinessInstallations(platformStore, { toNumber });
+  for (const { businessId, business, installation, fromNumber } of installations) {
     let state = readFeRetentionState(installation);
     const client = findFeClientByPhone(state, fromPhone);
     if (!client) continue;
@@ -365,6 +388,9 @@ export async function applyFeInboundByPhone({
         businessName: bookName,
         deliveryProvider,
         integrationPlatform,
+        platformStore,
+        businessId,
+        fromNumber,
         reason: "yes",
       });
     }

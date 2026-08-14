@@ -4,6 +4,7 @@ import { getAuthorizedBusinessScope, requireSessionUser } from "@/lib/platform/A
 import { getSystemWorkspaceForBusiness } from "@/lib/platform/getSystemWorkspaceForBusiness";
 import { businessGrantsFeRetentionAccess } from "../../../backend/core/fe-retention/feRetentionEntitlement.js";
 import { readFeRetentionBilling } from "../../../backend/core/fe-retention/FeRetentionBilling.js";
+import { readFeRetentionOnboarding } from "../../../backend/core/fe-retention/FeRetentionOnboarding.js";
 import { ensureFeRetentionInstallation } from "../../../backend/core/fe-retention/ensureFeRetentionInstallation.js";
 import { readFeRetentionState } from "../../../backend/core/fe-retention/FeRetentionStore.js";
 import {
@@ -44,6 +45,10 @@ export async function requireFeRetentionContext(businessId: string) {
       throw new AuthorizationError("PAYMENT_REQUIRED", "This book is paused until the $200 monthly subscription is current.");
     }
   }
+  const onboarding = readFeRetentionOnboarding(business.packageConfiguration ?? {});
+  if (!onboarding.onboardingComplete) {
+    throw new AuthorizationError("ONBOARDING_REQUIRED", "Finish business details and the engagement agreement first.");
+  }
 
   const ensured = await ensureFeRetentionInstallation({
     platformStore,
@@ -53,6 +58,7 @@ export async function requireFeRetentionContext(businessId: string) {
     putDurableCredential,
     vault: getSharedCredentialVault(),
     light: true,
+    attachSms: true,
   });
   const installation = ensured.installation
     ?? await platformStore.getBusinessOSInstallation(businessId);
@@ -77,7 +83,9 @@ export function feJsonError(err: unknown) {
       ? 401
       : err.code === "NOT_FOUND"
         ? 404
-        : err.code === "PAYMENT_REQUIRED"
+        : err.code === "ONBOARDING_REQUIRED"
+          ? 409
+          : err.code === "PAYMENT_REQUIRED"
           ? 402
           : 403;
     return NextResponse.json({ error: err.message, code: err.code }, { status });
@@ -117,19 +125,34 @@ export function createFeAgentEmailSender() {
   };
 }
 
-export function resolveFeSmsStatus() {
+export function resolveFeSmsStatus({ fromNumber = null } = {}) {
   const env = readPlatformTwilioSmsEnv();
   const missing = listMissingPlatformTwilioEnvKeys();
-  const ready = missing.length === 0;
+  const bookFrom = String(fromNumber ?? "").trim();
+  if (bookFrom && env.accountSid && env.authToken) {
+    const described = describeTwilioReadiness({
+      ready: true,
+      fromNumber: bookFrom,
+      missing: [],
+    });
+    return {
+      ready: true,
+      fromNumber: bookFrom,
+      mode: "per_book",
+      missing: [],
+      badge: described.badge,
+      message: described.message,
+    };
+  }
   const described = describeTwilioReadiness({
-    ready,
-    fromNumber: env.fromNumber || null,
+    ready: false,
+    fromNumber: null,
     missing,
   });
   return {
-    ready,
-    fromNumber: ready ? env.fromNumber : null,
-    mode: "platform_shared",
+    ready: false,
+    fromNumber: null,
+    mode: "per_book",
     missing,
     badge: described.badge,
     message: described.message,

@@ -35,6 +35,8 @@ export default async function AdminInsurancePage() {
         openLabel="Open as client"
       />
       <p style={{ marginTop: 24 }}>
+        <Link href="/admin/insurance/agreement-preview">Preview engagement agreement</Link>
+        {" · "}
         <Link href="/admin">Back to admin</Link>
       </p>
     </AdminVtPage>

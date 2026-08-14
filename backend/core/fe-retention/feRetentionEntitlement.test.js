@@ -41,7 +41,14 @@ test("resolveFeRetentionNextPath sends agents to dashboard, billing, or admin di
   assert.deepEqual(
     resolveFeRetentionNextPath({
       signedIn: true,
-      books: [{ id: "a", allowsDashboard: true }],
+      books: [{ id: "a", allowsDashboard: true, onboardingComplete: false }],
+    }),
+    { kind: "setup", href: "/insurance/setup/a" },
+  );
+  assert.deepEqual(
+    resolveFeRetentionNextPath({
+      signedIn: true,
+      books: [{ id: "a", allowsDashboard: true, onboardingComplete: true }],
     }),
     { kind: "dashboard", href: "/insurance/a" },
   );

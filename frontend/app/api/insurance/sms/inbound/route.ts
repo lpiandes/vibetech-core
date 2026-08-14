@@ -21,8 +21,9 @@ function forbidden() {
 }
 
 /**
- * Shared platform Twilio number inbound for FE Retention.
+ * Per-book Twilio inbound for FE Retention.
  * STOP → pause; START → resume; YES (lapse) → Needs attention + agent text/email.
+ * Routed by Twilio To (this book's From-number), not across all agencies.
  */
 export async function POST(request: Request) {
   const form = await request.formData().catch(() => null);
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
   }
 
   const from = String(form.get("From") ?? "").trim();
+  const toNumber = String(form.get("To") ?? "").trim();
   const inboundText = String(form.get("Body") ?? "").trim();
   const optOutType = String(form.get("OptOutType") ?? "").trim().toUpperCase();
   const intent = classifyFeInboundSms({ body: inboundText, optOutType });
@@ -61,6 +63,7 @@ export async function POST(request: Request) {
     await applyFeInboundByPhone({
       platformStore,
       fromPhone: from,
+      toNumber,
       inboundText: inboundText || optOutType,
       optOutType,
       deliveryProvider: getFeDeliveryProvider(),

@@ -87,6 +87,7 @@ export async function provisionFeRetentionAccount({
     actorId: user.id,
     putDurableCredential,
     vault,
+    attachSms: false,
   });
 
   return deepFreeze({

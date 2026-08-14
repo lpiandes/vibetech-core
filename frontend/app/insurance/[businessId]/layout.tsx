@@ -4,6 +4,7 @@ import { getFeRetentionAccess } from "@/lib/platform/feRetentionAccess";
 import { platformStore } from "@/lib/server/compose";
 import { businessGrantsFeRetentionAccess } from "../../../../backend/core/fe-retention/feRetentionEntitlement.js";
 import { readFeRetentionBilling } from "../../../../backend/core/fe-retention/FeRetentionBilling.js";
+import { resolveFeRetentionContinuePath } from "../../../../backend/core/fe-retention/FeRetentionOnboarding.js";
 import { ensureFeRetentionInstallation } from "../../../../backend/core/fe-retention/ensureFeRetentionInstallation.js";
 import { readPurchasedPackagesFromConfig } from "../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 import { getSessionUser } from "@/lib/platform/AuthorizedWorkspaceService";
@@ -42,8 +43,15 @@ export default async function InsuranceBusinessLayout({
   }
 
   const billing = readFeRetentionBilling(business.packageConfiguration ?? {});
-  if (!access.isPlatformAdmin && !billing.allowsDashboard) {
-    redirect(insuranceBillingPath(businessId));
+  if (!billing.allowsDashboard) {
+    if (!access.isPlatformAdmin) redirect(insuranceBillingPath(businessId));
+  }
+  const next = resolveFeRetentionContinuePath({
+    businessId,
+    packageConfiguration: business.packageConfiguration,
+  });
+  if (next.startsWith("/insurance/setup/")) {
+    redirect(next);
   }
 
   await ensureFeRetentionInstallation({
@@ -54,6 +62,7 @@ export default async function InsuranceBusinessLayout({
     putDurableCredential,
     vault: getSharedCredentialVault(),
     light: true,
+    attachSms: true,
   });
 
   return (

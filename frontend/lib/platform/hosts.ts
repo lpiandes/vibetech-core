@@ -17,6 +17,14 @@ export function insuranceDashboardPath(businessId: string) {
   return `/insurance/${encodeURIComponent(businessId)}`;
 }
 
+export function insuranceSetupPath(businessId: string) {
+  return `/insurance/setup/${encodeURIComponent(businessId)}`;
+}
+
+export function insuranceAgreementPath(businessId: string) {
+  return `/insurance/setup/${encodeURIComponent(businessId)}/agreement`;
+}
+
 export function insuranceBillingPath(businessId?: string | null) {
   const id = String(businessId ?? "").trim();
   return id ? `/insurance/billing?businessId=${encodeURIComponent(id)}` : "/insurance/billing";

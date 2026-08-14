@@ -19,7 +19,10 @@ export async function GET(
   try {
     const { businessId } = await params;
     const ctx = await requireFeRetentionContext(businessId);
-    const smsStatus = resolveFeSmsStatus();
+    const bookFrom = ctx.sms?.fromNumber
+      || ctx.business?.packageConfiguration?.feRetentionBilling?.twilioFromNumber
+      || null;
+    const smsStatus = resolveFeSmsStatus({ fromNumber: bookFrom });
     let { state, installation } = ctx;
 
     const rawSettings = installation?.configuration?.feRetention?.settings ?? {};

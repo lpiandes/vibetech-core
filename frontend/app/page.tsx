@@ -41,6 +41,9 @@ export default async function RootPage() {
         )
         .map(presentFeRetentionBook),
     });
+    if (next.kind === "setup") {
+      redirect(next.href);
+    }
     if (next.kind === "dashboard" && next.href.startsWith("/insurance/")) {
       const id = next.href.replace("/insurance/", "").split("?")[0];
       redirect(insuranceDashboardUrl(id));
@@ -61,6 +64,9 @@ export default async function RootPage() {
       if (!book.allowsDashboard) {
         redirect(`/insurance/billing?businessId=${encodeURIComponent(book.id)}`);
       }
+      if (book.onboardingComplete === false) {
+        redirect(`/insurance/setup/${encodeURIComponent(book.id)}`);
+      }
       redirect(insuranceDashboardUrl(book.id));
     }
     redirect(`/b/${lastBusinessId}/home`);
@@ -72,6 +78,9 @@ export default async function RootPage() {
       const book = presentFeRetentionBook(only);
       if (!book.allowsDashboard) {
         redirect(`/insurance/billing?businessId=${encodeURIComponent(book.id)}`);
+      }
+      if (book.onboardingComplete === false) {
+        redirect(`/insurance/setup/${encodeURIComponent(book.id)}`);
       }
       redirect(insuranceDashboardUrl(book.id));
     }

@@ -18,11 +18,13 @@ export function InsurancePublicShell({
   title,
   lede,
   showStory = false,
+  wide = false,
 }: {
   children: ReactNode;
   title: string;
   lede?: string;
   showStory?: boolean;
+  wide?: boolean;
 }) {
   return (
     <div className="vk-gate">
@@ -40,7 +42,7 @@ export function InsurancePublicShell({
         }
         .vk-gate * { box-sizing: border-box; }
         .vk-frame {
-          max-width: ${showStory ? "1040px" : "460px"};
+          max-width: ${showStory ? "1040px" : wide ? "720px" : "460px"};
           margin: 0 auto;
           padding: 2.5rem 1.25rem 3.5rem;
         }

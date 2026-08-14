@@ -172,15 +172,22 @@ export default function InsuranceSettingsPage() {
 
       <div className="fe-card" style={{ background: cockpitColors.inset }}>
         <h3>Text messaging</h3>
-        <p style={{ margin: "0 0 0.5rem" }}>
+        <p style={{ margin: "0 0 0.75rem" }}>
           <span className={`fe-badge ${sms?.ready ? "ok" : "missed"}`}>
             {sms?.badge || (sms?.ready ? "Active" : "Not ready")}
           </span>
-          {sms?.fromNumber ? (
-            <span className="fe-muted" style={{ marginLeft: 10 }}>From {sms.fromNumber}</span>
-          ) : null}
         </p>
-        <p className="fe-muted" style={{ margin: 0 }}>{sms?.message}</p>
+        <div className="fe-field" style={{ marginBottom: "0.75rem" }}>
+          <div className="fe-label">Texts sent from this number</div>
+          <p style={{ margin: "0.25rem 0 0", fontSize: "1.15rem", fontWeight: 600, letterSpacing: "0.02em" }}>
+            {sms?.fromNumber || "Not assigned yet"}
+          </p>
+        </div>
+        <p className="fe-muted" style={{ margin: 0 }}>
+          {sms?.fromNumber
+            ? "Clients see this number on welcome, reminder, and recovery texts."
+            : (sms?.message || "A number is assigned automatically when this book is active.")}
+        </p>
       </div>
 
       <div className="fe-card" style={{ background: cockpitColors.inset }}>

@@ -3,6 +3,7 @@ import {
   readPurchasedPackagesFromConfig,
 } from "../platform/packages/SalesPackageCatalog.js";
 import { readFeRetentionBilling } from "./FeRetentionBilling.js";
+import { readFeRetentionOnboarding } from "./FeRetentionOnboarding.js";
 
 /** Present one FE book for pickers, paywall, and admin directory. */
 export function presentFeRetentionBook(business) {
@@ -13,6 +14,7 @@ export function presentFeRetentionBook(business) {
     billingStatus: billing.status,
     allowsDashboard: billing.allowsDashboard,
     needsPayment: billing.needsPayment,
+    onboardingComplete: readFeRetentionOnboarding(business?.packageConfiguration ?? {}).onboardingComplete,
   };
 }
 
@@ -97,6 +99,9 @@ export function resolveFeRetentionNextPath({
   const paid = list.filter((row) => row.allowsDashboard);
   const unpaid = list.filter((row) => !row.allowsDashboard);
   if (paid.length === 1) {
+    if (paid[0].onboardingComplete === false) {
+      return { kind: "setup", href: `/insurance/setup/${paid[0].id}` };
+    }
     return { kind: "dashboard", href: `/insurance/${paid[0].id}` };
   }
   if (paid.length > 1) {

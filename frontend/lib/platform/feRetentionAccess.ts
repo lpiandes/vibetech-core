@@ -15,6 +15,7 @@ export type FeRetentionBook = {
   name: string;
   billingStatus: string;
   allowsDashboard: boolean;
+  onboardingComplete?: boolean;
 };
 
 export type FeRetentionAccess = {
@@ -36,6 +37,7 @@ function toBook(business: { id?: string; name?: string; packageConfiguration?: o
     name: presented.name,
     billingStatus: presented.billingStatus,
     allowsDashboard: presented.allowsDashboard,
+    onboardingComplete: presented.onboardingComplete,
   };
 }
 

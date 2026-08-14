@@ -16,6 +16,7 @@ test("dashboard unlocks only on active/trialing/complimentary", () => {
   assert.equal(feRetentionDashboardAllowed("active"), true);
   assert.equal(feRetentionDashboardAllowed("trialing"), true);
   assert.equal(feRetentionDashboardAllowed("complimentary"), true);
+  assert.equal(feRetentionDashboardAllowed("legacy"), true);
   assert.equal(feRetentionDashboardAllowed("past_due"), false);
   assert.equal(feRetentionDashboardAllowed("incomplete"), false);
   assert.equal(feRetentionNeedsPayment("past_due"), true);
@@ -36,6 +37,14 @@ test("writeFeRetentionBilling stamps the CRM package and $200 contract", () => {
   assert.deepEqual(next.purchasedPackages, ["fe_retention_crm"]);
   assert.equal(readFeRetentionBilling(next).status, "incomplete");
   assert.equal(readFeRetentionBilling(next).allowsDashboard, false);
+});
+
+test("writeFeRetentionBilling preserves the book Twilio number across Stripe status updates", () => {
+  const withNumber = writeFeRetentionBilling({}, { status: "incomplete", twilioFromNumber: "+15550001111" });
+  assert.equal(readFeRetentionBilling(withNumber).twilioFromNumber, "+15550001111");
+  const paid = writeFeRetentionBilling(withNumber, { status: "active" });
+  assert.equal(readFeRetentionBilling(paid).status, "active");
+  assert.equal(readFeRetentionBilling(paid).twilioFromNumber, "+15550001111");
 });
 
 test("billingPatchFromStripeEvent maps checkout and past_due invoice", () => {
