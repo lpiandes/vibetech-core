@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Image from "next/image";
 import { brand } from "@/design/tokens/brand";
 import {
   VIBEKEEP_TAGLINE,
@@ -47,29 +46,17 @@ export function InsurancePublicShell({
         }
         .vk-lockup {
           display: flex;
-          align-items: center;
-          gap: 0.85rem;
           justify-content: ${showStory ? "flex-start" : "center"};
           margin-bottom: 1.85rem;
         }
-        .vk-wordmark {
-          display: flex;
-          flex-direction: column;
-          line-height: 1;
-        }
-        .vk-wordmark strong {
-          font-size: 1.15rem;
-          letter-spacing: 0.08em;
-          font-weight: 800;
-        }
-        .vk-wordmark strong span { color: ${brand.cyan}; }
-        .vk-wordmark small {
-          margin-top: 0.28rem;
-          font-size: 0.62rem;
-          letter-spacing: 0.22em;
-          text-transform: uppercase;
-          color: ${brand.textMuted};
-          font-weight: 650;
+        .vk-lockup img {
+          display: block;
+          width: min(220px, 72vw);
+          height: auto;
+          padding: 0.7rem 0.9rem 0.55rem;
+          background: #fff;
+          border-radius: 16px;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.28);
         }
         .vk-grid {
           display: grid;
@@ -171,18 +158,7 @@ export function InsurancePublicShell({
       ` }} />
       <div className="vk-frame">
         <div className="vk-lockup">
-          <Image
-            src="/brand/vibetech-logo.png"
-            alt="VibeTech"
-            width={56}
-            height={56}
-            priority
-            style={{ width: 56, height: 56, objectFit: "contain" }}
-          />
-          <div className="vk-wordmark">
-            <strong>VIBE<span>TECH</span></strong>
-            <small>Development</small>
-          </div>
+          <img src="/brand/vibetech-lockup.png" alt="VibeTech Development" />
         </div>
         <div className="vk-grid">
           {showStory ? (
