@@ -86,3 +86,37 @@ test("provisionFeRetentionAccount refuses duplicate email", async () => {
   assert.equal(result.ok, false);
   assert.equal(result.reason, "email_taken");
 });
+
+test("valid promo code grants complimentary access", async () => {
+  const platformStore = memoryStore();
+  const result = await provisionFeRetentionAccount({
+    platformStore,
+    hashPassword: async (password) => `hash:${password}`,
+    name: "Ada",
+    email: "promo@agency.test",
+    password: "password1",
+    agencyName: "Ada Agency",
+    promoCode: "Crete88",
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.complimentary, true);
+  const billing = readFeRetentionBilling(platformStore.businesses[0].packageConfiguration);
+  assert.equal(billing.status, "complimentary");
+  assert.equal(billing.allowsDashboard, true);
+});
+
+test("wrong promo code is rejected without creating an account", async () => {
+  const platformStore = memoryStore();
+  const result = await provisionFeRetentionAccount({
+    platformStore,
+    hashPassword: async () => "x",
+    name: "Ada",
+    email: "badpromo@agency.test",
+    password: "password1",
+    agencyName: "Ada Agency",
+    promoCode: "nope",
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "invalid_promo");
+  assert.equal(platformStore.users.length, 0);
+});

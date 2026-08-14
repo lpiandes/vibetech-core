@@ -12,13 +12,15 @@ import {
   applyFeRetentionStripeEvent,
 } from "./FeRetentionBilling.js";
 
-test("dashboard unlocks only on active/trialing", () => {
+test("dashboard unlocks only on active/trialing/complimentary", () => {
   assert.equal(feRetentionDashboardAllowed("active"), true);
   assert.equal(feRetentionDashboardAllowed("trialing"), true);
+  assert.equal(feRetentionDashboardAllowed("complimentary"), true);
   assert.equal(feRetentionDashboardAllowed("past_due"), false);
   assert.equal(feRetentionDashboardAllowed("incomplete"), false);
   assert.equal(feRetentionNeedsPayment("past_due"), true);
   assert.equal(feRetentionNeedsPayment("incomplete"), true);
+  assert.equal(feRetentionNeedsPayment("complimentary"), false);
   assert.equal(feRetentionNeedsPayment("active"), false);
 });
 

@@ -7,6 +7,7 @@ import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { MEMBERSHIP_ROLES } from "../platform/permissions/rolePermissions.js";
 import { FE_RETENTION_CRM_PACKAGE_ID } from "./feRetentionEntitlement.js";
 import { writeFeRetentionBilling } from "./FeRetentionBilling.js";
+import { isValidVibeKeepPromoCode } from "./vibeKeepPromo.js";
 import { ensureFeRetentionInstallation } from "./ensureFeRetentionInstallation.js";
 import { provisionEmptyBusinessWorkspace } from "../platform/services/PlatformBusinessService.js";
 
@@ -33,9 +34,20 @@ export async function provisionFeRetentionAccount({
   agencyName,
   putDurableCredential = null,
   vault = null,
+  promoCode = "",
 } = {}) {
   const valid = validateFeRetentionSignup({ name, email, password, agencyName });
   if (!valid.ok) return deepFreeze(valid);
+
+  const typedPromo = String(promoCode ?? "").trim();
+  const complimentary = Boolean(typedPromo) && isValidVibeKeepPromoCode(typedPromo);
+  if (typedPromo && !complimentary) {
+    return deepFreeze({
+      ok: false,
+      reason: "invalid_promo",
+      message: "That promo code is not valid.",
+    });
+  }
 
   const existing = await platformStore.getUserByEmail(valid.email).catch(() => null);
   if (existing) {
@@ -53,7 +65,9 @@ export async function provisionFeRetentionAccount({
     passwordHash,
   });
 
-  const packageConfiguration = writeFeRetentionBilling({}, { status: "incomplete" });
+  const packageConfiguration = writeFeRetentionBilling({}, {
+    status: complimentary ? "complimentary" : "incomplete",
+  });
   const business = await platformStore.createBusiness({
     id: crypto.randomUUID(),
     name: valid.agencyName,
@@ -81,5 +95,6 @@ export async function provisionFeRetentionAccount({
     businessId: String(business.id),
     email: valid.email,
     packageId: FE_RETENTION_CRM_PACKAGE_ID,
+    complimentary,
   });
 }

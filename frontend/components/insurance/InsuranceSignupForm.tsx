@@ -10,6 +10,7 @@ export function InsuranceSignupForm() {
   const [agencyName, setAgencyName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [promoCode, setPromoCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -21,7 +22,7 @@ export function InsuranceSignupForm() {
       const res = await fetch("/api/insurance/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, agencyName, email, password }),
+        body: JSON.stringify({ name, agencyName, email, password, promoCode }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -36,8 +37,12 @@ export function InsuranceSignupForm() {
         callbackUrl: "/insurance",
       });
       if (signed?.error) {
-        setError("Account created. Log in, then finish payment.");
+        setError(data.complimentary ? "Account created. Log in to open your book." : "Account created. Log in, then finish payment.");
         setBusy(false);
+        return;
+      }
+      if (data.complimentary) {
+        window.location.assign("/insurance");
         return;
       }
       if (data.checkoutUrl) {
@@ -51,6 +56,8 @@ export function InsuranceSignupForm() {
       setBusy(false);
     }
   }
+
+  const hasPromo = Boolean(promoCode.trim());
 
   return (
     <form onSubmit={onSubmit} style={{ display: "grid", gap: 14 }}>
@@ -70,9 +77,19 @@ export function InsuranceSignupForm() {
         <span style={insuranceLabelStyle}>Password (8+ characters)</span>
         <input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} style={insuranceFieldStyle} autoComplete="new-password" />
       </label>
+      <label>
+        <span style={insuranceLabelStyle}>Promo code (optional)</span>
+        <input
+          value={promoCode}
+          onChange={(e) => setPromoCode(e.target.value)}
+          style={insuranceFieldStyle}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </label>
       {error ? <p style={{ color: "#fca5a5", margin: 0, fontSize: 14 }}>{error}</p> : null}
       <Button type="submit" disabled={busy} size="lg" className="w-full h-11 font-semibold">
-        {busy ? "Opening payment…" : "Continue to payment · $200/month"}
+        {busy ? "Working…" : hasPromo ? "Create free account" : "Continue to payment · $200/month"}
       </Button>
     </form>
   );

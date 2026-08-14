@@ -79,6 +79,16 @@ export class PostgresPlatformStore {
     return mapUserRow(rows[0] ?? null);
   }
 
+  async setUserPlatformRole(userId, platformRole) {
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `UPDATE users SET platform_role = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
+        [String(userId), platformRole],
+      ),
+    );
+    return mapUserRow(rows[0] ?? null);
+  }
+
   async createBusiness({
     id = crypto.randomUUID(),
     name,

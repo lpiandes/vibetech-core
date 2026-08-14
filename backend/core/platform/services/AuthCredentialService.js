@@ -27,12 +27,12 @@ export async function bootstrapPlatformAdmin({ email, name, password }) {
   const passwordHash = await hashPassword(password);
   const existing = await platformStore.getUserByEmail(normalizedEmail);
   if (existing) {
-    if (existing.platformRole === PLATFORM_ROLES.PLATFORM_ADMIN) {
-      // Reset password so re-running bootstrap against the target DB always unlocks login.
-      await platformStore.setUserPassword(existing.id, passwordHash);
-      return { user: existing, created: false, passwordReset: true };
+    await platformStore.setUserPassword(existing.id, passwordHash);
+    let user = existing;
+    if (existing.platformRole !== PLATFORM_ROLES.PLATFORM_ADMIN) {
+      user = await platformStore.setUserPlatformRole(existing.id, PLATFORM_ROLES.PLATFORM_ADMIN);
     }
-    throw new Error(`User ${normalizedEmail} already exists without platform admin role.`);
+    return { user, created: false, passwordReset: true };
   }
 
   const user = await platformStore.createUser({

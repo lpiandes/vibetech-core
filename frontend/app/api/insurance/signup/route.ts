@@ -16,12 +16,23 @@ export async function POST(request: Request) {
       email: body.email,
       password: body.password,
       agencyName: body.agencyName,
+      promoCode: body.promoCode,
       putDurableCredential,
       vault: getSharedCredentialVault(),
     });
     if (!provisioned.ok) {
       const status = provisioned.reason === "email_taken" ? 409 : 400;
       return NextResponse.json({ ok: false, error: provisioned.message }, { status });
+    }
+
+    if (provisioned.complimentary) {
+      return NextResponse.json({
+        ok: true,
+        businessId: provisioned.businessId,
+        email: provisioned.email,
+        complimentary: true,
+        checkoutUrl: null,
+      });
     }
 
     const checkout = await createFeRetentionCheckoutSession({

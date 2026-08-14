@@ -14,7 +14,7 @@ export const FE_RETENTION_BILLING_CURRENCY = "usd";
 export { FE_RETENTION_PRODUCT_NAME };
 
 /** Stripe subscription statuses that unlock the agent dashboard. */
-export const FE_RETENTION_PAID_STATUSES = Object.freeze(["active", "trialing"]);
+export const FE_RETENTION_PAID_STATUSES = Object.freeze(["active", "trialing", "complimentary"]);
 
 /** Statuses that show the catch-up payment screen (account exists, access paused). */
 export const FE_RETENTION_PAST_DUE_STATUSES = Object.freeze([
@@ -36,6 +36,7 @@ export function feRetentionDashboardAllowed(status) {
 export function feRetentionNeedsPayment(status) {
   const s = String(status ?? "").toLowerCase();
   if (!s || s === "incomplete") return true;
+  if (s === "complimentary") return false;
   return FE_RETENTION_PAST_DUE_STATUSES.includes(s);
 }
 
