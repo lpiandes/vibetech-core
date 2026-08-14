@@ -3,8 +3,8 @@ import { platformStore, AuthorizationError } from "@/lib/server/compose";
 import { getAuthorizedBusinessScope, requireSessionUser } from "@/lib/platform/AuthorizedWorkspaceService";
 import { feJsonError } from "@/lib/insurance/feRetentionApi";
 import { getFeDeliveryProvider } from "@/lib/insurance/feRetentionApi";
-import { PLATFORM_ROLES } from "../../../../../../../backend/core/platform/permissions/rolePermissions.js";
-import { readFeRetentionBilling } from "../../../../../../../backend/core/fe-retention/FeRetentionBilling.js";
+import { PLATFORM_ROLES } from "../../../../../../backend/core/platform/permissions/rolePermissions.js";
+import { readFeRetentionBilling } from "../../../../../../backend/core/fe-retention/FeRetentionBilling.js";
 import {
   feA2pProfileIsComplete,
   normalizeFeA2pProfile,
@@ -12,11 +12,11 @@ import {
   resolveFeRetentionContinuePath,
   writeFeRetentionOnboarding,
   VIBEKEEP_AGREEMENT_VERSION,
-} from "../../../../../../../backend/core/fe-retention/FeRetentionOnboarding.js";
-import { buildFeRetentionEngagementAgreement } from "../../../../../../../backend/core/fe-retention/FeRetentionEngagementAgreement.js";
-import { ensureFeRetentionInstallation } from "../../../../../../../backend/core/fe-retention/ensureFeRetentionInstallation.js";
-import { notifyFeRetentionOnboardingComplete } from "../../../../../../../backend/core/fe-retention/FeRetentionA2pOps.js";
-import { putDurableCredential } from "../../../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
+} from "../../../../../../backend/core/fe-retention/FeRetentionOnboarding.js";
+import { buildFeRetentionEngagementAgreement } from "../../../../../../backend/core/fe-retention/FeRetentionEngagementAgreement.js";
+import { ensureFeRetentionInstallation } from "../../../../../../backend/core/fe-retention/ensureFeRetentionInstallation.js";
+import { notifyFeRetentionOnboardingComplete } from "../../../../../../backend/core/fe-retention/FeRetentionA2pOps.js";
+import { putDurableCredential } from "../../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
 import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
 
 async function requirePaidBook(businessId: string) {
