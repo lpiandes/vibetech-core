@@ -8,7 +8,7 @@ import {
   listSellableSalesPackagesForAdmin,
   normalizePurchasedPackages,
 } from "../packages/SalesPackageCatalog.js";
-import { isStripeBillingConfigured } from "./StripeHttp.js";
+import { isStripeBillingConfigured } from "./StripeEnv.js";
 
 export { isStripeBillingConfigured };
 

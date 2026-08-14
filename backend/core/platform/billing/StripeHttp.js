@@ -4,18 +4,9 @@
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { deepFreeze } from "../../workspace/_utils/deepFreeze.js";
+import { isStripeBillingConfigured, stripeSecretKey, stripeWebhookSecret } from "./StripeEnv.js";
 
-export function isStripeBillingConfigured() {
-  return Boolean(String(process.env.STRIPE_SECRET_KEY ?? "").trim());
-}
-
-export function stripeSecretKey() {
-  return String(process.env.STRIPE_SECRET_KEY ?? "").trim();
-}
-
-export function stripeWebhookSecret() {
-  return String(process.env.STRIPE_WEBHOOK_SECRET ?? "").trim();
-}
+export { isStripeBillingConfigured, stripeSecretKey, stripeWebhookSecret };
 
 /**
  * Flatten nested objects/arrays into Stripe's form encoding:

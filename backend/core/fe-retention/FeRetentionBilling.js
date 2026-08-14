@@ -5,7 +5,8 @@
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { FE_RETENTION_CRM_PACKAGE_ID } from "./feRetentionEntitlement.js";
 import { mergePurchasedPackagesIntoConfig } from "../platform/packages/SalesPackageCatalog.js";
-import { stripeFormPost, isStripeBillingConfigured } from "../platform/billing/StripeHttp.js";
+import { isStripeBillingConfigured } from "../platform/billing/StripeEnv.js";
+import { stripeFormPost } from "../platform/billing/StripeHttp.js";
 import { FE_RETENTION_PRODUCT_NAME } from "./productBrand.js";
 
 export const FE_RETENTION_MONTHLY_AMOUNT_CENTS = 20000;
