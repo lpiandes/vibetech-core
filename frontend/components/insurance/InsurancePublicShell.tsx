@@ -47,16 +47,17 @@ export function InsurancePublicShell({
         .vk-lockup {
           display: flex;
           justify-content: ${showStory ? "flex-start" : "center"};
-          margin-bottom: 1.85rem;
+          margin-bottom: 1.15rem;
         }
         .vk-lockup img {
           display: block;
-          width: min(280px, 78vw);
-          height: auto;
-          padding: 0.55rem 0.85rem;
+          height: 36px;
+          width: auto;
+          max-width: 168px;
+          padding: 6px 10px;
           background: #fff;
-          border-radius: 14px;
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.28);
+          border-radius: 10px;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
         }
         .vk-grid {
           display: grid;
