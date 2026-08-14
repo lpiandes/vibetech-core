@@ -19,6 +19,7 @@ type SalesPackageOption = {
   honestyNote: string | null;
   commercialStatus?: string;
   sellable?: boolean;
+  selfServe?: boolean;
 };
 
 export default function AdminBusinessManagePanel({
@@ -150,7 +151,7 @@ export default function AdminBusinessManagePanel({
           <span style={{ color: cockpitColors.textMuted, fontWeight: 800, fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase" }}>
             Purchased packages
           </span>
-          {packages.map((pkg) => {
+          {packages.filter((pkg) => pkg.selfServe !== true).map((pkg) => {
             const checked = purchasedPackages.includes(pkg.id);
             return (
               <VtCard key={pkg.id} padding={12} accent={checked}>

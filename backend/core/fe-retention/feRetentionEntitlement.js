@@ -2,6 +2,19 @@ import {
   normalizePurchasedPackages,
   readPurchasedPackagesFromConfig,
 } from "../platform/packages/SalesPackageCatalog.js";
+import { readFeRetentionBilling } from "./FeRetentionBilling.js";
+
+/** Present one FE book for pickers, paywall, and admin directory. */
+export function presentFeRetentionBook(business) {
+  const billing = readFeRetentionBilling(business?.packageConfiguration ?? {});
+  return {
+    id: business?.id != null ? String(business.id) : "",
+    name: String(business?.name ?? "Agency"),
+    billingStatus: billing.status,
+    allowsDashboard: billing.allowsDashboard,
+    needsPayment: billing.needsPayment,
+  };
+}
 
 export const FE_RETENTION_CRM_PACKAGE_ID = "fe_retention_crm";
 
@@ -36,17 +49,64 @@ export function isUserFeRetentionOnly(businesses = []) {
 }
 
 /**
- * First FE-entitled business for a user.
- * @param {{ businesses?: Array<{ id?: string, packageConfiguration?: object }> }} input
+ * First FE book for a user. Paid books win; otherwise the unpaid book (paywall).
+ * @param {{ businesses?: Array<{ id?: string, packageConfiguration?: object }>, isPlatformAdmin?: boolean }} input
  */
-export function resolveFeRetentionEntitlement({ businesses = [] } = {}) {
-  for (const business of Array.isArray(businesses) ? businesses : []) {
+export function resolveFeRetentionEntitlement({ businesses = [], isPlatformAdmin = false } = {}) {
+  const list = Array.isArray(businesses) ? businesses : [];
+  const feBooks = [];
+  for (const business of list) {
     const purchasedPackages = readPurchasedPackagesFromConfig(business?.packageConfiguration ?? {});
     if (!businessGrantsFeRetentionAccess(purchasedPackages)) continue;
-    return {
-      entitled: true,
+    const billing = readFeRetentionBilling(business?.packageConfiguration ?? {});
+    feBooks.push({
+      business,
+      billing,
       businessId: business?.id != null ? String(business.id) : null,
+    });
+  }
+  if (!feBooks.length) {
+    return { entitled: false, businessId: null, billing: null, allowsDashboard: Boolean(isPlatformAdmin) };
+  }
+  const paid = feBooks.find((row) => row.billing.allowsDashboard);
+  const chosen = paid || feBooks[0];
+  return {
+    entitled: true,
+    businessId: chosen.businessId,
+    billing: chosen.billing,
+    allowsDashboard: Boolean(isPlatformAdmin) || chosen.billing.allowsDashboard,
+  };
+}
+
+/**
+ * Next path after /insurance (or app root for FE-only users).
+ * Paid book → dashboard. Unpaid → catch-up. Admin → directory of every book.
+ */
+export function resolveFeRetentionNextPath({
+  signedIn = false,
+  isPlatformAdmin = false,
+  books = [],
+} = {}) {
+  if (!signedIn) {
+    return { kind: "gate", href: "/insurance" };
+  }
+  if (isPlatformAdmin) {
+    return { kind: "admin_directory", href: "/admin/insurance" };
+  }
+  const list = Array.isArray(books) ? books.filter((row) => row?.id) : [];
+  const paid = list.filter((row) => row.allowsDashboard);
+  const unpaid = list.filter((row) => !row.allowsDashboard);
+  if (paid.length === 1) {
+    return { kind: "dashboard", href: `/insurance/${paid[0].id}` };
+  }
+  if (paid.length > 1) {
+    return { kind: "picker", href: "/insurance" };
+  }
+  if (unpaid.length) {
+    return {
+      kind: "billing",
+      href: `/insurance/billing?businessId=${encodeURIComponent(unpaid[0].id)}`,
     };
   }
-  return { entitled: false, businessId: null };
+  return { kind: "no_book", href: "/insurance" };
 }

@@ -20,13 +20,21 @@ export function isPublicPath(pathname: string): boolean {
   if (pathname === "/social-checker" || pathname.startsWith("/social-checker/")) {
     return true;
   }
-  // Insurance CRM landing — own sign-in gate.
-  if (pathname === "/insurance" || pathname === "/insurance/") {
+  // Insurance CRM landing + self-serve signup (own auth, not /login).
+  if (
+    pathname === "/insurance"
+    || pathname === "/insurance/"
+    || pathname === "/insurance/signup"
+    || pathname.startsWith("/insurance/signup/")
+  ) {
     return true;
   }
   if (
     pathname === "/api/social-checker/register"
     || pathname === "/api/social-checker/join"
+    || pathname === "/api/insurance/signup"
+    || pathname === "/api/insurance/sms/inbound"
+    || pathname === "/api/billing/stripe/webhook"
   ) {
     return true;
   }

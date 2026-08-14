@@ -19,6 +19,7 @@ import {
   Users,
   Bot,
   AlertTriangle,
+  Shield,
 } from "lucide-react";
 
 import PageContainer from "@/components/layout/PageContainer";
@@ -45,6 +46,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin/health", label: "Health", icon: <Activity size={16} aria-hidden /> },
       { href: "/admin/businesses", label: "Businesses", icon: <Building2 size={16} aria-hidden /> },
       { href: "/admin/support", label: "Support", icon: <LifeBuoy size={16} aria-hidden /> },
+      { href: "/admin/insurance", label: "VibeKeep", icon: <Shield size={16} aria-hidden /> },
     ],
   },
   {

@@ -1,78 +1,68 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getFeRetentionAccess } from "@/lib/platform/feRetentionAccess";
-import { insuranceDashboardPath } from "@/lib/platform/hosts";
-import { brand } from "@/design/tokens/brand";
+import { resolveFeRetentionNextPath } from "../../../backend/core/fe-retention/feRetentionEntitlement.js";
+import { InsurancePublicShell } from "@/components/insurance/InsurancePublicShell";
+import { InsuranceLoginForm } from "@/components/insurance/InsuranceLoginForm";
+import { InsuranceBookList } from "@/components/insurance/InsuranceBookList";
+import { sanitizeCallbackUrl } from "@/lib/platform/routeProtection";
+import { VIBEKEEP_MONTHLY_PRICE_LABEL } from "@/lib/insurance/productBrand";
 
-const pageStyle: React.CSSProperties = {
-  minHeight: "100vh",
-  margin: 0,
-  background: `radial-gradient(ellipse 70% 45% at 12% -8%, rgba(34,211,238,0.12) 0%, transparent 55%), ${brand.bgDeep}`,
-  color: brand.text,
-  fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-};
-
-const wrapStyle: React.CSSProperties = {
-  maxWidth: 480,
-  margin: "0 auto",
-  padding: "4rem 1.25rem",
-};
-
-export default async function InsuranceIndexPage() {
+export default async function InsuranceIndexPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string }>;
+}) {
   const access = await getFeRetentionAccess();
+  const params = await searchParams;
+  const callbackUrl = sanitizeCallbackUrl(params.callbackUrl, "/insurance");
 
   if (!access.signedIn) {
     return (
-      <main style={pageStyle}>
-        <div style={wrapStyle}>
-          <p style={{ color: brand.cyan, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: 12 }}>
-            VibeTech Insurance
-          </p>
-          <h1 style={{ fontSize: "2rem", margin: "0.4rem 0 0.75rem", letterSpacing: "-0.02em" }}>Final Expense Retention</h1>
-          <p style={{ color: brand.textMuted, lineHeight: 1.5 }}>
-            Sign in with the invite email your agency admin sent you to open your private client dashboard.
-          </p>
-          <p>
-            <Link href={`/login?callbackUrl=${encodeURIComponent("/insurance")}`} style={{ color: brand.cyan, fontWeight: 700 }}>
-              Sign in →
-            </Link>
-          </p>
-        </div>
-      </main>
+      <InsurancePublicShell
+        showStory
+        title="Log in"
+        lede="Open your book. Reminders, birthdays, and lapse recovery are already running."
+      >
+        <InsuranceLoginForm callbackUrl={callbackUrl} />
+        <p style={{ margin: "1.1rem 0 0", fontSize: 14, opacity: 0.9 }}>
+          New agency?{" "}
+          <Link href="/insurance/signup">Start VibeKeep · {VIBEKEEP_MONTHLY_PRICE_LABEL}</Link>
+        </p>
+      </InsurancePublicShell>
     );
   }
 
-  if (!access.entitled || !access.businesses.length) {
+  if (access.isPlatformAdmin) {
+    redirect("/admin/insurance");
+  }
+
+  const next = resolveFeRetentionNextPath({
+    signedIn: true,
+    isPlatformAdmin: false,
+    books: access.businesses,
+  });
+
+  if (next.kind === "dashboard" || next.kind === "billing") {
+    redirect(next.href);
+  }
+
+  if (next.kind === "picker") {
     return (
-      <main style={pageStyle}>
-        <div style={wrapStyle}>
-          <h1 style={{ letterSpacing: "-0.02em" }}>No FE Retention workspace yet</h1>
-          <p style={{ color: brand.textMuted }}>
-            Ask your VibeTech admin to invite you with the Final Expense Retention CRM package.
-          </p>
-        </div>
-      </main>
+      <InsurancePublicShell title="Choose your book" lede="Pick which agency book to open.">
+        <InsuranceBookList books={access.businesses.filter((b) => b.allowsDashboard)} />
+      </InsurancePublicShell>
     );
-  }
-
-  if (access.businesses.length === 1) {
-    redirect(insuranceDashboardPath(access.businesses[0].id));
   }
 
   return (
-    <main style={pageStyle}>
-      <div style={{ ...wrapStyle, maxWidth: 560 }}>
-        <h1 style={{ letterSpacing: "-0.02em" }}>Choose your book</h1>
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {access.businesses.map((b) => (
-            <li key={b.id} style={{ marginBottom: 12 }}>
-              <Link href={insuranceDashboardPath(b.id)} style={{ color: brand.cyan, fontWeight: 700, fontSize: "1.1rem" }}>
-                {b.name}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </main>
+    <InsurancePublicShell
+      title="No book on this login"
+      lede="This email isn’t tied to a VibeKeep subscription. Start a new book, or log in with the email you used at checkout."
+    >
+      <p>
+        <Link href="/insurance/signup">Start VibeKeep · {VIBEKEEP_MONTHLY_PRICE_LABEL} →</Link>
+      </p>
+    </InsurancePublicShell>
   );
 }

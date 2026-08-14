@@ -4,12 +4,14 @@ import { redirect } from "next/navigation";
 
 import { platformStore } from "@/lib/server/compose";
 import { LAST_BUSINESS_COOKIE } from "@/lib/platform/businessCookies";
-import { SOCIAL_CHECKER_HOST_URL, insuranceDashboardUrl, insuranceEntryUrl } from "@/lib/platform/hosts";
+import { SOCIAL_CHECKER_HOST_URL, insuranceDashboardUrl } from "@/lib/platform/hosts";
 import { PLATFORM_ROLES } from "../../backend/core/platform/permissions/rolePermissions.js";
 import { isUserSocialCheckerOnly } from "../../backend/core/platform/packages/socialCheckerEntitlement.js";
 import {
   isUserFeRetentionOnly,
   businessGrantsFeRetentionAccess,
+  presentFeRetentionBook,
+  resolveFeRetentionNextPath,
 } from "../../backend/core/fe-retention/feRetentionEntitlement.js";
 import { readPurchasedPackagesFromConfig } from "../../backend/core/platform/packages/SalesPackageCatalog.js";
 
@@ -31,13 +33,19 @@ export default async function RootPage() {
   }
 
   if (!isAdmin && isUserFeRetentionOnly(businesses)) {
-    const fe = businesses.find((b: any) =>
-      businessGrantsFeRetentionAccess(readPurchasedPackagesFromConfig(b?.packageConfiguration ?? {})),
-    );
-    if (fe?.id) {
-      redirect(insuranceDashboardUrl(String(fe.id)));
+    const next = resolveFeRetentionNextPath({
+      signedIn: true,
+      books: businesses
+        .filter((b: any) =>
+          businessGrantsFeRetentionAccess(readPurchasedPackagesFromConfig(b?.packageConfiguration ?? {})),
+        )
+        .map(presentFeRetentionBook),
+    });
+    if (next.kind === "dashboard" && next.href.startsWith("/insurance/")) {
+      const id = next.href.replace("/insurance/", "").split("?")[0];
+      redirect(insuranceDashboardUrl(id));
     }
-    redirect(insuranceEntryUrl());
+    redirect(next.href);
   }
 
   const cookieStore = await cookies();
@@ -49,7 +57,11 @@ export default async function RootPage() {
       last
       && businessGrantsFeRetentionAccess(readPurchasedPackagesFromConfig(last?.packageConfiguration ?? {}))
     ) {
-      redirect(insuranceDashboardUrl(String(last.id)));
+      const book = presentFeRetentionBook(last);
+      if (!book.allowsDashboard) {
+        redirect(`/insurance/billing?businessId=${encodeURIComponent(book.id)}`);
+      }
+      redirect(insuranceDashboardUrl(book.id));
     }
     redirect(`/b/${lastBusinessId}/home`);
   }
@@ -57,7 +69,11 @@ export default async function RootPage() {
   if (businesses.length === 1) {
     const only = businesses[0];
     if (businessGrantsFeRetentionAccess(readPurchasedPackagesFromConfig(only?.packageConfiguration ?? {}))) {
-      redirect(insuranceDashboardUrl(String(only.id)));
+      const book = presentFeRetentionBook(only);
+      if (!book.allowsDashboard) {
+        redirect(`/insurance/billing?businessId=${encodeURIComponent(book.id)}`);
+      }
+      redirect(insuranceDashboardUrl(book.id));
     }
     redirect(`/b/${only.id}/home`);
   }

@@ -3,11 +3,13 @@ import { InsuranceShell } from "@/components/insurance/InsuranceShell";
 import { getFeRetentionAccess } from "@/lib/platform/feRetentionAccess";
 import { platformStore } from "@/lib/server/compose";
 import { businessGrantsFeRetentionAccess } from "../../../../backend/core/fe-retention/feRetentionEntitlement.js";
+import { readFeRetentionBilling } from "../../../../backend/core/fe-retention/FeRetentionBilling.js";
 import { ensureFeRetentionInstallation } from "../../../../backend/core/fe-retention/ensureFeRetentionInstallation.js";
 import { readPurchasedPackagesFromConfig } from "../../../../backend/core/platform/packages/SalesPackageCatalog.js";
 import { getSessionUser } from "@/lib/platform/AuthorizedWorkspaceService";
 import { putDurableCredential } from "../../../../backend/core/integrations/credentials/durableCredentialVault.js";
 import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
+import { insuranceBillingPath } from "@/lib/platform/hosts";
 
 export default async function InsuranceBusinessLayout({
   children,
@@ -19,7 +21,7 @@ export default async function InsuranceBusinessLayout({
   const { businessId } = await params;
   const access = await getFeRetentionAccess();
   if (!access.signedIn) {
-    redirect(`/login?callbackUrl=${encodeURIComponent(`/insurance/${businessId}`)}`);
+    redirect(`/insurance?callbackUrl=${encodeURIComponent(`/insurance/${businessId}`)}`);
   }
 
   const user = await getSessionUser();
@@ -32,12 +34,16 @@ export default async function InsuranceBusinessLayout({
   const packages = readPurchasedPackagesFromConfig(business.packageConfiguration ?? {});
   const entitled = businessGrantsFeRetentionAccess(packages)
     || access.businesses.some((b) => b.id === businessId);
-  if (!entitled && membership?.status !== "ACTIVE") {
+  if (!entitled && membership?.status !== "ACTIVE" && !access.isPlatformAdmin) {
     notFound();
   }
-  if (!businessGrantsFeRetentionAccess(packages)) {
-    // Member of a non-FE business — bounce to OS
+  if (!businessGrantsFeRetentionAccess(packages) && !access.isPlatformAdmin) {
     redirect(`/b/${businessId}/home`);
+  }
+
+  const billing = readFeRetentionBilling(business.packageConfiguration ?? {});
+  if (!access.isPlatformAdmin && !billing.allowsDashboard) {
+    redirect(insuranceBillingPath(businessId));
   }
 
   await ensureFeRetentionInstallation({
@@ -55,6 +61,7 @@ export default async function InsuranceBusinessLayout({
       businessId={businessId}
       businessName={String(business.name ?? "My book")}
       agentName={access.displayName}
+      viewingAsAdmin={access.isPlatformAdmin}
     >
       {children}
     </InsuranceShell>

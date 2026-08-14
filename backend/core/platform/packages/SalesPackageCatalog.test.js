@@ -387,6 +387,10 @@ test("sellable admin list is Wave A/B + managed, RFT-first", () => {
   const chatbot = sellable.find((row) => row.id === "website_chatbot");
   assert.equal(chatbot?.sellable, true);
   assert.ok(!sellable.some((row) => row.id === "ai_business_os"));
+  assert.ok(
+    !sellable.some((row) => row.id === "fe_retention_crm"),
+    "FE Retention is self-serve Stripe — not assigned from admin checkboxes",
+  );
 });
 
 test("thin SKU default employees use registered archetypes", () => {

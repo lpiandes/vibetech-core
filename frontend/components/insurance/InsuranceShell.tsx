@@ -18,11 +18,13 @@ export function InsuranceShell({
   businessId,
   businessName,
   agentName,
+  viewingAsAdmin = false,
   children,
 }: {
   businessId: string;
   businessName: string;
   agentName: string | null;
+  viewingAsAdmin?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname() || "";
@@ -233,16 +235,32 @@ export function InsuranceShell({
         .fe-table a { color: var(--fe-accent); font-weight: 650; text-decoration: none; }
       ` }} />
       <div className="fe-shell">
+        {viewingAsAdmin ? (
+          <p
+            style={{
+              margin: "0 0 1rem",
+              padding: "0.55rem 0.85rem",
+              borderRadius: 10,
+              background: "rgba(34,211,238,0.12)",
+              border: `1px solid ${brand.borderGlow}`,
+              color: brand.cyan,
+              fontSize: 13,
+              fontWeight: 650,
+            }}
+          >
+            Admin view — this is the same dashboard the agent sees.
+          </p>
+        ) : null}
         <header className="fe-top">
           <div>
             <p className="fe-brand">
-              <span>VibeTech Insurance</span>
-              {businessName || "Retention CRM"}
+              <span>VibeKeep</span>
+              {businessName || "Your book"}
             </p>
           </div>
           <div className="fe-agent">
             {agentName ? <div>{agentName}</div> : null}
-            <div>Final Expense Retention</div>
+            <div>Keep every client in force</div>
           </div>
         </header>
         <nav className="fe-nav">

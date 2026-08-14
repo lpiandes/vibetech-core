@@ -4,6 +4,8 @@ import {
   applySubscriptionEntitlementsToConfig,
   isStripeBillingConfigured,
 } from "../../../../../../backend/core/platform/billing/StripeBillingScaffold.js";
+import { verifyStripeWebhookSignature } from "../../../../../../backend/core/platform/billing/StripeHttp.js";
+import { applyFeRetentionStripeEvent } from "../../../../../../backend/core/fe-retention/FeRetentionBilling.js";
 
 function isProductionRuntime() {
   return process.env.NODE_ENV === "production"
@@ -11,9 +13,8 @@ function isProductionRuntime() {
 }
 
 /**
- * Stripe webhook / controlled sandbox entitlements.
- * Production: requires Stripe config + stripe-signature header (SDK verify lands next).
- * Sandbox: only allowed outside production, or with matching BILLING_SANDBOX_SECRET.
+ * Stripe webhook: FE Retention subscriptions + optional OS package entitlements.
+ * Live traffic requires Stripe-Signature + STRIPE_WEBHOOK_SECRET.
  */
 export async function POST(request: Request) {
   const sandboxHeader = request.headers.get("x-vibetech-billing-sandbox") === "1";
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
   const providedSandboxSecret = String(request.headers.get("x-vibetech-billing-sandbox-secret") ?? "").trim();
   const secret = String(process.env.STRIPE_WEBHOOK_SECRET ?? "").trim();
   const production = isProductionRuntime();
+  const rawBody = await request.text();
 
   let sandbox = false;
   if (sandboxHeader) {
@@ -42,10 +44,8 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ok: false,
         error: "stripe_not_configured",
-        note: "Invoices/packages are assigned by admin. In-app Stripe Checkout is not enabled.",
       }, { status: 503 });
     }
-    // Signature verification lands with Stripe SDK; refuse unsigned live traffic.
     const sig = request.headers.get("stripe-signature");
     if (!sig) {
       return NextResponse.json({ ok: false, error: "stripe_signature_required" }, { status: 400 });
@@ -54,15 +54,30 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ok: false,
         error: "stripe_webhook_secret_required",
-        note: "Refusing to mutate entitlements without STRIPE_WEBHOOK_SECRET.",
       }, { status: 503 });
+    }
+    const verified = verifyStripeWebhookSignature(rawBody, sig, secret);
+    if (!verified.ok) {
+      return NextResponse.json({ ok: false, error: verified.reason }, { status: 400 });
     }
   }
 
-  const body = await request.json().catch(() => ({}));
+  const body = JSON.parse(rawBody || "{}");
+  const event = body?.type && body?.data ? body : { type: body?.type, data: { object: body } };
+
+  const fe = await applyFeRetentionStripeEvent({ platformStore, event: body?.type ? body : event });
+  if (fe.ok && !fe.ignored) {
+    return NextResponse.json({ ok: true, product: "fe_retention_crm", ...fe, sandbox });
+  }
+
   const businessId = String(body?.businessId ?? body?.data?.object?.metadata?.businessId ?? "").trim();
   if (!businessId) {
-    return NextResponse.json({ ok: false, error: "businessId_required" }, { status: 400 });
+    return NextResponse.json({
+      ok: fe.ok !== false,
+      ignored: true,
+      fe,
+      sandbox,
+    });
   }
 
   const status = String(
@@ -78,12 +93,12 @@ export async function POST(request: Request) {
   const priceIds = Array.isArray(body?.priceIds)
     ? body.priceIds
     : (Array.isArray(body?.data?.object?.items?.data)
-      ? body.data.object.items.data.map((item: any) => item?.price?.id).filter(Boolean)
+      ? body.data.object.items.data.map((item: { price?: { id?: string } }) => item?.price?.id).filter(Boolean)
       : []);
 
   const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
   if (!installation) {
-    return NextResponse.json({ ok: false, error: "business_not_found" }, { status: 404 });
+    return NextResponse.json({ ok: false, error: "business_not_found", fe }, { status: 404 });
   }
 
   const applied = applySubscriptionEntitlementsToConfig({
@@ -93,7 +108,7 @@ export async function POST(request: Request) {
     priceIds,
   });
   if (!applied.ok) {
-    return NextResponse.json({ ok: false, ...applied }, { status: 400 });
+    return NextResponse.json({ ok: false, ...applied, fe }, { status: 400 });
   }
 
   await platformStore.upsertBusinessOSInstallation({

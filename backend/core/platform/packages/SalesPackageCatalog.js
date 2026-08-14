@@ -433,8 +433,8 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
   },
   {
     id: "fe_retention_crm",
-    label: "Final Expense Retention CRM",
-    description: "Agent dashboard for FE clients — automatic payment reminders, birthdays, holidays, welcome/docs texts, and lapse recovery. Lives at insurance.vtechdevelopment.com.",
+    label: "VibeKeep",
+    description: "Keep every Final Expense client in force — automatic payment reminders, birthdays, holidays, and lapse recovery. Lives at /insurance.",
     moduleIds: ["home", "settings", "integrations"],
     canonicalNavIds: ["home", "settings", "integrations"],
     discoveryTopics: [],
@@ -447,6 +447,7 @@ export const SALES_PACKAGE_CATALOG = Object.freeze([
     skipPackageAsk: true,
     autoSendWithoutApproval: true,
     productHost: "insurance",
+    selfServe: true,
   },
   {
     id: "social_content_automation",
@@ -813,6 +814,8 @@ export function listSalesPackagesForAdmin({ includeRoadmap = true } = {}) {
         honestyNote: pkg.honestyNote ?? null,
         commercialStatus: pkg.commercialStatus ?? "product",
         sellable: pkg.sellable !== false,
+        selfServe: pkg.selfServe === true,
+        productHost: pkg.productHost ?? null,
         maxWorkers: pkg.maxWorkers ?? null,
         maxWorkflows: pkg.maxWorkflows ?? null,
         maxProspectingRunsPerDay: pkg.maxProspectingRunsPerDay ?? null,
@@ -842,7 +845,6 @@ export { canSellOffer } from "../commercial/CanSellOffer.js";
  */
 export const WAVE_A_SELLABLE_PACKAGE_IDS = Object.freeze([
   "managed_revenue_follow_through",
-  "fe_retention_crm",
   "ai_receptionist",
   "lead_follow_up",
   "website_chatbot",
@@ -860,12 +862,15 @@ export const WAVE_B_SELLABLE_PACKAGE_IDS = Object.freeze([
 export function listSellableSalesPackagesForAdmin() {
   const waveA = new Set(WAVE_A_SELLABLE_PACKAGE_IDS);
   const waveB = new Set(WAVE_B_SELLABLE_PACKAGE_IDS);
-  const rows = listSalesPackagesForAdmin({ includeRoadmap: true }).filter((row) => (
-    (waveA.has(row.id) && row.sellable !== false)
-    || (waveB.has(row.id) && row.sellable !== false)
-    || (row.commercialStatus === "managed_product" && row.sellable !== false)
-    || (row.commercialStatus === "product" && row.sellable === true && !waveA.has(row.id) && !waveB.has(row.id))
-  ));
+  const rows = listSalesPackagesForAdmin({ includeRoadmap: true }).filter((row) => {
+    if (row.selfServe === true) return false;
+    return (
+      (waveA.has(row.id) && row.sellable !== false)
+      || (waveB.has(row.id) && row.sellable !== false)
+      || (row.commercialStatus === "managed_product" && row.sellable !== false)
+      || (row.commercialStatus === "product" && row.sellable === true && !waveA.has(row.id) && !waveB.has(row.id))
+    );
+  });
   const rft = rows.filter((row) => row.id === "managed_revenue_follow_through");
   const rest = rows.filter((row) => row.id !== "managed_revenue_follow_through");
   return [...rft, ...rest];

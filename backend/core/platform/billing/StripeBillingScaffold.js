@@ -8,10 +8,9 @@ import {
   listSellableSalesPackagesForAdmin,
   normalizePurchasedPackages,
 } from "../packages/SalesPackageCatalog.js";
+import { isStripeBillingConfigured } from "./StripeHttp.js";
 
-export function isStripeBillingConfigured() {
-  return Boolean(String(process.env.STRIPE_SECRET_KEY ?? "").trim());
-}
+export { isStripeBillingConfigured };
 
 /**
  * Map sellable package ids to Stripe price ids via env:
