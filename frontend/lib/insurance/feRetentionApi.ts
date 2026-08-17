@@ -14,7 +14,7 @@ import {
 import { describeTwilioReadiness } from "../../../backend/core/fe-retention/FeRetentionSettingsCatalog.js";
 import { readPurchasedPackagesFromConfig } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
 import { PLATFORM_ROLES } from "../../../backend/core/platform/permissions/rolePermissions.js";
-import { createFrontendInvitationDeliveryProvider } from "@/lib/server/invitationDelivery";
+import { createFrontendSupportDeliveryProvider } from "@/lib/server/invitationDelivery";
 import { putDurableCredential } from "../../../backend/core/integrations/credentials/durableCredentialVault.js";
 import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
 
@@ -107,7 +107,7 @@ export async function resolveFeIntegrationPlatform(businessId: string) {
 }
 
 export function getFeDeliveryProvider() {
-  return createFrontendInvitationDeliveryProvider();
+  return createFrontendSupportDeliveryProvider();
 }
 
 /** @deprecated prefer getFeDeliveryProvider + deliverFeClientTouchpoint deliveryProvider */

@@ -9,7 +9,7 @@ export class ResendInvitationDeliveryProvider extends InvitationDeliveryProvider
 
   async send(payload) {
     const body = {
-      from: this.from,
+      from: String(payload.from ?? "").trim() || this.from,
       to: [payload.to],
       subject: payload.subject,
       html: payload.html,

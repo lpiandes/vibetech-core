@@ -17,11 +17,12 @@ export class SmtpInvitationDeliveryProvider extends InvitationDeliveryProvider {
   async send(payload) {
     try {
       const info = await this.transporter.sendMail({
-        from: this.from,
+        from: String(payload.from ?? "").trim() || this.from,
         to: payload.to,
         subject: payload.subject,
         html: payload.html,
         text: payload.text,
+        replyTo: String(payload.replyTo ?? "").trim() || undefined,
         attachments: Array.isArray(payload.attachments) ? payload.attachments : undefined,
       });
       return {

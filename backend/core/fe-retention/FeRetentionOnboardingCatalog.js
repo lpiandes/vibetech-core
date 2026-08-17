@@ -3,6 +3,7 @@
  * Keep Stripe/billing imports out of this file so client components can use it.
  */
 export const VIBEKEEP_OPS_EMAIL = "leopiandes@vtechdevelopment.com";
+export const VIBEKEEP_SUPPORT_FROM = "VIBETech Support <support@vtechdevelopment.com>";
 export const VIBEKEEP_OPS_PHONE_DISPLAY = "603-818-2383";
 export const VIBEKEEP_OPS_PHONE_E164 = "+16038182383";
 export const VIBEKEEP_AGREEMENT_VERSION = "2026-08-14";

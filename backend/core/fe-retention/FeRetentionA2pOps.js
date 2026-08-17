@@ -9,6 +9,7 @@ import {
   formatFeA2pProfileForOps,
   VIBEKEEP_OPS_EMAIL,
   VIBEKEEP_OPS_PHONE_E164,
+  VIBEKEEP_SUPPORT_FROM,
 } from "./FeRetentionOnboarding.js";
 
 function safeString(v) {
@@ -155,6 +156,8 @@ export async function notifyFeRetentionOnboardingComplete({
       force: true,
       fallbackDefaultEmail: true,
       toEmails: [DEFAULT_PLATFORM_OPERATOR_EMAIL, VIBEKEEP_OPS_EMAIL],
+      from: VIBEKEEP_SUPPORT_FROM,
+      replyTo: "support@vtechdevelopment.com",
     });
   } catch (err) {
     email = { ok: false, message: err instanceof Error ? err.message : String(err) };
@@ -178,6 +181,8 @@ export async function notifyFeRetentionOnboardingComplete({
         subject: `VibeKeep signed agreement — ${safeString(businessName) || businessId}`,
         text: agreementText || action.summary,
         html: agreementHtml || `<pre>${action.summary}</pre>`,
+        from: VIBEKEEP_SUPPORT_FROM,
+        replyTo: "support@vtechdevelopment.com",
         attachments,
       });
     } catch {
