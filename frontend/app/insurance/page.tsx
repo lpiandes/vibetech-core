@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getFeRetentionAccess } from "@/lib/platform/feRetentionAccess";
-import { resolveFeRetentionNextPath } from "../../../backend/core/fe-retention/feRetentionEntitlement.js";
+import { getFeRetentionAccess, resolveFeRetentionNextPath } from "@/lib/platform/feRetentionAccess";
 import { InsurancePublicShell } from "@/components/insurance/InsurancePublicShell";
 import { InsuranceLoginForm } from "@/components/insurance/InsuranceLoginForm";
 import { InsuranceBookList } from "@/components/insurance/InsuranceBookList";

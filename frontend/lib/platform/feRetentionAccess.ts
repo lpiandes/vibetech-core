@@ -2,6 +2,7 @@ import { getSessionUser } from "./AuthorizedWorkspaceService";
 import { platformStore } from "@/lib/server/compose";
 import {
   resolveFeRetentionEntitlement,
+  resolveFeRetentionNextPath,
   isUserFeRetentionOnly,
   listOwnedFeRetentionBooks,
   presentFeRetentionBook,
@@ -84,6 +85,8 @@ export async function listAllFeRetentionBooks(): Promise<FeRetentionBook[]> {
   const all = await platformStore.listBusinesses({ limit: 500 }).catch(() => []);
   return listOwnedFeRetentionBooks(Array.isArray(all) ? all : []).map(toBook);
 }
+
+export { resolveFeRetentionNextPath };
 
 export function feRetentionRedirectForBusiness(businessId: string) {
   return insuranceDashboardPath(businessId);
