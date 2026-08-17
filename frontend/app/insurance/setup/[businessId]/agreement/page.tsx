@@ -58,7 +58,7 @@ export default async function InsuranceAgreementPage({
     <InsurancePublicShell
       wide
       title="Engagement agreement"
-      lede="Review and sign. Your legal name and address from the last screen are filled in. After you sign, we buy your texting number and open the dashboard."
+      lede="This is the VibeKeep engagement agreement with VibeTech’s wordmark. Read it, then type the owner’s name. After you sign we buy your texting number, put it in Settings, and open the dashboard."
     >
       <InsuranceEngagementAgreementForm
         businessId={businessId}

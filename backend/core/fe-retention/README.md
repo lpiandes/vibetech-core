@@ -9,7 +9,7 @@ Self-serve at `/insurance` as **VibeKeep**. Agents sign up, pay $200/month on St
 | `feRetentionEntitlement.js` | Which books a login can open; next-path (dashboard vs paywall vs admin) |
 | `FeRetentionStore.js` | Client book state on the OS installation |
 | `FeRetentionNeedsAttention.js` | Today queue |
-| `FeRetentionSms.js` | Per-book From-number: oldest live book keeps `TWILIO_MESSAGING_FROM`; later books buy a number |
+| `FeRetentionSms.js` | Every signed book buys a dedicated From-number. `TWILIO_MESSAGING_FROM` only texts the operator |
 | `FeRetentionInbound.js` | Twilio inbound + STOP |
 | `runHostedFeRetentionSweep.js` | Hosted daily tick |
 | `ensureFeRetentionInstallation.js` | Minimal OS row so agents skip Architect |

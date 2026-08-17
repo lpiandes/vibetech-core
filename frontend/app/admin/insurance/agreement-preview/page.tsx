@@ -26,7 +26,10 @@ export default async function AdminAgreementPreviewPage() {
       dock={<VtDockLink href="/admin/insurance">Back to books</VtDockLink>}
     >
       <p style={{ maxWidth: 640 }}>
-        This is the document agencies sign after A2P details. Sample name and address are filled in.
+        Agencies see this after they fill business details, at
+        {" "}
+        <code>/insurance/setup/…/agreement</code>
+        . After they sign, they can reopen it from Settings. Sample name and address are filled in below.
       </p>
       <div dangerouslySetInnerHTML={{ __html: doc.html }} />
     </AdminVtPage>

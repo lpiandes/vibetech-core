@@ -2,13 +2,12 @@
  * Platform-managed Twilio SMS for FE Retention (VibeKeep).
  * Agents never enter Twilio credentials.
  *
- * The oldest live VibeKeep book keeps TWILIO_MESSAGING_FROM (already purchased).
- * Later books get a dedicated US local number bought in the background.
+ * TWILIO_MESSAGING_FROM texts the operator (A2P setup). Every signed book
+ * gets its own purchased US local number — including the first agency.
  */
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { INTEGRATION_CAPABILITIES } from "../integrations/capabilities/IntegrationCapability.js";
 import { purchaseTwilioLocalSmsNumber } from "../integrations/twilio/TwilioProvisioningService.js";
-import { listActiveFeRetentionBooks } from "./feRetentionEntitlement.js";
 import { readFeRetentionBilling, writeFeRetentionBilling, syncFeRetentionBillingOntoInstallation } from "./FeRetentionBilling.js";
 import { readFeRetentionOnboarding } from "./FeRetentionOnboarding.js";
 import { resolvePublicAppOrigin } from "../platform/invitations/invitationAppUrl.js";
@@ -83,52 +82,8 @@ export async function resolveFeRetentionFromNumber({
   return safeString(cred?.secrets?.fromNumber || cred?.metadata?.fromNumber);
 }
 
-async function listClaimedFeFromNumbers(platformStore) {
-  let businesses = [];
-  try {
-    businesses = await platformStore.listBusinesses({ limit: 500 });
-  } catch {
-    businesses = await platformStore.listAllBusinesses?.() ?? [];
-  }
-  const feBooks = listActiveFeRetentionBooks(businesses);
-  const claimed = [];
-  for (const business of feBooks) {
-    const businessId = String(business.id);
-    const fromNumber = await resolveFeRetentionFromNumber({
-      platformStore,
-      businessId,
-      packageConfiguration: business.packageConfiguration,
-    });
-    if (fromNumber) claimed.push({ businessId, fromNumber });
-  }
-  return { feBooks, claimed };
-}
-
-function compareFeBooksByAge(a, b) {
-  const ta = Date.parse(a?.createdAt || 0) || 0;
-  const tb = Date.parse(b?.createdAt || 0) || 0;
-  if (ta !== tb) return ta - tb;
-  return String(a?.id ?? "").localeCompare(String(b?.id ?? ""));
-}
-
-/** Only the oldest live VibeKeep book may keep the platform From-number. */
-export function shouldAssignPlatformSharedFromNumber({
-  businessId,
-  feBooks = [],
-  sharedFrom = "",
-  claimed = [],
-} = {}) {
-  const id = safeString(businessId);
-  const shared = safeString(sharedFrom);
-  if (!id || !shared) return false;
-  const taken = claimed.some((row) => (
-    String(row.businessId) !== id && feSmsPhonesMatch(row.fromNumber, shared)
-  ));
-  if (taken) return false;
-  const active = Array.isArray(feBooks) ? feBooks : [];
-  if (!active.length) return true;
-  const oldest = [...active].sort(compareFeBooksByAge)[0];
-  return String(oldest.id) === id;
+export function isFeRetentionOpsFromNumber(fromNumber) {
+  return feSmsPhonesMatch(fromNumber, readPlatformTwilioSmsEnv().fromNumber);
 }
 
 async function persistBookFromNumber({ platformStore, businessId, fromNumber }) {
@@ -185,7 +140,7 @@ async function writeFeSmsCredential({
       phoneSid: phoneSid || null,
       provisionedBy,
       simulated,
-      a2pRegistrationStatus: provisionedBy === "fe_retention_platform" ? "platform_shared" : "pending",
+      a2pRegistrationStatus: "pending",
       actorId,
     },
   });
@@ -226,11 +181,11 @@ export async function ensureFeRetentionPlatformSms({
   }
 
   const env = readPlatformTwilioSmsEnv();
-  if (!env.accountSid || !env.authToken || !env.fromNumber) {
+  if (!env.accountSid || !env.authToken) {
     return deepFreeze({
       ok: false,
       reason: "platform_twilio_not_configured",
-      message: "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_MESSAGING_FROM on the server.",
+      message: "Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN on the server.",
     });
   }
 
@@ -238,8 +193,8 @@ export async function ensureFeRetentionPlatformSms({
   try {
     const existing = await platformStore.getIntegrationCredential?.(credentialId).catch(() => null);
     const existingFrom = safeString(existing?.secrets?.fromNumber || existing?.metadata?.fromNumber);
-    if (existing?.secrets?.accountSid && existingFrom) {
-      if (!billing.twilioFromNumber) {
+    if (existing?.secrets?.accountSid && existingFrom && !isFeRetentionOpsFromNumber(existingFrom)) {
+      if (!billing.twilioFromNumber || isFeRetentionOpsFromNumber(billing.twilioFromNumber)) {
         await persistBookFromNumber({ platformStore, businessId: id, fromNumber: existingFrom });
       }
       return deepFreeze({
@@ -247,24 +202,22 @@ export async function ensureFeRetentionPlatformSms({
         already: true,
         credentialId,
         fromNumber: existingFrom,
-        provisionedBy: existing?.metadata?.provisionedBy || null,
+        provisionedBy: existing?.metadata?.provisionedBy || "fe_retention_purchased",
       });
     }
   } catch {
-    /* continue to assign or buy */
+    /* continue to buy */
   }
 
   const billedFrom = safeString(billing.twilioFromNumber);
-  if (billedFrom) {
+  if (billedFrom && !isFeRetentionOpsFromNumber(billedFrom)) {
     await writeFeSmsCredential({
       platformStore,
       vault,
       putDurableCredential,
       businessId: id,
       fromNumber: billedFrom,
-      provisionedBy: feSmsPhonesMatch(billedFrom, env.fromNumber)
-        ? "fe_retention_platform"
-        : "fe_retention_purchased",
+      provisionedBy: "fe_retention_purchased",
       actorId,
     });
     return deepFreeze({
@@ -272,31 +225,6 @@ export async function ensureFeRetentionPlatformSms({
       already: true,
       credentialId,
       fromNumber: billedFrom,
-    });
-  }
-
-  const { feBooks, claimed } = await listClaimedFeFromNumbers(platformStore);
-  if (shouldAssignPlatformSharedFromNumber({
-    businessId: id,
-    feBooks,
-    sharedFrom: env.fromNumber,
-    claimed,
-  })) {
-    await writeFeSmsCredential({
-      platformStore,
-      vault,
-      putDurableCredential,
-      businessId: id,
-      fromNumber: env.fromNumber,
-      provisionedBy: "fe_retention_platform",
-      actorId,
-    });
-    return deepFreeze({
-      ok: true,
-      already: false,
-      credentialId,
-      fromNumber: env.fromNumber,
-      provisionedBy: "fe_retention_platform",
     });
   }
 
@@ -458,4 +386,15 @@ export async function sendFeRetentionSmsMessage({
       message: err instanceof Error ? err.message : String(err),
     });
   }
+}
+
+/** Operator texts always come from TWILIO_MESSAGING_FROM, never a client book number. */
+export async function sendFeRetentionOpsSms(input = {}) {
+  const env = readPlatformTwilioSmsEnv();
+  return sendFeRetentionSmsMessage({
+    ...input,
+    businessId: null,
+    packageConfiguration: null,
+    fromNumber: env.fromNumber,
+  });
 }

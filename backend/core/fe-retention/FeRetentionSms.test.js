@@ -2,10 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   sendFeRetentionSmsMessage,
+  sendFeRetentionOpsSms,
   readPlatformTwilioSmsEnv,
   ensureFeRetentionPlatformSms,
   feSmsPhonesMatch,
-  shouldAssignPlatformSharedFromNumber,
+  isFeRetentionOpsFromNumber,
 } from "./FeRetentionSms.js";
 import { writeFeRetentionBilling } from "./FeRetentionBilling.js";
 import { buildFeMissedPaymentEmail } from "./FeRetentionEmail.js";
@@ -95,7 +96,7 @@ test("sendFeRetentionSmsMessage uses the book's From-number when provided", asyn
   });
 });
 
-test("first paid book keeps TWILIO_MESSAGING_FROM; the next book buys a dedicated number", async () => {
+test("every paid book buys a dedicated number; ops From is never assigned to a book", async () => {
   await withTwilioEnv(async () => {
     const dad = {
       id: "biz_dad",
@@ -112,10 +113,12 @@ test("first paid book keeps TWILIO_MESSAGING_FROM; the next book buys a dedicate
       businessId: dad.id,
       putDurableCredential,
       packageConfiguration: dad.packageConfiguration,
+      simulate: true,
     });
     assert.equal(first.ok, true);
-    assert.equal(first.fromNumber, "+15551234567");
-    assert.equal(first.provisionedBy, "fe_retention_platform");
+    assert.equal(first.provisionedBy, "fe_retention_purchased");
+    assert.ok(first.fromNumber);
+    assert.equal(isFeRetentionOpsFromNumber(first.fromNumber), false);
 
     const second = await ensureFeRetentionPlatformSms({
       platformStore: store,
@@ -127,7 +130,8 @@ test("first paid book keeps TWILIO_MESSAGING_FROM; the next book buys a dedicate
     assert.equal(second.ok, true);
     assert.equal(second.provisionedBy, "fe_retention_purchased");
     assert.ok(second.fromNumber);
-    assert.notEqual(second.fromNumber, "+15551234567");
+    assert.notEqual(second.fromNumber, first.fromNumber);
+    assert.equal(isFeRetentionOpsFromNumber(second.fromNumber), false);
     assert.equal(readPlatformTwilioSmsEnv().fromNumber, "+15551234567");
   });
 });
@@ -175,57 +179,45 @@ test("feSmsPhonesMatch treats +1 and 10-digit US numbers as the same", () => {
   assert.equal(feSmsPhonesMatch("+15551234567", "+15559876543"), false);
 });
 
-test("only the oldest live book may claim the platform From-number", () => {
-  const dad = { id: "biz_dad", createdAt: "2026-01-01T00:00:00.000Z" };
-  const next = { id: "biz_two", createdAt: "2026-08-01T00:00:00.000Z" };
-  assert.equal(shouldAssignPlatformSharedFromNumber({
-    businessId: dad.id,
-    feBooks: [dad, next],
-    sharedFrom: "+15551234567",
-    claimed: [],
-  }), true);
-  assert.equal(shouldAssignPlatformSharedFromNumber({
-    businessId: next.id,
-    feBooks: [dad, next],
-    sharedFrom: "+15551234567",
-    claimed: [],
-  }), false);
-});
-
-test("a newer book does not take the platform From while an older VibeKeep book exists", async () => {
+test("a book that already has the ops From is migrated to a purchased number", async () => {
   await withTwilioEnv(async () => {
     const dad = {
       id: "biz_dad",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      packageConfiguration: { purchasedPackages: ["fe_retention_crm"] },
+      packageConfiguration: writeFeRetentionBilling({}, {
+        status: "complimentary",
+        twilioFromNumber: "+15551234567",
+      }),
     };
-    const next = {
-      id: "biz_two",
-      createdAt: "2026-08-01T00:00:00.000Z",
-      packageConfiguration: writeFeRetentionBilling({}, { status: "complimentary" }),
-    };
-    const store = makeSmsStore([dad, next]);
-
-    const secondFirst = await ensureFeRetentionPlatformSms({
-      platformStore: store,
-      businessId: next.id,
-      putDurableCredential,
-      packageConfiguration: next.packageConfiguration,
-      simulate: true,
-    });
-    assert.equal(secondFirst.ok, true);
-    assert.equal(secondFirst.provisionedBy, "fe_retention_purchased");
-    assert.notEqual(secondFirst.fromNumber, "+15551234567");
-
-    const dadLater = await ensureFeRetentionPlatformSms({
+    const store = makeSmsStore([dad]);
+    const result = await ensureFeRetentionPlatformSms({
       platformStore: store,
       businessId: dad.id,
       putDurableCredential,
       packageConfiguration: dad.packageConfiguration,
+      simulate: true,
     });
-    assert.equal(dadLater.ok, true);
-    assert.equal(dadLater.fromNumber, "+15551234567");
-    assert.equal(dadLater.provisionedBy, "fe_retention_platform");
+    assert.equal(result.ok, true);
+    assert.equal(result.provisionedBy, "fe_retention_purchased");
+    assert.notEqual(result.fromNumber, "+15551234567");
+  });
+});
+
+test("sendFeRetentionOpsSms always uses TWILIO_MESSAGING_FROM", async () => {
+  await withTwilioEnv(async () => {
+    let sawForm = "";
+    const result = await sendFeRetentionOpsSms({
+      to: "+16038182383",
+      body: "Set up A2P",
+      businessId: "biz_should_be_ignored",
+      fromNumber: "+15559990000",
+      fetchImpl: async (_url, init) => {
+        sawForm = String(init?.body ?? "");
+        return { ok: true, json: async () => ({ sid: "SMops" }) };
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.fromNumber, "+15551234567");
+    assert.match(sawForm, /From=%2B15551234567/);
   });
 });
 

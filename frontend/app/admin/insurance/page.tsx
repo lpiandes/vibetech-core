@@ -28,8 +28,11 @@ export default async function AdminInsurancePage() {
     >
       <p style={{ marginTop: 0, maxWidth: 640 }}>
         Self-serve $200/month product — not assigned from package checkboxes.
-        Open a book to see the same dashboard the agent sees. Release signup if
-        they got stuck and need to create the account again on the same email.
+        Open a book to see the same dashboard the agent sees. Preview the
+        {" "}
+        <Link href="/admin/insurance/agreement-preview">engagement agreement</Link>
+        {" "}
+        they sign. Release signup if they got stuck and need to create the account again on the same email.
       </p>
       <InsuranceBookList
         books={books}

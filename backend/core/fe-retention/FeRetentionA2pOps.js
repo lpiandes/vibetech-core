@@ -1,8 +1,9 @@
 /**
- * Ops email + SMS after a VibeKeep agency completes A2P + agreement (number bought).
+ * Ops SMS after a VibeKeep agency signs — from TWILIO_MESSAGING_FROM to Leo.
+ * Email is optional extra. Twilio number purchase is separate from this text.
  */
 import { notifyPlatformOperators, DEFAULT_PLATFORM_OPERATOR_EMAIL } from "../admin/notifyPlatformOperators.js";
-import { sendFeRetentionSmsMessage } from "./FeRetentionSms.js";
+import { sendFeRetentionOpsSms } from "./FeRetentionSms.js";
 import {
   formatFeA2pProfileForOps,
   VIBEKEEP_OPS_EMAIL,
@@ -20,19 +21,19 @@ export function buildFeRetentionA2pAttachOpsAction({
   profile = null,
   signedName = "",
 } = {}) {
-  const number = safeString(fromNumber) || "(number not assigned yet)";
+  const number = safeString(fromNumber) || "(number purchase failed — buy in Twilio Console)";
   const book = safeString(businessName) || safeString(businessId) || "VibeKeep book";
   const profileBlock = profile ? formatFeA2pProfileForOps(profile) : "(profile missing)";
   return {
     id: `fe_a2p_register_${safeString(businessId)}_${number}`,
     title: `VibeKeep: register 10DLC for ${book}`,
-    summary: `${book} signed the engagement agreement. Register THIS agency as its own Brand + Campaign (not dad’s). Then add ${number} to that campaign.`,
+    summary: `${book} signed. Their texting number is ${number}. Register THIS agency as its own Brand + Campaign, then add that number.`,
     steps: [
       "Twilio Console → Messaging → Regulatory Compliance → Onboarding",
-      "Create a Customer Profile / Brand for THIS agency using the payload (legal name, EIN, address, authorized rep)",
+      "Create a Customer Profile / Brand for THIS agency using the fields below (legal name, EIN, address, authorized rep)",
       "Do not attach this number to another agency’s campaign",
       "After Brand is Approved, create a Customer Care campaign (welcome, premium reminder, lapse). Privacy: https://vtechdevelopment.com/privacy.html Terms: https://vtechdevelopment.com/terms.html",
-      `When Campaign is Verified: Messaging Service → Sender Pool → add ${number}`,
+      `When Campaign is Verified: Messaging → Services → Sender Pool → add ${number}`,
       `Signed by: ${safeString(signedName) || "(unknown)"}`,
       profileBlock,
     ],
@@ -48,6 +49,50 @@ export function buildFeRetentionA2pAttachOpsAction({
   };
 }
 
+export function buildFeRetentionA2pOpsSmsBodies({
+  businessId,
+  businessName = "",
+  fromNumber,
+  profile = null,
+  signedName = "",
+} = {}) {
+  const action = buildFeRetentionA2pAttachOpsAction({
+    businessId,
+    businessName,
+    fromNumber,
+    profile,
+    signedName,
+  });
+  const body = [
+    action.title,
+    action.summary,
+    "",
+    "STEPS IN TWILIO:",
+    ...action.steps.slice(0, 5).map((step, i) => `${i + 1}. ${step}`),
+    `Signed by: ${safeString(signedName) || "(unknown)"}`,
+    "",
+    "THEIR A2P FIELDS:",
+    profile ? formatFeA2pProfileForOps(profile) : "(profile missing)",
+  ].join("\n");
+  return splitSmsBodies(body);
+}
+
+function splitSmsBodies(text, max = 1500) {
+  const raw = String(text || "");
+  if (raw.length <= max) return [raw];
+  const parts = [];
+  let rest = raw;
+  while (rest.length > max) {
+    const slice = rest.slice(0, max);
+    const breakAt = Math.max(slice.lastIndexOf("\n\n"), slice.lastIndexOf("\n"));
+    const at = breakAt > 400 ? breakAt : max;
+    parts.push(rest.slice(0, at).trim());
+    rest = rest.slice(at).trim();
+  }
+  if (rest) parts.push(rest);
+  return parts;
+}
+
 export async function notifyFeRetentionNumberPurchased(input = {}) {
   return notifyFeRetentionOnboardingComplete(input);
 }
@@ -61,8 +106,8 @@ export async function notifyFeRetentionOnboardingComplete({
   agreementHtml = "",
   agreementText = "",
   deliveryProvider = null,
-  simulated = false,
   notifyOperators = notifyPlatformOperators,
+  sendOpsSms = sendFeRetentionOpsSms,
 } = {}) {
   if (!safeString(businessId)) {
     return { ok: true, skipped: true };
@@ -74,6 +119,33 @@ export async function notifyFeRetentionOnboardingComplete({
     profile,
     signedName,
   });
+  const smsBodies = buildFeRetentionA2pOpsSmsBodies({
+    businessId,
+    businessName,
+    fromNumber,
+    profile,
+    signedName,
+  });
+
+  let sms = { ok: false };
+  try {
+    const results = [];
+    for (const body of smsBodies) {
+      results.push(await sendOpsSms({
+        to: VIBEKEEP_OPS_PHONE_E164,
+        body,
+      }));
+    }
+    sms = {
+      ok: results.every((row) => row?.ok),
+      parts: results.length,
+      fromNumber: results[0]?.fromNumber || null,
+      last: results[results.length - 1] || null,
+    };
+  } catch (err) {
+    sms = { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
+
   let email = { ok: false };
   try {
     email = await notifyOperators({
@@ -95,27 +167,8 @@ export async function notifyFeRetentionOnboardingComplete({
         html: agreementHtml || `<pre>${action.summary}</pre>`,
       });
     } catch {
-      /* packet email still attempted above */
+      /* SMS is the operator path; email is extra */
     }
-  }
-
-  const smsBody = [
-    `VibeKeep A2P: ${safeString(businessName) || businessId}`,
-    `Number: ${safeString(fromNumber) || "pending"}`,
-    `EIN: ${safeString(profile?.ein) || "n/a"}`,
-    `Signed: ${safeString(signedName) || "n/a"}`,
-    "Full packet emailed.",
-  ].join("\n");
-  let sms = { ok: false };
-  try {
-    sms = simulated
-      ? { ok: true, skipped: true, reason: "simulated" }
-      : await sendFeRetentionSmsMessage({
-        to: VIBEKEEP_OPS_PHONE_E164,
-        body: smsBody,
-      });
-  } catch (err) {
-    sms = { ok: false, message: err instanceof Error ? err.message : String(err) };
   }
 
   return { ok: true, email, sms };

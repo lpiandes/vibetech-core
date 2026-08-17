@@ -422,7 +422,7 @@ export async function purchaseTwilioLocalSmsNumber({
     return deepFreeze({
       ok: false,
       reason: "webhook_url_unresolved",
-      message: "Set APP_ORIGIN or NEXTAUTH_URL so inbound SMS can be attached at purchase.",
+      message: "Set APP_URL or NEXTAUTH_URL so inbound SMS can be attached at purchase.",
     });
   }
   const bought = await purchaseUsLocalNumber({

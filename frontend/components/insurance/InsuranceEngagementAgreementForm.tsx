@@ -49,8 +49,6 @@ export function InsuranceEngagementAgreementForm({
     <form onSubmit={onSubmit} style={{ display: "grid", gap: 14 }}>
       <div
         style={{
-          maxHeight: 420,
-          overflow: "auto",
           padding: 0,
           borderRadius: 16,
           border: "none",

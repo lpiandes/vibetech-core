@@ -131,7 +131,6 @@ export async function POST(
         agreementHtml: doc.html,
         agreementText: doc.text,
         deliveryProvider: getFeDeliveryProvider(),
-        simulated: ensured.sms?.simulated === true,
       });
 
       return NextResponse.json({

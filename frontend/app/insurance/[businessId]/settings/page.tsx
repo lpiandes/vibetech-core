@@ -180,13 +180,18 @@ export default function InsuranceSettingsPage() {
         <div className="fe-field" style={{ marginBottom: "0.75rem" }}>
           <div className="fe-label">Texts sent from this number</div>
           <p style={{ margin: "0.25rem 0 0", fontSize: "1.15rem", fontWeight: 600, letterSpacing: "0.02em" }}>
-            {sms?.fromNumber || "Not assigned yet"}
+            {sms?.fromNumber || "Buying your number…"}
           </p>
         </div>
-        <p className="fe-muted" style={{ margin: 0 }}>
+        <p className="fe-muted" style={{ margin: "0 0 0.85rem" }}>
           {sms?.fromNumber
-            ? "Clients see this number on welcome, reminder, and recovery texts."
-            : (sms?.message || "A number is assigned automatically when this book is active.")}
+            ? "Clients see this number on welcome, reminder, and recovery texts. We bought it when you signed the agreement."
+            : (sms?.message || "A dedicated number is bought automatically after you sign the agreement.")}
+        </p>
+        <p style={{ margin: 0 }}>
+          <a href={`/insurance/${encodeURIComponent(businessId)}/agreement`} style={{ color: cockpitColors.accent, fontWeight: 600 }}>
+            View signed engagement agreement
+          </a>
         </p>
       </div>
 
