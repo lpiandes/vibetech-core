@@ -4,6 +4,7 @@ import { listAllFeRetentionBooks } from "@/lib/platform/feRetentionAccess";
 import AdminVtPage from "@/components/admin/AdminVtPage";
 import { InsuranceBookList } from "@/components/insurance/InsuranceBookList";
 import { AdminReleaseVibeKeepButton } from "@/components/admin/AdminReleaseVibeKeepButton";
+import { feRetentionAgreementPdfHref } from "../../../../backend/core/fe-retention/FeRetentionOnboarding.js";
 import { VtDockLink } from "@/components/product/VtChrome";
 
 /**
@@ -32,14 +33,21 @@ export default async function AdminInsurancePage() {
         {" "}
         <Link href="/admin/insurance/agreement-preview">engagement agreement</Link>
         {" "}
-        they sign. Release signup if they got stuck and need to create the account again on the same email.
+        they sign. After a book is signed, download the PDF on that row. Release signup if they got stuck and need to create the account again on the same email.
       </p>
       <InsuranceBookList
         books={books}
         emptyLabel="No VibeKeep signups yet."
         openLabel="Open as client"
         action={(book) => (
-          <AdminReleaseVibeKeepButton businessId={book.id} businessName={book.name} />
+          <>
+            {book.onboardingComplete ? (
+              <Link href={feRetentionAgreementPdfHref(book.id)} style={{ color: "inherit", fontWeight: 650, fontSize: 14 }}>
+                Download PDF
+              </Link>
+            ) : null}
+            <AdminReleaseVibeKeepButton businessId={book.id} businessName={book.name} />
+          </>
         )}
       />
       <p style={{ marginTop: 24 }}>

@@ -27,6 +27,7 @@ export {
   feRetentionSetupPath,
   formatFeA2pProfileForOps,
   normalizeFeA2pProfile,
+  feRetentionAgreementPdfHref,
 } from "./FeRetentionOnboardingCatalog.js";
 
 function safeString(v) {

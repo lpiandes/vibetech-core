@@ -124,6 +124,10 @@ export function feRetentionAgreementPath(businessId) {
   return `/insurance/setup/${encodeURIComponent(String(businessId))}/agreement`;
 }
 
+export function feRetentionAgreementPdfHref(businessId) {
+  return `/api/insurance/${encodeURIComponent(String(businessId))}/agreement-pdf`;
+}
+
 export function formatFeA2pProfileForOps(profile = {}) {
   const p = normalizeFeA2pProfile(profile);
   return [

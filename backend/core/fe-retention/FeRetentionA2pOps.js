@@ -4,6 +4,7 @@
  */
 import { notifyPlatformOperators, DEFAULT_PLATFORM_OPERATOR_EMAIL } from "../admin/notifyPlatformOperators.js";
 import { sendFeRetentionOpsSms } from "./FeRetentionSms.js";
+import { renderFeRetentionEngagementAgreementPdf } from "./FeRetentionEngagementAgreementPdf.js";
 import {
   formatFeA2pProfileForOps,
   VIBEKEEP_OPS_EMAIL,
@@ -103,6 +104,7 @@ export async function notifyFeRetentionOnboardingComplete({
   fromNumber,
   profile = null,
   signedName = "",
+  signedAt = null,
   agreementHtml = "",
   agreementText = "",
   deliveryProvider = null,
@@ -158,13 +160,25 @@ export async function notifyFeRetentionOnboardingComplete({
     email = { ok: false, message: err instanceof Error ? err.message : String(err) };
   }
 
-  if (deliveryProvider?.send && (agreementHtml || agreementText)) {
+  if (deliveryProvider?.send && (agreementHtml || agreementText || profile)) {
     try {
+      let attachments;
+      try {
+        const pdf = await renderFeRetentionEngagementAgreementPdf({
+          profile,
+          signedName,
+          signedAt,
+        });
+        attachments = [{ filename: pdf.filename, content: pdf.buffer }];
+      } catch {
+        attachments = undefined;
+      }
       await deliveryProvider.send({
         to: VIBEKEEP_OPS_EMAIL,
         subject: `VibeKeep signed agreement — ${safeString(businessName) || businessId}`,
         text: agreementText || action.summary,
         html: agreementHtml || `<pre>${action.summary}</pre>`,
+        attachments,
       });
     } catch {
       /* SMS is the operator path; email is extra */

@@ -3,6 +3,7 @@ import { platformStore } from "@/lib/server/compose";
 import {
   readFeRetentionOnboarding,
   resolveFeRetentionContinuePath,
+  feRetentionAgreementPdfHref,
 } from "../../../../../backend/core/fe-retention/FeRetentionOnboarding.js";
 import { buildFeRetentionEngagementAgreement } from "../../../../../backend/core/fe-retention/FeRetentionEngagementAgreement.js";
 
@@ -31,7 +32,12 @@ export default async function InsuranceSignedAgreementPage({
   return (
     <div className="fe-card">
       <h2 style={{ marginTop: 0 }}>Engagement agreement</h2>
-      <p className="fe-muted">Signed copy for this book. VibeTech colors and wordmark are on the document.</p>
+      <p className="fe-muted">Signed copy for this book. Name and address came from the A2P form; the name they typed is the signature.</p>
+      <p style={{ margin: "0 0 1rem" }}>
+        <a href={feRetentionAgreementPdfHref(businessId)} className="fe-muted" style={{ color: "inherit", fontWeight: 700 }}>
+          Download signed PDF
+        </a>
+      </p>
       <div dangerouslySetInnerHTML={{ __html: doc.html }} />
     </div>
   );

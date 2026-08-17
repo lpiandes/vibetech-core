@@ -22,6 +22,7 @@ export class SmtpInvitationDeliveryProvider extends InvitationDeliveryProvider {
         subject: payload.subject,
         html: payload.html,
         text: payload.text,
+        attachments: Array.isArray(payload.attachments) ? payload.attachments : undefined,
       });
       return {
         sent: true,

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
 import { buildFeRetentionEngagementAgreement } from "../../../../../backend/core/fe-retention/FeRetentionEngagementAgreement.js";
 import AdminVtPage from "@/components/admin/AdminVtPage";
@@ -26,10 +27,14 @@ export default async function AdminAgreementPreviewPage() {
       dock={<VtDockLink href="/admin/insurance">Back to books</VtDockLink>}
     >
       <p style={{ maxWidth: 640 }}>
-        Agencies see this after they fill business details, at
+        This page is a <strong>sample</strong> with fake names so you can read the clauses.
+        Agencies see the real document on their own screen after they fill business details —
+        legal name and address are pulled from that form, then they type their name to sign.
+        The finished signed PDF is on each book row at
         {" "}
-        <code>/insurance/setup/…/agreement</code>
-        . After they sign, they can reopen it from Settings. Sample name and address are filled in below.
+        <Link href="/admin/insurance">VibeKeep books</Link>
+        {" "}
+        (Download PDF), and in the agency Settings page.
       </p>
       <div dangerouslySetInnerHTML={{ __html: doc.html }} />
     </AdminVtPage>

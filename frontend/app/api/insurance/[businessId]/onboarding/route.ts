@@ -128,6 +128,7 @@ export async function POST(
         fromNumber: ensured.sms?.fromNumber || null,
         profile: current.profile,
         signedName,
+        signedAt,
         agreementHtml: doc.html,
         agreementText: doc.text,
         deliveryProvider: getFeDeliveryProvider(),

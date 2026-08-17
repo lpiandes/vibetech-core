@@ -17,6 +17,14 @@ export class ResendInvitationDeliveryProvider extends InvitationDeliveryProvider
     };
     const replyTo = String(payload.replyTo ?? "").trim();
     if (replyTo) body.reply_to = replyTo;
+    if (Array.isArray(payload.attachments) && payload.attachments.length) {
+      body.attachments = payload.attachments.map((row) => ({
+        filename: String(row.filename || "attachment"),
+        content: Buffer.isBuffer(row.content)
+          ? row.content.toString("base64")
+          : String(row.content ?? ""),
+      }));
+    }
 
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",

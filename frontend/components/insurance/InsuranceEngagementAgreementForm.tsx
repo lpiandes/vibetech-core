@@ -72,6 +72,9 @@ export function InsuranceEngagementAgreementForm({
         />
       </label>
       {error ? <p style={{ color: "#fca5a5", margin: 0, fontSize: 14 }}>{error}</p> : null}
+      <p style={{ margin: 0, fontSize: 14, opacity: 0.9 }}>
+        The business name and address at the top came from the details you just entered. Typing your name below is the signature.
+      </p>
       <Button type="submit" disabled={busy} size="lg" className="w-full h-11 font-semibold">
         {busy ? "Signing…" : "Sign and open dashboard"}
       </Button>

@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: repoRoot,
   // Knowledge extraction uses Node-only packages. Externalize them so the
   // server compiler does not try to bundle pdfjs/browser internals into RSC.
-  serverExternalPackages: ["pg", "bcryptjs", "mammoth", "pdf-parse", "googleapis", "nodemailer"],
+  serverExternalPackages: ["pg", "bcryptjs", "mammoth", "pdf-parse", "pdfkit", "googleapis", "nodemailer"],
   experimental: {
     // Enables next/navigation forbidden() + unauthorized() for clean 403/401 UX.
     authInterrupts: true,

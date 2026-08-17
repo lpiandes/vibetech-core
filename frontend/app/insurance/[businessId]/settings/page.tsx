@@ -188,9 +188,12 @@ export default function InsuranceSettingsPage() {
             ? "Clients see this number on welcome, reminder, and recovery texts. We bought it when you signed the agreement."
             : (sms?.message || "A dedicated number is bought automatically after you sign the agreement.")}
         </p>
-        <p style={{ margin: 0 }}>
+        <p style={{ margin: 0, display: "flex", gap: 16, flexWrap: "wrap" }}>
           <a href={`/insurance/${encodeURIComponent(businessId)}/agreement`} style={{ color: cockpitColors.accent, fontWeight: 600 }}>
-            View signed engagement agreement
+            View signed agreement
+          </a>
+          <a href={`/api/insurance/${encodeURIComponent(businessId)}/agreement-pdf`} style={{ color: cockpitColors.accent, fontWeight: 600 }}>
+            Download signed PDF
           </a>
         </p>
       </div>
