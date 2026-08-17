@@ -85,7 +85,7 @@ export function InsuranceA2pOnboardingForm({
       {select("businessType", "Business type", FE_A2P_BUSINESS_TYPES)}
       {field("ein", "EIN / tax ID", { inputMode: "numeric" })}
       {select("businessIndustry", "Business industry", FE_A2P_INDUSTRIES)}
-      {field("websiteUrl", "Website URL", { type: "url", placeholder: "https://" })}
+      {field("websiteUrl", "Website URL", { placeholder: "https://youragency.com", inputMode: "url" })}
       {field("street", "Street address")}
       {field("city", "City")}
       {field("region", "State")}

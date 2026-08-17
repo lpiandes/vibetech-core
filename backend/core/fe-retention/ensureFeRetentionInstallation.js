@@ -1,7 +1,7 @@
 import { FE_RETENTION_CRM_PACKAGE_ID } from "./feRetentionEntitlement.js";
 import { emptyFeRetentionState, readFeRetentionState } from "./FeRetentionStore.js";
 import { readPurchasedPackagesFromConfig } from "../platform/packages/SalesPackageCatalog.js";
-import { ensureFeRetentionPlatformSms } from "./FeRetentionSms.js";
+import { ensureFeRetentionPlatformSms, resolveFeRetentionFromNumber } from "./FeRetentionSms.js";
 import { configureFeRetentionInboundSmsWebhook } from "./FeRetentionInbound.js";
 import { feRetentionMayProvisionSms } from "./FeRetentionOnboarding.js";
 
@@ -93,6 +93,7 @@ export async function ensureFeRetentionInstallation({
       configuration: {
         purchasedPackages: packages,
         feRetention: state,
+        feRetentionBilling: pkgConfig.feRetentionBilling,
       },
       history: [{ at, action: "fe_retention_install", actorId }],
       actorUserId: actorId,
@@ -135,8 +136,13 @@ export async function ensureFeRetentionInstallation({
   }
 
   let inboundWebhook = null;
-  const webhookNumber = sms?.fromNumber || null;
-  if (configureInboundWebhook || (sms?.ok && sms.already === false && webhookNumber)) {
+  const webhookNumber = sms?.fromNumber
+    || await resolveFeRetentionFromNumber({
+      platformStore,
+      businessId,
+      packageConfiguration: pkgConfig,
+    });
+  if (webhookNumber && (configureInboundWebhook || Boolean(sms?.ok && sms.already === false))) {
     try {
       inboundWebhook = await configureFeRetentionInboundSmsWebhook({
         fromNumber: webhookNumber,

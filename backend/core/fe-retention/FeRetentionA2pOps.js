@@ -62,8 +62,9 @@ export async function notifyFeRetentionOnboardingComplete({
   agreementText = "",
   deliveryProvider = null,
   simulated = false,
+  notifyOperators = notifyPlatformOperators,
 } = {}) {
-  if (simulated || !safeString(businessId)) {
+  if (!safeString(businessId)) {
     return { ok: true, skipped: true };
   }
   const action = buildFeRetentionA2pAttachOpsAction({
@@ -75,7 +76,7 @@ export async function notifyFeRetentionOnboardingComplete({
   });
   let email = { ok: false };
   try {
-    email = await notifyPlatformOperators({
+    email = await notifyOperators({
       actions: [action],
       force: true,
       fallbackDefaultEmail: true,
@@ -107,10 +108,12 @@ export async function notifyFeRetentionOnboardingComplete({
   ].join("\n");
   let sms = { ok: false };
   try {
-    sms = await sendFeRetentionSmsMessage({
-      to: VIBEKEEP_OPS_PHONE_E164,
-      body: smsBody,
-    });
+    sms = simulated
+      ? { ok: true, skipped: true, reason: "simulated" }
+      : await sendFeRetentionSmsMessage({
+        to: VIBEKEEP_OPS_PHONE_E164,
+        body: smsBody,
+      });
   } catch (err) {
     sms = { ok: false, message: err instanceof Error ? err.message : String(err) };
   }

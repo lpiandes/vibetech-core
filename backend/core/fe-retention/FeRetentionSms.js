@@ -2,16 +2,16 @@
  * Platform-managed Twilio SMS for FE Retention (VibeKeep).
  * Agents never enter Twilio credentials.
  *
- * First book to claim SMS keeps TWILIO_MESSAGING_FROM (already purchased).
- * Later paid/promo books get a dedicated US local number bought in the background.
+ * The oldest live VibeKeep book keeps TWILIO_MESSAGING_FROM (already purchased).
+ * Later books get a dedicated US local number bought in the background.
  */
 import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { INTEGRATION_CAPABILITIES } from "../integrations/capabilities/IntegrationCapability.js";
 import { purchaseTwilioLocalSmsNumber } from "../integrations/twilio/TwilioProvisioningService.js";
-import { businessGrantsFeRetentionAccess } from "./feRetentionEntitlement.js";
-import { readFeRetentionBilling, writeFeRetentionBilling } from "./FeRetentionBilling.js";
+import { listActiveFeRetentionBooks } from "./feRetentionEntitlement.js";
+import { readFeRetentionBilling, writeFeRetentionBilling, syncFeRetentionBillingOntoInstallation } from "./FeRetentionBilling.js";
 import { readFeRetentionOnboarding } from "./FeRetentionOnboarding.js";
-import { readPurchasedPackagesFromConfig } from "../platform/packages/SalesPackageCatalog.js";
+import { resolvePublicAppOrigin } from "../platform/invitations/invitationAppUrl.js";
 
 function safeString(v) {
   return v === null || v === undefined ? "" : String(v).trim();
@@ -22,9 +22,9 @@ export function feSmsCredentialId(businessId) {
 }
 
 export function resolveFeRetentionInboundSmsWebhookUrl() {
-  const origin = safeString(process.env.APP_ORIGIN || process.env.NEXTAUTH_URL);
+  const origin = resolvePublicAppOrigin();
   if (!origin) return null;
-  return `${origin.replace(/\/$/, "")}/api/insurance/sms/inbound`;
+  return `${origin}/api/insurance/sms/inbound`;
 }
 
 export function feSmsPhoneDigits(phone) {
@@ -90,10 +90,9 @@ async function listClaimedFeFromNumbers(platformStore) {
   } catch {
     businesses = await platformStore.listAllBusinesses?.() ?? [];
   }
+  const feBooks = listActiveFeRetentionBooks(businesses);
   const claimed = [];
-  for (const business of Array.isArray(businesses) ? businesses : []) {
-    const packages = readPurchasedPackagesFromConfig(business?.packageConfiguration ?? {});
-    if (!businessGrantsFeRetentionAccess(packages)) continue;
+  for (const business of feBooks) {
     const businessId = String(business.id);
     const fromNumber = await resolveFeRetentionFromNumber({
       platformStore,
@@ -102,7 +101,34 @@ async function listClaimedFeFromNumbers(platformStore) {
     });
     if (fromNumber) claimed.push({ businessId, fromNumber });
   }
-  return claimed;
+  return { feBooks, claimed };
+}
+
+function compareFeBooksByAge(a, b) {
+  const ta = Date.parse(a?.createdAt || 0) || 0;
+  const tb = Date.parse(b?.createdAt || 0) || 0;
+  if (ta !== tb) return ta - tb;
+  return String(a?.id ?? "").localeCompare(String(b?.id ?? ""));
+}
+
+/** Only the oldest live VibeKeep book may keep the platform From-number. */
+export function shouldAssignPlatformSharedFromNumber({
+  businessId,
+  feBooks = [],
+  sharedFrom = "",
+  claimed = [],
+} = {}) {
+  const id = safeString(businessId);
+  const shared = safeString(sharedFrom);
+  if (!id || !shared) return false;
+  const taken = claimed.some((row) => (
+    String(row.businessId) !== id && feSmsPhonesMatch(row.fromNumber, shared)
+  ));
+  if (taken) return false;
+  const active = Array.isArray(feBooks) ? feBooks : [];
+  if (!active.length) return true;
+  const oldest = [...active].sort(compareFeBooksByAge)[0];
+  return String(oldest.id) === id;
 }
 
 async function persistBookFromNumber({ platformStore, businessId, fromNumber }) {
@@ -124,6 +150,11 @@ async function persistBookFromNumber({ platformStore, businessId, fromNumber }) 
     packageConfiguration: next,
   });
   business.packageConfiguration = next;
+  await syncFeRetentionBillingOntoInstallation({
+    platformStore,
+    businessId,
+    packageConfiguration: next,
+  });
 }
 
 async function writeFeSmsCredential({
@@ -244,12 +275,13 @@ export async function ensureFeRetentionPlatformSms({
     });
   }
 
-  const claimed = await listClaimedFeFromNumbers(platformStore);
-  const sharedTaken = claimed.some((row) => (
-    row.businessId !== id && feSmsPhonesMatch(row.fromNumber, env.fromNumber)
-  ));
-
-  if (!sharedTaken) {
+  const { feBooks, claimed } = await listClaimedFeFromNumbers(platformStore);
+  if (shouldAssignPlatformSharedFromNumber({
+    businessId: id,
+    feBooks,
+    sharedFrom: env.fromNumber,
+    claimed,
+  })) {
     await writeFeSmsCredential({
       platformStore,
       vault,
@@ -370,7 +402,16 @@ export async function sendFeRetentionSmsMessage({
   }
 
   const env = readPlatformTwilioSmsEnv();
-  if (!from) from = env.fromNumber;
+  if (!from) {
+    if (businessId) {
+      return deepFreeze({
+        ok: false,
+        reason: "sms_not_ready",
+        message: "This book does not have a texting number yet.",
+      });
+    }
+    from = env.fromNumber;
+  }
   if (!env.accountSid || !env.authToken || !from) {
     return deepFreeze({
       ok: false,

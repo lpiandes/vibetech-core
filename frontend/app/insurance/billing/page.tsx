@@ -6,23 +6,38 @@ import { readFeRetentionBilling } from "../../../../backend/core/fe-retention/Fe
 import { resolveFeRetentionContinuePath } from "../../../../backend/core/fe-retention/FeRetentionOnboarding.js";
 import { InsurancePublicShell } from "@/components/insurance/InsurancePublicShell";
 import { InsuranceBillingActions } from "@/components/insurance/InsuranceBillingActions";
+import { insuranceBillingPath, withQuery } from "@/lib/platform/hosts";
+import { insuranceSignInHref } from "@/lib/platform/routeProtection";
+import { claimFeRetentionPaidReturn } from "@/lib/insurance/claimFeRetentionPaidReturn";
 
 export default async function InsuranceBillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ businessId?: string; paid?: string; canceled?: string }>;
+  searchParams: Promise<{ businessId?: string; paid?: string; canceled?: string; session_id?: string }>;
 }) {
-  const access = await getFeRetentionAccess();
-  if (!access.signedIn) {
-    redirect("/insurance");
-  }
-
   const params = await searchParams;
   const requestedId = String(params.businessId ?? "").trim();
+  const sessionId = String(params.session_id ?? "").trim();
+  const paidFlag = String(params.paid ?? "").trim();
+  const returnPath = withQuery(insuranceBillingPath(requestedId || null), {
+    paid: paidFlag || undefined,
+    session_id: sessionId || undefined,
+    canceled: params.canceled === "1" ? "1" : undefined,
+  });
+
+  const access = await getFeRetentionAccess();
+  if (!access.signedIn) {
+    redirect(insuranceSignInHref(returnPath));
+  }
+
   const businessId = requestedId
     || access.primaryBusinessId
     || access.businesses[0]?.id
     || "";
+
+  if (businessId && sessionId) {
+    await claimFeRetentionPaidReturn({ businessId, sessionId });
+  }
 
   if (!businessId) {
     return (
@@ -44,7 +59,7 @@ export default async function InsuranceBillingPage({
     }));
   }
 
-  const justPaid = params.paid === "1";
+  const justPaid = paidFlag === "1" || Boolean(sessionId);
   const canceled = params.canceled === "1";
 
   return (
@@ -52,7 +67,7 @@ export default async function InsuranceBillingPage({
       title={justPaid ? "Confirming your payment" : "Catch up to continue"}
       lede={
         justPaid
-          ? "Stripe reported a successful checkout. If this page is still here, wait a moment and refresh — your dashboard unlocks when the subscription is active."
+          ? "If this page is still here, wait a moment and refresh — your dashboard unlocks when the subscription is active."
           : canceled
             ? "Checkout was canceled. Your book is paused until the $200 monthly subscription is current."
             : "This book is paused because the $200 monthly subscription is not current. Catch up on payment to open VibeKeep again."

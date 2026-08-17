@@ -3,10 +3,9 @@ import { platformStore } from "@/lib/server/compose";
 import {
   resolveFeRetentionEntitlement,
   isUserFeRetentionOnly,
-  businessGrantsFeRetentionAccess,
+  listOwnedFeRetentionBooks,
   presentFeRetentionBook,
 } from "../../../backend/core/fe-retention/feRetentionEntitlement.js";
-import { readPurchasedPackagesFromConfig } from "../../../backend/core/platform/packages/SalesPackageCatalog.js";
 import { PLATFORM_ROLES } from "../../../backend/core/platform/permissions/rolePermissions.js";
 import { insuranceDashboardPath } from "./hosts";
 
@@ -59,34 +58,31 @@ export async function getFeRetentionAccess(): Promise<FeRetentionAccess> {
 
   const isPlatformAdmin = user.platformRole === PLATFORM_ROLES.PLATFORM_ADMIN;
   const memberships = await platformStore.listBusinessesForUser(user.id);
-  let source = Array.isArray(memberships) ? memberships : [];
-  if (isPlatformAdmin) {
-    const all = await platformStore.listBusinesses({ limit: 500 }).catch(() => []);
-    source = Array.isArray(all) ? all : source;
-  }
-
-  const feBusinesses = source
-    .filter((b: { packageConfiguration?: object }) =>
-      businessGrantsFeRetentionAccess(readPurchasedPackagesFromConfig(b?.packageConfiguration ?? {})),
-    )
-    .map(toBook);
+  const owned = Array.isArray(memberships) ? memberships : [];
+  const feBusinesses = listOwnedFeRetentionBooks(owned).map(toBook);
 
   const entitlement = resolveFeRetentionEntitlement({
-    businesses: source,
-    isPlatformAdmin,
+    businesses: owned,
+    isPlatformAdmin: false,
   });
 
   return {
     signedIn: true,
-    entitled: entitlement.entitled || isPlatformAdmin,
+    entitled: entitlement.entitled,
     allowsDashboard: Boolean(entitlement.allowsDashboard),
-    feOnly: isUserFeRetentionOnly(memberships),
+    feOnly: isUserFeRetentionOnly(owned),
     isPlatformAdmin,
     displayName: String((user as { name?: string }).name ?? user.email ?? "").trim() || null,
     businesses: feBusinesses,
     primaryBusinessId: entitlement.businessId,
     billingStatus: entitlement.billing?.status ?? null,
   };
+}
+
+/** Admin directory of every VibeKeep book — not used for the agent's own login. */
+export async function listAllFeRetentionBooks(): Promise<FeRetentionBook[]> {
+  const all = await platformStore.listBusinesses({ limit: 500 }).catch(() => []);
+  return listOwnedFeRetentionBooks(Array.isArray(all) ? all : []).map(toBook);
 }
 
 export function feRetentionRedirectForBusiness(businessId: string) {

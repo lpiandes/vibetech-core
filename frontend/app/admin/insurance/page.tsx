@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/platform/requirePlatformAdmin";
-import { getFeRetentionAccess } from "@/lib/platform/feRetentionAccess";
+import { listAllFeRetentionBooks } from "@/lib/platform/feRetentionAccess";
 import AdminVtPage from "@/components/admin/AdminVtPage";
 import { InsuranceBookList } from "@/components/insurance/InsuranceBookList";
+import { AdminReleaseVibeKeepButton } from "@/components/admin/AdminReleaseVibeKeepButton";
 import { VtDockLink } from "@/components/product/VtChrome";
 
 /**
@@ -11,13 +12,13 @@ import { VtDockLink } from "@/components/product/VtChrome";
  */
 export default async function AdminInsurancePage() {
   await requirePlatformAdmin();
-  const access = await getFeRetentionAccess();
+  const books = await listAllFeRetentionBooks();
 
   return (
     <AdminVtPage
       title="VibeKeep books"
       eyebrow="Admin"
-      statusLabel={`${access.businesses.length} books`}
+      statusLabel={`${books.length} books`}
       dock={(
         <>
           <VtDockLink href="/insurance">Client entry</VtDockLink>
@@ -27,12 +28,16 @@ export default async function AdminInsurancePage() {
     >
       <p style={{ marginTop: 0, maxWidth: 640 }}>
         Self-serve $200/month product — not assigned from package checkboxes.
-        Open a book to see the same dashboard the agent sees.
+        Open a book to see the same dashboard the agent sees. Release signup if
+        they got stuck and need to create the account again on the same email.
       </p>
       <InsuranceBookList
-        books={access.businesses}
+        books={books}
         emptyLabel="No VibeKeep signups yet."
         openLabel="Open as client"
+        action={(book) => (
+          <AdminReleaseVibeKeepButton businessId={book.id} businessName={book.name} />
+        )}
       />
       <p style={{ marginTop: 24 }}>
         <Link href="/admin/insurance/agreement-preview">Preview engagement agreement</Link>

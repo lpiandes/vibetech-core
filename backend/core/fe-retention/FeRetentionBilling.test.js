@@ -10,6 +10,7 @@ import {
   billingPatchFromStripeEvent,
   findFeRetentionBusinessForStripe,
   applyFeRetentionStripeEvent,
+  applyFeRetentionPaidCheckoutSession,
 } from "./FeRetentionBilling.js";
 
 test("dashboard unlocks only on active/trialing/complimentary", () => {
@@ -98,4 +99,50 @@ test("applyFeRetentionStripeEvent updates the matching book", async () => {
     findFeRetentionBusinessForStripe({ businesses: [business], stripeCustomerId: "cus_1" })?.id,
     "biz_1",
   );
+});
+
+test("applyFeRetentionPaidCheckoutSession unlocks the matching book from the return URL", async () => {
+  const prev = process.env.STRIPE_SECRET_KEY;
+  process.env.STRIPE_SECRET_KEY = "sk_test_x";
+  const config = writeFeRetentionBilling({}, { status: "incomplete" });
+  const business = { id: "biz_1", packageConfiguration: config };
+  const store = {
+    async listBusinesses() { return [business]; },
+    async updateBusinessPackageConfiguration({ packageConfiguration }) {
+      business.packageConfiguration = packageConfiguration;
+    },
+    async getBusinessOSInstallation() { return null; },
+  };
+  const fetchImpl = async () => ({
+    ok: true,
+    json: async () => ({
+      payment_status: "paid",
+      status: "complete",
+      customer: "cus_1",
+      subscription: "sub_1",
+      metadata: { businessId: "biz_1" },
+      client_reference_id: "biz_1",
+    }),
+  });
+  try {
+    const result = await applyFeRetentionPaidCheckoutSession({
+      platformStore: store,
+      sessionId: "cs_test_1",
+      expectedBusinessId: "biz_1",
+      fetchImpl,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(readFeRetentionBilling(business.packageConfiguration).allowsDashboard, true);
+    const mismatch = await applyFeRetentionPaidCheckoutSession({
+      platformStore: store,
+      sessionId: "cs_test_1",
+      expectedBusinessId: "biz_other",
+      fetchImpl,
+    });
+    assert.equal(mismatch.ok, false);
+    assert.equal(mismatch.reason, "business_mismatch");
+  } finally {
+    if (prev != null) process.env.STRIPE_SECRET_KEY = prev;
+    else delete process.env.STRIPE_SECRET_KEY;
+  }
 });

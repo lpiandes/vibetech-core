@@ -11,6 +11,7 @@ import { getSessionUser } from "@/lib/platform/AuthorizedWorkspaceService";
 import { putDurableCredential } from "../../../../backend/core/integrations/credentials/durableCredentialVault.js";
 import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
 import { insuranceBillingPath } from "@/lib/platform/hosts";
+import { insuranceSignInHref } from "@/lib/platform/routeProtection";
 
 export default async function InsuranceBusinessLayout({
   children,
@@ -22,7 +23,7 @@ export default async function InsuranceBusinessLayout({
   const { businessId } = await params;
   const access = await getFeRetentionAccess();
   if (!access.signedIn) {
-    redirect(`/insurance?callbackUrl=${encodeURIComponent(`/insurance/${businessId}`)}`);
+    redirect(insuranceSignInHref(`/insurance/${businessId}`));
   }
 
   const user = await getSessionUser();

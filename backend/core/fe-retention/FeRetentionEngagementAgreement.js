@@ -2,6 +2,7 @@
  * VibeKeep engagement agreement — operational contract, not a substitute for counsel review.
  */
 import { VIBEKEEP_AGREEMENT_VERSION, VIBEKEEP_OPS_EMAIL, VIBEKEEP_OPS_PHONE_DISPLAY } from "./FeRetentionOnboardingCatalog.js";
+import { resolvePublicAppOrigin } from "../platform/invitations/invitationAppUrl.js";
 
 function safeString(v) {
   return v === null || v === undefined ? "" : String(v).trim();
@@ -16,9 +17,7 @@ function escapeHtml(s) {
 }
 
 function brandAssetOrigin() {
-  const origin = safeString(process.env.APP_ORIGIN || process.env.NEXTAUTH_URL || process.env.APP_URL);
-  if (origin) return origin.replace(/\/$/, "");
-  return "https://app.vtechdevelopment.com";
+  return resolvePublicAppOrigin() || "https://app.vtechdevelopment.com";
 }
 
 export function buildFeRetentionEngagementAgreement({

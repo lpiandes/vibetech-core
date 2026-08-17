@@ -24,13 +24,9 @@ export function isPublicPath(pathname: string): boolean {
   if (pathname === "/social-checker" || pathname.startsWith("/social-checker/")) {
     return true;
   }
-  // Insurance CRM landing + self-serve signup (own auth, not /login).
-  if (
-    pathname === "/insurance"
-    || pathname === "/insurance/"
-    || pathname === "/insurance/signup"
-    || pathname.startsWith("/insurance/signup/")
-  ) {
+  // Insurance product owns its own gate. Pages redirect unsigned visitors to
+  // /insurance — never the OS /login screen — so Stripe return and setup keep working.
+  if (pathname === "/insurance" || pathname.startsWith("/insurance/")) {
     return true;
   }
   if (
@@ -80,6 +76,13 @@ export function isSafeCallbackUrl(value: string | null | undefined): boolean {
 
 export function sanitizeCallbackUrl(value: string | null | undefined, fallback = "/"): string {
   return isSafeCallbackUrl(value) ? String(value) : fallback;
+}
+
+/** VibeKeep login, optionally returning to setup/billing after Stripe or a failed cookie. */
+export function insuranceSignInHref(callbackUrl?: string | null): string {
+  const dest = sanitizeCallbackUrl(callbackUrl, "/insurance");
+  if (dest === "/insurance") return "/insurance";
+  return `/insurance?callbackUrl=${encodeURIComponent(dest)}`;
 }
 
 export function requiresPlatformAdmin(pathname: string): boolean {

@@ -6,7 +6,8 @@ import { deepFreeze } from "../workspace/_utils/deepFreeze.js";
 import { FE_RETENTION_CRM_PACKAGE_ID } from "./feRetentionEntitlement.js";
 import { mergePurchasedPackagesIntoConfig } from "../platform/packages/SalesPackageCatalog.js";
 import { isStripeBillingConfigured } from "../platform/billing/StripeEnv.js";
-import { stripeFormPost } from "../platform/billing/StripeHttp.js";
+import { stripeFormPost, stripeGet } from "../platform/billing/StripeHttp.js";
+import { resolvePublicAppOrigin } from "../platform/invitations/invitationAppUrl.js";
 import { FE_RETENTION_PRODUCT_NAME } from "./productBrand.js";
 
 export const FE_RETENTION_MONTHLY_AMOUNT_CENTS = 20000;
@@ -94,8 +95,29 @@ export function writeFeRetentionBilling(packageConfiguration = {}, patch = {}) {
   };
 }
 
+export async function syncFeRetentionBillingOntoInstallation({ platformStore, businessId, packageConfiguration } = {}) {
+  if (!platformStore?.getBusinessOSInstallation || !businessId) return null;
+  const installation = await platformStore.getBusinessOSInstallation(businessId).catch(() => null);
+  if (!installation) return null;
+  await platformStore.upsertBusinessOSInstallation({
+    id: installation.id ?? `install_${businessId}`,
+    businessId,
+    specificationId: installation.specificationId,
+    specificationVersion: installation.specificationVersion ?? 1,
+    specificationContentHash: installation.specificationContentHash ?? "fe-billing",
+    planId: installation.planId ?? `plan_${businessId}`,
+    status: installation.status ?? "ACTIVE",
+    configuration: {
+      ...(installation.configuration ?? {}),
+      purchasedPackages: packageConfiguration?.purchasedPackages,
+      feRetentionBilling: packageConfiguration?.feRetentionBilling,
+    },
+  });
+  return true;
+}
+
 function appOriginFromRequestUrl(requestUrl) {
-  const env = String(process.env.APP_URL || process.env.NEXTAUTH_URL || "").trim().replace(/\/$/, "");
+  const env = resolvePublicAppOrigin();
   if (env) return env;
   try {
     return new URL(requestUrl).origin;
@@ -136,7 +158,7 @@ export async function createFeRetentionCheckoutSession({
   const origin = appOriginFromRequestUrl(requestUrl);
   const params = {
     mode: "subscription",
-    success_url: `${origin}/insurance/setup/${encodeURIComponent(String(businessId))}?paid=1`,
+    success_url: `${origin}/insurance/setup/${encodeURIComponent(String(businessId))}?paid=1&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/insurance/billing?canceled=1&businessId=${encodeURIComponent(String(businessId))}`,
     client_reference_id: String(businessId),
     metadata: {
@@ -297,23 +319,11 @@ export async function applyFeRetentionStripeEvent({ platformStore, event } = {})
   });
   business.packageConfiguration = nextConfig;
 
-  const installation = await platformStore.getBusinessOSInstallation?.(business.id).catch(() => null);
-  if (installation) {
-    await platformStore.upsertBusinessOSInstallation({
-      id: installation.id ?? `install_${business.id}`,
-      businessId: business.id,
-      specificationId: installation.specificationId,
-      specificationVersion: installation.specificationVersion ?? 1,
-      specificationContentHash: installation.specificationContentHash ?? "fe-billing",
-      planId: installation.planId ?? `plan_${business.id}`,
-      status: installation.status ?? "ACTIVE",
-      configuration: {
-        ...(installation.configuration ?? {}),
-        purchasedPackages: nextConfig.purchasedPackages,
-        feRetentionBilling: nextConfig.feRetentionBilling,
-      },
-    });
-  }
+  await syncFeRetentionBillingOntoInstallation({
+    platformStore,
+    businessId: business.id,
+    packageConfiguration: nextConfig,
+  });
 
   if (feRetentionDashboardAllowed(patch.status) && typeof platformStore.upsertIntegrationCredential === "function") {
     try {
@@ -338,5 +348,32 @@ export async function applyFeRetentionStripeEvent({ platformStore, event } = {})
     businessId: String(business.id),
     status: patch.status,
     type: event?.type ?? null,
+  });
+}
+
+/**
+ * Unlock a book from the Stripe Checkout return URL when the webhook is late or missing.
+ * Session ids are unguessable; still require the URL businessId to match session metadata.
+ */
+export async function applyFeRetentionPaidCheckoutSession({
+  platformStore,
+  sessionId,
+  expectedBusinessId,
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  const id = String(sessionId ?? "").trim();
+  if (!id) {
+    return deepFreeze({ ok: false, reason: "missing_session", skipped: true });
+  }
+  const result = await stripeGet(`checkout/sessions/${encodeURIComponent(id)}`, { fetchImpl });
+  if (!result.ok) return result;
+  const object = result.data ?? {};
+  const businessId = object.metadata?.businessId || object.client_reference_id || null;
+  if (expectedBusinessId && String(businessId ?? "") !== String(expectedBusinessId)) {
+    return deepFreeze({ ok: false, reason: "business_mismatch" });
+  }
+  return applyFeRetentionStripeEvent({
+    platformStore,
+    event: { type: "checkout.session.completed", data: { object } },
   });
 }

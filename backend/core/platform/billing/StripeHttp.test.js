@@ -6,6 +6,7 @@ import {
   flattenStripeParams,
   verifyStripeWebhookSignature,
   isStripeBillingConfigured,
+  stripeGet,
 } from "./StripeHttp.js";
 
 test("flattenStripeParams encodes nested checkout line items", () => {
@@ -44,4 +45,23 @@ test("isStripeBillingConfigured reads STRIPE_SECRET_KEY", () => {
   assert.equal(isStripeBillingConfigured(), true);
   if (prev != null) process.env.STRIPE_SECRET_KEY = prev;
   else delete process.env.STRIPE_SECRET_KEY;
+});
+
+test("stripeGet retrieves a Stripe object", async () => {
+  const prev = process.env.STRIPE_SECRET_KEY;
+  process.env.STRIPE_SECRET_KEY = "sk_test_x";
+  try {
+    const result = await stripeGet("checkout/sessions/cs_test_1", {
+      fetchImpl: async (url, init) => {
+        assert.equal(String(url).includes("checkout/sessions/cs_test_1"), true);
+        assert.equal(init.method, "GET");
+        return { ok: true, json: async () => ({ id: "cs_test_1", payment_status: "paid" }) };
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.data.id, "cs_test_1");
+  } finally {
+    if (prev != null) process.env.STRIPE_SECRET_KEY = prev;
+    else delete process.env.STRIPE_SECRET_KEY;
+  }
 });

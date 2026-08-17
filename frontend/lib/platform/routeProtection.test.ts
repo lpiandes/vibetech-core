@@ -5,9 +5,11 @@ import {
   isApiPath,
   isPublicPath,
   isSafeCallbackUrl,
+  insuranceSignInHref,
   requiresPlatformAdmin,
   sanitizeCallbackUrl,
 } from "./routeProtection.ts";
+import { withQuery } from "./hosts.ts";
 
 describe("routeProtection", () => {
   it("allows public auth and invite surfaces", () => {
@@ -19,11 +21,14 @@ describe("routeProtection", () => {
     assert.equal(isPublicPath("/api/businesses/biz_1/forms/submit"), true);
     assert.equal(isPublicPath("/social-checker"), true);
     assert.equal(isPublicPath("/insurance"), true);
+    assert.equal(isPublicPath("/insurance/signup"), true);
+    assert.equal(isPublicPath("/insurance/billing"), true);
+    assert.equal(isPublicPath("/insurance/setup/biz_1"), true);
     assert.equal(isPublicPath("/brand/vibetech-wordmark.png"), true);
     assert.equal(isPublicPath("/globe.svg"), true);
     assert.equal(isPublicPath("/api/insurance/signup"), true);
     assert.equal(isPublicPath("/api/insurance/sms/inbound"), true);
-    assert.equal(isPublicPath("/insurance/billing"), false);
+    assert.equal(isPublicPath("/api/insurance/onboarding"), false);
     assert.equal(isPublicPath("/api/marketing/consultant"), true);
     assert.equal(isPublicPath("/api/marketing/meeting-request"), true);
     assert.equal(isPublicPath("/api/marketing/intake"), true);
@@ -45,6 +50,9 @@ describe("routeProtection", () => {
     assert.equal(isSafeCallbackUrl("/\\evil"), false);
     assert.equal(sanitizeCallbackUrl("//evil.com"), "/");
     assert.equal(sanitizeCallbackUrl("/b/abc/work"), "/b/abc/work");
+    assert.equal(insuranceSignInHref("/insurance/setup/biz_1?paid=1"), "/insurance?callbackUrl=%2Finsurance%2Fsetup%2Fbiz_1%3Fpaid%3D1");
+    assert.equal(insuranceSignInHref("/insurance"), "/insurance");
+    assert.equal(withQuery("/insurance/billing?businessId=biz_1", { paid: "1", session_id: "cs_1" }), "/insurance/billing?businessId=biz_1&paid=1&session_id=cs_1");
   });
 
   it("identifies platform-admin surfaces including APIs", () => {

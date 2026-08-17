@@ -32,19 +32,17 @@ export function flattenStripeParams(value, prefix = "") {
   return out;
 }
 
-export async function stripeFormPost(path, params = {}, { fetchImpl = globalThis.fetch } = {}) {
+async function stripeRequest(method, path, { body = null, fetchImpl = globalThis.fetch } = {}) {
   const secret = stripeSecretKey();
   if (!secret) {
     return deepFreeze({ ok: false, reason: "stripe_not_configured", status: 503 });
   }
-  const body = new URLSearchParams(flattenStripeParams(params));
+  const headers = { Authorization: `Bearer ${secret}` };
+  if (body != null) headers["Content-Type"] = "application/x-www-form-urlencoded";
   const res = await fetchImpl(`https://api.stripe.com/v1/${String(path).replace(/^\//, "")}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${secret}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: body.toString(),
+    method,
+    headers,
+    body: body == null ? undefined : body.toString(),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -57,6 +55,17 @@ export async function stripeFormPost(path, params = {}, { fetchImpl = globalThis
     });
   }
   return deepFreeze({ ok: true, data });
+}
+
+export async function stripeFormPost(path, params = {}, { fetchImpl = globalThis.fetch } = {}) {
+  return stripeRequest("POST", path, {
+    body: new URLSearchParams(flattenStripeParams(params)),
+    fetchImpl,
+  });
+}
+
+export async function stripeGet(path, { fetchImpl = globalThis.fetch } = {}) {
+  return stripeRequest("GET", path, { fetchImpl });
 }
 
 /**

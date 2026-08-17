@@ -35,6 +35,8 @@ test("A2P profile is incomplete until required fields are present", () => {
   assert.equal(feA2pProfileIsComplete({}), false);
   assert.equal(feA2pProfileIsComplete(completeProfile), true);
   assert.equal(normalizeFeA2pProfile(completeProfile).ein, "123456789");
+  assert.equal(normalizeFeA2pProfile({ ...completeProfile, websiteUrl: "agency.com" }).websiteUrl, "https://agency.com");
+  assert.equal(feA2pProfileIsComplete({ ...completeProfile, websiteUrl: "agency.com" }), true);
 });
 
 test("pre-Stripe books still must complete A2P and the agreement before SMS", () => {

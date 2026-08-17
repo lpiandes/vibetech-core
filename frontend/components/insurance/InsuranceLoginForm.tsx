@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { insuranceFieldStyle, insuranceLabelStyle } from "./insuranceFormStyles";
+import { signInToInsurance } from "@/lib/insurance/signInToInsurance";
 
 export function InsuranceLoginForm({ callbackUrl = "/insurance" }: { callbackUrl?: string }) {
   const [email, setEmail] = useState("");
@@ -16,18 +16,11 @@ export function InsuranceLoginForm({ callbackUrl = "/insurance" }: { callbackUrl
     setBusy(true);
     setError(null);
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-        callbackUrl,
-      });
-      if (result?.error) {
+      const signed = await signInToInsurance({ email, password, nextPath: callbackUrl });
+      if (!signed.ok) {
         setError("Email or password is incorrect.");
         setBusy(false);
-        return;
       }
-      window.location.assign(result?.url ?? callbackUrl);
     } catch {
       setError("Could not sign in. Try again.");
       setBusy(false);

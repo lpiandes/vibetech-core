@@ -12,6 +12,7 @@ import { InsurancePublicShell } from "@/components/insurance/InsurancePublicShel
 import { InsuranceEngagementAgreementForm } from "@/components/insurance/InsuranceEngagementAgreementForm";
 import { InsuranceSetupHelp } from "@/components/insurance/InsuranceSetupHelp";
 import { insuranceBillingPath } from "@/lib/platform/hosts";
+import { insuranceSignInHref } from "@/lib/platform/routeProtection";
 
 export default async function InsuranceAgreementPage({
   params,
@@ -21,7 +22,7 @@ export default async function InsuranceAgreementPage({
   const { businessId } = await params;
   const access = await getFeRetentionAccess();
   if (!access.signedIn) {
-    redirect(`/insurance?callbackUrl=${encodeURIComponent(`/insurance/setup/${businessId}/agreement`)}`);
+    redirect(insuranceSignInHref(`/insurance/setup/${businessId}/agreement`));
   }
 
   const business = await platformStore.getBusinessById(businessId).catch(() => null);

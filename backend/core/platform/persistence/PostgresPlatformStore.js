@@ -79,6 +79,18 @@ export class PostgresPlatformStore {
     return mapUserRow(rows[0] ?? null);
   }
 
+  async updateUserEmail(userId, email) {
+    const normalizedEmail = String(email ?? "").trim().toLowerCase();
+    if (!userId || !normalizedEmail.includes("@")) return null;
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `UPDATE users SET email = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
+        [String(userId), normalizedEmail],
+      ),
+    );
+    return mapUserRow(rows[0] ?? null);
+  }
+
   async setUserPlatformRole(userId, platformRole) {
     const { rows } = await this.withClient((client) =>
       client.query(
@@ -228,6 +240,7 @@ export class PostgresPlatformStore {
         `SELECT b.* FROM businesses b
          INNER JOIN business_memberships m ON m.business_id = b.id
          WHERE m.user_id = $1 AND m.status = 'ACTIVE'
+           AND COALESCE(b.status, 'ACTIVE') <> 'ARCHIVED'
          ORDER BY b.name ASC`,
         [String(userId)],
       ),

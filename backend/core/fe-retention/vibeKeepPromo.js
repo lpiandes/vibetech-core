@@ -10,10 +10,15 @@ export function resolveVibeKeepComplimentaryCode() {
   return fromEnv || DEFAULT_COMPLIMENTARY_CODE;
 }
 
+/** Trim, drop internal spaces, compare case-insensitively. */
+export function normalizeVibeKeepPromoCode(input) {
+  return String(input ?? "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
 export function isValidVibeKeepPromoCode(input) {
-  const got = String(input ?? "").trim();
-  if (!got) return false;
-  const expected = resolveVibeKeepComplimentaryCode();
+  const got = normalizeVibeKeepPromoCode(input);
+  const expected = normalizeVibeKeepPromoCode(resolveVibeKeepComplimentaryCode());
+  if (!got || !expected) return false;
   const a = Buffer.from(got, "utf8");
   const b = Buffer.from(expected, "utf8");
   if (a.length !== b.length) return false;

@@ -69,7 +69,7 @@ export function emptyFeA2pProfile() {
 }
 
 export function feA2pProfileIsComplete(profile = {}) {
-  const p = { ...emptyFeA2pProfile(), ...(profile || {}) };
+  const p = normalizeFeA2pProfile(profile);
   const ein = digitsOnly(p.ein);
   const url = safeString(p.websiteUrl);
   const hasUrl = /^https?:\/\//i.test(url);
@@ -110,6 +110,9 @@ export function normalizeFeA2pProfile(input = {}) {
   next.contactPhone = digitsOnly(next.contactPhone);
   next.preferredAreaCode = digitsOnly(next.preferredAreaCode).slice(0, 3);
   next.postalCode = safeString(next.postalCode);
+  if (next.websiteUrl && !/^https?:\/\//i.test(next.websiteUrl)) {
+    next.websiteUrl = `https://${next.websiteUrl}`;
+  }
   return next;
 }
 

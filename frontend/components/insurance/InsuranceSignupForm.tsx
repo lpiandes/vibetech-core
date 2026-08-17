@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { insuranceFieldStyle, insuranceLabelStyle } from "./insuranceFormStyles";
+import { authenticateInsuranceCredentials } from "@/lib/insurance/signInToInsurance";
+import { insuranceSignInHref } from "@/lib/platform/routeProtection";
 
 export function InsuranceSignupForm() {
   const [name, setName] = useState("");
@@ -30,27 +32,16 @@ export function InsuranceSignupForm() {
         setBusy(false);
         return;
       }
-      const signed = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-        callbackUrl: "/insurance",
-      });
-      if (signed?.error) {
-        setError(data.complimentary ? "Account created. Log in to open your book." : "Account created. Log in, then finish payment.");
-        setBusy(false);
+      const nextPath = String(
+        data.nextPath
+        || `/insurance/billing?businessId=${encodeURIComponent(String(data.businessId || ""))}`,
+      );
+      const signed = await authenticateInsuranceCredentials({ email, password, nextPath });
+      if (!signed.ok) {
+        window.location.assign(insuranceSignInHref(nextPath));
         return;
       }
-      if (data.complimentary) {
-        window.location.assign(`/insurance/setup/${encodeURIComponent(data.businessId)}`);
-        return;
-      }
-      if (data.checkoutUrl) {
-        window.location.assign(data.checkoutUrl);
-        return;
-      }
-      setError(data.billingError || "Account created. Payment is not configured yet — contact VibeTech.");
-      window.location.assign("/insurance/billing");
+      window.location.assign(String(data.checkoutUrl || nextPath));
     } catch {
       setError("Sign up failed. Try again.");
       setBusy(false);
@@ -87,7 +78,12 @@ export function InsuranceSignupForm() {
           spellCheck={false}
         />
       </label>
-      {error ? <p style={{ color: "#fca5a5", margin: 0, fontSize: 14 }}>{error}</p> : null}
+      {error ? (
+        <p style={{ color: "#fca5a5", margin: 0, fontSize: 14 }}>
+          {error}{" "}
+          {/already exists|log in/i.test(error) ? <Link href="/insurance">Log in</Link> : null}
+        </p>
+      ) : null}
       <Button type="submit" disabled={busy} size="lg" className="w-full h-11 font-semibold">
         {busy ? "Working…" : hasPromo ? "Create free account" : "Continue to payment · $200/month"}
       </Button>

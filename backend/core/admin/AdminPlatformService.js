@@ -17,6 +17,7 @@ import {
 } from "./operatorInterventions.js";
 import { presentRootCauseOptions } from "./operatorRootCause.js";
 import { progressRftOpportunity } from "../ai-builder/operating-contract/rft/rftOpportunityRuntime.js";
+import { releaseFeRetentionSignup as releaseOwnedFeRetentionSignup } from "../fe-retention/releaseFeRetentionSignup.js";
 import {
   refreshGovernedLearning,
   persistGovernedLearning,
@@ -804,6 +805,25 @@ export class AdminPlatformService {
         createdAt: user.createdAt ?? null,
       })),
     });
+  }
+
+  async releaseFeRetentionSignup({ adminUserId, platformRole, businessId }) {
+    const gate = this.assertAdmin(platformRole);
+    if (!gate.ok) return deepFreeze(gate);
+    const result = await releaseOwnedFeRetentionSignup({
+      platformStore: this.platformStore,
+      businessId,
+    });
+    if (result.ok) {
+      await this.platformStore.recordAuditEvent?.({
+        actorUserId: adminUserId,
+        action: "admin.vibekeep_signup_released",
+        targetType: "business",
+        targetId: String(businessId),
+        metadata: { releasedEmails: result.releasedEmails ?? [] },
+      });
+    }
+    return result;
   }
 
   async getPlatformAnalytics({ adminUserId, platformRole }) {

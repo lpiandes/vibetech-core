@@ -30,6 +30,16 @@ export function insuranceBillingPath(businessId?: string | null) {
   return id ? `/insurance/billing?businessId=${encodeURIComponent(id)}` : "/insurance/billing";
 }
 
+/** Append extra query params to a same-origin path that may already have a query. */
+export function withQuery(path: string, extra: Record<string, string | null | undefined> = {}) {
+  const url = new URL(path, "https://local.invalid");
+  for (const [key, value] of Object.entries(extra)) {
+    const next = value == null ? "" : String(value).trim();
+    if (next) url.searchParams.set(key, next);
+  }
+  return `${url.pathname}${url.search}`;
+}
+
 /** Absolute or same-origin URL for the insurance landing page. */
 export function insuranceEntryUrl() {
   return INSURANCE_HOST_URL ? `${INSURANCE_HOST_URL}/insurance` : "/insurance";

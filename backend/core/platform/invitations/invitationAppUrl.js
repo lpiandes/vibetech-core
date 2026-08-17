@@ -1,7 +1,14 @@
 const LOCALHOST_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 
+/** Public app origin for invites, Stripe return URLs, and Twilio webhooks. */
+export function resolvePublicAppOrigin() {
+  return String(process.env.APP_URL ?? process.env.NEXTAUTH_URL ?? process.env.APP_ORIGIN ?? "")
+    .trim()
+    .replace(/\/$/, "");
+}
+
 export function resolveInvitationAppBaseUrl() {
-  return String(process.env.APP_URL ?? process.env.NEXTAUTH_URL ?? "").trim().replace(/\/$/, "");
+  return resolvePublicAppOrigin();
 }
 
 export function validateProductionInvitationAppUrl() {

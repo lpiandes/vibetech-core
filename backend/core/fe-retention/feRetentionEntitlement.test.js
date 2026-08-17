@@ -5,6 +5,7 @@ import {
   presentFeRetentionBook,
   resolveFeRetentionEntitlement,
   resolveFeRetentionNextPath,
+  listOwnedFeRetentionBooks,
 } from "./feRetentionEntitlement.js";
 import { writeFeRetentionBilling } from "./FeRetentionBilling.js";
 
@@ -59,4 +60,10 @@ test("resolveFeRetentionNextPath sends agents to dashboard, billing, or admin di
     }).kind,
     "billing",
   );
+});
+
+test("listOwnedFeRetentionBooks ignores businesses without the VibeKeep package", () => {
+  const fe = { id: "biz_fe", packageConfiguration: writeFeRetentionBilling({}, { status: "incomplete" }) };
+  const other = { id: "biz_os", packageConfiguration: { purchasedPackages: ["ai_business_os"] } };
+  assert.deepEqual(listOwnedFeRetentionBooks([fe, other]).map((b) => b.id), ["biz_fe"]);
 });

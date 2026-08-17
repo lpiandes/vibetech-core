@@ -1,21 +1,22 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getFeRetentionAccess } from "@/lib/platform/feRetentionAccess";
+import { resolveFeRetentionNextPath } from "../../../backend/core/fe-retention/feRetentionEntitlement.js";
 import { InsurancePublicShell } from "@/components/insurance/InsurancePublicShell";
 import { InsuranceSignupForm } from "@/components/insurance/InsuranceSignupForm";
 import { VIBEKEEP_MONTHLY_PRICE_LABEL } from "@/lib/insurance/productBrand";
 
 export default async function InsuranceSignupPage() {
   const access = await getFeRetentionAccess();
-  if (access.signedIn && access.allowsDashboard && access.primaryBusinessId) {
-    const book = access.businesses.find((b) => b.id === access.primaryBusinessId);
-    if (book?.onboardingComplete === false) {
-      redirect(`/insurance/setup/${access.primaryBusinessId}`);
+  if (access.signedIn) {
+    const next = resolveFeRetentionNextPath({
+      signedIn: true,
+      isPlatformAdmin: false,
+      books: access.businesses,
+    });
+    if (next.kind === "dashboard" || next.kind === "billing" || next.kind === "setup") {
+      redirect(next.href);
     }
-    redirect(`/insurance/${access.primaryBusinessId}`);
-  }
-  if (access.signedIn && access.entitled && !access.allowsDashboard) {
-    redirect("/insurance/billing");
   }
 
   return (

@@ -20,6 +20,23 @@ export function presentFeRetentionBook(business) {
 
 export const FE_RETENTION_CRM_PACKAGE_ID = "fe_retention_crm";
 
+export function isFeRetentionBusinessArchived(business) {
+  return String(business?.status ?? "").toUpperCase() === "ARCHIVED";
+}
+
+/** FE books this user actually belongs to — never the admin global directory. */
+export function listOwnedFeRetentionBooks(businesses = []) {
+  const list = Array.isArray(businesses) ? businesses : [];
+  return list.filter((business) =>
+    businessGrantsFeRetentionAccess(readPurchasedPackagesFromConfig(business?.packageConfiguration ?? {})),
+  );
+}
+
+/** Live VibeKeep books only — archived signups do not keep a From-number or inbound route. */
+export function listActiveFeRetentionBooks(businesses = []) {
+  return listOwnedFeRetentionBooks(businesses).filter((business) => !isFeRetentionBusinessArchived(business));
+}
+
 /**
  * @param {string[]} purchasedPackages
  * @returns {boolean}

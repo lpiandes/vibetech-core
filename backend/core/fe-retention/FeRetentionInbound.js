@@ -1,7 +1,7 @@
 /**
  * Per-book Twilio inbound for FE Retention (STOP → pause SMS on that book only).
  */
-import { businessGrantsFeRetentionAccess } from "./feRetentionEntitlement.js";
+import { businessGrantsFeRetentionAccess, isFeRetentionBusinessArchived } from "./feRetentionEntitlement.js";
 import { readPurchasedPackagesFromConfig } from "../platform/packages/SalesPackageCatalog.js";
 import {
   appendFeMessageLog,
@@ -167,7 +167,7 @@ export async function configureFeRetentionInboundSmsWebhook({
     return {
       ok: false,
       reason: "webhook_url_unresolved",
-      message: "Set APP_ORIGIN or NEXTAUTH_URL so the STOP webhook can be configured.",
+      message: "Set APP_URL or NEXTAUTH_URL so the STOP webhook can be configured.",
     };
   }
   if (!env.accountSid || !env.authToken || !targetNumber) {
@@ -236,6 +236,7 @@ async function listFeBusinessInstallations(platformStore, { toNumber = "" } = {}
   const inboundTo = safeString(toNumber);
   const out = [];
   for (const business of Array.isArray(businesses) ? businesses : []) {
+    if (isFeRetentionBusinessArchived(business)) continue;
     const packages = readPurchasedPackagesFromConfig(business?.packageConfiguration ?? {});
     if (!businessGrantsFeRetentionAccess(packages)) continue;
     const businessId = String(business.id);
