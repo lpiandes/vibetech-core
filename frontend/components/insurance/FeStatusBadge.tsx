@@ -11,6 +11,15 @@ export function FeStatusBadge({
 }) {
   const key = String(status || "active").toLowerCase();
   const text = label || formatFePolicyStatus(key);
+
+  if (size === "lg") {
+    return (
+      <span className={`fe-badge fe-badge--${key} fe-badge--lg fe-badge--solo`}>
+        {text}
+      </span>
+    );
+  }
+
   return (
     <span className={`fe-badge fe-badge--${key} fe-badge--${size}`}>
       <span className="fe-badge-dot" aria-hidden />

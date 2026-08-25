@@ -192,28 +192,37 @@ export function InsuranceShell({
         .fe-badge {
           display: inline-flex;
           align-items: center;
-          gap: 0.45rem;
-          font-size: 0.7rem;
+          justify-content: center;
+          gap: 0.4rem;
+          font-size: 0.68rem;
           font-weight: 750;
           text-transform: uppercase;
-          letter-spacing: 0.08em;
-          padding: 0.38rem 0.85rem 0.38rem 0.65rem;
+          letter-spacing: 0.07em;
+          padding: 0.35rem 0.75rem;
           border-radius: 999px;
           border: 1px solid transparent;
-          line-height: 1.1;
+          line-height: 1;
           white-space: nowrap;
-          align-self: flex-start;
+          align-self: center;
           flex-shrink: 0;
-          box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset;
+          box-sizing: border-box;
+          vertical-align: middle;
+        }
+        .fe-badge--solo {
+          gap: 0;
+          padding: 0.5rem 1rem;
+          min-height: 2.125rem;
+          line-height: 1;
+          text-align: center;
         }
         .fe-badge--lg {
-          font-size: 0.72rem;
-          padding: 0.58rem 1.2rem;
-          letter-spacing: 0.1em;
-          min-width: 7.25rem;
-          justify-content: center;
+          font-size: 0.74rem;
+          letter-spacing: 0.09em;
         }
-        .fe-badge-text { position: relative; top: 0.5px; }
+        .fe-badge-text {
+          display: block;
+          line-height: 1;
+        }
         .fe-badge-dot {
           width: 7px;
           height: 7px;
@@ -271,31 +280,76 @@ export function InsuranceShell({
           border: 1px solid rgba(248,113,113,0.4);
           color: #fca5a5;
         }
+        .fe-status-banner {
+          position: sticky;
+          top: 0.5rem;
+          z-index: 20;
+          padding: 0.9rem 1rem;
+          border-radius: 12px;
+          margin: 0 0 0.85rem;
+          font-weight: 700;
+          font-size: 0.95rem;
+          line-height: 1.35;
+          background: rgba(34,211,238,0.18);
+          border: 1px solid rgba(34,211,238,0.5);
+          color: #a5f3fc;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+        }
+        .fe-status-banner.ok {
+          background: rgba(52,211,153,0.2);
+          border-color: rgba(52,211,153,0.55);
+          color: #86efac;
+        }
+        .fe-status-banner.err {
+          background: rgba(248,113,113,0.16);
+          border-color: rgba(248,113,113,0.5);
+          color: #fca5a5;
+        }
+        .fe-status-banner.busy {
+          background: rgba(34,211,238,0.18);
+          border-color: rgba(34,211,238,0.5);
+          color: #a5f3fc;
+        }
+        .fe-status-segment {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-top: 0.85rem;
+        }
+        .fe-status-btn {
+          min-width: 7.5rem;
+          transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+        }
         .fe-status-btn.is-current {
-          box-shadow: 0 0 0 2px var(--fe-accent), 0 0 14px rgba(34,211,238,0.28);
+          box-shadow: 0 0 0 2px var(--fe-accent), 0 0 16px rgba(34,211,238,0.35);
           transform: translateY(-1px);
         }
         .fe-status-btn.is-current.fe-btn.warn {
-          background: rgba(248,113,113,0.92);
+          background: #f87171;
           color: #fff;
-          border-color: rgba(248,113,113,0.95);
+          border-color: #f87171;
         }
         .fe-status-btn.is-current.fe-btn.secondary {
-          background: rgba(34,211,238,0.18);
-          color: var(--fe-accent);
-          border-color: rgba(34,211,238,0.55);
+          background: rgba(34,211,238,0.22);
+          color: #67e8f9;
+          border-color: rgba(34,211,238,0.65);
         }
         .fe-status-btn.is-pressing {
-          opacity: 0.72;
-          transform: scale(0.98);
+          transform: scale(0.96);
+          opacity: 1 !important;
         }
-        .fe-status-btn:disabled { opacity: 0.65; cursor: wait; }
+        .fe-status-btn:disabled {
+          cursor: wait;
+        }
+        .fe-status-btn:disabled:not(.is-pressing):not(.is-current) {
+          opacity: 0.5;
+        }
         @keyframes fe-status-flash {
-          0% { box-shadow: 0 0 0 0 rgba(34,211,238,0.55); }
-          100% { box-shadow: 0 0 0 10px rgba(34,211,238,0); }
+          0% { box-shadow: 0 0 0 0 rgba(34,211,238,0.65); }
+          100% { box-shadow: 0 0 0 12px rgba(34,211,238,0); }
         }
         .fe-status-btn.just-updated {
-          animation: fe-status-flash 0.65s ease-out;
+          animation: fe-status-flash 0.75s ease-out;
         }
         .fe-table {
           width: 100%;

@@ -125,6 +125,16 @@ export default function InsuranceClientDetailPage() {
     setError(null);
     setStatusMessage(null);
     setMessage(null);
+    setClient((prev) => {
+      if (!prev || prev.smsOptedOut) return prev;
+      return {
+        ...prev,
+        policy: {
+          ...prev.policy,
+          status,
+        },
+      };
+    });
     try {
       const res = await fetch(
         `/api/insurance/${encodeURIComponent(businessId)}/clients/${encodeURIComponent(clientId)}/status`,
@@ -148,6 +158,7 @@ export default function InsuranceClientDetailPage() {
       statusSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
+      await load();
     } finally {
       setBusy(false);
       setPressingStatus(null);
@@ -214,13 +225,29 @@ export default function InsuranceClientDetailPage() {
     return base + current + pressing + flash;
   };
 
+  const policyBtnLabel = (target: string, label: string) => {
+    if (busy && pressingStatus === target) return "Saving…";
+    return label;
+  };
+
   return (
     <>
+      {busy && pressingStatus ? (
+        <div className="fe-status-banner busy" role="status">
+          Updating policy to {pressingStatus}…
+        </div>
+      ) : null}
+      {!busy && statusMessage ? (
+        <div className="fe-status-banner ok" role="status">{statusMessage}</div>
+      ) : null}
+      {!busy && error ? (
+        <div className="fe-status-banner err" role="alert">{error}</div>
+      ) : null}
       <p style={{ marginBottom: "0.75rem" }}>
         <Link href={`/insurance/${businessId}/clients`} className="fe-muted">← Clients</Link>
       </p>
-      <div className="fe-card">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
+      <div className="fe-card" ref={statusSectionRef}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", alignItems: "center" }}>
           <div>
             <h2 style={{ margin: "0 0 0.35rem" }}>{client.name}</h2>
             <p className="fe-muted" style={{ margin: 0 }}>{client.phone}{client.email ? ` · ${client.email}` : ""}</p>
@@ -238,30 +265,23 @@ export default function InsuranceClientDetailPage() {
             label={client.smsOptedOut ? "SMS paused" : undefined}
           />
         </div>
-      </div>
 
-      <div className="fe-card" ref={statusSectionRef}>
-        <h3>Policy status</h3>
-        <p className="fe-muted">
-          Missed or lapsed sends the client a recovery text and alerts the agency owner.
-          {currentPolicyStatus !== "active" && !client.smsOptedOut ? (
-            <> Current status: <strong>{currentPolicyStatus}</strong>.</>
-          ) : null}
+        <h3 style={{ marginTop: "1rem" }}>Policy status</h3>
+        <p className="fe-muted" style={{ marginBottom: 0 }}>
+          Tap a status — the badge above updates instantly. Missed/lapsed also texts the client and emails the agency owner.
         </p>
-        {statusMessage ? <div className="fe-toast ok">{statusMessage}</div> : null}
-        {error ? <div className="fe-toast err">{error}</div> : null}
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div className="fe-status-segment">
           <button type="button" className={policyBtnClass("missed", true)} disabled={busy} onClick={() => setStatus("missed")}>
-            {busy ? "Updating…" : "Mark missed"}
+            {policyBtnLabel("missed", "Mark missed")}
           </button>
           <button type="button" className={policyBtnClass("lapsed", true)} disabled={busy} onClick={() => setStatus("lapsed")}>
-            {busy ? "Updating…" : "Mark lapsed"}
+            {policyBtnLabel("lapsed", "Mark lapsed")}
           </button>
           <button type="button" className={policyBtnClass("active")} disabled={busy} onClick={() => setStatus("active")}>
-            {busy ? "Updating…" : "Mark reinstated"}
+            {policyBtnLabel("active", "Mark reinstated")}
           </button>
           <button type="button" className={policyBtnClass("cancelled")} disabled={busy} onClick={() => setStatus("cancelled")}>
-            {busy ? "Updating…" : "Cancelled"}
+            {policyBtnLabel("cancelled", "Cancelled")}
           </button>
         </div>
       </div>
