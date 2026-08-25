@@ -22,12 +22,17 @@ export {
   VIBEKEEP_SUPPORT_FROM,
   VIBEKEEP_OPS_PHONE_DISPLAY,
   VIBEKEEP_OPS_PHONE_E164,
+  VIBEKEEP_DEFAULT_PRIVACY_URL,
+  VIBEKEEP_DEFAULT_TERMS_URL,
+  VIBEKEEP_DEFAULT_OPT_IN_KEYWORDS,
+  VIBEKEEP_DEFAULT_OPT_IN_MESSAGE,
   emptyFeA2pProfile,
   feA2pProfileIsComplete,
   feRetentionAgreementPath,
   feRetentionSetupPath,
   formatFeA2pProfileForOps,
   normalizeFeA2pProfile,
+  defaultFeA2pOptInMessage,
   feRetentionAgreementPdfHref,
 } from "./FeRetentionOnboardingCatalog.js";
 

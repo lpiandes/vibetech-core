@@ -8,6 +8,20 @@ export const VIBEKEEP_OPS_PHONE_DISPLAY = "603-818-2383";
 export const VIBEKEEP_OPS_PHONE_E164 = "+16038182383";
 export const VIBEKEEP_AGREEMENT_VERSION = "2026-08-14";
 
+/** Defaults for 10DLC campaign URLs when the agency has no page of their own yet. */
+export const VIBEKEEP_DEFAULT_PRIVACY_URL = "https://vtechdevelopment.com/privacy.html";
+export const VIBEKEEP_DEFAULT_TERMS_URL = "https://vtechdevelopment.com/terms.html";
+
+/**
+ * VibeKeep does not use keyword subscribe by default — agents upload consented numbers.
+ * Leave opt-in keywords blank in Twilio unless the agency supports text-to-join.
+ */
+export const VIBEKEEP_DEFAULT_OPT_IN_KEYWORDS = "";
+
+/** Sample auto-reply if an agency later enables START/UNSTOP keyword opt-in. */
+export const VIBEKEEP_DEFAULT_OPT_IN_MESSAGE =
+  "You are opted in to policy reminders from {agency}. Msg & data rates may apply. Msg frequency varies. Reply HELP for help, STOP to cancel.";
+
 export const FE_A2P_BUSINESS_TYPES = Object.freeze([
   "Limited Liability Corporation",
   "Corporation",
@@ -52,6 +66,10 @@ export function emptyFeA2pProfile() {
     ein: "",
     businessIndustry: "INSURANCE",
     websiteUrl: "",
+    privacyPolicyUrl: "",
+    termsUrl: "",
+    optInKeywords: "",
+    optInMessage: "",
     regions: ["USA_AND_CANADA"],
     street: "",
     city: "",
@@ -69,17 +87,34 @@ export function emptyFeA2pProfile() {
   };
 }
 
+function normalizeHttpUrl(value) {
+  const raw = safeString(value);
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw}`;
+}
+
+function isHttpUrl(value) {
+  return /^https?:\/\//i.test(safeString(value));
+}
+
 export function feA2pProfileIsComplete(profile = {}) {
   const p = normalizeFeA2pProfile(profile);
   const ein = digitsOnly(p.ein);
-  const url = safeString(p.websiteUrl);
-  const hasUrl = /^https?:\/\//i.test(url);
+  const keywords = safeString(p.optInKeywords);
+  const optInMessageOk = !keywords || (
+    safeString(p.optInMessage).length >= 20
+    && safeString(p.optInMessage).length <= 320
+  );
   return Boolean(
     safeString(p.legalBusinessName)
     && safeString(p.businessType)
     && ein.length >= 9
     && safeString(p.businessIndustry)
-    && hasUrl
+    && isHttpUrl(p.websiteUrl)
+    && isHttpUrl(p.privacyPolicyUrl)
+    && isHttpUrl(p.termsUrl)
+    && optInMessageOk
     && safeString(p.street)
     && safeString(p.city)
     && safeString(p.region)
@@ -111,10 +146,17 @@ export function normalizeFeA2pProfile(input = {}) {
   next.contactPhone = digitsOnly(next.contactPhone);
   next.preferredAreaCode = digitsOnly(next.preferredAreaCode).slice(0, 3);
   next.postalCode = safeString(next.postalCode);
-  if (next.websiteUrl && !/^https?:\/\//i.test(next.websiteUrl)) {
-    next.websiteUrl = `https://${next.websiteUrl}`;
-  }
+  next.websiteUrl = normalizeHttpUrl(next.websiteUrl);
+  next.privacyPolicyUrl = normalizeHttpUrl(next.privacyPolicyUrl);
+  next.termsUrl = normalizeHttpUrl(next.termsUrl);
+  next.optInKeywords = safeString(next.optInKeywords);
+  next.optInMessage = safeString(next.optInMessage);
   return next;
+}
+
+export function defaultFeA2pOptInMessage(agencyName = "") {
+  const agency = safeString(agencyName) || "your agency";
+  return VIBEKEEP_DEFAULT_OPT_IN_MESSAGE.replace("{agency}", agency);
 }
 
 export function feRetentionSetupPath(businessId) {
@@ -137,6 +179,10 @@ export function formatFeA2pProfileForOps(profile = {}) {
     `EIN: ${p.ein}`,
     `Industry: ${p.businessIndustry}`,
     `Website: ${p.websiteUrl}`,
+    `Privacy policy: ${p.privacyPolicyUrl}`,
+    `Terms: ${p.termsUrl}`,
+    `Opt-in keywords: ${p.optInKeywords || "(none — clients opt in by consent when the agent adds them)"}`,
+    `Opt-in message: ${p.optInMessage || "(n/a — no keyword opt-in)"}`,
     `Regions: ${(p.regions || []).join(", ")}`,
     `Address: ${p.street}, ${p.city}, ${p.region} ${p.postalCode} ${p.country}`,
     `Notify email: ${p.notifyEmail}`,

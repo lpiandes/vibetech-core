@@ -17,6 +17,10 @@ const completeProfile = {
   ein: "12-3456789",
   businessIndustry: "INSURANCE",
   websiteUrl: "https://secondagency.example",
+  privacyPolicyUrl: "https://vtechdevelopment.com/privacy.html",
+  termsUrl: "https://vtechdevelopment.com/terms.html",
+  optInKeywords: "",
+  optInMessage: "",
   street: "1 Main St",
   city: "Nashua",
   region: "NH",
@@ -37,6 +41,18 @@ test("A2P profile is incomplete until required fields are present", () => {
   assert.equal(normalizeFeA2pProfile(completeProfile).ein, "123456789");
   assert.equal(normalizeFeA2pProfile({ ...completeProfile, websiteUrl: "agency.com" }).websiteUrl, "https://agency.com");
   assert.equal(feA2pProfileIsComplete({ ...completeProfile, websiteUrl: "agency.com" }), true);
+  assert.equal(feA2pProfileIsComplete({ ...completeProfile, privacyPolicyUrl: "" }), false);
+  assert.equal(feA2pProfileIsComplete({ ...completeProfile, termsUrl: "" }), false);
+  assert.equal(feA2pProfileIsComplete({
+    ...completeProfile,
+    optInKeywords: "START",
+    optInMessage: "short",
+  }), false);
+  assert.equal(feA2pProfileIsComplete({
+    ...completeProfile,
+    optInKeywords: "START",
+    optInMessage: "You are opted in to policy reminders. Reply HELP for help, STOP to cancel.",
+  }), true);
 });
 
 test("pre-Stripe books still must complete A2P and the agreement before SMS", () => {
