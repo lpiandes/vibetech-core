@@ -67,6 +67,7 @@ export default function InsuranceClientDetailPage() {
   const [busy, setBusy] = useState(false);
   const [pressingStatus, setPressingStatus] = useState<string | null>(null);
   const [flashStatus, setFlashStatus] = useState<string | null>(null);
+  const [badgePop, setBadgePop] = useState(false);
   const statusSectionRef = useRef<HTMLDivElement | null>(null);
   const [holidayMonth, setHolidayMonth] = useState<string>("");
   const [holidayDay, setHolidayDay] = useState<string>("");
@@ -119,11 +120,12 @@ export default function InsuranceClientDetailPage() {
   }, [holidayMonth]);
 
   async function setStatus(status: string) {
+    const previousStatus = client?.smsOptedOut ? "sms_opt_out" : (client?.policy?.status || "active");
     setBusy(true);
     setPressingStatus(status);
     setFlashStatus(null);
     setError(null);
-    setStatusMessage(null);
+    setStatusMessage(`Updating to ${status}…`);
     setMessage(null);
     setClient((prev) => {
       if (!prev || prev.smsOptedOut) return prev;
@@ -147,17 +149,21 @@ export default function InsuranceClientDetailPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Status update failed.");
       setClient(data.client);
-      setStatusMessage(
-        data.message
+      const feedback = data.message
         || STATUS_FEEDBACK[status]
-        || "Status updated.",
-      );
+        || "Status updated.";
+      setStatusMessage(feedback);
       setFlashStatus(status);
-      window.setTimeout(() => setFlashStatus((prev) => (prev === status ? null : prev)), 700);
-      await load();
+      setBadgePop(true);
+      window.setTimeout(() => setBadgePop(false), 600);
+      window.setTimeout(() => setFlashStatus((prev) => (prev === status ? null : prev)), 900);
+      if (previousStatus !== status) {
+        await load();
+      }
       statusSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
+      setStatusMessage(null);
       await load();
     } finally {
       setBusy(false);
@@ -233,22 +239,22 @@ export default function InsuranceClientDetailPage() {
   return (
     <>
       {busy && pressingStatus ? (
-        <div className="fe-status-banner busy" role="status">
+        <div className="fe-toast-fixed busy" role="status">
           Updating policy to {pressingStatus}…
         </div>
       ) : null}
       {!busy && statusMessage ? (
-        <div className="fe-status-banner ok" role="status">{statusMessage}</div>
+        <div className="fe-toast-fixed ok" role="status">{statusMessage}</div>
       ) : null}
-      {!busy && error ? (
-        <div className="fe-status-banner err" role="alert">{error}</div>
+      {!busy && error && !statusMessage ? (
+        <div className="fe-toast-fixed err" role="alert">{error}</div>
       ) : null}
       <p style={{ marginBottom: "0.75rem" }}>
         <Link href={`/insurance/${businessId}/clients`} className="fe-muted">← Clients</Link>
       </p>
       <div className="fe-card" ref={statusSectionRef}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", alignItems: "center" }}>
-          <div>
+          <div style={{ minWidth: 0, flex: "1 1 12rem" }}>
             <h2 style={{ margin: "0 0 0.35rem" }}>{client.name}</h2>
             <p className="fe-muted" style={{ margin: 0 }}>{client.phone}{client.email ? ` · ${client.email}` : ""}</p>
             {client.birthday ? <p className="fe-muted">Birthday: {client.birthday}</p> : null}
@@ -261,6 +267,7 @@ export default function InsuranceClientDetailPage() {
           </div>
           <FeStatusBadge
             size="lg"
+            pop={badgePop}
             status={client.smsOptedOut ? "sms_opt_out" : (client.policy?.status || "active")}
             label={client.smsOptedOut ? "SMS paused" : undefined}
           />
@@ -284,6 +291,17 @@ export default function InsuranceClientDetailPage() {
             {policyBtnLabel("cancelled", "Cancelled")}
           </button>
         </div>
+        {busy && pressingStatus ? (
+          <div className="fe-status-feedback busy" role="status">
+            Saving {pressingStatus}… badge updates now; recovery text sends when applicable.
+          </div>
+        ) : null}
+        {!busy && statusMessage ? (
+          <div className="fe-status-feedback ok" role="status">{statusMessage}</div>
+        ) : null}
+        {!busy && error ? (
+          <div className="fe-status-feedback err" role="alert">{error}</div>
+        ) : null}
       </div>
 
       <form className="fe-card" onSubmit={saveCustom}>

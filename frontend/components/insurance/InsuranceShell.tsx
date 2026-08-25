@@ -43,6 +43,9 @@ export function InsuranceShell({
           --fe-warn: ${cockpitColors.critical};
           --fe-warn-soft: rgba(248,113,113,0.12);
           --fe-ok: ${cockpitColors.handled};
+          width: 100%;
+          max-width: 100%;
+          overflow-x: clip;
           min-height: 100vh;
           background:
             radial-gradient(ellipse 70% 45% at 12% -8%, rgba(34,211,238,0.12) 0%, transparent 55%),
@@ -54,8 +57,14 @@ export function InsuranceShell({
         .fe-root * { box-sizing: border-box; }
         .fe-shell {
           max-width: 1080px;
+          width: 100%;
           margin: 0 auto;
           padding: 1.25rem 1.25rem 3rem;
+          box-sizing: border-box;
+        }
+        .fe-shell > * {
+          min-width: 0;
+          max-width: 100%;
         }
         .fe-top {
           display: flex;
@@ -113,9 +122,13 @@ export function InsuranceShell({
           background: var(--fe-panel);
           border: 1px solid var(--fe-line);
           border-radius: 14px;
-          padding: 1.1rem 1.2rem;
+          padding: 1.25rem 1.35rem;
           margin-bottom: 0.85rem;
           box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
+          box-sizing: border-box;
+          width: 100%;
+          max-width: 100%;
+          overflow: hidden;
         }
         .fe-card h2, .fe-card h3 {
           margin: 0 0 0.35rem;
@@ -210,10 +223,19 @@ export function InsuranceShell({
         }
         .fe-badge--solo {
           gap: 0;
-          padding: 0.5rem 1rem;
-          min-height: 2.125rem;
-          line-height: 1;
+          line-height: 1.15;
           text-align: center;
+        }
+        .fe-badge--header {
+          flex-shrink: 0;
+        }
+        .fe-badge--pop {
+          animation: fe-badge-pop 0.55s ease;
+        }
+        @keyframes fe-badge-pop {
+          0% { transform: scale(1); }
+          35% { transform: scale(1.12); box-shadow: 0 0 0 4px rgba(34,211,238,0.35); }
+          100% { transform: scale(1); box-shadow: none; }
         }
         .fe-badge--lg {
           font-size: 0.74rem;
@@ -350,6 +372,62 @@ export function InsuranceShell({
         }
         .fe-status-btn.just-updated {
           animation: fe-status-flash 0.75s ease-out;
+        }
+        .fe-status-btn:active:not(:disabled) {
+          transform: scale(0.94);
+        }
+        .fe-status-feedback {
+          margin-top: 0.85rem;
+          padding: 0.85rem 1rem;
+          border-radius: 10px;
+          font-weight: 650;
+          font-size: 0.92rem;
+          line-height: 1.4;
+        }
+        .fe-status-feedback.busy {
+          background: rgba(34,211,238,0.14);
+          border: 1px solid rgba(34,211,238,0.45);
+          color: #a5f3fc;
+        }
+        .fe-status-feedback.ok {
+          background: rgba(52,211,153,0.18);
+          border: 1px solid rgba(52,211,153,0.5);
+          color: #86efac;
+        }
+        .fe-status-feedback.err {
+          background: rgba(248,113,113,0.14);
+          border: 1px solid rgba(248,113,113,0.45);
+          color: #fca5a5;
+        }
+        .fe-toast-fixed {
+          position: fixed;
+          left: 50%;
+          bottom: 1.25rem;
+          transform: translateX(-50%);
+          z-index: 100;
+          max-width: min(520px, calc(100vw - 2rem));
+          padding: 1rem 1.15rem;
+          border-radius: 12px;
+          font-weight: 700;
+          font-size: 0.95rem;
+          line-height: 1.35;
+          box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+          pointer-events: none;
+        }
+        .fe-toast-fixed.ok {
+          background: #065f46;
+          border: 1px solid #34d399;
+          color: #ecfdf5;
+        }
+        .fe-toast-fixed.busy {
+          background: #164e63;
+          border: 1px solid #22d3ee;
+          color: #ecfeff;
+        }
+        .fe-toast-fixed.err {
+          background: #7f1d1d;
+          border: 1px solid #f87171;
+          color: #fef2f2;
         }
         .fe-table {
           width: 100%;
