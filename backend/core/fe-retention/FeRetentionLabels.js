@@ -25,6 +25,20 @@ export function feSendReasonLabel(kind) {
   return KIND_LABELS[key] || key || "Message";
 }
 
+const POLICY_STATUS_LABELS = Object.freeze({
+  active: "Active",
+  missed: "Missed payment",
+  lapsed: "Lapsed",
+  cancelled: "Cancelled",
+  sms_opt_out: "SMS paused",
+  ok: "Active",
+});
+
+export function formatFePolicyStatus(status = "") {
+  const key = String(status ?? "").trim().toLowerCase();
+  return POLICY_STATUS_LABELS[key] || (key ? key.charAt(0).toUpperCase() + key.slice(1) : "Active");
+}
+
 export const MONTH_OPTIONS = Object.freeze([
   { value: 1, label: "January" },
   { value: 2, label: "February" },

@@ -5,10 +5,12 @@ import {
   sendFeRetentionOpsSms,
   readPlatformTwilioSmsEnv,
   ensureFeRetentionPlatformSms,
+  buildFeRetentionTwilioFriendlyName,
   feSmsPhonesMatch,
   isFeRetentionOpsFromNumber,
 } from "./FeRetentionSms.js";
 import { writeFeRetentionBilling } from "./FeRetentionBilling.js";
+import { writeFeRetentionOnboarding } from "./FeRetentionOnboarding.js";
 import { buildFeMissedPaymentEmail } from "./FeRetentionEmail.js";
 
 function withTwilioEnv(run) {
@@ -55,6 +57,47 @@ async function putDurableCredential({ platformStore, credentialId, secrets, meta
     providerType,
   });
 }
+
+test("buildFeRetentionTwilioFriendlyName prefers A2P legal name, then book name", () => {
+  const withLegal = buildFeRetentionTwilioFriendlyName({
+    businessName: "Senior Advisors",
+    packageConfiguration: writeFeRetentionOnboarding({}, {
+      profile: { legalBusinessName: "Senior Advisors insurance LLC" },
+    }),
+    businessId: "c9750464-0000-4000-8000-000000000000",
+  });
+  assert.equal(withLegal, "VibeKeep Senior Advisors insurance LLC");
+
+  const signupOnly = buildFeRetentionTwilioFriendlyName({
+    businessName: "Ada Agency",
+    packageConfiguration: {},
+    businessId: "biz_ada",
+  });
+  assert.equal(signupOnly, "VibeKeep Ada Agency");
+
+  const fallback = buildFeRetentionTwilioFriendlyName({
+    businessName: "",
+    packageConfiguration: {},
+    businessId: "c9750464-abcd-4000-8000-000000000000",
+  });
+  assert.equal(fallback, "VibeKeep c9750464");
+});
+
+test("sendFeRetentionSmsMessage normalizes 10-digit US numbers for Twilio", async () => {
+  await withTwilioEnv(async () => {
+    let sawForm = "";
+    await sendFeRetentionSmsMessage({
+      to: "6038182383",
+      body: "Hello",
+      fromNumber: "+15559990000",
+      fetchImpl: async (_url, init) => {
+        sawForm = String(init?.body ?? "");
+        return { ok: true, json: async () => ({ sid: "SMnorm" }) };
+      },
+    });
+    assert.match(sawForm, /To=%2B16038182383/);
+  });
+});
 
 test("sendFeRetentionSmsMessage falls back to platform env Twilio", async () => {
   await withTwilioEnv(async () => {

@@ -9,11 +9,18 @@ import {
   appendFeMessageLog,
   readFeRetentionState,
   markClientTouchSent,
+  normalizeFePhone,
 } from "./FeRetentionStore.js";
 import { planFeRetentionSends, buildFeNeedsAttention, feRetentionCatchUpDue } from "./FeRetentionNeedsAttention.js";
 import { classifyCarrierNoticeText } from "./FeRetentionLapseFromGmail.js";
 import { businessGrantsFeRetentionAccess, isFeRetentionOnlyPurchasedScope } from "./feRetentionEntitlement.js";
 import { buildFeMessageBodies } from "./FeRetentionTemplates.js";
+
+test("normalizeFePhone formats US numbers as E.164", () => {
+  assert.equal(normalizeFePhone("6038182383"), "+16038182383");
+  assert.equal(normalizeFePhone("(603) 818-2383"), "+16038182383");
+  assert.equal(normalizeFePhone("+16038182383"), "+16038182383");
+});
 
 test("upsertFeClient requires name and phone or email", () => {
   const state = emptyFeRetentionState();
@@ -23,6 +30,7 @@ test("upsertFeClient requires name and phone or email", () => {
   assert.equal(ok.ok, true);
   assert.equal(ok.isNew, true);
   assert.equal(ok.client.policy.carrier, "Mutual of Omaha");
+  assert.equal(ok.client.phone, "+15551234567");
 });
 
 test("planFeRetentionSends schedules welcome and birthday", () => {

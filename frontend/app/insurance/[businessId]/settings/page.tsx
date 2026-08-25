@@ -10,6 +10,7 @@ import {
 } from "../../../../../backend/core/fe-retention/FeRetentionLabels.js";
 import { syncPaymentReminderTemplate } from "../../../../../backend/core/fe-retention/FeRetentionTemplates.js";
 import { paymentReminderFieldLabel } from "../../../../../backend/core/fe-retention/FeRetentionSettingsCatalog.js";
+import { FeStatusBadge } from "@/components/insurance/FeStatusBadge";
 
 const TEMPLATE_KEYS = [
   "welcome",
@@ -173,9 +174,7 @@ export default function InsuranceSettingsPage() {
       <div className="fe-card" style={{ background: cockpitColors.inset }}>
         <h3>Text messaging</h3>
         <p style={{ margin: "0 0 0.75rem" }}>
-          <span className={`fe-badge ${sms?.ready ? "ok" : "missed"}`}>
-            {sms?.badge || (sms?.ready ? "Active" : "Not ready")}
-          </span>
+          <FeStatusBadge status={sms?.ready ? "ok" : "missed"} label={sms?.badge || (sms?.ready ? "Active" : "Not ready")} />
         </p>
         <div className="fe-field" style={{ marginBottom: "0.75rem" }}>
           <div className="fe-label">Texts sent from this number</div>
@@ -185,8 +184,8 @@ export default function InsuranceSettingsPage() {
         </div>
         <p className="fe-muted" style={{ margin: "0 0 0.85rem" }}>
           {sms?.fromNumber
-            ? "Clients see this number on welcome, reminder, and recovery texts. We bought it when you signed the agreement."
-            : (sms?.message || "A dedicated number is bought automatically after you sign the agreement.")}
+            ? "Your agency number on all client texts."
+            : (sms?.message || "Assigned automatically after you sign.")}
         </p>
         <p style={{ margin: 0, display: "flex", gap: 16, flexWrap: "wrap" }}>
           <a href={`/insurance/${encodeURIComponent(businessId)}/agreement`} style={{ color: cockpitColors.accent, fontWeight: 600 }}>
@@ -201,7 +200,7 @@ export default function InsuranceSettingsPage() {
       <div className="fe-card" style={{ background: cockpitColors.inset }}>
         <h3>Agent alerts</h3>
         <p className="fe-muted">
-          On missed/lapsed (manual or from Gmail), we send the client the recovery text, then text and email you.
+          Lapse detected → client gets recovery text → you get a text and email.
         </p>
         <div className="fe-field">
           <label className="fe-label">Notify email</label>
@@ -228,14 +227,10 @@ export default function InsuranceSettingsPage() {
       <div className="fe-card" style={{ background: cockpitColors.inset }}>
         <h3>Gmail carrier notices</h3>
         <p className="fe-muted">
-          Connects <strong>your</strong> Gmail so VibeTech can sync inbox mail, scan for carrier past-due / lapse language,
-          match it to a client (policy #, name, email, or phone in the message), mark them missed/lapsed, send the recovery text,
-          and text + email you. You mainly see it in Needs attention and Recent auto-sends when a match is found.
+          Syncs your inbox for carrier lapse notices, matches clients, and triggers recovery + alerts.
         </p>
         <p style={{ margin: "0.5rem 0" }}>
-          <span className={`fe-badge ${gmail?.connected ? "ok" : "missed"}`}>
-            {gmail?.connected ? "Connected" : "Not connected"}
-          </span>
+          <FeStatusBadge status={gmail?.connected ? "ok" : "missed"} label={gmail?.connected ? "Connected" : "Not connected"} />
           {gmail?.lastSyncAt ? (
             <span className="fe-muted" style={{ marginLeft: 10 }}>
               Last sync {new Date(gmail.lastSyncAt).toLocaleString()}
@@ -278,7 +273,7 @@ export default function InsuranceSettingsPage() {
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error(data.error || "Sync failed.");
-                setMessage("Gmail synced. Carrier lapse scan runs on the next job tick (every 15 minutes).");
+                setMessage("Gmail synced.");
               } catch (err) {
                 setError(err instanceof Error ? err.message : "Gmail sync failed");
               }
@@ -361,13 +356,13 @@ export default function InsuranceSettingsPage() {
           </select>
         </div>
         <p className="fe-muted" style={{ margin: "0.35rem 0 0" }}>
-          Saves as soon as you change it. Book default is December 25. Birthday, holiday, and payment texts send with the daily 1:00 PM UTC job. Override per client on their page (e.g. Hanukkah).
+          Saves instantly. Scheduled texts run daily at 1:00 PM UTC. Override per client on their page.
         </p>
       </div>
 
       <h3>Automatic messages</h3>
       <p className="fe-muted" style={{ marginBottom: "1rem" }}>
-        Book defaults for everyone. To give one client different copy (Hanukkah vs Christmas, custom birthday, etc.), select them under the box and click Apply — or edit on the client’s page. Placeholders: {"{{firstName}}"} · {"{{carrier}}"} · {"{{docsArriveDays}}"} · {"{{reminderDays}}"}
+        Book-wide defaults. Override on a client page or apply below. Placeholders: {"{{firstName}}"}, {"{{carrier}}"}, {"{{docsArriveDays}}"}, {"{{reminderDays}}"}
       </p>
       {TEMPLATE_KEYS.map((key) => {
         const raw = settings.templates?.[key] ?? "";

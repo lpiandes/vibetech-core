@@ -49,6 +49,7 @@ export async function POST(
           ok: true,
           client: result.client,
           skippedNotify: true,
+          message: `Already marked ${status}.`,
         });
       }
       const integrationPlatform = await resolveFeIntegrationPlatform(businessId);
@@ -69,9 +70,17 @@ export async function POST(
       state = delivered.state;
     }
 
+    const statusMessages: Record<string, string> = {
+      missed: "Marked missed — recovery text sent.",
+      lapsed: "Marked lapsed — recovery text sent.",
+      active: "Marked reinstated.",
+      cancelled: "Marked cancelled.",
+    };
+
     return NextResponse.json({
       ok: true,
       client: state.clients.find((c: any) => c.id === clientId) ?? result.client,
+      message: statusMessages[status] || "Status updated.",
     });
   } catch (err) {
     return feJsonError(err);

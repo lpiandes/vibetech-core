@@ -10,6 +10,7 @@ import { INTEGRATION_CAPABILITIES } from "../integrations/capabilities/Integrati
 import { purchaseTwilioLocalSmsNumber } from "../integrations/twilio/TwilioProvisioningService.js";
 import { readFeRetentionBilling, writeFeRetentionBilling, syncFeRetentionBillingOntoInstallation } from "./FeRetentionBilling.js";
 import { readFeRetentionOnboarding } from "./FeRetentionOnboarding.js";
+import { normalizeFePhone } from "./FeRetentionStore.js";
 import { resolvePublicAppOrigin } from "../platform/invitations/invitationAppUrl.js";
 
 function safeString(v) {
@@ -59,6 +60,21 @@ export function listMissingPlatformTwilioEnvKeys() {
 
 export function isPlatformTwilioSmsReady() {
   return listMissingPlatformTwilioEnvKeys().length === 0;
+}
+
+/** Twilio FriendlyName for a book's purchased number (max 64 chars). */
+export function buildFeRetentionTwilioFriendlyName({
+  businessName = "",
+  packageConfiguration = null,
+  businessId = "",
+} = {}) {
+  const profile = readFeRetentionOnboarding(packageConfiguration ?? {}).profile;
+  const agency =
+    safeString(profile.legalBusinessName)
+    || safeString(businessName)
+    || safeString(businessId).slice(0, 8)
+    || "Agency";
+  return `VibeKeep ${agency}`.slice(0, 64);
 }
 
 function resolveSmsConnection(integrationPlatform) {
@@ -167,8 +183,8 @@ export async function ensureFeRetentionPlatformSms({
   }
 
   let billingConfig = packageConfiguration;
+  const business = await platformStore.getBusinessById?.(id).catch(() => null);
   if (!billingConfig) {
-    const business = await platformStore.getBusinessById?.(id).catch(() => null);
     billingConfig = business?.packageConfiguration ?? {};
   }
   const billing = readFeRetentionBilling(billingConfig);
@@ -232,7 +248,11 @@ export async function ensureFeRetentionPlatformSms({
   const purchased = await purchaseTwilioLocalSmsNumber({
     fetchImpl,
     smsUrl: webhookUrl || "",
-    friendlyName: `VibeKeep ${id.slice(0, 8)}`,
+    friendlyName: buildFeRetentionTwilioFriendlyName({
+      businessName: business?.name,
+      packageConfiguration: billingConfig,
+      businessId: id,
+    }),
     businessId: id,
     simulate,
     skipPool: true,
@@ -285,7 +305,7 @@ export async function sendFeRetentionSmsMessage({
   fetchImpl = globalThis.fetch,
   nowISO = null,
 } = {}) {
-  const phone = safeString(to);
+  const phone = normalizeFePhone(to);
   const text = safeString(body);
   if (!phone || !text) {
     return deepFreeze({ ok: false, reason: "to_and_body_required" });

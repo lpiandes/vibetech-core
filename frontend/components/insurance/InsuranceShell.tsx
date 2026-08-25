@@ -190,27 +190,57 @@ export function InsuranceShell({
           .fe-agent { text-align: left; }
         }
         .fe-badge {
-          display: inline-block;
-          font-size: 0.72rem;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.38rem;
+          font-size: 0.68rem;
           font-weight: 700;
           text-transform: uppercase;
-          letter-spacing: 0.04em;
-          padding: 0.2rem 0.5rem;
+          letter-spacing: 0.06em;
+          padding: 0.32rem 0.7rem 0.32rem 0.55rem;
           border-radius: 999px;
-          background: var(--fe-accent-soft);
-          color: var(--fe-accent);
+          border: 1px solid transparent;
+          line-height: 1;
+          white-space: nowrap;
         }
-        .fe-badge.missed, .fe-badge.lapsed {
+        .fe-badge-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          flex-shrink: 0;
+          background: currentColor;
+          box-shadow: 0 0 8px currentColor;
+        }
+        .fe-badge.missed, .fe-badge.lapsed,
+        .fe-badge--missed, .fe-badge--lapsed {
           background: var(--fe-warn-soft);
           color: var(--fe-warn);
+          border-color: rgba(248,113,113,0.35);
         }
-        .fe-badge.sms_opt_out, .fe-badge.gmail_unmatched, .fe-badge.reinstatement {
-          background: rgba(251, 191, 36, 0.15);
+        .fe-badge.missed .fe-badge-dot, .fe-badge.lapsed .fe-badge-dot,
+        .fe-badge--missed .fe-badge-dot, .fe-badge--lapsed .fe-badge-dot {
+          animation: fe-badge-pulse 2.2s ease-in-out infinite;
+        }
+        .fe-badge.sms_opt_out, .fe-badge.gmail_unmatched, .fe-badge.reinstatement,
+        .fe-badge--sms_opt_out, .fe-badge--gmail_unmatched, .fe-badge--reinstatement {
+          background: rgba(251, 191, 36, 0.14);
           color: #fbbf24;
+          border-color: rgba(251, 191, 36, 0.35);
         }
-        .fe-badge.active, .fe-badge.ok {
-          background: rgba(52,211,153,0.12);
+        .fe-badge.active, .fe-badge.ok,
+        .fe-badge--active, .fe-badge--ok {
+          background: rgba(52,211,153,0.14);
           color: var(--fe-ok);
+          border-color: rgba(52,211,153,0.35);
+        }
+        .fe-badge--cancelled {
+          background: rgba(148,163,184,0.12);
+          color: #94a3b8;
+          border-color: rgba(148,163,184,0.32);
+        }
+        @keyframes fe-badge-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.55; transform: scale(0.85); }
         }
         .fe-table {
           width: 100%;

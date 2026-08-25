@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { FeStatusBadge } from "@/components/insurance/FeStatusBadge";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
@@ -219,7 +220,7 @@ export default function InsuranceClientsPage() {
                   </td>
                   <td>{c.policy?.carrier || "—"}</td>
                   <td>{c.policy?.dueDay ?? "—"}</td>
-                  <td><span className={`fe-badge ${c.policy?.status || "active"}`}>{c.policy?.status || "active"}</span></td>
+                  <td><FeStatusBadge status={c.policy?.status || "active"} /></td>
                 </tr>
               ))}
             </tbody>

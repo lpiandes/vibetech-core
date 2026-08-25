@@ -11,6 +11,20 @@ function safeString(v) {
   return v === null || v === undefined ? "" : String(v).trim();
 }
 
+/** US client phones as E.164 for Twilio (+1XXXXXXXXXX). */
+export function normalizeFePhone(phone = "") {
+  const raw = safeString(phone);
+  if (!raw) return "";
+  if (/^\+[1-9]\d{7,14}$/.test(raw.replace(/\s/g, ""))) {
+    return raw.replace(/\s/g, "");
+  }
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return raw.startsWith("+") ? raw.replace(/\s/g, "") : `+${digits}`;
+}
+
 function nowISO() {
   return new Date().toISOString();
 }
@@ -88,7 +102,7 @@ function normalizeClient(raw = {}, defaults = {}) {
   return {
     id,
     name: safeString(raw.name),
-    phone: safeString(raw.phone),
+    phone: normalizeFePhone(raw.phone),
     email: safeString(raw.email),
     birthday: safeString(raw.birthday) || null,
     address: safeString(raw.address) || null,

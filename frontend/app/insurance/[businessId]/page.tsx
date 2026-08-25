@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { feSendReasonLabel } from "../../../../backend/core/fe-retention/FeRetentionLabels.js";
+import { FeStatusBadge } from "@/components/insurance/FeStatusBadge";
 
 type Attention = {
   cards: Array<{
@@ -95,7 +96,7 @@ export default function InsuranceTodayPage() {
           <div key={card.id} className="fe-card">
             <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap" }}>
               <div>
-                <span className={`fe-badge ${card.status || card.type}`}>{card.type.replace("_", " ")}</span>
+                <FeStatusBadge status={card.status || card.type} label={card.type.replace("_", " ")} />
                 <h3 style={{ marginTop: "0.5rem" }}>{card.title}</h3>
                 <p className="fe-muted" style={{ margin: 0 }}>{card.body}</p>
               </div>

@@ -6,7 +6,9 @@ import { useParams } from "next/navigation";
 import {
   MONTH_OPTIONS,
   daysInMonth,
+  feSendReasonLabel,
 } from "../../../../../../backend/core/fe-retention/FeRetentionLabels.js";
+import { FeStatusBadge } from "@/components/insurance/FeStatusBadge";
 
 type Client = {
   id: string;
@@ -32,6 +34,18 @@ type Client = {
   };
 };
 
+const STATUS_FEEDBACK: Record<string, string> = {
+  missed: "Marked missed — recovery text sent.",
+  lapsed: "Marked lapsed — recovery text sent.",
+  active: "Marked reinstated.",
+  cancelled: "Marked cancelled.",
+};
+
+function formatLogStatus(row: { ok?: boolean; error?: string | null; channel?: string }) {
+  if (row.ok) return row.channel === "sms" ? "Sent to carrier" : "Sent";
+  return row.error || "Failed";
+}
+
 const OVERRIDE_KEYS = [
   { key: "holiday", label: "Holiday text" },
   { key: "birthday", label: "Birthday text" },
@@ -49,6 +63,7 @@ export default function InsuranceClientDetailPage() {
   const [history, setHistory] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [holidayMonth, setHolidayMonth] = useState<string>("");
   const [holidayDay, setHolidayDay] = useState<string>("");
@@ -103,6 +118,8 @@ export default function InsuranceClientDetailPage() {
   async function setStatus(status: string) {
     setBusy(true);
     setError(null);
+    setStatusMessage(null);
+    setMessage(null);
     try {
       const res = await fetch(
         `/api/insurance/${encodeURIComponent(businessId)}/clients/${encodeURIComponent(clientId)}/status`,
@@ -115,6 +132,11 @@ export default function InsuranceClientDetailPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Status update failed.");
       setClient(data.client);
+      setStatusMessage(
+        data.message
+        || STATUS_FEEDBACK[status]
+        || "Status updated.",
+      );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
@@ -192,15 +214,39 @@ export default function InsuranceClientDetailPage() {
               <p className="fe-muted">They replied YES — follow up to reinstate.</p>
             ) : null}
           </div>
-          <span className={`fe-badge ${client.smsOptedOut ? "sms_opt_out" : (client.policy?.status || "active")}`}>
-            {client.smsOptedOut ? "sms paused" : (client.policy?.status || "active")}
-          </span>
+          <FeStatusBadge
+            status={client.smsOptedOut ? "sms_opt_out" : (client.policy?.status || "active")}
+            label={client.smsOptedOut ? "SMS paused" : undefined}
+          />
+        </div>
+      </div>
+
+      <div className="fe-card">
+        <h3>Policy status</h3>
+        <p className="fe-muted">
+          Missed or lapsed sends the client a recovery text and alerts you.
+        </p>
+        {statusMessage ? <p style={{ color: "#34d399", margin: "0 0 0.75rem" }}>{statusMessage}</p> : null}
+        {error ? <p style={{ color: "#fca5a5", margin: "0 0 0.75rem" }}>{error}</p> : null}
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <button type="button" className="fe-btn warn" disabled={busy} onClick={() => setStatus("missed")}>
+            {busy ? "Updating…" : "Mark missed"}
+          </button>
+          <button type="button" className="fe-btn warn" disabled={busy} onClick={() => setStatus("lapsed")}>
+            {busy ? "Updating…" : "Mark lapsed"}
+          </button>
+          <button type="button" className="fe-btn secondary" disabled={busy} onClick={() => setStatus("active")}>
+            {busy ? "Updating…" : "Mark reinstated"}
+          </button>
+          <button type="button" className="fe-btn secondary" disabled={busy} onClick={() => setStatus("cancelled")}>
+            {busy ? "Updating…" : "Cancelled"}
+          </button>
         </div>
       </div>
 
       <form className="fe-card" onSubmit={saveCustom}>
         <h3>Edit client &amp; policy</h3>
-        <p className="fe-muted">Fix a wrong birthday, phone, due day, or anything else. Saves immediately; automation uses the new values.</p>
+        <p className="fe-muted">Update contact or policy details. Saves on submit.</p>
         <div className="fe-grid-2">
           <div className="fe-field">
             <label className="fe-label">Full name</label>
@@ -208,7 +254,7 @@ export default function InsuranceClientDetailPage() {
           </div>
           <div className="fe-field">
             <label className="fe-label">Phone</label>
-            <input className="fe-input" required value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+            <input className="fe-input" required value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} placeholder="+1 603 818 2383" />
           </div>
           <div className="fe-field">
             <label className="fe-label">Email</label>
@@ -248,23 +294,9 @@ export default function InsuranceClientDetailPage() {
           <input className="fe-input" value={profile.address} onChange={(e) => setProfile({ ...profile, address: e.target.value })} />
         </div>
 
-      <div className="fe-card">
-        <h3>Policy status</h3>
-        <p className="fe-muted">
-          Marking missed or lapsed automatically texts the client a recovery message and texts + emails you.
-        </p>
-        {error ? <p style={{ color: "#fca5a5" }}>{error}</p> : null}
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <button type="button" className="fe-btn warn" disabled={busy} onClick={() => setStatus("missed")}>Mark missed</button>
-          <button type="button" className="fe-btn warn" disabled={busy} onClick={() => setStatus("lapsed")}>Mark lapsed</button>
-          <button type="button" className="fe-btn secondary" disabled={busy} onClick={() => setStatus("active")}>Mark reinstated</button>
-          <button type="button" className="fe-btn secondary" disabled={busy} onClick={() => setStatus("cancelled")}>Cancelled</button>
-        </div>
-      </div>
-
         <h3>Custom messages for this client</h3>
         <p className="fe-muted">
-          Leave blank to use Settings defaults. Example: set holiday text to a Hanukkah greeting and pick that client’s holiday date below.
+          Leave blank to use Settings defaults. Override holiday date or copy per client here.
         </p>
 
         <div className="fe-field">
@@ -316,6 +348,11 @@ export default function InsuranceClientDetailPage() {
 
       <div className="fe-card">
         <h3>Message history</h3>
+        {history.some((row) => row.channel === "sms" && row.ok) ? (
+          <p className="fe-muted" style={{ marginTop: 0 }}>
+            “Sent to carrier” means Twilio accepted the message. Delivery to the phone requires your A2P campaign to be approved.
+          </p>
+        ) : null}
         {!history.length ? (
           <p className="fe-muted" style={{ margin: 0 }}>No messages yet.</p>
         ) : (
@@ -324,7 +361,7 @@ export default function InsuranceClientDetailPage() {
               <tr>
                 <th>When</th>
                 <th>Kind</th>
-                <th>Channel</th>
+                <th>To</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -332,9 +369,9 @@ export default function InsuranceClientDetailPage() {
               {history.map((row) => (
                 <tr key={row.id}>
                   <td>{row.at ? new Date(row.at).toLocaleString() : "—"}</td>
-                  <td>{row.kind}</td>
-                  <td>{row.channel}</td>
-                  <td>{row.ok ? "OK" : row.error || "Failed"}</td>
+                  <td>{feSendReasonLabel(row.kind)}</td>
+                  <td>{row.to || row.channel}</td>
+                  <td>{formatLogStatus(row)}</td>
                 </tr>
               ))}
             </tbody>
