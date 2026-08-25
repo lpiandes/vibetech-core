@@ -6,7 +6,7 @@ import {
   deleteFeClient,
   writeFeRetentionState,
 } from "@/lib/insurance/feRetentionCore";
-import { feSendReasonLabel } from "../../../../../../backend/core/fe-retention/FeRetentionLabels.js";
+import { feSendReasonLabel } from "../../../../../../../backend/core/fe-retention/FeRetentionLabels.js";
 
 export async function GET(
   _request: Request,
