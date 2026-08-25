@@ -43,6 +43,7 @@ export function emptyFeRetentionState() {
       docsArriveDaysDefault: 10,
       agentNotifyEmail: "",
       agentNotifyPhone: "",
+      agentNotifyCustomized: false,
       templates: { ...DEFAULT_FE_RETENTION_TEMPLATES },
       lastSchedulerRunAt: null,
       lastGmailLapseRunAt: null,
@@ -481,6 +482,11 @@ export function updateFeSettings(state, patch = {}) {
   }
   if (patch.agentNotifyPhone != null) {
     settings.agentNotifyPhone = safeString(patch.agentNotifyPhone);
+  }
+  if (patch.agentNotifyCustomized != null) {
+    settings.agentNotifyCustomized = Boolean(patch.agentNotifyCustomized);
+  } else if (patch.agentNotifyEmail != null || patch.agentNotifyPhone != null) {
+    settings.agentNotifyCustomized = true;
   }
   if (patch.docsArriveDaysDefault != null) {
     settings.docsArriveDaysDefault = Math.min(60, Math.max(1, Number(patch.docsArriveDaysDefault) || 10));

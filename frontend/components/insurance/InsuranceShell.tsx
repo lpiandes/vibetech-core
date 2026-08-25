@@ -207,9 +207,11 @@ export function InsuranceShell({
           box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset;
         }
         .fe-badge--lg {
-          font-size: 0.78rem;
-          padding: 0.52rem 1rem 0.52rem 0.78rem;
+          font-size: 0.72rem;
+          padding: 0.58rem 1.2rem;
           letter-spacing: 0.1em;
+          min-width: 7.25rem;
+          justify-content: center;
         }
         .fe-badge-text { position: relative; top: 0.5px; }
         .fe-badge-dot {
@@ -270,10 +272,31 @@ export function InsuranceShell({
           color: #fca5a5;
         }
         .fe-status-btn.is-current {
-          box-shadow: 0 0 0 2px var(--fe-accent), 0 0 12px rgba(34,211,238,0.25);
+          box-shadow: 0 0 0 2px var(--fe-accent), 0 0 14px rgba(34,211,238,0.28);
           transform: translateY(-1px);
         }
+        .fe-status-btn.is-current.fe-btn.warn {
+          background: rgba(248,113,113,0.92);
+          color: #fff;
+          border-color: rgba(248,113,113,0.95);
+        }
+        .fe-status-btn.is-current.fe-btn.secondary {
+          background: rgba(34,211,238,0.18);
+          color: var(--fe-accent);
+          border-color: rgba(34,211,238,0.55);
+        }
+        .fe-status-btn.is-pressing {
+          opacity: 0.72;
+          transform: scale(0.98);
+        }
         .fe-status-btn:disabled { opacity: 0.65; cursor: wait; }
+        @keyframes fe-status-flash {
+          0% { box-shadow: 0 0 0 0 rgba(34,211,238,0.55); }
+          100% { box-shadow: 0 0 0 10px rgba(34,211,238,0); }
+        }
+        .fe-status-btn.just-updated {
+          animation: fe-status-flash 0.65s ease-out;
+        }
         .fe-table {
           width: 100%;
           border-collapse: collapse;

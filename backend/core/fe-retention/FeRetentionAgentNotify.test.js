@@ -4,6 +4,7 @@ import {
   agentNotifyFromOnboardingProfile,
   seedFeAgentNotifySettings,
   resolveFeAgentNotifyContacts,
+  resolveFeBookAgentDisplayName,
 } from "./FeRetentionAgentNotify.js";
 import { emptyFeRetentionState } from "./FeRetentionStore.js";
 import { writeFeRetentionOnboarding } from "./FeRetentionOnboarding.js";
@@ -28,6 +29,52 @@ test("seedFeAgentNotifySettings copies profile notify into blank settings", () =
   assert.equal(seeded.seeded, true);
   assert.equal(seeded.state.settings.agentNotifyEmail, "owner@agency.com");
   assert.equal(seeded.state.settings.agentNotifyPhone, "+15551234567");
+});
+
+test("seedFeAgentNotifySettings overwrites stale notify email until agency customizes", () => {
+  const pkg = writeFeRetentionOnboarding({}, {
+    profile: {
+      notifyEmail: "kpiandes@senioradvisorsllc.com",
+      contactPhone: "+16038182383",
+    },
+  });
+  const state = {
+    ...emptyFeRetentionState(),
+    settings: {
+      ...emptyFeRetentionState().settings,
+      agentNotifyEmail: "leopiandes@vtechdevelopment.com",
+      agentNotifyCustomized: false,
+    },
+  };
+  const seeded = seedFeAgentNotifySettings(state, pkg);
+  assert.equal(seeded.seeded, true);
+  assert.equal(seeded.state.settings.agentNotifyEmail, "kpiandes@senioradvisorsllc.com");
+});
+
+test("seedFeAgentNotifySettings respects agency customization", () => {
+  const pkg = writeFeRetentionOnboarding({}, {
+    profile: { notifyEmail: "owner@agency.com" },
+  });
+  const state = {
+    ...emptyFeRetentionState(),
+    settings: {
+      ...emptyFeRetentionState().settings,
+      agentNotifyEmail: "custom@agency.com",
+      agentNotifyCustomized: true,
+    },
+  };
+  const seeded = seedFeAgentNotifySettings(state, pkg);
+  assert.equal(seeded.seeded, false);
+  assert.equal(seeded.state.settings.agentNotifyEmail, "custom@agency.com");
+});
+
+test("resolveFeBookAgentDisplayName prefers A2P contact name", () => {
+  const name = resolveFeBookAgentDisplayName({
+    packageConfiguration: writeFeRetentionOnboarding({}, {
+      profile: { contactFirstName: "Kerry", contactLastName: "Piandes" },
+    }),
+  });
+  assert.equal(name, "Kerry Piandes");
 });
 
 test("resolveFeAgentNotifyContacts uses book owner email before session admin", async () => {

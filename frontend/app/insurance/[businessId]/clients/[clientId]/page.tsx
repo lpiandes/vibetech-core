@@ -65,6 +65,8 @@ export default function InsuranceClientDetailPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pressingStatus, setPressingStatus] = useState<string | null>(null);
+  const [flashStatus, setFlashStatus] = useState<string | null>(null);
   const statusSectionRef = useRef<HTMLDivElement | null>(null);
   const [holidayMonth, setHolidayMonth] = useState<string>("");
   const [holidayDay, setHolidayDay] = useState<string>("");
@@ -118,6 +120,8 @@ export default function InsuranceClientDetailPage() {
 
   async function setStatus(status: string) {
     setBusy(true);
+    setPressingStatus(status);
+    setFlashStatus(null);
     setError(null);
     setStatusMessage(null);
     setMessage(null);
@@ -138,12 +142,15 @@ export default function InsuranceClientDetailPage() {
         || STATUS_FEEDBACK[status]
         || "Status updated.",
       );
+      setFlashStatus(status);
+      window.setTimeout(() => setFlashStatus((prev) => (prev === status ? null : prev)), 700);
       await load();
       statusSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     } finally {
       setBusy(false);
+      setPressingStatus(null);
     }
   }
 
@@ -202,7 +209,9 @@ export default function InsuranceClientDetailPage() {
   const policyBtnClass = (target: string, warn = false) => {
     const base = `${warn ? "fe-btn warn" : "fe-btn secondary"} fe-status-btn`;
     const current = !client.smsOptedOut && currentPolicyStatus === target ? " is-current" : "";
-    return base + current;
+    const pressing = busy && pressingStatus === target ? " is-pressing" : "";
+    const flash = flashStatus === target ? " just-updated" : "";
+    return base + current + pressing + flash;
   };
 
   return (
@@ -235,6 +244,9 @@ export default function InsuranceClientDetailPage() {
         <h3>Policy status</h3>
         <p className="fe-muted">
           Missed or lapsed sends the client a recovery text and alerts the agency owner.
+          {currentPolicyStatus !== "active" && !client.smsOptedOut ? (
+            <> Current status: <strong>{currentPolicyStatus}</strong>.</>
+          ) : null}
         </p>
         {statusMessage ? <div className="fe-toast ok">{statusMessage}</div> : null}
         {error ? <div className="fe-toast err">{error}</div> : null}

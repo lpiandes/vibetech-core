@@ -205,7 +205,7 @@ export default function InsuranceSettingsPage() {
       <div className="fe-card" style={{ background: cockpitColors.inset }}>
         <h3>Agent alerts</h3>
         <p className="fe-muted">
-          Lapse detected → client gets recovery text → you get a text and email.
+          Lapse detected → client gets recovery text → alerts go to the email below (from A2P signup unless you change it).
         </p>
         <div className="fe-field">
           <label className="fe-label">Notify email</label>

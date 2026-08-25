@@ -131,7 +131,10 @@ export async function POST(
       if (ensured.installation) {
         const notifySeed = agentNotifyFromOnboardingProfile(current.profile);
         const feState = readFeRetentionState(ensured.installation);
-        const nextFeState = updateFeSettings(feState, notifySeed);
+        const nextFeState = updateFeSettings(feState, {
+          ...notifySeed,
+          agentNotifyCustomized: false,
+        });
         await writeFeRetentionState({
           platformStore,
           installation: ensured.installation,
