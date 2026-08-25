@@ -192,24 +192,33 @@ export function InsuranceShell({
         .fe-badge {
           display: inline-flex;
           align-items: center;
-          gap: 0.38rem;
-          font-size: 0.68rem;
-          font-weight: 700;
+          gap: 0.45rem;
+          font-size: 0.7rem;
+          font-weight: 750;
           text-transform: uppercase;
-          letter-spacing: 0.06em;
-          padding: 0.32rem 0.7rem 0.32rem 0.55rem;
+          letter-spacing: 0.08em;
+          padding: 0.38rem 0.85rem 0.38rem 0.65rem;
           border-radius: 999px;
           border: 1px solid transparent;
-          line-height: 1;
+          line-height: 1.1;
           white-space: nowrap;
+          align-self: flex-start;
+          flex-shrink: 0;
+          box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset;
         }
+        .fe-badge--lg {
+          font-size: 0.78rem;
+          padding: 0.52rem 1rem 0.52rem 0.78rem;
+          letter-spacing: 0.1em;
+        }
+        .fe-badge-text { position: relative; top: 0.5px; }
         .fe-badge-dot {
-          width: 6px;
-          height: 6px;
+          width: 7px;
+          height: 7px;
           border-radius: 50%;
           flex-shrink: 0;
           background: currentColor;
-          box-shadow: 0 0 8px currentColor;
+          box-shadow: 0 0 10px currentColor;
         }
         .fe-badge.missed, .fe-badge.lapsed,
         .fe-badge--missed, .fe-badge--lapsed {
@@ -242,6 +251,29 @@ export function InsuranceShell({
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.55; transform: scale(0.85); }
         }
+        .fe-toast {
+          padding: 0.85rem 1rem;
+          border-radius: 12px;
+          margin: 0 0 0.85rem;
+          font-weight: 650;
+          font-size: 0.92rem;
+          line-height: 1.4;
+        }
+        .fe-toast.ok {
+          background: rgba(52,211,153,0.16);
+          border: 1px solid rgba(52,211,153,0.45);
+          color: #6ee7b7;
+        }
+        .fe-toast.err {
+          background: rgba(248,113,113,0.12);
+          border: 1px solid rgba(248,113,113,0.4);
+          color: #fca5a5;
+        }
+        .fe-status-btn.is-current {
+          box-shadow: 0 0 0 2px var(--fe-accent), 0 0 12px rgba(34,211,238,0.25);
+          transform: translateY(-1px);
+        }
+        .fe-status-btn:disabled { opacity: 0.65; cursor: wait; }
         .fe-table {
           width: 100%;
           border-collapse: collapse;

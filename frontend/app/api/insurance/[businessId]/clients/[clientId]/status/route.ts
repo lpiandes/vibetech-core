@@ -62,17 +62,18 @@ export async function POST(
         kind: "lapseRecovery",
         integrationPlatform,
         deliveryProvider,
-        agentEmail: state.settings?.agentNotifyEmail || ctx.scope.user.email,
-        agentPhone: state.settings?.agentNotifyPhone || null,
+        agentEmail: ctx.agentNotify?.email || state.settings?.agentNotifyEmail || null,
+        agentPhone: ctx.agentNotify?.phone || state.settings?.agentNotifyPhone || null,
         businessName: ctx.business?.name,
         actorId: ctx.scope.user.id,
       });
       state = delivered.state;
     }
 
+    const alertEmail = ctx.agentNotify?.email || state.settings?.agentNotifyEmail || "";
     const statusMessages: Record<string, string> = {
-      missed: "Marked missed — recovery text sent.",
-      lapsed: "Marked lapsed — recovery text sent.",
+      missed: `Marked missed — recovery text sent.${alertEmail ? ` Alert email: ${alertEmail}.` : ""}`,
+      lapsed: `Marked lapsed — recovery text sent.${alertEmail ? ` Alert email: ${alertEmail}.` : ""}`,
       active: "Marked reinstated.",
       cancelled: "Marked cancelled.",
     };

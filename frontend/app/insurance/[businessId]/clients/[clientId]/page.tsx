@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   MONTH_OPTIONS,
@@ -65,6 +65,7 @@ export default function InsuranceClientDetailPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const statusSectionRef = useRef<HTMLDivElement | null>(null);
   const [holidayMonth, setHolidayMonth] = useState<string>("");
   const [holidayDay, setHolidayDay] = useState<string>("");
   const [overrides, setOverrides] = useState<Record<string, string>>({});
@@ -138,6 +139,7 @@ export default function InsuranceClientDetailPage() {
         || "Status updated.",
       );
       await load();
+      statusSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     } finally {
@@ -196,6 +198,13 @@ export default function InsuranceClientDetailPage() {
   if (error && !client) return <div className="fe-card"><p>{error}</p></div>;
   if (!client) return <div className="fe-card"><p className="fe-muted">Loading…</p></div>;
 
+  const currentPolicyStatus = client.smsOptedOut ? "sms_opt_out" : (client.policy?.status || "active");
+  const policyBtnClass = (target: string, warn = false) => {
+    const base = `${warn ? "fe-btn warn" : "fe-btn secondary"} fe-status-btn`;
+    const current = !client.smsOptedOut && currentPolicyStatus === target ? " is-current" : "";
+    return base + current;
+  };
+
   return (
     <>
       <p style={{ marginBottom: "0.75rem" }}>
@@ -215,30 +224,31 @@ export default function InsuranceClientDetailPage() {
             ) : null}
           </div>
           <FeStatusBadge
+            size="lg"
             status={client.smsOptedOut ? "sms_opt_out" : (client.policy?.status || "active")}
             label={client.smsOptedOut ? "SMS paused" : undefined}
           />
         </div>
       </div>
 
-      <div className="fe-card">
+      <div className="fe-card" ref={statusSectionRef}>
         <h3>Policy status</h3>
         <p className="fe-muted">
-          Missed or lapsed sends the client a recovery text and alerts you.
+          Missed or lapsed sends the client a recovery text and alerts the agency owner.
         </p>
-        {statusMessage ? <p style={{ color: "#34d399", margin: "0 0 0.75rem" }}>{statusMessage}</p> : null}
-        {error ? <p style={{ color: "#fca5a5", margin: "0 0 0.75rem" }}>{error}</p> : null}
+        {statusMessage ? <div className="fe-toast ok">{statusMessage}</div> : null}
+        {error ? <div className="fe-toast err">{error}</div> : null}
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <button type="button" className="fe-btn warn" disabled={busy} onClick={() => setStatus("missed")}>
+          <button type="button" className={policyBtnClass("missed", true)} disabled={busy} onClick={() => setStatus("missed")}>
             {busy ? "Updating…" : "Mark missed"}
           </button>
-          <button type="button" className="fe-btn warn" disabled={busy} onClick={() => setStatus("lapsed")}>
+          <button type="button" className={policyBtnClass("lapsed", true)} disabled={busy} onClick={() => setStatus("lapsed")}>
             {busy ? "Updating…" : "Mark lapsed"}
           </button>
-          <button type="button" className="fe-btn secondary" disabled={busy} onClick={() => setStatus("active")}>
+          <button type="button" className={policyBtnClass("active")} disabled={busy} onClick={() => setStatus("active")}>
             {busy ? "Updating…" : "Mark reinstated"}
           </button>
-          <button type="button" className="fe-btn secondary" disabled={busy} onClick={() => setStatus("cancelled")}>
+          <button type="button" className={policyBtnClass("cancelled")} disabled={busy} onClick={() => setStatus("cancelled")}>
             {busy ? "Updating…" : "Cancelled"}
           </button>
         </div>
@@ -360,7 +370,7 @@ export default function InsuranceClientDetailPage() {
             <thead>
               <tr>
                 <th>When</th>
-                <th>Kind</th>
+                <th>Message</th>
                 <th>To</th>
                 <th>Status</th>
               </tr>
@@ -369,8 +379,8 @@ export default function InsuranceClientDetailPage() {
               {history.map((row) => (
                 <tr key={row.id}>
                   <td>{row.at ? new Date(row.at).toLocaleString() : "—"}</td>
-                  <td>{feSendReasonLabel(row.kind)}</td>
-                  <td>{row.to || row.channel}</td>
+                  <td>{row.kindLabel || feSendReasonLabel(row.kind)}</td>
+                  <td>{row.to || row.channelLabel || row.channel}</td>
                   <td>{formatLogStatus(row)}</td>
                 </tr>
               ))}

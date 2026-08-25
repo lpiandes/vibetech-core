@@ -6,6 +6,7 @@ import {
   deleteFeClient,
   writeFeRetentionState,
 } from "@/lib/insurance/feRetentionCore";
+import { feSendReasonLabel } from "../../../../../../backend/core/fe-retention/FeRetentionLabels.js";
 
 export async function GET(
   _request: Request,
@@ -16,7 +17,13 @@ export async function GET(
     const { state } = await requireFeRetentionContext(businessId);
     const client = getFeClient(state, clientId);
     if (!client) return NextResponse.json({ error: "Client not found." }, { status: 404 });
-    const history = (state.messageLog ?? []).filter((row: any) => String(row.clientId) === String(clientId));
+    const history = (state.messageLog ?? [])
+      .filter((row: any) => String(row.clientId) === String(clientId))
+      .map((row: any) => ({
+        ...row,
+        kindLabel: feSendReasonLabel(row.kind),
+        channelLabel: row.channel === "email" ? "Email" : row.channel === "sms" ? "Text" : row.channel,
+      }));
     return NextResponse.json({ client, history });
   } catch (err) {
     return feJsonError(err);

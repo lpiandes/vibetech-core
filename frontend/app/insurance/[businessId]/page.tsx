@@ -170,7 +170,7 @@ export default function InsuranceTodayPage() {
                       {row.body || row.error || "—"}
                     </div>
                   </td>
-                  <td>{row.ok ? "Sent" : "Failed"}</td>
+                  <td>{row.ok ? (row.channel === "sms" ? "Sent to carrier" : "Sent") : "Failed"}</td>
                 </tr>
               ))}
             </tbody>

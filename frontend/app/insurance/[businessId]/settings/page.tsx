@@ -169,7 +169,12 @@ export default function InsuranceSettingsPage() {
   return (
     <form className="fe-card" onSubmit={onSubmit}>
       <h2 style={{ marginTop: 0 }}>Settings</h2>
-      <p className="fe-muted">Signed in as {agentEmail || "—"}.</p>
+      <p className="fe-muted">
+        Signed in as {agentEmail || "—"}.
+        {settings.agentNotifyEmail ? (
+          <> Alerts send to <strong>{settings.agentNotifyEmail}</strong>.</>
+        ) : null}
+      </p>
 
       <div className="fe-card" style={{ background: cockpitColors.inset }}>
         <h3>Text messaging</h3>

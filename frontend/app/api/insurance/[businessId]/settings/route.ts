@@ -63,7 +63,8 @@ export async function GET(
       businessName: ctx.business.name,
       settings: state.settings,
       clients: listFeClients(state).map((c: any) => ({ id: c.id, name: c.name })),
-      agentEmail: ctx.scope.user.email ?? null,
+      agentEmail: ctx.agentNotify?.email || state.settings?.agentNotifyEmail || ctx.scope.user.email || null,
+      notifyEmail: ctx.agentNotify?.email || state.settings?.agentNotifyEmail || null,
       sms: {
         ...smsStatus,
         credentialAttached: Boolean(ctx.sms?.ok),

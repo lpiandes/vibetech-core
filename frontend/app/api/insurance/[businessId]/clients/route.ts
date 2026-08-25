@@ -63,7 +63,8 @@ export async function POST(
           kind,
           integrationPlatform,
           deliveryProvider,
-          agentEmail: state.settings?.agentNotifyEmail || ctx.scope.user.email,
+          agentEmail: ctx.agentNotify?.email || state.settings?.agentNotifyEmail || null,
+          agentPhone: ctx.agentNotify?.phone || state.settings?.agentNotifyPhone || null,
           businessName: ctx.business?.name,
           actorId: ctx.scope.user.id,
         });

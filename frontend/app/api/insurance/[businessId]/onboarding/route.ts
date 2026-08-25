@@ -16,6 +16,12 @@ import {
 import { buildFeRetentionEngagementAgreement } from "../../../../../../backend/core/fe-retention/FeRetentionEngagementAgreement.js";
 import { ensureFeRetentionInstallation } from "../../../../../../backend/core/fe-retention/ensureFeRetentionInstallation.js";
 import { notifyFeRetentionOnboardingComplete } from "../../../../../../backend/core/fe-retention/FeRetentionA2pOps.js";
+import { agentNotifyFromOnboardingProfile } from "../../../../../../backend/core/fe-retention/FeRetentionAgentNotify.js";
+import {
+  readFeRetentionState,
+  updateFeSettings,
+  writeFeRetentionState,
+} from "../../../../../../backend/core/fe-retention/FeRetentionStore.js";
 import { putDurableCredential } from "../../../../../../backend/core/integrations/credentials/durableCredentialVault.js";
 import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
 
@@ -121,6 +127,19 @@ export async function POST(
         attachSms: true,
         light: false,
       });
+
+      if (ensured.installation) {
+        const notifySeed = agentNotifyFromOnboardingProfile(current.profile);
+        const feState = readFeRetentionState(ensured.installation);
+        const nextFeState = updateFeSettings(feState, notifySeed);
+        await writeFeRetentionState({
+          platformStore,
+          installation: ensured.installation,
+          state: nextFeState,
+          actorId: user.id,
+          historyAction: "fe_agent_notify_seed",
+        });
+      }
 
       await notifyFeRetentionOnboardingComplete({
         businessId,

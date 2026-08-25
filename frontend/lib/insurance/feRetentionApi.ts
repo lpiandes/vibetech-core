@@ -6,7 +6,8 @@ import { businessGrantsFeRetentionAccess } from "../../../backend/core/fe-retent
 import { readFeRetentionBilling } from "../../../backend/core/fe-retention/FeRetentionBilling.js";
 import { readFeRetentionOnboarding } from "../../../backend/core/fe-retention/FeRetentionOnboarding.js";
 import { ensureFeRetentionInstallation } from "../../../backend/core/fe-retention/ensureFeRetentionInstallation.js";
-import { readFeRetentionState } from "../../../backend/core/fe-retention/FeRetentionStore.js";
+import { readFeRetentionState, writeFeRetentionState } from "../../../backend/core/fe-retention/FeRetentionStore.js";
+import { resolveFeAgentNotifyContacts } from "../../../backend/core/fe-retention/FeRetentionAgentNotify.js";
 import {
   readPlatformTwilioSmsEnv,
   listMissingPlatformTwilioEnvKeys,
@@ -66,7 +67,29 @@ export async function requireFeRetentionContext(businessId: string) {
     throw new Error("Could not prepare FE Retention installation.");
   }
 
-  const state = readFeRetentionState(installation);
+  let state = readFeRetentionState(installation);
+  const notify = await resolveFeAgentNotifyContacts({
+    platformStore,
+    businessId,
+    business,
+    state,
+  });
+  if (notify.seeded) {
+    state = notify.state;
+    await writeFeRetentionState({
+      platformStore,
+      installation,
+      state,
+      actorId: scope.user.id,
+      historyAction: "fe_agent_notify_seed",
+      settingsMode: "preserve_settings",
+    });
+    installation.configuration = {
+      ...(installation.configuration ?? {}),
+      feRetention: state,
+    };
+  }
+
   return {
     scope,
     business,
@@ -74,6 +97,7 @@ export async function requireFeRetentionContext(businessId: string) {
     state,
     platformStore,
     sms: ensured.sms,
+    agentNotify: { email: notify.email, phone: notify.phone },
   };
 }
 
