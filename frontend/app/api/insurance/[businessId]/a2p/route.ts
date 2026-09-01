@@ -70,7 +70,7 @@ export async function POST(
     const cred = await loadFeSmsCredential(platformStore, businessId);
     const vault = getSharedCredentialVault();
 
-    if (resubmit || !cred?.metadata?.brandRegistrationSid) {
+    if (resubmit || !cred?.metadata?.brandRegistrationSid || !cred?.metadata?.campaignSid) {
       const submitted = await submitFeRetentionA2pRegistration({
         platformStore,
         businessId,

@@ -66,6 +66,10 @@ export async function submitTwilioA2pRegistration({
     existing.a2pProfileBundleSid || process.env.TWILIO_A2P_PROFILE_BUNDLE_SID,
   );
 
+  let brandRegistrationSid = safeString(existing.brandRegistrationSid);
+  let brandStatus = "pending";
+  let brandError = null;
+
   // Prefer refreshing an existing brand registration.
   if (existing.brandRegistrationSid) {
     const refreshed = await refreshTwilioA2pStatus({
@@ -73,17 +77,23 @@ export async function submitTwilioA2pRegistration({
       authToken: token,
       brandRegistrationSid: existing.brandRegistrationSid,
       campaignSid: existing.campaignSid,
+      messagingServiceSid: messagingServiceSid || existing.messagingServiceSid,
       fetchImpl,
       nowISO,
     });
-    if (refreshed.ok && refreshed.a2pRegistrationStatus === "approved") {
+    const campOk = refreshed.campaignSid
+      && /approved|verified/i.test(String(refreshed.campaignStatus || ""));
+    if (refreshed.ok && refreshed.a2pRegistrationStatus === "approved" && campOk) {
       return refreshed;
     }
+    if (refreshed.ok && refreshed.a2pRegistrationStatus === "failed") {
+      return refreshed;
+    }
+    if (refreshed.ok && refreshed.a2pRegistrationStatus === "approved") {
+      brandRegistrationSid = safeString(existing.brandRegistrationSid);
+      brandStatus = "approved";
+    }
   }
-
-  let brandRegistrationSid = safeString(existing.brandRegistrationSid);
-  let brandStatus = "pending";
-  let brandError = null;
 
   if (!brandRegistrationSid && customerProfileSid && a2pProfileBundleSid) {
     try {

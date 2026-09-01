@@ -67,7 +67,21 @@ export async function runHostedFeRetentionA2pPoll({
 
     outcome.attempted += 1;
     try {
-      if (meta.brandRegistrationSid) {
+      if (meta.brandRegistrationSid && !safeString(meta.campaignSid)) {
+        const onboarding = readFeRetentionOnboarding(business.packageConfiguration ?? {});
+        const submitted = await submitFeRetentionA2pRegistration({
+          platformStore,
+          businessId,
+          profile: onboarding.profile,
+          fromNumber: safeString(cred?.secrets?.fromNumber || meta.fromNumber),
+          businessName: String(business.name ?? onboarding.profile?.legalBusinessName ?? ""),
+          packageConfiguration: business.packageConfiguration,
+          vault,
+          fetchImpl,
+        });
+        if (submitted.ok !== false) outcome.submitted += 1;
+        else outcome.errors.push({ businessId, reason: submitted.reason || submitted.error || "submit_failed" });
+      } else if (meta.brandRegistrationSid) {
         const refreshed = await refreshFeRetentionA2pRegistration({
           platformStore,
           businessId,
