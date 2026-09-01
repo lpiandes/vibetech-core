@@ -42,6 +42,8 @@ export default function InsuranceSettingsPage() {
   const businessId = String(params.businessId ?? "");
   const [settings, setSettings] = useState<any>(null);
   const [sms, setSms] = useState<any>(null);
+  const [a2pBusy, setA2pBusy] = useState(false);
+  const [a2pMessage, setA2pMessage] = useState<string | null>(null);
   const [agentEmail, setAgentEmail] = useState<string | null>(null);
   const [gmail, setGmail] = useState<any>(null);
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([]);
@@ -192,7 +194,74 @@ export default function InsuranceSettingsPage() {
             ? "Your agency number on all client texts."
             : (sms?.message || "Assigned automatically after you sign.")}
         </p>
-        <p style={{ margin: 0, display: "flex", gap: 16, flexWrap: "wrap" }}>
+        {sms?.fromNumber ? (
+          <>
+            <p style={{ margin: "0 0 0.5rem" }}>
+              <FeStatusBadge
+                status={
+                  sms?.carrierPhase === "approved"
+                    ? "ok"
+                    : sms?.carrierPhase === "failed"
+                      ? "lapsed"
+                      : "reinstatement"
+                }
+                label={
+                  sms?.carrierPhase === "approved"
+                    ? "Carrier approved"
+                    : sms?.carrierPhase === "failed"
+                      ? "Carrier rejected"
+                      : "Carrier review pending"
+                }
+              />
+            </p>
+            <p className="fe-muted" style={{ margin: "0 0 0.75rem" }}>
+              {sms?.carrierCopy || "US carriers must approve your 10DLC campaign before texts deliver to phones."}
+            </p>
+            {sms?.a2pError ? (
+              <p style={{ margin: "0 0 0.75rem", color: "#fca5a5", fontWeight: 600 }}>
+                {sms.a2pError}
+              </p>
+            ) : null}
+            {a2pMessage ? (
+              <p style={{ margin: "0 0 0.75rem", color: "#86efac", fontWeight: 600 }}>{a2pMessage}</p>
+            ) : null}
+            <button
+              type="button"
+              className="fe-btn secondary"
+              disabled={a2pBusy}
+              onClick={async () => {
+                setA2pBusy(true);
+                setA2pMessage(null);
+                setError(null);
+                try {
+                  const res = await fetch(`/api/insurance/${encodeURIComponent(businessId)}/a2p`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) throw new Error(data.error || "Could not refresh carrier status.");
+                  setSms((prev: any) => ({
+                    ...prev,
+                    a2pRegistrationStatus: data.a2pRegistrationStatus,
+                    a2pError: data.a2pError,
+                    carrierPhase: data.phase,
+                    carrierCopy: data.copy,
+                    deliveryLikely: data.deliveryLikely,
+                  }));
+                  setA2pMessage(data.message || "Status refreshed from Twilio.");
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Refresh failed");
+                } finally {
+                  setA2pBusy(false);
+                }
+              }}
+            >
+              {a2pBusy ? "Refreshing…" : "Refresh carrier status"}
+            </button>
+          </>
+        ) : null}
+        <p style={{ margin: "0.85rem 0 0", display: "flex", gap: 16, flexWrap: "wrap" }}>
           <a href={`/insurance/${encodeURIComponent(businessId)}/agreement`} style={{ color: cockpitColors.accent, fontWeight: 600 }}>
             View signed agreement
           </a>

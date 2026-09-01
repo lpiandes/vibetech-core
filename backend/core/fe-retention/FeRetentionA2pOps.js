@@ -112,6 +112,7 @@ export async function notifyFeRetentionOnboardingComplete({
   signedAt = null,
   agreementHtml = "",
   agreementText = "",
+  a2pResult = null,
   deliveryProvider = null,
   notifyOperators = notifyPlatformOperators,
   sendOpsSms = sendFeRetentionOpsSms,
@@ -119,6 +120,21 @@ export async function notifyFeRetentionOnboardingComplete({
   if (!safeString(businessId)) {
     return { ok: true, skipped: true };
   }
+
+  const a2pFailed = a2pResult && a2pResult.ok === false;
+  const a2pStatus = safeString(a2pResult?.a2pRegistrationStatus).toLowerCase();
+  const needsOpsAlert = a2pFailed || a2pStatus === "failed";
+
+  if (!needsOpsAlert) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "a2p_submitted",
+      a2pRegistrationStatus: a2pResult?.a2pRegistrationStatus ?? "pending",
+      message: a2pResult?.message ?? "A2P submitted automatically — carrier review can take several days.",
+    };
+  }
+
   const action = buildFeRetentionA2pAttachOpsAction({
     businessId,
     businessName,
@@ -126,6 +142,14 @@ export async function notifyFeRetentionOnboardingComplete({
     profile,
     signedName,
   });
+  action.title = `VibeKeep A2P failed — ${safeString(businessName) || businessId}`;
+  action.summary = [
+    action.summary,
+    "",
+    `Error: ${safeString(a2pResult?.error || a2pResult?.message || "A2P registration failed")}`,
+    "Fix in Twilio Console or re-submit from VibeKeep Settings.",
+  ].join("\n");
+
   const smsBodies = buildFeRetentionA2pOpsSmsBodies({
     businessId,
     businessName,
@@ -133,6 +157,12 @@ export async function notifyFeRetentionOnboardingComplete({
     profile,
     signedName,
   });
+  smsBodies[0] = [
+    action.title,
+    action.summary,
+    "",
+    ...smsBodies[0].split("\n").slice(2),
+  ].join("\n");
 
   let sms = { ok: false };
   try {

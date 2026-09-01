@@ -95,13 +95,23 @@ async function main() {
   );
 
   const trustHubOk = Boolean(
+    String(process.env.TWILIO_TRUST_HUB_CUSTOMER_PROFILE_POLICY_SID || "").trim()
+    && String(process.env.TWILIO_TRUST_HUB_A2P_MESSAGING_POLICY_SID || process.env.TWILIO_A2P_PROFILE_BUNDLE_SID || "").trim(),
+  );
+  record(
+    "env_twilio_trust_hub_policies",
+    trustHubOk,
+    trustHubOk ? "Trust Hub policy SIDs set" : "missing TWILIO_TRUST_HUB_CUSTOMER_PROFILE_POLICY_SID / TWILIO_TRUST_HUB_A2P_MESSAGING_POLICY_SID",
+  );
+
+  const legacyBundlesOk = Boolean(
     String(process.env.TWILIO_A2P_CUSTOMER_PROFILE_SID || "").trim()
     && String(process.env.TWILIO_A2P_PROFILE_BUNDLE_SID || "").trim(),
   );
   record(
     "env_twilio_a2p_trust_hub",
-    trustHubOk,
-    trustHubOk ? "Trust Hub SIDs set" : "missing TWILIO_A2P_CUSTOMER_PROFILE_SID / TWILIO_A2P_PROFILE_BUNDLE_SID",
+    legacyBundlesOk,
+    legacyBundlesOk ? "Legacy bundle SIDs set" : "missing TWILIO_A2P_CUSTOMER_PROFILE_SID / TWILIO_A2P_PROFILE_BUNDLE_SID (optional for VibeKeep per-agency flow)",
   );
 
   try {

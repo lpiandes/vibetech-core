@@ -143,6 +143,12 @@ export async function submitTwilioA2pRegistration({
       });
       if (samples[0]) body.append("MessageSamples", String(samples[0]).slice(0, 1024));
       if (samples[1]) body.append("MessageSamples", String(samples[1]).slice(0, 1024));
+      if (safeString(brand.privacyPolicyUrl)) {
+        body.set("PrivacyPolicyUrl", safeString(brand.privacyPolicyUrl).slice(0, 2048));
+      }
+      if (safeString(brand.termsUrl || brand.termsAndConditionsUrl)) {
+        body.set("TermsAndConditionsUrl", safeString(brand.termsUrl || brand.termsAndConditionsUrl).slice(0, 2048));
+      }
       const res = await fetchImpl(
         `https://messaging.twilio.com/v1/Services/${encodeURIComponent(msSid)}/Compliance/Usa2p`,
         {

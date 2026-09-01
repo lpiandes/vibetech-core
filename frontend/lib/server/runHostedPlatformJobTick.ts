@@ -8,6 +8,7 @@ import { runPlatformJobTick } from "../../../backend/core/platform/jobs/createPl
 import { GmailInboundSyncService } from "../../../backend/core/integrations/gmail/GmailInboundSyncService.js";
 import { selectDueGmailSyncBusinesses } from "../../../backend/core/integrations/gmail/selectDueGmailSyncBusinesses.js";
 import { runHostedFeRetentionSweep } from "../../../backend/core/fe-retention/runHostedFeRetentionSweep.js";
+import { runHostedFeRetentionA2pPoll } from "../../../backend/core/fe-retention/runHostedFeRetentionA2pPoll.js";
 import { createFrontendInvitationDeliveryProvider } from "@/lib/server/invitationDelivery";
 import { putDurableCredential } from "../../../backend/core/integrations/credentials/durableCredentialVault.js";
 import { getSharedCredentialVault } from "@/lib/server/liveIntegrations";
@@ -181,6 +182,16 @@ export async function runHostedPlatformJobTick({
     /* best-effort only */
   }
 
+  let feRetentionA2p: Awaited<ReturnType<typeof runHostedFeRetentionA2pPoll>> | null = null;
+  try {
+    feRetentionA2p = await runHostedFeRetentionA2pPoll({
+      platformStore,
+      vault: getSharedCredentialVault(),
+    });
+  } catch {
+    /* best-effort only */
+  }
+
   try {
     await withClient((client) =>
       client.query(
@@ -190,11 +201,11 @@ export async function runHostedPlatformJobTick({
            status = EXCLUDED.status,
            detail = EXCLUDED.detail,
            last_seen_at = NOW()`,
-        [workerId, JSON.stringify({ processed: result.processed, via, gmailInboxSync, feRetention })],
+        [workerId, JSON.stringify({ processed: result.processed, via, gmailInboxSync, feRetention, feRetentionA2p })],
       ),
     );
   } catch {
     /* table may not exist in older envs */
   }
-  return { ...result, gmailInboxSync, feRetention };
+  return { ...result, gmailInboxSync, feRetention, feRetentionA2p };
 }

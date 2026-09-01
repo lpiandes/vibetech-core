@@ -4,6 +4,8 @@ import {
   feJsonError,
   resolveFeSmsStatus,
 } from "@/lib/insurance/feRetentionApi";
+import { loadFeSmsCredential } from "../../../../../../backend/core/fe-retention/submitFeRetentionA2pRegistration.js";
+import { describeSmsCarrierStatus } from "../../../../../../backend/core/integrations/sms/smsCarrierStatus.js";
 import {
   applyFeTemplateOverrideToClients,
   listFeClients,
@@ -23,6 +25,9 @@ export async function GET(
       || ctx.business?.packageConfiguration?.feRetentionBilling?.twilioFromNumber
       || null;
     const smsStatus = resolveFeSmsStatus({ fromNumber: bookFrom });
+    const smsCred = await loadFeSmsCredential(ctx.platformStore, businessId);
+    const a2pMeta = smsCred?.metadata && typeof smsCred.metadata === "object" ? smsCred.metadata : {};
+    const carrier = describeSmsCarrierStatus(a2pMeta);
     let { state, installation } = ctx;
 
     const rawSettings = installation?.configuration?.feRetention?.settings ?? {};
@@ -69,6 +74,13 @@ export async function GET(
         ...smsStatus,
         credentialAttached: Boolean(ctx.sms?.ok),
         fromNumber: ctx.sms?.fromNumber || smsStatus.fromNumber,
+        a2pRegistrationStatus: a2pMeta.a2pRegistrationStatus ?? "pending",
+        a2pMessage: a2pMeta.a2pMessage ?? null,
+        a2pError: a2pMeta.a2pError ?? null,
+        a2pLastCheckedAt: a2pMeta.a2pLastCheckedAt ?? null,
+        carrierPhase: carrier.phase,
+        carrierCopy: carrier.copy,
+        deliveryLikely: carrier.deliveryLikely,
       },
       gmail: {
         connected: gmailConnected || Boolean(sync.lastSyncAt),

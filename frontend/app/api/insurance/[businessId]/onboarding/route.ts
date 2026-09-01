@@ -16,6 +16,7 @@ import {
 import { buildFeRetentionEngagementAgreement } from "../../../../../../backend/core/fe-retention/FeRetentionEngagementAgreement.js";
 import { ensureFeRetentionInstallation } from "../../../../../../backend/core/fe-retention/ensureFeRetentionInstallation.js";
 import { notifyFeRetentionOnboardingComplete } from "../../../../../../backend/core/fe-retention/FeRetentionA2pOps.js";
+import { submitFeRetentionA2pRegistration } from "../../../../../../backend/core/fe-retention/submitFeRetentionA2pRegistration.js";
 import { agentNotifyFromOnboardingProfile } from "../../../../../../backend/core/fe-retention/FeRetentionAgentNotify.js";
 import {
   readFeRetentionState,
@@ -144,6 +145,16 @@ export async function POST(
         });
       }
 
+      const a2pResult = await submitFeRetentionA2pRegistration({
+        platformStore,
+        businessId,
+        profile: current.profile,
+        fromNumber: ensured.sms?.fromNumber || null,
+        businessName: String(business.name || current.profile.legalBusinessName),
+        packageConfiguration: nextConfig,
+        vault: getSharedCredentialVault(),
+      });
+
       await notifyFeRetentionOnboardingComplete({
         businessId,
         businessName: String(business.name || current.profile.legalBusinessName),
@@ -153,12 +164,16 @@ export async function POST(
         signedAt,
         agreementHtml: doc.html,
         agreementText: doc.text,
+        a2pResult,
         deliveryProvider: getFeDeliveryProvider(),
       });
 
       return NextResponse.json({
         ok: true,
         fromNumber: ensured.sms?.fromNumber || null,
+        a2pRegistrationStatus: a2pResult.a2pRegistrationStatus ?? "pending",
+        a2pMessage: a2pResult.message ?? null,
+        a2pError: a2pResult.error ?? null,
         next: `/insurance/${encodeURIComponent(businessId)}`,
       });
     }

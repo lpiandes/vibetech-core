@@ -151,12 +151,13 @@ async function writeFeSmsCredential({
       authToken: env.authToken,
       fromNumber,
     },
-    metadata: {
+      metadata: {
       fromNumber,
       phoneSid: phoneSid || null,
       provisionedBy,
       simulated,
       a2pRegistrationStatus: "pending",
+      feA2pProduct: "vibekeep",
       actorId,
     },
   });

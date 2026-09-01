@@ -48,7 +48,7 @@ test("ops SMS includes Twilio steps and the A2P fields they filled out", () => {
   assert.match(body, /Customer Care/);
 });
 
-test("onboarding complete texts ops even when number purchase was simulated", async () => {
+test("onboarding complete skips ops alert when A2P auto-submit succeeds", async () => {
   const smsBodies = [];
   const result = await notifyFeRetentionOnboardingComplete({
     businessId: "biz_sim",
@@ -57,6 +57,37 @@ test("onboarding complete texts ops even when number purchase was simulated", as
     profile,
     signedName: "Pat Owner",
     agreementText: "agreement",
+    a2pResult: {
+      ok: true,
+      a2pRegistrationStatus: "pending",
+      message: "A2P brand submitted to Twilio.",
+    },
+    notifyOperators: async () => {
+      throw new Error("should not notify on success");
+    },
+    sendOpsSms: async ({ body }) => {
+      smsBodies.push(body);
+      return { ok: true, fromNumber: "+15551234567" };
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, true);
+  assert.equal(smsBodies.length, 0);
+});
+
+test("onboarding complete texts ops when A2P auto-submit fails", async () => {
+  const smsBodies = [];
+  const result = await notifyFeRetentionOnboardingComplete({
+    businessId: "biz_sim",
+    businessName: "Sim Agency",
+    fromNumber: "+15550000000",
+    profile,
+    signedName: "Pat Owner",
+    agreementText: "agreement",
+    a2pResult: {
+      ok: false,
+      error: "Trust Hub profile creation failed",
+    },
     notifyOperators: async () => ({ ok: true }),
     sendOpsSms: async ({ body }) => {
       smsBodies.push(body);
@@ -70,7 +101,6 @@ test("onboarding complete texts ops even when number purchase was simulated", as
   });
   assert.equal(result.ok, true);
   assert.equal(result.sms?.ok, true);
-  assert.equal(result.sms?.skipped, undefined);
-  assert.match(smsBodies.join("\n"), /Sim Agency/);
-  assert.match(smsBodies.join("\n"), /EIN: 123456789/);
+  assert.match(smsBodies.join("\n"), /A2P failed/);
+  assert.match(smsBodies.join("\n"), /Trust Hub profile creation failed/);
 });
