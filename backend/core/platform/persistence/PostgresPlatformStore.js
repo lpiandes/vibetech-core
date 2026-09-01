@@ -472,6 +472,34 @@ export class PostgresPlatformStore {
     };
   }
 
+  async getIntegrationCredential(credentialId, workspaceId = null) {
+    const id = String(credentialId ?? "");
+    if (!id) return null;
+    const params = workspaceId ? [String(workspaceId), id] : [id];
+    const where = workspaceId
+      ? "WHERE workspace_id = $1 AND credential_id = $2"
+      : "WHERE credential_id = $1";
+    const { rows } = await this.withClient((client) =>
+      client.query(
+        `SELECT workspace_id, credential_id, provider_type, secrets_ciphertext, metadata, updated_at
+         FROM integration_credentials
+         ${where}
+         LIMIT 1`,
+        params,
+      ),
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      workspaceId: String(row.workspace_id),
+      credentialId: String(row.credential_id),
+      providerType: String(row.provider_type),
+      secrets: decryptIntegrationSecrets(String(row.secrets_ciphertext)),
+      metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : {},
+      updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    };
+  }
+
   async listIntegrationCredentialsForWorkspace(workspaceId) {
     const { rows } = await this.withClient((client) =>
       client.query(

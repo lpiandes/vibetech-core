@@ -46,6 +46,51 @@ async function twilioFormPost({ url, accountSid, authToken, fields, fetchImpl })
   return { ok: res.ok, status: res.status, data };
 }
 
+async function createSupportingDocument({ accountSid, authToken, type, attributes, friendlyName, fetchImpl }) {
+  const { ok, data } = await twilioFormPost({
+    url: `${trustHubBase()}/SupportingDocuments`,
+    accountSid,
+    authToken,
+    fetchImpl,
+    fields: {
+      Type: type,
+      FriendlyName: friendlyName,
+      Attributes: JSON.stringify(attributes),
+    },
+  });
+  if (!ok) {
+    return { ok: false, error: safeString(data.message) || "SupportingDocument create failed" };
+  }
+  return { ok: true, sid: safeString(data.sid) };
+}
+
+async function createTwilioAddress({
+  accountSid,
+  authToken,
+  customerName,
+  address,
+  fetchImpl,
+}) {
+  const { ok, data, status } = await twilioFormPost({
+    url: `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Addresses.json`,
+    accountSid,
+    authToken,
+    fetchImpl,
+    fields: {
+      CustomerName: customerName,
+      Street: address.street,
+      City: address.city,
+      Region: address.region,
+      PostalCode: address.postal_code,
+      IsoCountry: address.iso_country,
+    },
+  });
+  if (!ok) {
+    return { ok: false, error: safeString(data.message) || `Address create failed (HTTP ${status})` };
+  }
+  return { ok: true, sid: safeString(data.sid) };
+}
+
 async function createEndUser({ accountSid, authToken, type, attributes, friendlyName, fetchImpl }) {
   const { ok, data } = await twilioFormPost({
     url: `${trustHubBase()}/EndUsers`,
@@ -100,7 +145,10 @@ function buildTrustHubEntities(profile = {}) {
     business_type: mapBusinessType(p.businessType),
     business_industry: safeString(p.businessIndustry || "INSURANCE"),
     business_registration_identifier: safeString(p.businessRegistrationIdType || "EIN"),
+    business_regions_of_operation: "USA_AND_CANADA",
+    business_identity: "direct_customer",
     website_url: safeString(p.websiteUrl),
+    social_media_profile_urls: "",
   };
   const address = {
     street: safeString(p.street),
@@ -230,16 +278,27 @@ export async function createAgencyCustomerProfile({
       return deepFreeze({ ok: false, reason: "business_end_user_failed", error: businessUser.error });
     }
 
-    const addressUser = await createEndUser({
+    const twilioAddress = await createTwilioAddress({
+      accountSid: sid,
+      authToken: token,
+      fetchImpl,
+      customerName: legalName,
+      address,
+    });
+    if (!twilioAddress.ok) {
+      return deepFreeze({ ok: false, reason: "address_create_failed", error: twilioAddress.error });
+    }
+
+    const addressDoc = await createSupportingDocument({
       accountSid: sid,
       authToken: token,
       fetchImpl,
       type: "customer_profile_address",
       friendlyName: `${legalName} — address`,
-      attributes: address,
+      attributes: { address_sids: twilioAddress.sid },
     });
-    if (!addressUser.ok) {
-      return deepFreeze({ ok: false, reason: "address_end_user_failed", error: addressUser.error });
+    if (!addressDoc.ok) {
+      return deepFreeze({ ok: false, reason: "address_end_user_failed", error: addressDoc.error });
     }
 
     const repUser = await createEndUser({
@@ -254,7 +313,7 @@ export async function createAgencyCustomerProfile({
       return deepFreeze({ ok: false, reason: "rep_end_user_failed", error: repUser.error });
     }
 
-    for (const objectSid of [businessUser.sid, addressUser.sid, repUser.sid]) {
+    for (const objectSid of [businessUser.sid, addressDoc.sid, repUser.sid]) {
       const assigned = await assignEntity({
         accountSid: sid,
         authToken: token,

@@ -120,7 +120,6 @@ async function persistBookFromNumber({ platformStore, businessId, fromNumber }) 
     businessId,
     packageConfiguration: next,
   });
-  business.packageConfiguration = next;
   await syncFeRetentionBillingOntoInstallation({
     platformStore,
     businessId,
