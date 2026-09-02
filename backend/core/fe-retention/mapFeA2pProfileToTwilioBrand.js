@@ -19,6 +19,9 @@ function safeString(v) {
 
 /**
  * Build Twilio A2P brand fields from a VibeKeep onboarding profile.
+ *
+ * Campaign description must pass TCR 30886: who sends, who receives, why —
+ * not just how consent is collected.
  */
 export function mapFeA2pProfileToTwilioBrand(profile = {}) {
   const p = normalizeFeA2pProfile(profile);
@@ -29,20 +32,29 @@ export function mapFeA2pProfileToTwilioBrand(profile = {}) {
     reminderDays: 3,
     docsArriveDays: 10,
   };
-  const welcome = renderFeTemplate(DEFAULT_FE_RETENTION_TEMPLATES.welcome, sampleVars);
-  const lapse = renderFeTemplate(DEFAULT_FE_RETENTION_TEMPLATES.lapseRecovery, sampleVars);
-  const reminder = renderFeTemplate(DEFAULT_FE_RETENTION_TEMPLATES.paymentReminder, sampleVars);
+  const welcome = `${agency}: ${renderFeTemplate(DEFAULT_FE_RETENTION_TEMPLATES.welcome, sampleVars)} Reply HELP for help.`;
+  const docs = `${agency}: ${renderFeTemplate(DEFAULT_FE_RETENTION_TEMPLATES.docsMail, sampleVars)} Reply HELP for help.`;
+  const reminder = `${agency}: ${renderFeTemplate(DEFAULT_FE_RETENTION_TEMPLATES.paymentReminder, sampleVars)} Reply HELP for help.`;
+  const lapse = `${agency}: ${renderFeTemplate(DEFAULT_FE_RETENTION_TEMPLATES.lapseRecovery, sampleVars)} Reply HELP for help.`;
 
+  const privacy = safeString(p.privacyPolicyUrl) || VIBEKEEP_DEFAULT_PRIVACY_URL;
+  const terms = safeString(p.termsUrl) || VIBEKEEP_DEFAULT_TERMS_URL;
+  const website = safeString(p.websiteUrl);
   const keywords = safeString(p.optInKeywords);
+
+  const consentUrl = website
+    ? ` Clients may also review SMS disclosures on the agency website (${website}).`
+    : "";
+
   const messageFlow = keywords
-    ? `Customers opt in by texting ${keywords} to this number or by providing their mobile number when the agent adds them to the book with consent. They can reply STOP to opt out or HELP for help.`
-    : "Customers opt in when the insurance agent adds their mobile number to VibeKeep with consent to receive policy-related texts (welcome, payment reminders, lapse recovery). They can reply STOP to opt out or HELP for help.";
+    ? `${agency} collects SMS consent when existing clients text ${keywords} to this number, or when an agent adds the client's mobile number to the agency book after the client agrees to receive policy-related texts. Consent is optional and not required to purchase or keep insurance. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. Privacy Policy: ${privacy}. Terms: ${terms}.${consentUrl}`
+    : `${agency} collects SMS consent when an insurance agent adds an existing client's mobile number to the agency book after the client agrees to receive policy-related texts (welcome, document notices, payment reminders, and lapse recovery). Consent is optional and not required to purchase or keep insurance. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. Privacy Policy: ${privacy}. Terms: ${terms}.${consentUrl}`;
 
   return deepFreeze({
     legalBusinessName: agency,
     dba: agency,
     ein: safeString(p.ein),
-    website: safeString(p.websiteUrl),
+    website,
     businessType: safeString(p.businessType),
     businessIndustry: safeString(p.businessIndustry || "INSURANCE"),
     contactFirstName: safeString(p.contactFirstName),
@@ -50,17 +62,24 @@ export function mapFeA2pProfileToTwilioBrand(profile = {}) {
     contactEmail: safeString(p.contactEmail),
     contactPhone: safeString(p.contactPhone),
     contactTitle: safeString(p.businessTitle),
-    campaignUseCase: "CUSTOMER_CARE",
+    // LOW_VOLUME fits small agencies sending mixed transactional care texts.
+    campaignUseCase: "LOW_VOLUME",
     campaignDescription:
-      `${agency} sends policy-related customer care texts to existing clients: welcome messages, payment reminders, birthday/holiday greetings, and lapse recovery when a payment is missed. Messages are not marketing blasts.`,
+      `${agency} sends transactional customer-care SMS to its existing insurance policyholders who opted in. `
+      + "Messages cover policy welcome notices, physical document delivery updates, upcoming payment reminders, "
+      + "and lapse-recovery follow-ups when a payment may have been missed. "
+      + "These texts are for policy servicing and client care only — not promotional marketing or lead generation.",
     messageFlow,
-    messageSamples: [welcome, lapse, reminder].filter(Boolean),
+    messageSamples: [welcome, docs, reminder, lapse].filter(Boolean).slice(0, 5),
     messageSample1: welcome,
     messageSample2: lapse,
-    privacyPolicyUrl: safeString(p.privacyPolicyUrl) || VIBEKEEP_DEFAULT_PRIVACY_URL,
-    termsUrl: safeString(p.termsUrl) || VIBEKEEP_DEFAULT_TERMS_URL,
+    privacyPolicyUrl: privacy,
+    termsUrl: terms,
     hasEmbeddedLinks: false,
     hasEmbeddedPhone: false,
     optInMessage: safeString(p.optInMessage) || defaultFeA2pOptInMessage(agency),
+    helpMessage:
+      `${agency}: Reply STOP to unsubscribe, HELP for help. Msg & data rates may apply. `
+      + "For assistance contact your agent or visit the agency website.",
   });
 }

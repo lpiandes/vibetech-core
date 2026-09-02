@@ -390,15 +390,48 @@ export async function createAgencyCustomerProfile({
       return deepFreeze({ ok: false, reason: "profile_trust_product_link_failed", error: linkTp.error });
     }
 
-    const submit = await twilioFormPost({
+    // Secondary Customer Profiles for ISVs must link the platform primary profile.
+    const primaryProfileSid = safeString(process.env.TWILIO_TRUST_HUB_PRIMARY_CUSTOMER_PROFILE_SID);
+    if (primaryProfileSid) {
+      const primaryLink = await assignEntity({
+        accountSid: sid,
+        authToken: token,
+        fetchImpl,
+        parentSid: customerProfileSid,
+        objectSid: primaryProfileSid,
+        resource: "CustomerProfiles",
+      });
+      if (!primaryLink.ok) {
+        return deepFreeze({
+          ok: false,
+          reason: "primary_profile_link_failed",
+          error: primaryLink.error,
+          message: "Could not link secondary Customer Profile to the platform primary profile.",
+        });
+      }
+    }
+
+    const submitCp = await twilioFormPost({
       url: `${trustHubBase()}/CustomerProfiles/${encodeURIComponent(customerProfileSid)}`,
       accountSid: sid,
       authToken: token,
       fetchImpl,
       fields: { Status: "pending-review" },
     });
-    if (!submit.ok) {
-      error = safeString(submit.data.message) || "Profile submit for review failed";
+    if (!submitCp.ok) {
+      error = safeString(submitCp.data.message) || "Profile submit for review failed";
+    }
+
+    // Brand registration requires the A2P Trust Product to be submitted too (not left in draft).
+    const submitTp = await twilioFormPost({
+      url: `${trustHubBase()}/TrustProducts/${encodeURIComponent(trustProductSid)}`,
+      accountSid: sid,
+      authToken: token,
+      fetchImpl,
+      fields: { Status: "pending-review" },
+    });
+    if (!submitTp.ok && !error) {
+      error = safeString(submitTp.data.message) || "A2P Trust Product submit for review failed";
     }
   } catch (err) {
     return deepFreeze({

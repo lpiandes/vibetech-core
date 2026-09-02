@@ -147,12 +147,15 @@ export async function submitTwilioA2pRegistration({
         UsAppToPersonUsecase: safeString(brand.campaignUseCase || "CUSTOMER_CARE"),
         HasEmbeddedLinks: brand.hasEmbeddedLinks ? "true" : "false",
         HasEmbeddedPhone: brand.hasEmbeddedPhone ? "true" : "false",
-        OptInMessage: "You are opted in to receive messages. Reply STOP to opt out, HELP for help.",
+        OptInMessage: safeString(brand.optInMessage)
+          || "You are opted in to receive policy-related messages. Reply STOP to opt out, HELP for help. Msg & data rates may apply.",
         OptOutMessage: "You have successfully been unsubscribed. You will not receive any more messages from this number. Reply START to resubscribe.",
-        HelpMessage: "Reply STOP to unsubscribe. Msg&Data rates may apply.",
+        HelpMessage: safeString(brand.helpMessage)
+          || "Reply STOP to unsubscribe, HELP for help. Msg & data rates may apply.",
       });
-      if (samples[0]) body.append("MessageSamples", String(samples[0]).slice(0, 1024));
-      if (samples[1]) body.append("MessageSamples", String(samples[1]).slice(0, 1024));
+      for (const sample of samples.slice(0, 5)) {
+        if (sample) body.append("MessageSamples", String(sample).slice(0, 1024));
+      }
       if (safeString(brand.privacyPolicyUrl)) {
         body.set("PrivacyPolicyUrl", safeString(brand.privacyPolicyUrl).slice(0, 2048));
       }
