@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   MONTH_OPTIONS,
   daysInMonth,
@@ -57,6 +57,7 @@ const OVERRIDE_KEYS = [
 
 export default function InsuranceClientDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const businessId = String(params.businessId ?? "");
   const clientId = String(params.clientId ?? "");
   const [client, setClient] = useState<Client | null>(null);
@@ -65,6 +66,7 @@ export default function InsuranceClientDetailPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [pressingStatus, setPressingStatus] = useState<string | null>(null);
   const [flashStatus, setFlashStatus] = useState<string | null>(null);
   const [badgePop, setBadgePop] = useState(false);
@@ -216,6 +218,29 @@ export default function InsuranceClientDetailPage() {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function deleteClient() {
+    if (!client) return;
+    const ok = window.confirm(
+      `Delete ${client.name}? This removes the client, message history, and Needs attention items for them. This cannot be undone.`,
+    );
+    if (!ok) return;
+    setDeleting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(
+        `/api/insurance/${encodeURIComponent(businessId)}/clients/${encodeURIComponent(clientId)}`,
+        { method: "DELETE" },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Delete failed.");
+      router.replace(`/insurance/${encodeURIComponent(businessId)}/clients`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+      setDeleting(false);
     }
   }
 
@@ -437,6 +462,21 @@ export default function InsuranceClientDetailPage() {
             </tbody>
           </table>
         )}
+      </div>
+
+      <div className="fe-card">
+        <h3>Delete client</h3>
+        <p className="fe-muted" style={{ marginTop: 0 }}>
+          Removes this client, their message history, and any Needs attention items. Cannot be undone.
+        </p>
+        <button
+          type="button"
+          className="fe-btn warn"
+          disabled={busy || deleting}
+          onClick={() => void deleteClient()}
+        >
+          {deleting ? "Deleting…" : "Delete client"}
+        </button>
       </div>
     </>
   );

@@ -336,7 +336,17 @@ export function deleteFeClient(state, clientId) {
   if (clients.length === (state.clients ?? []).length) {
     return { ok: false, reason: "not_found", state };
   }
-  return { ok: true, state: { ...state, clients, updatedAt: nowISO() } };
+  // Drop outbound + inbound log rows for this client (messages, YES alerts, etc.).
+  const messageLog = (state.messageLog ?? []).filter((row) => String(row?.clientId ?? "") !== id);
+  return {
+    ok: true,
+    state: {
+      ...state,
+      clients,
+      messageLog,
+      updatedAt: nowISO(),
+    },
+  };
 }
 
 export function setFeClientPolicyStatus(state, { clientId, status, source = "manual" } = {}) {

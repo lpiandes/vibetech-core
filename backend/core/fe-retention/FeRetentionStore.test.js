@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   emptyFeRetentionState,
   upsertFeClient,
+  deleteFeClient,
   setFeClientPolicyStatus,
   setFeClientSmsOptOut,
   appendFeMessageLog,
@@ -31,6 +32,50 @@ test("upsertFeClient requires name and phone or email", () => {
   assert.equal(ok.isNew, true);
   assert.equal(ok.client.policy.carrier, "Mutual of Omaha");
   assert.equal(ok.client.phone, "+15551234567");
+});
+
+test("deleteFeClient removes client and their message history", () => {
+  let state = emptyFeRetentionState();
+  const created = upsertFeClient(state, {
+    name: "Temp Client",
+    phone: "+15550001111",
+    policy: { carrier: "Carrier", dueDay: 1 },
+  });
+  assert.equal(created.ok, true);
+  state = created.state;
+  const other = upsertFeClient(state, {
+    name: "Keep Client",
+    phone: "+15550002222",
+    policy: { carrier: "Carrier", dueDay: 1 },
+  });
+  state = other.state;
+  const logged = appendFeMessageLog(state, {
+    kind: "lapseRecovery",
+    channel: "sms",
+    clientId: created.client.id,
+    clientName: created.client.name,
+    to: created.client.phone,
+    body: "test",
+    ok: true,
+  });
+  state = logged.state;
+  const keepLog = appendFeMessageLog(state, {
+    kind: "welcome",
+    channel: "sms",
+    clientId: other.client.id,
+    clientName: other.client.name,
+    to: other.client.phone,
+    body: "keep",
+    ok: true,
+  });
+  state = keepLog.state;
+
+  const deleted = deleteFeClient(state, created.client.id);
+  assert.equal(deleted.ok, true);
+  assert.equal(deleted.state.clients.some((c) => c.id === created.client.id), false);
+  assert.equal(deleted.state.clients.some((c) => c.id === other.client.id), true);
+  assert.equal(deleted.state.messageLog.every((row) => row.clientId !== created.client.id), true);
+  assert.equal(deleted.state.messageLog.some((row) => row.clientId === other.client.id), true);
 });
 
 test("planFeRetentionSends schedules welcome and birthday", () => {
